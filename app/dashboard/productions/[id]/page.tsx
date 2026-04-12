@@ -25,6 +25,7 @@ interface Production {
 interface ChecklistItem {
   id: string; title: string; completed: boolean
   completed_at: string | null; assigned_to: string | null; sort_order: number
+  kb_article_id: string | null
 }
 
 interface ProductionMember {
@@ -247,6 +248,7 @@ export default function ProductionDetailPage() {
     { id: 'delivered', label: 'Deliverable Ready', subject: 'Your {{type}} is ready — {{title}}' },
     { id: 'reschedule', label: 'Reschedule / Change', subject: 'Schedule update for {{title}}' },
     { id: 'followup', label: 'Follow-Up', subject: 'Following up — {{title}}' },
+    { id: 'status', label: 'Status Update', subject: 'Status update — {{title}}' },
   ]
 
   const fillTemplate = (templateId: string): string => {
@@ -264,6 +266,7 @@ export default function ProductionDetailPage() {
       delivered: `Hi ${name},\n\nYour production is complete and the final deliverable is ready. You can access it here:\n\n[Link will be added here]\n\nIf you need any edits or have questions, just let me know. Otherwise, you're all set.\n\nThanks for working with CSDtv!\n\nJustin Andersen\nCSDtv Production Office`,
       reschedule: `Hi ${name},\n\nI'm reaching out because we need to make a change to the schedule for your upcoming production.\n\nOriginal date: ${date}\nProduction: ${title}\n\n[Reason and proposed new date will be added here]\n\nPlease reply to confirm the new date works for you, or suggest an alternative.\n\nThanks for your flexibility,\nJustin Andersen\nCSDtv Production Office`,
       followup: `Hi ${name},\n\nI'm following up on my previous message about your upcoming production:\n\nWhat: ${title}\nDate: ${date}\nLocation: ${venue}\n\nWe want to make sure everything is still on track. Could you reply to confirm, or let me know if anything has changed?\n\nThanks,\nJustin Andersen\nCSDtv Production Office`,
+      status: `Hi ${name},\n\nHere's a quick status update on your production:\n\nProduction: ${title}\nType: ${type}\nStatus: ${production.status || 'In progress'}\nScheduled: ${date}\n\nOur team is actively working on this. If you have any questions or need anything in the meantime, don't hesitate to reach out.\n\nThanks,\nJustin Andersen\nCSDtv Production Office`,
     }
     return templates[templateId] || ''
   }
@@ -528,6 +531,28 @@ export default function ProductionDetailPage() {
       {activeTab === 'checklist' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px' }}>
+            <button onClick={async () => {
+              if (!production || !uuid) return
+              const typeLabel = production.request_type_label || production.type
+              if (!typeLabel) { alert('No production type set'); return }
+              // Find the most recent completed production of same type
+              const { data: lastProd } = await supabase.from('productions').select('id, production_number, title').eq('request_type_label', typeLabel).neq('id', uuid).order('start_datetime', { ascending: false }).limit(1).single()
+              if (!lastProd) { alert(`No previous ${typeLabel} production found`); return }
+              if (!confirm(`Apply checklist and team from #${lastProd.production_number} ${lastProd.title}?`)) return
+              const [clRes, tmRes] = await Promise.all([
+                supabase.from('checklist_items').select('title, sort_order').eq('production_id', lastProd.id).order('sort_order'),
+                supabase.from('production_members').select('user_id').eq('production_id', lastProd.id),
+              ])
+              if (clRes.data && clRes.data.length > 0) {
+                await supabase.from('checklist_items').insert(clRes.data.map((c: any, i: number) => ({ production_id: uuid, title: c.title, completed: false, sort_order: i })))
+              }
+              if (tmRes.data && tmRes.data.length > 0) {
+                await supabase.from('production_members').insert(tmRes.data.map((m: any) => ({ production_id: uuid, user_id: m.user_id })))
+              }
+              loadData()
+            }} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Apply last {production.request_type_label?.split('(')[0]?.trim() || 'type'} setup
+            </button>
             <button onClick={() => setShowCopySetup(!showCopySetup)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
               Copy setup to...
             </button>
@@ -649,7 +674,21 @@ export default function ProductionDetailPage() {
                           </svg>
                         )}
                       </button>
-                      <span style={{ flex: 1, fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>{item.title}</span>
+                      <span style={{ flex: 1, fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>
+                        {item.title}
+                        {item.kb_article_id && (() => {
+                          const kb = kbArticles.find(a => a.id === item.kb_article_id)
+                          return kb ? <Link href="/dashboard/knowledge" style={{ fontSize: '11px', color: '#5ba3e0', marginLeft: '6px', textDecoration: 'none' }}>📖 {kb.title}</Link> : null
+                        })()}
+                      </span>
+                      <select value={item.kb_article_id || ''} onChange={e => {
+                        const val = e.target.value || null
+                        supabase.from('checklist_items').update({ kb_article_id: val }).eq('id', item.id)
+                        setChecklist(prev => prev.map(c => c.id === item.id ? { ...c, kb_article_id: val } : c))
+                      }} style={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: `0.5px solid ${border}`, background: inputBg, color: item.kb_article_id ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit', maxWidth: '32px', opacity: 0.6 }} title="Link KB article">
+                        <option value="">📖</option>
+                        {kbArticles.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
+                      </select>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flexShrink: 0 }}>
                         <button onClick={() => moveItem(i, 'up')} disabled={i === 0} style={{ background: 'none', border: 'none', cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? 'transparent' : muted, fontSize: '10px', padding: '0 4px', lineHeight: 1, opacity: 0.5 }}>▲</button>
                         <button onClick={() => moveItem(i, 'down')} disabled={i === checklist.length - 1} style={{ background: 'none', border: 'none', cursor: i === checklist.length - 1 ? 'default' : 'pointer', color: i === checklist.length - 1 ? 'transparent' : muted, fontSize: '10px', padding: '0 4px', lineHeight: 1, opacity: 0.5 }}>▼</button>
@@ -696,6 +735,38 @@ export default function ProductionDetailPage() {
 
       {/* INFO TAB */}
       {activeTab === 'info' && (
+        <div>
+          {/* Timeline */}
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 14px' }}>Production timeline</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0', position: 'relative' as const }}>
+              {(() => {
+                const steps = [
+                  { label: 'Requested', date: production.synced_at, done: true },
+                  { label: 'Approved', date: production.status !== 'Idea/Request' ? production.synced_at : null, done: production.status !== 'Idea/Request' },
+                  { label: 'Scheduled', date: production.start_datetime, done: !!production.start_datetime },
+                  { label: 'Complete', date: activity.find(a => a.action === 'marked_complete')?.created_at || null, done: production.status === 'Complete' || activity.some(a => a.action === 'marked_complete') },
+                ]
+                return steps.map((step, i) => (
+                  <div key={step.label} style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', position: 'relative' as const }}>
+                    {i > 0 && <div style={{ position: 'absolute' as const, top: '10px', right: '50%', width: '100%', height: '2px', background: step.done ? '#22c55e' : border, zIndex: 0 }} />}
+                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: step.done ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), border: step.done ? 'none' : `2px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative' as const }}>
+                      {step.done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </div>
+                    <p style={{ fontSize: '11px', fontWeight: 600, color: step.done ? text : muted, margin: '6px 0 0', textAlign: 'center' as const }}>{step.label}</p>
+                    {step.date && <p style={{ fontSize: '10px', color: muted, margin: '2px 0 0' }}>{new Date(step.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>}
+                  </div>
+                ))
+              })()}
+            </div>
+            {production.synced_at && production.start_datetime && (
+              <p style={{ fontSize: '12px', color: muted, margin: '12px 0 0', textAlign: 'center' as const }}>
+                {Math.round((new Date(production.start_datetime).getTime() - new Date(production.synced_at).getTime()) / (1000 * 60 * 60 * 24))} days from request to shoot
+                {production.status === 'Complete' || activity.some(a => a.action === 'marked_complete') ? ` · ${Math.round((new Date(activity.find(a => a.action === 'marked_complete')?.created_at || Date.now()).getTime() - new Date(production.synced_at).getTime()) / (1000 * 60 * 60 * 24))} days total turnaround` : ''}
+              </p>
+            )}
+          </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Organizer</h3>
@@ -735,8 +806,8 @@ export default function ProductionDetailPage() {
             </button>
           </div>
         </div>
+        </div>
       )}
-
       {/* TEAM TAB */}
       {activeTab === 'team' && (
         <div>

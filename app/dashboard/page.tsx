@@ -16,7 +16,7 @@ interface Production {
   id: string; production_number: number; title: string
   request_type_label: string | null; type: string | null; status: string | null
   start_datetime: string | null; filming_location: string | null; school_department: string | null
-  checklist_items?: { completed: boolean }[]
+  checklist_items?: { id: string; title: string; completed: boolean }[]
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
 }
 
@@ -42,6 +42,10 @@ export default function DashboardPage() {
   const [todayHours, setTodayHours] = useState<string | null>(null)
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
   const [completing, setCompleting] = useState<Set<string>>(new Set())
+  const [weekStats, setWeekStats] = useState({ prodsCompleted: 0, tasksCompleted: 0, videosPublished: 0 })
+  const [expandedTodayProd, setExpandedTodayProd] = useState<string | null>(null)
+  const [monthStats, setMonthStats] = useState({ prodsCompleted: 0, tasksCompleted: 0, videosPublished: 0 })
+  const [yearProdCount, setYearProdCount] = useState(0)
 
   const text     = dark ? '#f0f4ff' : '#1a1f36'
   const muted    = dark ? '#94a3b8' : '#6b7280'
@@ -66,7 +70,7 @@ export default function DashboardPage() {
       supabase.from('team').select('*').eq('active', true),
       supabase.from('tasks').select('*, productions(title)').neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(12),
       supabase.from('productions').select('id', { count: 'exact', head: true }),
-      supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color))').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).limit(10),
+      supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).limit(10),
       supabase.from('schedule_defaults').select('*').eq('user_id', user.id).single(),
       supabase.from('production_activity').select('*, team:team(name)').order('created_at', { ascending: false }).limit(10),
     ])
@@ -95,6 +99,22 @@ export default function DashboardPage() {
         setTodayHours(null)
       }
     }
+
+    // Weekly/monthly stats pulse
+    const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
+    const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds] = await Promise.all([
+      supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monday.toISOString()),
+      supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monthStart.toISOString()),
+      supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monday.toISOString()),
+      supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monthStart.toISOString()),
+      supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monday.toISOString().split('T')[0]),
+      supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
+      supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
+    ])
+    setWeekStats({ prodsCompleted: weekProds.count || 0, tasksCompleted: weekTasks.count || 0, videosPublished: weekVids.count || 0 })
+    setMonthStats({ prodsCompleted: monthProds.count || 0, tasksCompleted: monthTasks.count || 0, videosPublished: monthVids.count || 0 })
+    setYearProdCount(yearProds.count || 0)
 
     if (prodMembersRes.data && prodMembersRes.data.length > 0) {
       const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
@@ -214,7 +234,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Today's productions — prominent */}
+      {/* Today's productions — prominent + expandable */}
       {todayProductions.length > 0 && (
         <div style={{ background: 'rgba(30,108,181,0.08)', border: '1px solid rgba(30,108,181,0.2)', borderRadius: '14px', padding: '16px 20px', marginBottom: '20px' }}>
           <p style={{ fontSize: '13px', fontWeight: 700, color: '#5ba3e0', margin: '0 0 12px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>🎬 Today — {todayProductions.length} production{todayProductions.length > 1 ? 's' : ''}</p>
@@ -224,31 +244,64 @@ export default function DashboardPage() {
               const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
               const loc = getSchoolName(p.school_department) || p.filming_location || ''
               const members = (p.production_members || []).map(m => m.team).filter(Boolean)
+              const isExpanded = expandedTodayProd === p.id
+              const items = (p.checklist_items || []).sort((a, b) => (a as any).sort_order - (b as any).sort_order)
+              const doneCount = items.filter(c => c.completed).length
               return (
-                <Link key={p.id} href={`/dashboard/productions/${p.production_number}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', border: `1px solid ${border}`, textDecoration: 'none' }}>
-                  <div style={{ width: '4px', height: '44px', borderRadius: '2px', background: '#5ba3e0', flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title}</p>
-                    <p style={{ fontSize: '13px', color: muted, margin: '3px 0 0' }}>
-                      {time && <span style={{ fontWeight: 500, color: '#5ba3e0' }}>{time}</span>}
-                      {time && loc ? ' · ' : ''}{loc}
-                    </p>
-                    <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>
-                      {p.request_type_label || 'Production'}
-                      {members.length > 0 && ` · ${members.map(m => m!.name.split(' ')[0]).join(', ')}`}
-                    </p>
+                <div key={p.id} onClick={() => setExpandedTodayProd(isExpanded ? null : p.id)} style={{ padding: '14px 16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', border: `1px solid ${isExpanded ? 'rgba(30,108,181,0.4)' : border}`, cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '4px', height: '44px', borderRadius: '2px', background: '#5ba3e0', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title}</p>
+                      <p style={{ fontSize: '13px', color: muted, margin: '3px 0 0' }}>
+                        {time && <span style={{ fontWeight: 500, color: '#5ba3e0' }}>{time}</span>}
+                        {time && loc ? ' · ' : ''}{loc}
+                      </p>
+                      <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>
+                        {p.request_type_label || 'Production'}
+                        {members.length > 0 && ` · ${members.map(m => m!.name.split(' ')[0]).join(', ')}`}
+                        {items.length > 0 && ` · ${doneCount}/${items.length} steps`}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
+                      {members.slice(0, 3).map((m, i) => m && (
+                        <div key={i} style={{ width: '28px', height: '28px', borderRadius: '50%', background: m.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#0a0f1e' }}>{m.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
-                    {members.slice(0, 3).map((m, i) => m && (
-                      <div key={i} style={{ width: '28px', height: '28px', borderRadius: '50%', background: m.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#0a0f1e' }}>{m.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
-                    ))}
-                  </div>
-                </Link>
+                  {isExpanded && (
+                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `0.5px solid ${border}` }} onClick={e => e.stopPropagation()}>
+                      {items.length > 0 ? items.map(item => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
+                          <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `1.5px solid ${item.completed ? '#22c55e' : border}`, background: item.completed ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {item.completed && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                          </div>
+                          <span style={{ fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>{item.title}</span>
+                        </div>
+                      )) : <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No checklist items</p>}
+                      <Link href={`/dashboard/productions/${p.production_number}`} style={{ display: 'inline-block', fontSize: '12px', color: '#5ba3e0', textDecoration: 'none', marginTop: '10px', fontWeight: 500 }}>Open production →</Link>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
         </div>
       )}
+
+      {/* Stats pulse */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+        {[
+          { label: 'This week', items: [`${weekStats.prodsCompleted} productions`, `${weekStats.tasksCompleted} tasks`, `${weekStats.videosPublished} videos`], color: '#5ba3e0' },
+          { label: 'This month', items: [`${monthStats.prodsCompleted} productions`, `${monthStats.tasksCompleted} tasks`, `${monthStats.videosPublished} videos`], color: '#a855f7' },
+          { label: 'Year pace', items: [`${yearProdCount} completed`, `${Math.round(yearProdCount / Math.max(1, new Date().getMonth() + 1) * 12)} projected/yr`], color: '#22c55e' },
+        ].map(s => (
+          <div key={s.label} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: s.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{s.label}</p>
+            {s.items.map((item, i) => <p key={i} style={{ fontSize: '13px', color: i === 0 ? text : muted, margin: '2px 0', fontWeight: i === 0 ? 600 : 400 }}>{item}</p>)}
+          </div>
+        ))}
+      </div>
 
       {/* View toggle */}
       <div style={{ display: 'flex', gap: '4px', background: dark ? '#1e2a3a' : '#e2e8f0', borderRadius: '12px', padding: '4px', width: 'fit-content', marginBottom: '20px' }}>

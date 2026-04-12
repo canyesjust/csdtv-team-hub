@@ -56,11 +56,13 @@ export default function ReportsPage() {
   const [team, setTeam] = useState<TeamMember[]>([])
   const [prodMembers, setProdMembers] = useState<ProdMember[]>([])
   const [allSchools, setAllSchools] = useState<{ code: string; name: string; type: string }[]>([])
+  const [timeEntries, setTimeEntries] = useState<{ task_id: string; hours: number }[]>([])
+  const [taskProdMap, setTaskProdMap] = useState<Record<string, string>>({})
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [prodsRes, tasksRes, actRes, videosRes, destRes, talentRes, loansRes, eqRes, teamRes, pmRes, schoolsRes] = await Promise.all([
+    const [prodsRes, tasksRes, actRes, videosRes, destRes, talentRes, loansRes, eqRes, teamRes, pmRes, schoolsRes, timeRes, taskProdsRes] = await Promise.all([
       supabase.from('productions').select('id, title, production_number, status, request_type_label, school_department, start_datetime, school_year, synced_at, estimated_external_cost').order('production_number'),
       supabase.from('tasks').select('id, status, assigned_to, completed_at, created_at, priority'),
       supabase.from('production_activity').select('id, production_id, action, created_at').order('created_at'),
@@ -72,6 +74,8 @@ export default function ReportsPage() {
       supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
       supabase.from('production_members').select('production_id, user_id'),
       supabase.from('schools').select('code, name, type').order('name'),
+      supabase.from('time_entries').select('task_id, hours'),
+      supabase.from('tasks').select('id, production_id').not('production_id', 'is', null),
     ])
     setProductions(prodsRes.data || [])
     setTasks(tasksRes.data || [])
@@ -84,6 +88,10 @@ export default function ReportsPage() {
     setTeam(teamRes.data || [])
     setProdMembers(pmRes.data || [])
     setAllSchools(schoolsRes.data || [])
+    setTimeEntries(timeRes.data || [])
+    const tpMap: Record<string, string> = {}
+    ;(taskProdsRes.data || []).forEach((t: any) => { if (t.production_id) tpMap[t.id] = t.production_id })
+    setTaskProdMap(tpMap)
     setLoading(false)
   }, [supabase])
 
@@ -395,6 +403,32 @@ export default function ReportsPage() {
               ))}
             </div>
           ))}
+          {/* Staff hours by production */}
+          {(() => {
+            const prodHours: Record<string, number> = {}
+            timeEntries.forEach(te => {
+              const prodId = taskProdMap[te.task_id]
+              if (prodId) prodHours[prodId] = (prodHours[prodId] || 0) + Number(te.hours)
+            })
+            const sorted = Object.entries(prodHours).map(([id, hours]) => {
+              const prod = fp.find(p => p.id === id)
+              return { title: prod ? `#${prod.production_number} ${prod.title}` : 'Unknown', hours: Math.round(hours * 10) / 10 }
+            }).sort((a, b) => b.hours - a.hours).slice(0, 10)
+            const maxH = sorted.length > 0 ? sorted[0].hours : 1
+            const totalHours = Object.values(prodHours).reduce((s, h) => s + h, 0)
+            if (sorted.length === 0) return null
+            return sectionCard(`Staff hours by production (${Math.round(totalHours * 10) / 10}h total)`, (
+              <div>
+                {sorted.map(({ title, hours }) => (
+                  <div key={title} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 0' }}>
+                    <span style={{ fontSize: '13px', color: text, minWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{title}</span>
+                    {pctBar(hours, maxH, '#60a5fa')}
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: text, minWidth: '50px', textAlign: 'right' as const }}>{hours}h</span>
+                  </div>
+                ))}
+              </div>
+            ))
+          })()}
           {sectionCard('Monthly volume — last 12 months', (
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '120px' }}>
               {monthlyBreakdown.map((m, i) => (
