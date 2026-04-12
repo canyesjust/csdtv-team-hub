@@ -32,7 +32,7 @@ interface ProductionMember {
   team: { id: string; name: string; role: string; avatar_color: string } | null
 }
 
-interface TeamMember { id: string; name: string; role: string; avatar_color: string }
+interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string }
 
 interface ProductionLink { id: string; title: string; url: string; created_at: string }
 
