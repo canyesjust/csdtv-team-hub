@@ -71,7 +71,7 @@ export default function ReportsPage() {
       supabase.from('equipment').select('id, name, asset_tag, status, category_id'),
       supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
       supabase.from('production_members').select('production_id, user_id'),
-      supabase.from('schools').select('code, name').order('name'),
+      supabase.from('schools').select('code, name, type').order('name'),
     ])
     setProductions(prodsRes.data || [])
     setTasks(tasksRes.data || [])
