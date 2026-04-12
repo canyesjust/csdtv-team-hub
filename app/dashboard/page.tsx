@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from './components/Loader'
+import { getSchoolName } from '@/lib/schools'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
@@ -14,7 +15,9 @@ interface Task {
 interface Production {
   id: string; production_number: number; title: string
   request_type_label: string | null; type: string | null; status: string | null
-  start_datetime: string | null; checklist_items?: { completed: boolean }[]
+  start_datetime: string | null; filming_location: string | null; school_department: string | null
+  checklist_items?: { completed: boolean }[]
+  production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
 }
 
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
@@ -63,7 +66,7 @@ export default function DashboardPage() {
       supabase.from('team').select('*').eq('active', true),
       supabase.from('tasks').select('*, productions(title)').neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(12),
       supabase.from('productions').select('id', { count: 'exact', head: true }),
-      supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).limit(5),
+      supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color))').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).limit(10),
       supabase.from('schedule_defaults').select('*').eq('user_id', user.id).single(),
       supabase.from('production_activity').select('*, team:team(name)').order('created_at', { ascending: false }).limit(10),
     ])
@@ -72,7 +75,7 @@ export default function DashboardPage() {
     setTeamMembers(teamRes.data || [])
     setAllTasks(allTasksRes.data || [])
     setTotalProductions(countRes.count || 0)
-    setTodayProductions(todayProdsRes.data || [])
+    setTodayProductions((todayProdsRes.data as any) || [])
     setRecentActivity(activityRes.data || [])
 
     // Figure out today's scheduled hours
@@ -211,18 +214,38 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Today's productions */}
+      {/* Today's productions — prominent */}
       {todayProductions.length > 0 && (
-        <div style={{ background: 'rgba(30,108,181,0.08)', border: '1px solid rgba(30,108,181,0.2)', borderRadius: '14px', padding: '14px 20px', marginBottom: '20px' }}>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: '#5ba3e0', margin: '0 0 10px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>🎬 Today's productions</p>
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            {todayProductions.map(p => (
-              <Link key={p.id} href={`/dashboard/productions/${p.production_number}`} style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-                <span style={{ fontSize: '15px', color: muted }}>#{p.production_number}</span>
-                <span style={{ fontSize: '15px', fontWeight: 500, color: text }}>{p.title}</span>
-                <span style={{ fontSize: '14px', color: '#5ba3e0', background: 'rgba(30,108,181,0.12)', padding: '3px 10px', borderRadius: '6px' }}>{p.request_type_label || 'Production'}</span>
-              </Link>
-            ))}
+        <div style={{ background: 'rgba(30,108,181,0.08)', border: '1px solid rgba(30,108,181,0.2)', borderRadius: '14px', padding: '16px 20px', marginBottom: '20px' }}>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: '#5ba3e0', margin: '0 0 12px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>🎬 Today — {todayProductions.length} production{todayProductions.length > 1 ? 's' : ''}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
+            {todayProductions.map(p => {
+              const d = p.start_datetime ? new Date(p.start_datetime) : null
+              const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+              const loc = getSchoolName(p.school_department) || p.filming_location || ''
+              const members = (p.production_members || []).map(m => m.team).filter(Boolean)
+              return (
+                <Link key={p.id} href={`/dashboard/productions/${p.production_number}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', border: `1px solid ${border}`, textDecoration: 'none' }}>
+                  <div style={{ width: '4px', height: '44px', borderRadius: '2px', background: '#5ba3e0', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title}</p>
+                    <p style={{ fontSize: '13px', color: muted, margin: '3px 0 0' }}>
+                      {time && <span style={{ fontWeight: 500, color: '#5ba3e0' }}>{time}</span>}
+                      {time && loc ? ' · ' : ''}{loc}
+                    </p>
+                    <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>
+                      {p.request_type_label || 'Production'}
+                      {members.length > 0 && ` · ${members.map(m => m!.name.split(' ')[0]).join(', ')}`}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
+                    {members.slice(0, 3).map((m, i) => m && (
+                      <div key={i} style={{ width: '28px', height: '28px', borderRadius: '50%', background: m.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#0a0f1e' }}>{m.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
+                    ))}
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </div>
       )}

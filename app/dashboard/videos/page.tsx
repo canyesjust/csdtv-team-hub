@@ -53,6 +53,9 @@ export default function VideosPage() {
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [showNew, setShowNew] = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const [bulkCSV, setBulkCSV] = useState('')
+  const [bulkImporting, setBulkImporting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [newVideo, setNewVideo] = useState({ title: '', description: '', video_type: 'Other', status: 'Filming', visibility: 'Internal', production_id: '', school_year: '', date_filmed: '', tags: '' })
 
@@ -125,10 +128,55 @@ export default function VideosPage() {
           <h1 style={{ fontSize: '26px', fontWeight: 700, color: text, margin: 0 }}>Video library</h1>
           <p style={{ fontSize: '14px', color: muted, margin: '4px 0 0' }}>{videos.length} video{videos.length !== 1 ? 's' : ''} tracked</p>
         </div>
-        <button onClick={() => setShowNew(!showNew)} style={{ background: '#1e6cb5', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          + New video
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={() => { setShowBulkImport(!showBulkImport); setShowNew(false) }} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            Bulk import
+          </button>
+          <button onClick={() => { setShowNew(!showNew); setShowBulkImport(false) }} style={{ background: '#1e6cb5', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            + New video
+          </button>
+        </div>
       </div>
+
+      {/* Bulk import panel */}
+      {showBulkImport && (
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 8px' }}>Bulk import videos</h3>
+          <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>Paste CSV data with columns: Title, Type, Status, Date Published (YYYY-MM-DD), Description. One video per line.</p>
+          <textarea value={bulkCSV} onChange={e => setBulkCSV(e.target.value)} placeholder={'Title, Type, Status, Date Published, Description\nSpring Concert 2025, Video, Published, 2025-05-15, Annual spring concert recording\nBoard Meeting March, Livestream, Published, 2025-03-18, Monthly board meeting'} style={{ ...inputStyle, minHeight: '120px', resize: 'vertical' as const, fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.6, marginBottom: '12px' }} />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button onClick={async () => {
+              if (!bulkCSV.trim()) return
+              setBulkImporting(true)
+              const lines = bulkCSV.trim().split('\n').filter(l => l.trim())
+              // Skip header if it looks like one
+              const start = lines[0]?.toLowerCase().includes('title') ? 1 : 0
+              const inserts = []
+              for (let i = start; i < lines.length; i++) {
+                const parts = lines[i].split(',').map(p => p.trim())
+                if (parts.length < 1 || !parts[0]) continue
+                inserts.push({
+                  title: parts[0],
+                  video_type: parts[1] || 'Other',
+                  status: parts[2] || 'Published',
+                  date_published: parts[3] || null,
+                  description: parts.slice(4).join(',').trim() || null,
+                })
+              }
+              if (inserts.length > 0) {
+                const { data } = await supabase.from('videos').insert(inserts).select('*')
+                if (data) setVideos(prev => [...data, ...prev])
+              }
+              setBulkCSV('')
+              setBulkImporting(false)
+              setShowBulkImport(false)
+            }} disabled={bulkImporting || !bulkCSV.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: bulkCSV.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: bulkCSV.trim() ? '#fff' : muted, border: 'none', cursor: bulkCSV.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
+              {bulkImporting ? 'Importing...' : `Import ${bulkCSV.trim() ? bulkCSV.trim().split('\n').filter(l => l.trim()).length : 0} videos`}
+            </button>
+            <button onClick={() => setShowBulkImport(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {/* New video form */}
       {showNew && (

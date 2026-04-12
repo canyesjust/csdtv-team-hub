@@ -129,6 +129,13 @@ export default function KnowledgePage() {
     if (selected?.id === article.id) setSelected(prev => prev ? { ...prev, pinned: newPinned } : prev)
   }
 
+  const deleteArticle = async (article: Article) => {
+    if (!confirm(`Delete "${article.title}"? This cannot be undone.`)) return
+    await supabase.from('knowledge_base').delete().eq('id', article.id)
+    setArticles(prev => prev.filter(a => a.id !== article.id))
+    if (selected?.id === article.id) setSelected(null)
+  }
+
   const filtered = articles.filter(a => {
     const matchSearch = search === '' || a.title.toLowerCase().includes(search.toLowerCase()) || stripHtml(a.content).toLowerCase().includes(search.toLowerCase())
     const matchCat = catFilter === 'all' || a.category === catFilter
@@ -182,6 +189,9 @@ export default function KnowledgePage() {
               }}
               style={{ fontSize: '15px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
               Edit
+            </button>
+            <button onClick={() => deleteArticle(selected)} style={{ fontSize: '15px', padding: '8px 16px', borderRadius: '8px', background: 'rgba(239,68,68,0.06)', border: '0.5px solid rgba(239,68,68,0.2)', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
+              Delete
             </button>
             </>
           )}

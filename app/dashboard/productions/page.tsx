@@ -374,6 +374,31 @@ function ProductionsPageContent() {
         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} /> Checklist complete</span>
       </div>
 
+      {/* Scheduling conflicts */}
+      {(() => {
+        const upcoming = filtered.filter(p => p.start_datetime && p.status !== 'Complete' && p.status !== 'Abandoned' && new Date(p.start_datetime) >= new Date())
+        const conflicts: { a: Production; b: Production }[] = []
+        for (let i = 0; i < upcoming.length; i++) {
+          for (let j = i + 1; j < upcoming.length; j++) {
+            const da = new Date(upcoming[i].start_datetime!)
+            const db = new Date(upcoming[j].start_datetime!)
+            if (da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate() && Math.abs(da.getTime() - db.getTime()) < 3600000) {
+              conflicts.push({ a: upcoming[i], b: upcoming[j] })
+            }
+          }
+        }
+        if (conflicts.length === 0) return null
+        return (
+          <div style={{ background: 'rgba(239,68,68,0.06)', border: '0.5px solid rgba(239,68,68,0.25)', borderRadius: '10px', padding: '12px 16px', marginBottom: '14px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: '#ef4444', margin: '0 0 6px' }}>⚠ Scheduling conflicts detected</p>
+            {conflicts.slice(0, 5).map((c, i) => {
+              const d = new Date(c.a.start_datetime!)
+              return <p key={i} style={{ fontSize: '12px', color: muted, margin: '2px 0' }}>{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}: <strong style={{ color: text }}>#{c.a.production_number} {c.a.title}</strong> and <strong style={{ color: text }}>#{c.b.production_number} {c.b.title}</strong> overlap</p>
+            })}
+          </div>
+        )
+      })()}
+
       {/* PIPELINE VIEW */}
       {view === 'pipeline' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>

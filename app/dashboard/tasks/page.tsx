@@ -33,6 +33,7 @@ const PRIORITIES = ['low', 'normal', 'high', 'day of']
 const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
   pending:       { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8' },
   'in progress': { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b' },
+  'in review':   { bg: 'rgba(168,85,247,0.15)',  color: '#a855f7' },
   complete:      { bg: 'rgba(34,197,94,0.15)',   color: '#22c55e' },
 }
 const PRIORITY_STYLES: Record<string, { bg: string; color: string }> = {
@@ -79,6 +80,7 @@ export default function TasksPage() {
   const [showTemplates, setShowTemplates] = useState(false)
   const [newTemplateName, setNewTemplateName] = useState('')
   const [subtaskCounts, setSubtaskCounts] = useState<Record<string, { total: number; done: number }>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
   const muted   = dark ? '#8899bb' : '#6b7280'
@@ -239,9 +241,15 @@ export default function TasksPage() {
 
   const cycleStatus = useCallback(async (task: Task, e: React.MouseEvent) => {
     e.stopPropagation()
-    const next = task.status === 'pending' ? 'in progress' : task.status === 'in progress' ? 'complete' : 'pending'
+    const next = task.status === 'pending' ? 'in progress' : task.status === 'in progress' ? 'in review' : task.status === 'in review' ? 'complete' : 'pending'
     await supabase.from('tasks').update({ status: next, completed_at: next === 'complete' ? new Date().toISOString() : null }).eq('id', task.id)
     if (next === 'complete') {
+      // Auto-unblock tasks blocked by this one
+      const blockedTasks = tasks.filter(t => t.blocked_by === task.id)
+      if (blockedTasks.length > 0) {
+        await supabase.from('tasks').update({ blocked_by: null }).eq('blocked_by', task.id)
+        setTasks(prev => prev.map(t => t.blocked_by === task.id ? { ...t, blocked_by: null } : t))
+      }
       // Auto-create next recurring task
       if (task.recurring && task.due_date) {
         const interval = task.recurring_interval || 1
@@ -506,19 +514,53 @@ export default function TasksPage() {
               <button style={filterBtn(statusFilter === 'all')} onClick={() => setStatusFilter('all')}>All status</button>
               <button style={filterBtn(statusFilter === 'pending')} onClick={() => setStatusFilter('pending')}>Pending</button>
               <button style={filterBtn(statusFilter === 'in progress')} onClick={() => setStatusFilter('in progress')}>In progress</button>
+              <button style={filterBtn(statusFilter === 'in review')} onClick={() => setStatusFilter('in review')}>In review</button>
               <div style={{ width: '1px', background: border, margin: '0 4px' }} />
               <button style={filterBtn(groupBy === 'none')} onClick={() => setGroupBy('none')}>No grouping</button>
               <button style={filterBtn(groupBy === 'priority')} onClick={() => setGroupBy('priority')}>Priority</button>
               <button style={filterBtn(groupBy === 'person')} onClick={() => setGroupBy('person')}>Person</button>
               <button style={filterBtn(groupBy === 'status')} onClick={() => setGroupBy('status')}>Status</button>
             </div>
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: 'rgba(30,108,181,0.08)', border: '0.5px solid rgba(30,108,181,0.2)', borderRadius: '10px', marginBottom: '12px', fontSize: '13px' }}>
+                <span style={{ color: '#5ba3e0', fontWeight: 600 }}>{selectedIds.size} selected</span>
+                <button onClick={async () => {
+                  if (!confirm(`Mark ${selectedIds.size} tasks complete?`)) return
+                  const ids = Array.from(selectedIds)
+                  await supabase.from('tasks').update({ status: 'complete', completed_at: new Date().toISOString() }).in('id', ids)
+                  setTasks(prev => prev.filter(t => !selectedIds.has(t.id)))
+                  setCompletedTasks(prev => [...ids.map(id => { const t = tasks.find(x => x.id === id); return t ? { ...t, status: 'complete', completed_at: new Date().toISOString() } : null }).filter(Boolean) as Task[], ...prev])
+                  setSelectedIds(new Set())
+                }} style={{ padding: '5px 12px', borderRadius: '6px', background: '#22c55e', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 500 }}>Complete all</button>
+                <select onChange={async e => {
+                  if (!e.target.value) return
+                  const ids = Array.from(selectedIds)
+                  await supabase.from('tasks').update({ assigned_to: e.target.value }).in('id', ids)
+                  setTasks(prev => prev.map(t => selectedIds.has(t.id) ? { ...t, assigned_to: e.target.value } : t))
+                  setSelectedIds(new Set())
+                  e.target.value = ''
+                }} style={{ padding: '5px 10px', borderRadius: '6px', background: cardBg, border: `0.5px solid ${border}`, color: text, fontFamily: 'inherit', fontSize: '12px' }}>
+                  <option value="">Assign to...</option>
+                  {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <button onClick={async () => {
+                  if (!confirm(`Delete ${selectedIds.size} tasks? This cannot be undone.`)) return
+                  const ids = Array.from(selectedIds)
+                  await supabase.from('tasks').delete().in('id', ids)
+                  setTasks(prev => prev.filter(t => !selectedIds.has(t.id)))
+                  setSelectedIds(new Set())
+                }} style={{ padding: '5px 12px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Delete</button>
+                <button onClick={() => setSelectedIds(new Set())} style={{ padding: '5px 12px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', marginLeft: 'auto' }}>Clear</button>
+              </div>
+            )}
             {filtered.length === 0 ? (
               <div style={{ textAlign: 'center' as const, padding: '60px 20px' }}>
                 <p style={{ color: muted, fontSize: '15px' }}>No tasks match your filters</p>
               </div>
             ) : viewMode === 'kanban' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', minHeight: '300px' }}>
-                {(['pending', 'in progress', 'complete'] as const).map(status => {
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', minHeight: '300px' }}>
+                {(['pending', 'in progress', 'in review', 'complete'] as const).map(status => {
                   const col = filtered.filter(t => t.status === status)
                   const colStyle = STATUS_STYLES[status] || STATUS_STYLES['pending']
                   const isOver = dragOverCol === status
@@ -605,7 +647,8 @@ export default function TasksPage() {
                         onMouseEnter={e => { if (!isSelected && !isCompleting) (e.currentTarget as HTMLDivElement).style.background = hoverBg }}
                         onMouseLeave={e => { if (!isSelected && !isCompleting) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                       >
-                        <button onClick={e => cycleStatus(task, e)} style={{ width: '20px', height: '20px', borderRadius: '5px', flexShrink: 0, border: `1.5px solid ${isCompleting || task.status === 'complete' ? '#22c55e' : task.status === 'in progress' ? '#f59e0b' : border}`, background: isCompleting || task.status === 'complete' ? '#22c55e' : task.status === 'in progress' ? 'rgba(245,158,11,0.15)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+                        <input type="checkbox" checked={selectedIds.has(task.id)} onChange={e => { e.stopPropagation(); setSelectedIds(prev => { const n = new Set(prev); if (n.has(task.id)) n.delete(task.id); else n.add(task.id); return n }) }} onClick={e => e.stopPropagation()} style={{ width: '14px', height: '14px', cursor: 'pointer', flexShrink: 0, accentColor: '#1e6cb5' }} />
+                        <button onClick={e => cycleStatus(task, e)} style={{ width: '20px', height: '20px', borderRadius: '5px', flexShrink: 0, border: `1.5px solid ${isCompleting || task.status === 'complete' ? '#22c55e' : task.status === 'in progress' ? '#f59e0b' : task.status === 'in review' ? '#a855f7' : border}`, background: isCompleting || task.status === 'complete' ? '#22c55e' : task.status === 'in progress' ? 'rgba(245,158,11,0.15)' : task.status === 'in review' ? 'rgba(168,85,247,0.15)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
                           {(isCompleting || task.status === 'complete') && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
                         </button>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -728,6 +771,7 @@ export default function TasksPage() {
                     <select value={selectedTask.status} onChange={e => updateTask(selectedTask.id, { status: e.target.value })} style={{ ...inputStyle, fontSize: '14px' }}>
                       <option value="pending">Pending</option>
                       <option value="in progress">In progress</option>
+                      <option value="in review">In review</option>
                       <option value="complete">Complete</option>
                     </select>
                   </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { useRouter } from 'next/navigation'
 import Loader from './Loader'
 
 interface Notification {
@@ -12,8 +13,7 @@ interface Notification {
   body: string | null
   read: boolean
   created_at: string
-  production_id: string | null
-  task_id: string | null
+  action_url: string | null
 }
 
 interface Props {
@@ -26,6 +26,7 @@ export default function NotificationPanel({ onClose, onUnreadChange, userId }: P
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
+  const router = useRouter()
 
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,7 +105,7 @@ export default function NotificationPanel({ onClose, onUnreadChange, userId }: P
         ) : notifications.map(n => (
           <div
             key={n.id}
-            onClick={() => markRead(n.id)}
+            onClick={() => { markRead(n.id); if (n.action_url) { onClose(); router.push(n.action_url) } }}
             style={{ padding: '12px 16px', borderBottom: `0.5px solid ${border}`, cursor: 'pointer', background: n.read ? 'transparent' : (dark ? 'rgba(30,108,181,0.08)' : 'rgba(30,108,181,0.04)'), display: 'flex', gap: '10px', alignItems: 'flex-start' }}
           >
             <span style={{ fontSize: '16px', flexShrink: 0, marginTop: '1px' }}>{typeIcon(n.type)}</span>

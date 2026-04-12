@@ -55,11 +55,12 @@ export default function ReportsPage() {
   const [equipment, setEquipment] = useState<Equipment[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [prodMembers, setProdMembers] = useState<ProdMember[]>([])
+  const [allSchools, setAllSchools] = useState<{ code: string; name: string }[]>([])
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [prodsRes, tasksRes, actRes, videosRes, destRes, talentRes, loansRes, eqRes, teamRes, pmRes] = await Promise.all([
+    const [prodsRes, tasksRes, actRes, videosRes, destRes, talentRes, loansRes, eqRes, teamRes, pmRes, schoolsRes] = await Promise.all([
       supabase.from('productions').select('id, title, production_number, status, request_type_label, school_department, start_datetime, school_year, synced_at, estimated_external_cost').order('production_number'),
       supabase.from('tasks').select('id, status, assigned_to, completed_at, created_at, priority'),
       supabase.from('production_activity').select('id, production_id, action, created_at').order('created_at'),
@@ -70,6 +71,7 @@ export default function ReportsPage() {
       supabase.from('equipment').select('id, name, asset_tag, status, category_id'),
       supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
       supabase.from('production_members').select('production_id, user_id'),
+      supabase.from('schools').select('code, name').order('name'),
     ])
     setProductions(prodsRes.data || [])
     setTasks(tasksRes.data || [])
@@ -81,6 +83,7 @@ export default function ReportsPage() {
     setEquipment(eqRes.data || [])
     setTeam(teamRes.data || [])
     setProdMembers(pmRes.data || [])
+    setAllSchools(schoolsRes.data || [])
     setLoading(false)
   }, [supabase])
 
@@ -368,6 +371,19 @@ export default function ReportsPage() {
               ))}
             </div>
           ))}
+          {/* Schools equity — not served */}
+          {(() => {
+            const servedCodes = new Set(fp.filter(p => p.school_department).map(p => p.school_department!))
+            const notServed = allSchools.filter(s => !servedCodes.has(s.code) && !servedCodes.has(s.code.padStart(3, '0')) && !servedCodes.has(s.code.replace(/^0+/, '') || '0'))
+            if (notServed.length === 0) return null
+            return sectionCard(`Schools not yet served (${notServed.length})`, (
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px' }}>
+                {notServed.map(s => (
+                  <span key={s.code} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', border: '0.5px solid rgba(239,68,68,0.15)', color: '#ef4444' }}>{s.name}</span>
+                ))}
+              </div>
+            ))
+          })()}
           {turnaroundByType.length > 0 && sectionCard('Average turnaround (days)', (
             <div>
               {turnaroundByType.map(({ type, avg }) => (

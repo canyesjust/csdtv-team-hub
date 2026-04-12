@@ -140,6 +140,7 @@ export default function SchedulePage() {
   const [viewingId, setViewingId]       = useState<string | null>(null) // whose schedule to show
   const [defaults, setDefaults]         = useState<ScheduleDefault[]>([])
   const [overrides, setOverrides]       = useState<ScheduleOverride[]>([])
+  const [allTeamDefaults, setAllTeamDefaults] = useState<ScheduleDefault[]>([])
   const [productions, setProductions]   = useState<Production[]>([])
   const [loading, setLoading]           = useState(true)
   const [editingDefault, setEditingDefault] = useState(false)
@@ -209,6 +210,10 @@ export default function SchedulePage() {
 
     const teamRes = await supabase.from('team').select('*').eq('active', true)
     setTeam(teamRes.data || [])
+
+    // Load all team schedule defaults for team availability view
+    const { data: allDefs } = await supabase.from('schedule_defaults').select('*')
+    setAllTeamDefaults(allDefs || [])
 
     if (user) setViewingId(v => v || user.id)
     setLoading(false)
@@ -502,7 +507,9 @@ export default function SchedulePage() {
             const today = new Date()
             const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
             const weekHrs = getWeekHours(monday)
-            return <span style={{ fontSize: '13px', color: weekHrs > 0 ? '#60b8f0' : muted, fontWeight: 600 }}>This week: {weekHrs}h</span>
+            const isIntern = viewingMember?.role === 'Intern'
+            const overLimit = isIntern && weekHrs > 20
+            return <span style={{ fontSize: '13px', color: overLimit ? '#ef4444' : weekHrs > 0 ? '#60b8f0' : muted, fontWeight: 600 }}>This week: {weekHrs}h{overLimit ? ' ⚠ Over 20h intern limit' : ''}</span>
           })()}
           <span style={{ width: '1px', height: '14px', background: border, flexShrink: 0 }} />
           <span style={{ fontSize: '13px', color: muted }}>Cutoff <strong style={{ color: text }}>{fmt(primaryPP.cutoff, { month: 'short', day: 'numeric' })}</strong></span>
@@ -556,6 +563,37 @@ export default function SchedulePage() {
               Fill all weekdays
             </button>
           )}
+        </div>
+      )}
+
+      {/* ── Team availability this week ── */}
+      {isManager && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '14px 18px', marginBottom: '16px' }}>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: text, margin: '0 0 10px' }}>Team this week</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '120px repeat(5, 1fr)', gap: '1px', fontSize: '13px' }}>
+            <div style={{ padding: '6px 0', color: muted, fontWeight: 500 }} />
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(d => (
+              <div key={d} style={{ padding: '6px 0', textAlign: 'center' as const, color: muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{d}</div>
+            ))}
+            {team.map(member => {
+              const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+              const today = new Date()
+              const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
+              const ws = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+              return [
+                <div key={`name-${member.id}`} style={{ padding: '6px 0', color: text, fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: member.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>{member.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}</div>
+                  {member.name.split(' ')[0]}
+                </div>,
+                ...days.map(dayKey => {
+                  const def = allTeamDefaults.find(d => d.user_id === member.id)
+                  const hrs = def ? (def as any)[dayKey] : null
+                  return <div key={`${member.id}-${dayKey}`} style={{ padding: '6px 0', textAlign: 'center' as const, color: hrs ? '#22c55e' : (dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), fontSize: '12px', fontWeight: hrs ? 500 : 400 }}>{hrs || 'Off'}</div>
+                })
+              ]
+            })}
+          </div>
+          <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0' }}>Use the person-switcher above to see detailed schedules with overrides. This is a quick overview.</p>
         </div>
       )}
 

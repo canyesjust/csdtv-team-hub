@@ -69,9 +69,10 @@ export default function ProductionDetailPage() {
   const [links, setLinks] = useState<ProductionLink[]>([])
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
+  const [linkedVideos, setLinkedVideos] = useState<{ id: string; title: string; video_type: string; status: string; date_published: string | null }[]>([])
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'>('checklist')
+  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'>('checklist')
   const [selectedMember, setSelectedMember] = useState<string|null>(null)
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
@@ -90,6 +91,9 @@ export default function ProductionDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
+  const [showCopySetup, setShowCopySetup] = useState(false)
+  const [copyTargetId, setCopyTargetId] = useState('')
+  const [allProductions, setAllProductions] = useState<{ id: string; production_number: number; title: string }[]>([])
   const [emailTemplate, setEmailTemplate] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
@@ -138,6 +142,11 @@ export default function ProductionDetailPage() {
     setActivity(actRes.data || [])
     setCurrentUser(userRes.data)
     setKbArticles(kbRes.data || [])
+    // Load linked videos
+    const { data: vidData } = await supabase.from('videos').select('id, title, video_type, status, date_published').eq('production_id', prodUUID).order('created_at', { ascending: false })
+    setLinkedVideos(vidData || [])
+    const { data: allProdsData } = await supabase.from('productions').select('id, production_number, title').neq('id', prodUUID).order('production_number', { ascending: false }).limit(50)
+    setAllProductions(allProdsData || [])
     setLoading(false)
   }, [supabase, productionNum])
 
@@ -272,6 +281,21 @@ export default function ProductionDetailPage() {
     setEmailBody(fillTemplate(templateId))
     setEmailSubject(fillSubject(templateId))
   }
+
+  const copySetupTo = useCallback(async () => {
+    if (!copyTargetId || !uuid || !currentUser) return
+    // Copy checklist items
+    const items = checklist.map((c, i) => ({ production_id: copyTargetId, title: c.title, completed: false, sort_order: i }))
+    if (items.length > 0) await supabase.from('checklist_items').insert(items)
+    // Copy team members
+    const memberInserts = members.map(m => ({ production_id: copyTargetId, user_id: m.user_id }))
+    if (memberInserts.length > 0) await supabase.from('production_members').insert(memberInserts)
+    // Log activity
+    await supabase.from('production_activity').insert({ production_id: copyTargetId, user_id: currentUser.id, action: 'setup_copied', detail: `Copied from #${production?.production_number || ''}` })
+    setShowCopySetup(false)
+    setCopyTargetId('')
+    alert('Setup copied successfully!')
+  }, [copyTargetId, uuid, currentUser, checklist, members, supabase, production])
 
   const sendOrganizerEmail = useCallback(async () => {
     if (!production?.organizer_email || !emailBody || !currentUser) return
@@ -461,12 +485,16 @@ export default function ProductionDetailPage() {
         {tabBtn('links', 'Links', links.length)}
         {tabBtn('activity', 'Activity')}
         {tabBtn('comments', 'Comments')}
+        {tabBtn('videos', 'Videos', linkedVideos.length)}
       </div>
 
       {/* CHECKLIST TAB */}
       {activeTab === 'checklist' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px' }}>
+            <button onClick={() => setShowCopySetup(!showCopySetup)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Copy setup to...
+            </button>
             <button
               onClick={() => setShowCreateTask(!showCreateTask)}
               style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}
@@ -477,6 +505,19 @@ export default function ProductionDetailPage() {
               Create task for this production
             </button>
           </div>
+
+          {showCopySetup && (
+            <div style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
+              <p style={{ fontSize: '13px', color: muted, margin: '0 0 8px' }}>Copy checklist ({checklist.length} items) and team ({members.length} members) to another production:</p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select value={copyTargetId} onChange={e => setCopyTargetId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                  <option value="">Select a production...</option>
+                  {allProductions.map(p => <option key={p.id} value={p.id}>#{p.production_number} {p.title}</option>)}
+                </select>
+                <button onClick={copySetupTo} disabled={!copyTargetId} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: copyTargetId ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: copyTargetId ? '#fff' : muted, border: 'none', cursor: copyTargetId ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Copy</button>
+              </div>
+            </div>
+          )}
 
           {showCreateTask && (
             <div style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
@@ -837,6 +878,26 @@ export default function ProductionDetailPage() {
       {activeTab === 'comments' && uuid && currentUser && (
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
           <CommentsSection entityType="production" entityId={uuid} currentUserId={currentUser.id} team={allTeam} />
+        </div>
+      )}
+
+      {/* VIDEOS TAB */}
+      {activeTab === 'videos' && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+          {linkedVideos.length === 0 ? (
+            <div style={{ textAlign: 'center' as const, padding: '30px 20px' }}>
+              <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No videos linked to this production</p>
+              <Link href="/dashboard/videos" style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none' }}>Go to video library to create one →</Link>
+            </div>
+          ) : linkedVideos.map(v => (
+            <Link key={v.id} href={`/dashboard/videos/${v.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '10px', border: `0.5px solid ${border}`, marginBottom: '8px', textDecoration: 'none', background: dark ? 'rgba(255,255,255,0.02)' : '#fafbfc' }}>
+              <div style={{ width: '4px', height: '32px', borderRadius: '2px', background: v.status === 'Published' ? '#22c55e' : v.status === 'Draft' ? '#94a3b8' : '#f59e0b', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0 }}>{v.title}</p>
+                <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{v.video_type} · {v.status}{v.date_published ? ` · Published ${new Date(v.date_published).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
 
