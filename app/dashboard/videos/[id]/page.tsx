@@ -67,7 +67,9 @@ export default function VideoDetailPage() {
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [productions, setProductions] = useState<Production[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'details' | 'people' | 'files' | 'distribution'>('details')
+  const [tab, setTab] = useState<'details' | 'checklist' | 'people' | 'files' | 'distribution'>('details')
+  const [checklistItems, setChecklistItems] = useState<{ id: string; title: string; completed: boolean; sort_order: number }[]>([])
+  const [newCheckItem, setNewCheckItem] = useState('')
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Video>>({})
 
@@ -101,6 +103,9 @@ export default function VideoDetailPage() {
     setTags(tagsRes.data || [])
     setCurrentUser(userRes.data)
     setProductions(prodsRes.data || [])
+    // Load video checklist
+    const { data: checkData } = await supabase.from('video_checklist_items').select('*').eq('video_id', videoId).order('sort_order')
+    setChecklistItems(checkData || [])
     setLoading(false)
   }, [supabase, videoId])
 
@@ -213,6 +218,7 @@ export default function VideoDetailPage() {
   const statusStyle = STATUS_COLORS[video.status] || STATUS_COLORS['Archived']
   const TABS = [
     { key: 'details', label: 'Details' },
+    { key: 'checklist', label: `Checklist (${checklistItems.filter(c => c.completed).length}/${checklistItems.length})` },
     { key: 'people', label: `People & releases (${talent.length})` },
     { key: 'files', label: `Files (${files.length})` },
     { key: 'distribution', label: `Distribution (${destinations.length})` },
@@ -264,6 +270,69 @@ export default function VideoDetailPage() {
       </div>
 
       {/* DETAILS TAB */}
+      {/* CHECKLIST TAB */}
+      {tab === 'checklist' && (
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px' }}>
+          {/* Progress bar */}
+          {checklistItems.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <div style={{ flex: 1, height: '6px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ width: `${(checklistItems.filter(c => c.completed).length / checklistItems.length) * 100}%`, height: '100%', background: '#22c55e', borderRadius: '3px', transition: 'width 0.3s' }}></div>
+              </div>
+              <span style={{ fontSize: '13px', color: muted, flexShrink: 0 }}>{checklistItems.filter(c => c.completed).length}/{checklistItems.length}</span>
+            </div>
+          )}
+
+          {/* Seed template button */}
+          {checklistItems.length === 0 && (
+            <div style={{ textAlign: 'center' as const, padding: '16px 0 20px' }}>
+              <p style={{ fontSize: '14px', color: muted, margin: '0 0 12px' }}>No checklist items yet</p>
+              <button onClick={async () => {
+                const defaults = ['Create thumbnail', 'Add subtitles/captions', 'Color grade and audio mix', 'Export at 1080p H.264', 'Review final cut', 'Upload to YouTube', 'Add to district website', 'Update video library entry', 'Notify organizer of publication', 'Archive project files']
+                const inserts = defaults.map((title, i) => ({ video_id: videoId, title, sort_order: i }))
+                const { data } = await supabase.from('video_checklist_items').insert(inserts).select('*')
+                if (data) setChecklistItems(data)
+              }} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                Load default export checklist
+              </button>
+            </div>
+          )}
+
+          {/* Checklist items */}
+          {checklistItems.map((item, i) => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: i < checklistItems.length - 1 ? `0.5px solid ${border}` : 'none' }}>
+              <button onClick={async () => {
+                const completed = !item.completed
+                await supabase.from('video_checklist_items').update({ completed, completed_at: completed ? new Date().toISOString() : null }).eq('id', item.id)
+                setChecklistItems(prev => prev.map(c => c.id === item.id ? { ...c, completed } : c))
+              }} style={{ width: '20px', height: '20px', borderRadius: '5px', border: `1.5px solid ${item.completed ? '#22c55e' : border}`, background: item.completed ? '#22c55e' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {item.completed && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>
+              <span style={{ flex: 1, fontSize: '14px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>{item.title}</span>
+              <button onClick={async () => {
+                await supabase.from('video_checklist_items').delete().eq('id', item.id)
+                setChecklistItems(prev => prev.filter(c => c.id !== item.id))
+              }} style={{ fontSize: '14px', color: muted, background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>×</button>
+            </div>
+          ))}
+
+          {/* Add item */}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)} onKeyDown={async e => {
+              if (e.key === 'Enter' && newCheckItem.trim()) {
+                const { data } = await supabase.from('video_checklist_items').insert({ video_id: videoId, title: newCheckItem.trim(), sort_order: checklistItems.length }).select('*').single()
+                if (data) { setChecklistItems(prev => [...prev, data]); setNewCheckItem('') }
+              }
+            }} placeholder="Add checklist item..." style={{ ...inputStyle, flex: 1, fontSize: '14px' }} />
+            <button onClick={async () => {
+              if (!newCheckItem.trim()) return
+              const { data } = await supabase.from('video_checklist_items').insert({ video_id: videoId, title: newCheckItem.trim(), sort_order: checklistItems.length }).select('*').single()
+              if (data) { setChecklistItems(prev => [...prev, data]); setNewCheckItem('') }
+            }} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: newCheckItem.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newCheckItem.trim() ? '#fff' : muted, border: 'none', cursor: newCheckItem.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+          </div>
+        </div>
+      )}
+
       {tab === 'details' && (
         <div>
           {!editing ? (

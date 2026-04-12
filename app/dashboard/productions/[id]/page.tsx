@@ -91,6 +91,9 @@ export default function ProductionDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
+  const [completeChecks, setCompleteChecks] = useState({ deliverables: false, organizer: false, files: false, quality: false })
+  const [sendingComplete, setSendingComplete] = useState(false)
   const [showCopySetup, setShowCopySetup] = useState(false)
   const [copyTargetId, setCopyTargetId] = useState('')
   const [allProductions, setAllProductions] = useState<{ id: string; production_number: number; title: string }[]>([])
@@ -297,6 +300,32 @@ export default function ProductionDetailPage() {
     alert('Setup copied successfully!')
   }, [copyTargetId, uuid, currentUser, checklist, members, supabase, production])
 
+  const markProductionComplete = useCallback(async () => {
+    if (!production || !currentUser || !uuid) return
+    setSendingComplete(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      // Get admin assistant email from settings
+      const { data: settingData } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
+      const adminEmail = settingData?.value || ''
+      const recipients = [currentUser.email, adminEmail].filter(Boolean)
+      const prodTitle = `#${production.production_number} ${production.title}`
+      const body = `Production ${prodTitle} has been marked complete in CSDtv Team Hub.\n\nPlease mark this production as complete in the district productions system.\n\nType: ${production.request_type_label || 'Unknown'}\nOrganizer: ${production.organizer_name || 'N/A'}\nDate: ${production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}\n\n— CSDtv Team Hub`
+      for (const email of recipients) {
+        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ type: 'production_complete', to: email, subject: `Production complete: ${prodTitle}`, body }),
+        })
+      }
+      await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin' })
+      setActivity(prev => [{ id: Date.now().toString(), production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin', created_at: new Date().toISOString(), team: { name: currentUser.name } }, ...prev])
+    } catch (e) { console.error(e) }
+    setSendingComplete(false)
+    setShowCompleteModal(false)
+    setCompleteChecks({ deliverables: false, organizer: false, files: false, quality: false })
+  }, [production, currentUser, uuid, supabase])
+
   const sendOrganizerEmail = useCallback(async () => {
     if (!production?.organizer_email || !emailBody || !currentUser) return
     setSendingEmail(true)
@@ -428,6 +457,13 @@ export default function ProductionDetailPage() {
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>
                 Email organizer
+              </button>
+              <button
+                onClick={() => setShowCompleteModal(true)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '0.5px solid rgba(34,197,94,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '8px' }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                Mark complete
               </button>
             )}
           </div>
@@ -940,6 +976,41 @@ export default function ProductionDetailPage() {
               <button onClick={() => setShowEmailModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MARK COMPLETE MODAL */}
+      {showCompleteModal && production && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCompleteModal(false) }}>
+          <div style={{ background: dark ? '#0d1525' : '#fff', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '480px', padding: '24px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Mark production complete</h2>
+            <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px' }}>#{production.production_number} {production.title}</p>
+
+            <p style={{ fontSize: '13px', fontWeight: 600, color: text, margin: '0 0 10px' }}>Confirm before completing:</p>
+            {([
+              { key: 'deliverables' as const, label: 'All deliverables have been sent to the organizer' },
+              { key: 'organizer' as const, label: 'Organizer has confirmed receipt' },
+              { key: 'files' as const, label: 'Project files are saved and organized' },
+              { key: 'quality' as const, label: 'Final quality check passed' },
+            ]).map(item => (
+              <div key={item.key} onClick={() => setCompleteChecks(prev => ({ ...prev, [item.key]: !prev[item.key] }))} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', marginBottom: '6px', background: completeChecks[item.key] ? 'rgba(34,197,94,0.06)' : (dark ? 'rgba(255,255,255,0.02)' : '#f8fafc'), border: `0.5px solid ${completeChecks[item.key] ? 'rgba(34,197,94,0.2)' : border}`, cursor: 'pointer' }}>
+                <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `1.5px solid ${completeChecks[item.key] ? '#22c55e' : border}`, background: completeChecks[item.key] ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {completeChecks[item.key] && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                <span style={{ fontSize: '14px', color: completeChecks[item.key] ? text : muted }}>{item.label}</span>
+              </div>
+            ))}
+
+            <p style={{ fontSize: '12px', color: muted, margin: '14px 0 12px' }}>An email will be sent to you and the admin assistant to mark this complete in the district system.</p>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={markProductionComplete} disabled={sendingComplete || !Object.values(completeChecks).every(Boolean)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: Object.values(completeChecks).every(Boolean) ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), color: Object.values(completeChecks).every(Boolean) ? '#fff' : muted, border: 'none', cursor: Object.values(completeChecks).every(Boolean) ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
+                {sendingComplete ? 'Sending...' : 'Confirm & notify'}
+              </button>
+              <button onClick={() => setShowCompleteModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             </div>
           </div>
         </div>

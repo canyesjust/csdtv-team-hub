@@ -55,7 +55,7 @@ export default function ReportsPage() {
   const [equipment, setEquipment] = useState<Equipment[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [prodMembers, setProdMembers] = useState<ProdMember[]>([])
-  const [allSchools, setAllSchools] = useState<{ code: string; name: string }[]>([])
+  const [allSchools, setAllSchools] = useState<{ code: string; name: string; type: string }[]>([])
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -374,7 +374,7 @@ export default function ReportsPage() {
           {/* Schools equity — not served */}
           {(() => {
             const servedCodes = new Set(fp.filter(p => p.school_department).map(p => p.school_department!))
-            const notServed = allSchools.filter(s => !servedCodes.has(s.code) && !servedCodes.has(s.code.padStart(3, '0')) && !servedCodes.has(s.code.replace(/^0+/, '') || '0'))
+            const notServed = allSchools.filter(s => s.type === 'school' && !servedCodes.has(s.code) && !servedCodes.has(s.code.padStart(3, '0')) && !servedCodes.has(s.code.replace(/^0+/, '') || '0'))
             if (notServed.length === 0) return null
             return sectionCard(`Schools not yet served (${notServed.length})`, (
               <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px' }}>

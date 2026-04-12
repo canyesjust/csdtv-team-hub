@@ -43,12 +43,15 @@ export default function SettingsPage() {
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState('')
   const [editingTeamMember, setEditingTeamMember] = useState<string | null>(null)
-  const [schools, setSchools] = useState<{ id: string; code: string; name: string }[]>([])
+  const [schools, setSchools] = useState<{ id: string; code: string; name: string; type: string }[]>([])
   const [schoolSearch, setSchoolSearch] = useState('')
   const [newSchoolCode, setNewSchoolCode] = useState('')
   const [newSchoolName, setNewSchoolName] = useState('')
+  const [newSchoolType, setNewSchoolType] = useState('school')
   const [editingSchool, setEditingSchool] = useState<string | null>(null)
   const [editSchoolName, setEditSchoolName] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
+  const [adminEmailSaved, setAdminEmailSaved] = useState(false)
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
   const muted   = dark ? '#8899bb' : '#6b7280'
@@ -59,14 +62,18 @@ export default function SettingsPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [userRes, teamRes, schoolsRes] = await Promise.all([
+    const [userRes, teamRes, schoolsRes, settingsRes] = await Promise.all([
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
       supabase.from('team').select('*').eq('active', true).order('name'),
       supabase.from('schools').select('*').order('name'),
+      supabase.from('app_settings').select('*'),
     ])
     setCurrentUser(userRes.data)
     setTeam(teamRes.data || [])
     setSchools(schoolsRes.data || [])
+    const settings = settingsRes.data || []
+    const adminSetting = settings.find((s: any) => s.key === 'admin_assistant_email')
+    if (adminSetting) setAdminEmail(adminSetting.value || '')
     if (userRes.data) {
       setProfileForm({ name: userRes.data.name, email: userRes.data.email })
       setSelectedColor(userRes.data.avatar_color || '#e8a020')
@@ -160,8 +167,8 @@ export default function SettingsPage() {
 
   const addSchool = async () => {
     if (!newSchoolCode.trim() || !newSchoolName.trim()) return
-    const { data } = await supabase.from('schools').insert({ code: newSchoolCode.trim(), name: newSchoolName.trim() }).select('*').single()
-    if (data) { setSchools(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))); setNewSchoolCode(''); setNewSchoolName('') }
+    const { data } = await supabase.from('schools').insert({ code: newSchoolCode.trim(), name: newSchoolName.trim(), type: newSchoolType }).select('*').single()
+    if (data) { setSchools(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))); setNewSchoolCode(''); setNewSchoolName(''); setNewSchoolType('school') }
   }
   const updateSchool = async (id: string) => {
     if (!editSchoolName.trim()) return
@@ -174,6 +181,18 @@ export default function SettingsPage() {
     setSchools(prev => prev.filter(s => s.id !== id))
   }
   const filteredSchools = schools.filter(s => !schoolSearch || s.name.toLowerCase().includes(schoolSearch.toLowerCase()) || s.code.includes(schoolSearch))
+
+  const saveAdminEmail = async () => {
+    await supabase.from('app_settings').upsert({ key: 'admin_assistant_email', value: adminEmail.trim(), updated_at: new Date().toISOString() })
+    setAdminEmailSaved(true)
+    setTimeout(() => setAdminEmailSaved(false), 2000)
+  }
+
+  const toggleSchoolType = async (school: { id: string; type: string }) => {
+    const newType = school.type === 'school' ? 'department' : 'school'
+    await supabase.from('schools').update({ type: newType }).eq('id', school.id)
+    setSchools(prev => prev.map(s => s.id === school.id ? { ...s, type: newType } : s))
+  }
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}><Loader /></div>
 
@@ -319,12 +338,30 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ── Admin Settings ── */}
+      {isManager && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Admin settings</h2>
+          <p style={{ fontSize: '13px', color: muted, margin: '0 0 14px' }}>System-wide configuration</p>
+          <div style={{ marginBottom: '12px' }}>
+            <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Admin assistant email</p>
+            <p style={{ fontSize: '11px', color: muted, margin: '0 0 6px' }}>Receives notification when a production is marked complete</p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="admin.assistant@canyonsdistrict.org" style={{ ...inputStyle, flex: 1, fontSize: '14px' }} />
+              <button onClick={saveAdminEmail} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>
+                {adminEmailSaved ? '✓ Saved' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Schools / Locations ── */}
       <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: 0 }}>Schools &amp; locations</h2>
-            <p style={{ fontSize: '13px', color: muted, margin: '4px 0 0' }}>{schools.length} entries — used to display location names on productions and signage</p>
+            <p style={{ fontSize: '13px', color: muted, margin: '4px 0 0' }}>{schools.filter(s => s.type === 'school').length} schools · {schools.filter(s => s.type === 'department').length} departments</p>
           </div>
         </div>
 
@@ -338,6 +375,13 @@ export default function SettingsPage() {
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Name</p>
               <input value={newSchoolName} onChange={e => setNewSchoolName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSchool()} placeholder="e.g. Alta High" style={{ ...inputStyle, fontSize: '14px' }} />
+            </div>
+            <div>
+              <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Type</p>
+              <select value={newSchoolType} onChange={e => setNewSchoolType(e.target.value)} style={{ ...inputStyle, fontSize: '14px', width: '120px' }}>
+                <option value="school">School</option>
+                <option value="department">Department</option>
+              </select>
             </div>
             <button onClick={addSchool} disabled={!newSchoolCode.trim() || !newSchoolName.trim()} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: newSchoolCode && newSchoolName ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: newSchoolCode && newSchoolName ? '#fff' : muted, border: 'none', cursor: newSchoolCode && newSchoolName ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
               Add
@@ -354,9 +398,10 @@ export default function SettingsPage() {
 
         {/* Table */}
         <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 100px', padding: '10px 14px', borderBottom: `0.5px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 100px', padding: '10px 14px', borderBottom: `0.5px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Code</span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Name</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Type</span>
             <span />
           </div>
           <div style={{ maxHeight: '400px', overflowY: 'auto' as const }}>
@@ -365,7 +410,7 @@ export default function SettingsPage() {
                 <p style={{ color: muted, fontSize: '14px', margin: 0 }}>{schoolSearch ? 'No matches' : 'No schools added yet'}</p>
               </div>
             ) : filteredSchools.map((school, i) => (
-              <div key={school.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 100px', padding: '10px 14px', borderBottom: i < filteredSchools.length - 1 ? `0.5px solid ${border}` : 'none', alignItems: 'center' }}>
+              <div key={school.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 100px', padding: '10px 14px', borderBottom: i < filteredSchools.length - 1 ? `0.5px solid ${border}` : 'none', alignItems: 'center' }}>
                 <span style={{ fontSize: '14px', color: muted, fontFamily: 'monospace' }}>{school.code}</span>
                 {editingSchool === school.id ? (
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -376,6 +421,7 @@ export default function SettingsPage() {
                 ) : (
                   <span style={{ fontSize: '14px', color: text }}>{school.name}</span>
                 )}
+                <button onClick={() => isManager && toggleSchoolType(school)} style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: school.type === 'school' ? 'rgba(34,197,94,0.1)' : 'rgba(96,165,250,0.1)', color: school.type === 'school' ? '#22c55e' : '#60a5fa', border: 'none', cursor: isManager ? 'pointer' : 'default', fontFamily: 'inherit' }}>{school.type}</button>
                 {isManager && editingSchool !== school.id && (
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                     <button onClick={() => { setEditingSchool(school.id); setEditSchoolName(school.name) }} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>

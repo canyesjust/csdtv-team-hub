@@ -52,6 +52,7 @@ function ProductionsPageContent() {
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [view, setView] = useState<'pipeline' | 'list'>('pipeline')
   const [scope, setScope] = useState<'all' | 'mine' | 'unassigned'>(searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'unassigned' ? 'unassigned' : 'all')
+  const [dismissedConflicts, setDismissedConflicts] = useState<Set<string>>(new Set())
   const searchRef = useRef<HTMLInputElement>(null)
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
@@ -97,6 +98,11 @@ function ProductionsPageContent() {
     const sorted = sortProductions(prodsRes.data || [])
     setProductions(sorted)
     setTeam(teamRes.data || [])
+    // Load dismissed conflicts
+    const { data: dismissedData } = await supabase.from('dismissed_conflicts').select('production_a_id, production_b_id')
+    const dSet = new Set<string>()
+    ;(dismissedData || []).forEach((d: any) => { dSet.add(`${d.production_a_id}-${d.production_b_id}`); dSet.add(`${d.production_b_id}-${d.production_a_id}`) })
+    setDismissedConflicts(dSet)
     const latestSync = (prodsRes.data || []).reduce<string | null>((max, p) =>
       p.synced_at && (!max || p.synced_at > max) ? p.synced_at : max, null)
     if (latestSync) setLastSync(latestSync)
@@ -104,6 +110,12 @@ function ProductionsPageContent() {
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
+
+  const dismissConflict = async (aId: string, bId: string) => {
+    if (!currentUserId) return
+    await supabase.from('dismissed_conflicts').insert({ production_a_id: aId, production_b_id: bId, dismissed_by: currentUserId })
+    setDismissedConflicts(prev => { const n = new Set(prev); n.add(`${aId}-${bId}`); n.add(`${bId}-${aId}`); return n })
+  }
 
   const getTypeLabel = (p: Production) => p.request_type_label || p.type || 'Unknown'
   const getTypeColor = (p: Production) => TYPE_COLORS[getTypeLabel(p)] || '#64748b'
@@ -377,23 +389,29 @@ function ProductionsPageContent() {
       {/* Scheduling conflicts */}
       {(() => {
         const upcoming = filtered.filter(p => p.start_datetime && p.status !== 'Complete' && p.status !== 'Abandoned' && new Date(p.start_datetime) >= new Date())
-        const conflicts: { a: Production; b: Production }[] = []
+        const allConflicts: { a: Production; b: Production }[] = []
         for (let i = 0; i < upcoming.length; i++) {
           for (let j = i + 1; j < upcoming.length; j++) {
             const da = new Date(upcoming[i].start_datetime!)
             const db = new Date(upcoming[j].start_datetime!)
             if (da.getFullYear() === db.getFullYear() && da.getMonth() === db.getMonth() && da.getDate() === db.getDate() && Math.abs(da.getTime() - db.getTime()) < 3600000) {
-              conflicts.push({ a: upcoming[i], b: upcoming[j] })
+              allConflicts.push({ a: upcoming[i], b: upcoming[j] })
             }
           }
         }
+        const conflicts = allConflicts.filter(c => !dismissedConflicts.has(`${c.a.id}-${c.b.id}`))
         if (conflicts.length === 0) return null
         return (
           <div style={{ background: 'rgba(239,68,68,0.06)', border: '0.5px solid rgba(239,68,68,0.25)', borderRadius: '10px', padding: '12px 16px', marginBottom: '14px' }}>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: '#ef4444', margin: '0 0 6px' }}>⚠ Scheduling conflicts detected</p>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: '#ef4444', margin: '0 0 6px' }}>⚠ {conflicts.length} scheduling conflict{conflicts.length !== 1 ? 's' : ''}</p>
             {conflicts.slice(0, 5).map((c, i) => {
               const d = new Date(c.a.start_datetime!)
-              return <p key={i} style={{ fontSize: '12px', color: muted, margin: '2px 0' }}>{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}: <strong style={{ color: text }}>#{c.a.production_number} {c.a.title}</strong> and <strong style={{ color: text }}>#{c.b.production_number} {c.b.title}</strong> overlap</p>
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+                  <p style={{ fontSize: '12px', color: muted, margin: 0, flex: 1 }}>{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}: <strong style={{ color: text }}>#{c.a.production_number} {c.a.title}</strong> and <strong style={{ color: text }}>#{c.b.production_number} {c.b.title}</strong></p>
+                  <button onClick={() => dismissConflict(c.a.id, c.b.id)} style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Accept</button>
+                </div>
+              )
             })}
           </div>
         )
