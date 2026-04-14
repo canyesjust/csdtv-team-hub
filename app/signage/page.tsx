@@ -197,7 +197,7 @@ export default function SignagePage() {
                   borderLeft: todayCell ? '3px solid #60b8f0' : 'none',
                   padding: '2px 3px', opacity, overflow: 'hidden' as const,
                 }}>
-                  <div style={{ fontSize: '14px', color: todayCell ? '#60b8f0' : '#99aabb', fontWeight: todayCell ? 800 : 500, textAlign: 'right' as const, marginBottom: '2px' }}>{date.getDate()}</div>
+                  <div style={{ fontSize: '14px', color: todayCell ? '#60b8f0' : '#99aabb', fontWeight: todayCell ? 800 : 500, textAlign: 'right' as const, marginBottom: dayProds.length > 3 ? '1px' : '2px' }}>{date.getDate()}</div>
                   {dayProds.map(p => {
                     const tc = TYPE_COLORS[p.request_type_label || ''] || '#94a3b8'
                     const members = p.production_members || []
@@ -207,19 +207,25 @@ export default function SignagePage() {
                     const d = p.start_datetime ? new Date(p.start_datetime) : null
                     const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
                     const loc = getSchoolName(p.school_department) || p.filming_location || ''
+                    const n = dayProds.length
+                    const titleSize = n <= 2 ? '14px' : n <= 3 ? '12px' : '11px'
+                    const detailSize = n <= 2 ? '12px' : '10px'
+                    const cardPad = n <= 2 ? '3px 5px' : n <= 3 ? '2px 4px' : '1px 4px'
+                    const cardGap = n <= 2 ? '2px' : '1px'
+                    const showDetail = n <= 4
                     return (
                       <div key={p.id} style={{
-                        padding: '3px 5px', marginBottom: '2px', borderRadius: '4px',
+                        padding: cardPad, marginBottom: cardGap, borderRadius: '3px',
                         background: done ? 'rgba(255,255,255,0.02)' : `${tc}18`,
                         borderLeft: `3px solid ${done ? '#444' : tc}`,
                         opacity: done ? 0.4 : 1,
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <span style={{ fontSize: '14px', fontWeight: active ? 700 : 600, color: done ? dimmed : tc, flex: 1, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, textDecoration: done ? 'line-through' : 'none' }}>{p.title}</span>
-                          {ini && <span style={{ fontSize: '11px', color: done ? dimmed : muted, flexShrink: 0 }}>{ini}</span>}
+                          <span style={{ fontSize: titleSize, fontWeight: active ? 700 : 600, color: done ? dimmed : tc, flex: 1, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, textDecoration: done ? 'line-through' : 'none', lineHeight: 1.2 }}>{p.title}</span>
+                          {ini && <span style={{ fontSize: n <= 3 ? '11px' : '9px', color: done ? dimmed : muted, flexShrink: 0 }}>{ini}</span>}
                         </div>
-                        {(time || loc) && !done && (
-                          <div style={{ fontSize: '12px', color: '#8aa0bc', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const }}>
+                        {showDetail && (time || loc) && !done && (
+                          <div style={{ fontSize: detailSize, color: '#8aa0bc', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, lineHeight: 1.2 }}>
                             {time}{time && loc ? ' · ' : ''}{loc}
                           </div>
                         )}
