@@ -108,7 +108,7 @@ export default function SettingsPage() {
 
   const inviteUser = async () => {
     if (!inviteEmail || !currentUser) return
-    if (!confirm(`Add ${inviteEmail} to the team as ${inviteRole}?`)) return
+    if (!confirm(`Add ${inviteEmail} to the team as ${inviteRole}? They'll receive an email with a sign-in link.`)) return
     setInviting(true)
     setInviteResult(null)
 
@@ -120,32 +120,31 @@ export default function SettingsPage() {
       return
     }
 
-    // Add to team table
-    const name = inviteEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-    const { error } = await supabase.from('team').insert({ name, email: inviteEmail, role: inviteRole, active: true, avatar_color: inviteColor })
-
-    if (error) {
-      setInviteResult({ success: false, message: 'Failed to add team member. Please try again.' })
-      setInviting(false)
-      return
-    }
-
-    // Send invite email via edge function
+    // Use edge function to create auth account + team record + send invite
     try {
+      const name = inviteEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
       const { data: { session } } = await supabase.auth.getSession()
-      await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-invite`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ email: inviteEmail, name, role: inviteRole, invitedBy: currentUser.name }),
+        body: JSON.stringify({ email: inviteEmail, name, role: inviteRole, avatar_color: inviteColor }),
       })
-    } catch {
-      // Email failed but team member was added - not critical
-    }
+      const result = await res.json()
 
-    setInviteResult({ success: true, message: `${name} added to the team. They can now log in at csdtvstaff.org using their email.` })
-    setInviteEmail('')
-    setInviting(false)
-    loadData()
+      if (!res.ok || result.error) {
+        setInviteResult({ success: false, message: result.error || 'Failed to invite. Please try again.' })
+        setInviting(false)
+        return
+      }
+
+      setInviteResult({ success: true, message: `Invite sent to ${inviteEmail}. They'll receive an email with a sign-in link.` })
+      setInviteEmail('')
+      setInviting(false)
+      loadData()
+    } catch {
+      setInviteResult({ success: false, message: 'Failed to invite. Please try again.' })
+      setInviting(false)
+    }
   }
 
   const deactivateMember = async (memberId: string, memberName: string) => {
@@ -294,6 +293,25 @@ export default function SettingsPage() {
                 <p style={{ fontSize: '14px', color: muted, margin: 0 }}>
                   {member.email}
                   {!member.supabase_user_id && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>Pending login</span>}
+                  {!member.supabase_user_id && isManager && (
+                    <button onClick={async () => {
+                      try {
+                        const { data: { session } } = await supabase.auth.getSession()
+                        const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+                          body: JSON.stringify({ email: member.email, name: member.name, role: member.role, avatar_color: member.avatar_color }),
+                        })
+                        const result = await res.json()
+                        if (res.ok && result.success) {
+                          alert(`Invite sent to ${member.email}`)
+                          loadData()
+                        } else {
+                          alert(result.error || 'Failed to send invite')
+                        }
+                      } catch { alert('Failed to send invite') }
+                    }} style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.2)', cursor: 'pointer', fontFamily: 'inherit' }}>Send invite</button>
+                  )}
                 </p>
               </div>
               <span style={{ fontSize: '14px', padding: '3px 10px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{member.role}</span>
@@ -306,7 +324,7 @@ export default function SettingsPage() {
           <div style={{ marginTop: '20px', padding: '16px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc', borderRadius: '12px', border: `0.5px solid ${border}` }}>
             <h3 style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 4px' }}>Invite team member</h3>
             <p style={{ fontSize: '14px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
-              They'll be added to the team and can log in at <strong>csdtvstaff.org</strong> using their district email — no password needed, just a magic link sent to their inbox.
+              They'll receive an email with a one-click sign-in link to <strong>csdtvstaff.org</strong>. Their auth account is created automatically — no signup needed.
             </p>
             <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
               <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="District email address" type="email" style={inputStyle} />
@@ -327,7 +345,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <button onClick={inviteUser} disabled={inviting || !inviteEmail} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: inviteEmail ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: inviteEmail ? '#fff' : muted, border: 'none', cursor: inviteEmail ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
-              {inviting ? 'Adding...' : 'Add to team'}
+              {inviting ? 'Sending invite...' : 'Invite to team'}
             </button>
             {inviteResult && (
               <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: inviteResult.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `0.5px solid ${inviteResult.success ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
