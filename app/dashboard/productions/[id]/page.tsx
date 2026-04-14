@@ -307,7 +307,8 @@ export default function ProductionDetailPage() {
     if (!production || !currentUser || !uuid) return
     setSendingComplete(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) { setSendingComplete(false); return }
       // Get admin assistant email from settings
       const { data: settingData } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
       const adminEmail = settingData?.value || ''
@@ -318,7 +319,7 @@ export default function ProductionDetailPage() {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ type: 'production_complete', to: email, subject: `Production complete: ${prodTitle}`, body }),
+          body: JSON.stringify({ type: 'production_complete', recipientEmail: email, subject: `Production complete: ${prodTitle}`, body }),
         })
       }
       await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin' })
@@ -333,7 +334,8 @@ export default function ProductionDetailPage() {
     if (!production?.organizer_email || !emailBody || !currentUser) return
     setSendingEmail(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) { setSendingEmail(false); return }
       await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
