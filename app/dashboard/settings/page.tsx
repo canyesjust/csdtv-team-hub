@@ -123,7 +123,8 @@ export default function SettingsPage() {
     // Use edge function to create auth account + team record + send invite
     try {
       const name = inviteEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) { setInviteResult({ success: false, message: 'Session expired. Please refresh the page and try again.' }); setInviting(false); return }
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
@@ -296,7 +297,8 @@ export default function SettingsPage() {
                   {!member.supabase_user_id && isManager && (
                     <button onClick={async () => {
                       try {
-                        const { data: { session } } = await supabase.auth.getSession()
+                        const { data: { session } } = await supabase.auth.refreshSession()
+                        if (!session) { alert('Session expired. Please refresh the page.'); return }
                         const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
