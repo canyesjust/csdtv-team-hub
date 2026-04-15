@@ -71,6 +71,7 @@ export default function ProductionDetailPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
   const [linkedVideos, setLinkedVideos] = useState<{ id: string; title: string; video_type: string; status: string; date_published: string | null }[]>([])
+  const [linkedTasks, setLinkedTasks] = useState<{ id: string; title: string; status: string; priority: string; assigned_to: string | null; due_date: string | null }[]>([])
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'>('checklist')
@@ -149,6 +150,8 @@ export default function ProductionDetailPage() {
     // Load linked videos
     const { data: vidData } = await supabase.from('videos').select('id, title, video_type, status, date_published').eq('production_id', prodUUID).order('created_at', { ascending: false })
     setLinkedVideos(vidData || [])
+    const { data: taskData } = await supabase.from('tasks').select('id, title, status, priority, assigned_to, due_date').eq('production_id', prodUUID).order('created_at', { ascending: false })
+    setLinkedTasks(taskData || [])
     const { data: allProdsData } = await supabase.from('productions').select('id, production_number, title').neq('id', prodUUID).order('production_number', { ascending: false }).limit(50)
     setAllProductions(allProdsData || [])
     setLoading(false)
@@ -165,12 +168,13 @@ export default function ProductionDetailPage() {
 
   const createTaskForProduction = useCallback(async () => {
     if (!newTaskTitle || !currentUser || !uuid) return
-    const { error } = await supabase.from('tasks').insert({
+    const { data, error } = await supabase.from('tasks').insert({
       title: newTaskTitle, priority: newTaskPriority,
       assigned_to: newTaskAssignee || null, due_date: newTaskDue || null,
       production_id: uuid, status: 'pending', created_by: currentUser.id,
-    })
+    }).select('id, title, status, priority, assigned_to, due_date').single()
     if (error) { alert(`Failed to create task: ${error.message}`); return }
+    if (data) setLinkedTasks(prev => [data, ...prev])
     setNewTaskTitle(''); setNewTaskAssignee(''); setNewTaskDue(''); setNewTaskPriority('normal')
     setShowCreateTask(false)
     await logActivity('Created task', newTaskTitle)
@@ -733,9 +737,31 @@ export default function ProductionDetailPage() {
               </button>
             </div>
           )}
+
+          {/* Linked tasks */}
+          {linkedTasks.length > 0 && (
+            <div style={{ marginTop: '16px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 10px' }}>Tasks ({linkedTasks.length})</p>
+              {linkedTasks.map((task, i) => {
+                const assignee = allTeam.find(m => m.id === task.assigned_to)
+                const statusColors: Record<string, string> = { pending: '#94a3b8', 'in progress': '#f59e0b', 'in review': '#a855f7', complete: '#22c55e' }
+                const sc = statusColors[task.status] || '#94a3b8'
+                return (
+                  <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: i < linkedTasks.length - 1 ? `0.5px solid ${border}` : 'none' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: sc, flexShrink: 0 }} />
+                    <Link href="/dashboard/tasks" style={{ flex: 1, fontSize: '14px', color: text, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</Link>
+                    <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: `${sc}20`, color: sc }}>{task.status}</span>
+                    {task.due_date && <span style={{ fontSize: '11px', color: muted }}>{new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                    {assignee && (
+                      <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: assignee.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>{assignee.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
-
       {/* INFO TAB */}
       {activeTab === 'info' && (
         <div>
