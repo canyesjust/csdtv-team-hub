@@ -2,13 +2,12 @@
 
 import { createClient } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 export default function LoginPage() {
   const supabase = createClient()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'password' | 'magic'>('password')
@@ -20,8 +19,8 @@ export default function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
 
   useEffect(() => {
-    if (searchParams.get('reset') === 'true') setResetMode(true)
-  }, [searchParams])
+    if (typeof window !== 'undefined' && window.location.search.includes('reset=true')) setResetMode(true)
+  }, [])
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
