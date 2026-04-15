@@ -2,18 +2,26 @@
 
 import { createClient } from '@/lib/supabase'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 
 export default function LoginPage() {
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mode, setMode] = useState<'password' | 'magic'>('password')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [resetMode, setResetMode] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  useEffect(() => {
+    if (searchParams.get('reset') === 'true') setResetMode(true)
+  }, [searchParams])
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -98,7 +106,42 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {mode === 'password' ? (
+        {resetMode ? (
+          <>
+            <div style={{ textAlign: 'center' as const, fontSize: '16px', fontWeight: 600, color: '#f0f4ff', marginBottom: '4px' }}>Set your password</div>
+            <div style={{ textAlign: 'center' as const, fontSize: '13px', color: '#8899bb', marginBottom: '1.5rem' }}>Create a password for your CSDtv account</div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#8899bb', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>New password</label>
+              <input type="password" placeholder="At least 6 characters" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={{ width: '100%', background: '#1a2540', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', color: '#f0f4ff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#8899bb', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Confirm password</label>
+              <input type="password" placeholder="••••••••" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onKeyDown={async e => {
+                if (e.key !== 'Enter' || !newPassword || newPassword !== confirmPassword) return
+                setLoading(true); setError('')
+                const { error } = await supabase.auth.updateUser({ password: newPassword })
+                if (error) setError(error.message)
+                else { setMessage('Password set! Redirecting...'); setTimeout(() => router.push('/dashboard'), 1500) }
+                setLoading(false)
+              }} style={{ width: '100%', background: '#1a2540', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', color: '#f0f4ff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+            </div>
+            {newPassword && confirmPassword && newPassword !== confirmPassword && <div style={{ fontSize: '13px', color: '#e74c3c', marginBottom: '1rem' }}>Passwords don't match</div>}
+            {error && <div style={{ fontSize: '14px', color: '#e74c3c', marginBottom: '1rem' }}>{error}</div>}
+            {message && <div style={{ fontSize: '14px', color: '#2ecc71', marginBottom: '1rem' }}>{message}</div>}
+            <button onClick={async () => {
+              if (!newPassword) { setError('Enter a password'); return }
+              if (newPassword.length < 6) { setError('Password must be at least 6 characters'); return }
+              if (newPassword !== confirmPassword) { setError('Passwords don\'t match'); return }
+              setLoading(true); setError('')
+              const { error } = await supabase.auth.updateUser({ password: newPassword })
+              if (error) setError(error.message)
+              else { setMessage('Password set! Redirecting...'); setTimeout(() => router.push('/dashboard'), 1500) }
+              setLoading(false)
+            }} disabled={loading || !newPassword || newPassword !== confirmPassword} style={{ width: '100%', background: newPassword && newPassword === confirmPassword ? '#1e6cb5' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: 500, color: newPassword && newPassword === confirmPassword ? '#fff' : '#4a5a7a', cursor: newPassword && newPassword === confirmPassword ? 'pointer' : 'default', fontFamily: 'inherit', opacity: loading ? 0.7 : 1 }}>
+              {loading ? 'Setting password...' : 'Set password'}
+            </button>
+          </>
+        ) : mode === 'password' ? (
           <>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#8899bb', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
@@ -129,10 +172,24 @@ export default function LoginPage() {
             <button
               onClick={handlePasswordLogin}
               disabled={loading}
-              style={{ width: '100%', background: '#1e6cb5', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: 500, color: '#fff', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '1rem', opacity: loading ? 0.7 : 1 }}
+              style={{ width: '100%', background: '#1e6cb5', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: 500, color: '#fff', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '0.5rem', opacity: loading ? 0.7 : 1 }}
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
+            <button
+              onClick={async () => {
+                if (!email) { setError('Enter your email first'); return }
+                setLoading(true); setError('')
+                const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login?reset=true` })
+                if (error) setError(error.message)
+                else setMessage('Check your email for a password reset link.')
+                setLoading(false)
+              }}
+              style={{ width: '100%', background: 'transparent', border: 'none', padding: '8px', fontSize: '13px', color: '#5ba3e0', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '0.5rem' }}
+            >
+              Forgot password? Send reset link
+            </button>
+            {message && <div style={{ fontSize: '14px', color: '#2ecc71', marginBottom: '1rem' }}>{message}</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
               <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.08)' }}></div>
               <div style={{ fontSize: '13px', color: '#4a5a7a' }}>or</div>
