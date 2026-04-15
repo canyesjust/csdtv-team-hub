@@ -165,11 +165,12 @@ export default function ProductionDetailPage() {
 
   const createTaskForProduction = useCallback(async () => {
     if (!newTaskTitle || !currentUser || !uuid) return
-    await supabase.from('tasks').insert({
+    const { error } = await supabase.from('tasks').insert({
       title: newTaskTitle, priority: newTaskPriority,
       assigned_to: newTaskAssignee || null, due_date: newTaskDue || null,
       production_id: uuid, status: 'pending', created_by: currentUser.id,
     })
+    if (error) { alert(`Failed to create task: ${error.message}`); return }
     setNewTaskTitle(''); setNewTaskAssignee(''); setNewTaskDue(''); setNewTaskPriority('normal')
     setShowCreateTask(false)
     await logActivity('Created task', newTaskTitle)
