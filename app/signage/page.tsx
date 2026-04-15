@@ -158,7 +158,7 @@ export default function SignagePage() {
             <div key={d} style={{
               background: isToday ? 'rgba(96,184,240,0.08)' : '#111d30',
               borderBottom: `1px solid ${gridBorder}`, borderRight: i < 6 ? `1px solid ${gridBorder}` : 'none',
-              padding: '8px', textAlign: 'center' as const, fontSize: '15px', fontWeight: 800,
+              padding: '8px', textAlign: 'center' as const, fontSize: '17px', fontWeight: 800,
               color: isToday ? '#60b8f0' : '#ccd5e8', letterSpacing: '1px',
             }}>{d}</div>
           )
@@ -175,7 +175,7 @@ export default function SignagePage() {
               background: isThisWeek ? 'rgba(96,184,240,0.06)' : 'transparent',
               borderBottom: wi < 4 ? `1px solid ${gridBorder}` : 'none',
               borderRight: `1px solid ${gridBorder}`,
-              padding: '8px 4px', fontSize: '12px', fontWeight: 700,
+              padding: '8px 4px', fontSize: '14px', fontWeight: 700,
               color: isThisWeek ? '#60b8f0' : muted, textAlign: 'center' as const,
               display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '8px',
             }}>{weekLabel}</div>,
@@ -201,7 +201,7 @@ export default function SignagePage() {
                     const n = dayProds.length
                     const s = n <= 3 ? 1 : Math.max(0.55, 3 / n)
                     return <>
-                  <div style={{ fontSize: `${Math.round(14 * s)}px`, color: todayCell ? '#60b8f0' : '#99aabb', fontWeight: todayCell ? 800 : 500, textAlign: 'right' as const, marginBottom: `${Math.round(2 * s)}px` }}>{date.getDate()}</div>
+                  <div style={{ fontSize: `${Math.round(18 * s)}px`, color: todayCell ? '#60b8f0' : '#c0ccdd', fontWeight: todayCell ? 800 : 600, textAlign: 'right' as const, marginBottom: `${Math.round(2 * s)}px` }}>{date.getDate()}</div>
                   {dayProds.map(p => {
                     const tc = TYPE_COLORS[p.request_type_label || ''] || '#94a3b8'
                     const members = p.production_members || []
@@ -214,16 +214,16 @@ export default function SignagePage() {
                     return (
                       <div key={p.id} style={{
                         padding: `${Math.round(3 * s)}px ${Math.round(5 * s)}px`, marginBottom: `${Math.round(2 * s)}px`, borderRadius: '3px',
-                        background: done ? 'rgba(255,255,255,0.02)' : `${tc}18`,
-                        borderLeft: `3px solid ${done ? '#444' : tc}`,
+                        background: done ? 'rgba(255,255,255,0.02)' : `${tc}22`,
+                        borderLeft: `3px solid ${done ? '#555' : tc}`,
                         opacity: done ? 0.4 : 1,
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                          <span style={{ fontSize: `${Math.round(14 * s)}px`, fontWeight: active ? 700 : 600, color: done ? dimmed : tc, flex: 1, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, textDecoration: done ? 'line-through' : 'none', lineHeight: 1.2 }}>{p.title}</span>
-                          {ini && <span style={{ fontSize: `${Math.round(11 * s)}px`, color: done ? dimmed : muted, flexShrink: 0 }}>{ini}</span>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: active ? 800 : 700, color: done ? dimmed : tc, flex: 1, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, textDecoration: done ? 'line-through' : 'none', lineHeight: 1.2 }}>{p.title}</span>
+                          {ini && <span style={{ fontSize: `${Math.round(13 * s)}px`, color: done ? dimmed : '#c0ccdd', fontWeight: 500, flexShrink: 0 }}>{ini}</span>}
                         </div>
                         {(time || loc) && !done && (
-                          <div style={{ fontSize: `${Math.round(12 * s)}px`, color: '#8aa0bc', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, lineHeight: 1.2 }}>
+                          <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', fontWeight: 400, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, lineHeight: 1.3 }}>
                             {time}{time && loc ? ' · ' : ''}{loc}
                           </div>
                         )}
