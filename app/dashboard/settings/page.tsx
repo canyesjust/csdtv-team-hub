@@ -52,6 +52,10 @@ export default function SettingsPage() {
   const [editSchoolName, setEditSchoolName] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
   const [adminEmailSaved, setAdminEmailSaved] = useState(false)
+  const [changePw, setChangePw] = useState('')
+  const [changePw2, setChangePw2] = useState('')
+  const [changePwSaving, setChangePwSaving] = useState(false)
+  const [changePwMsg, setChangePwMsg] = useState('')
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
   const muted   = dark ? '#8899bb' : '#6b7280'
@@ -253,6 +257,34 @@ export default function SettingsPage() {
           </div>
           <Toggle checked={dark} onChange={toggleTheme} />
         </div>
+      </div>
+
+      {/* Security */}
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 16px' }}>Security</h2>
+        <p style={{ fontSize: '14px', color: muted, margin: '0 0 12px' }}>Set or change your login password</p>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' as const }}>
+          <div>
+            <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>New password</p>
+            <input type="password" value={changePw} onChange={e => { setChangePw(e.target.value); setChangePwMsg('') }} placeholder="At least 6 characters" style={{ ...inputStyle, width: '200px', fontSize: '14px' }} />
+          </div>
+          <div>
+            <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Confirm</p>
+            <input type="password" value={changePw2} onChange={e => { setChangePw2(e.target.value); setChangePwMsg('') }} placeholder="••••••••" style={{ ...inputStyle, width: '200px', fontSize: '14px' }} />
+          </div>
+          <button onClick={async () => {
+            if (!changePw || changePw.length < 6) { setChangePwMsg('At least 6 characters'); return }
+            if (changePw !== changePw2) { setChangePwMsg('Passwords don\'t match'); return }
+            setChangePwSaving(true)
+            const { error } = await supabase.auth.updateUser({ password: changePw })
+            if (error) setChangePwMsg(error.message)
+            else { setChangePwMsg('Password updated!'); setChangePw(''); setChangePw2('') }
+            setChangePwSaving(false)
+          }} disabled={changePwSaving || !changePw || changePw !== changePw2} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: changePw && changePw === changePw2 ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: changePw && changePw === changePw2 ? '#fff' : muted, border: 'none', cursor: changePw && changePw === changePw2 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            {changePwSaving ? 'Saving...' : 'Update password'}
+          </button>
+        </div>
+        {changePwMsg && <p style={{ fontSize: '13px', color: changePwMsg === 'Password updated!' ? '#22c55e' : '#ef4444', margin: '8px 0 0' }}>{changePwMsg}</p>}
       </div>
 
       {/* Notifications */}
