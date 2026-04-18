@@ -228,8 +228,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setShowMore(false)}>
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: sidebar, borderRadius: '20px 20px 0 0', padding: '12px 16px 40px', zIndex: 1 }} onClick={e => e.stopPropagation()}>
-            <div style={{ width: '36px', height: '4px', background: border, borderRadius: '2px', margin: '0 auto 20px' }} />
-            <p style={{ fontSize: '13px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px 4px' }}>More</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 0 4px' }}>More</p>
+              <button onClick={() => setShowMore(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', padding: '8px', fontSize: '18px', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px', minHeight: '44px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
             {MORE_ITEMS.map(item => (
               <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', textDecoration: 'none', marginBottom: '4px', background: isActive(item.href) ? 'rgba(30,108,181,0.12)' : 'transparent', color: isActive(item.href) ? '#5ba3e0' : text }}>
                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: isActive(item.href) ? 'rgba(30,108,181,0.2)' : (dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive(item.href) ? '#5ba3e0' : muted }}>
@@ -272,7 +276,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         <nav className="csdtv-mobile-nav" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'none', background: sidebar, borderTop: `0.5px solid ${border}`, zIndex: 10, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', width: '100%' }}>
             {BOTTOM_NAV.map(item => {
               const active = item.href !== '#more' && isActive(item.href)
               const isMore = item.href === '#more'
@@ -307,7 +311,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         @media (max-width: 767px) {
           .csdtv-hamburger { display: flex !important; }
           .csdtv-mobile-nav { display: flex !important; }
-          .csdtv-content { padding-bottom: 80px !important; }
+          .csdtv-content { padding: 12px 8px 80px 8px !important; }
           .csdtv-search-label { display: none !important; }
         }
       `}</style>
