@@ -272,19 +272,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         <nav className="csdtv-mobile-nav" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'none', background: sidebar, borderTop: `0.5px solid ${border}`, zIndex: 10, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'stretch', padding: '0 4px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)' }}>
             {BOTTOM_NAV.map(item => {
               const active = item.href !== '#more' && isActive(item.href)
               const isMore = item.href === '#more'
+              const itemStyle = { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '3px', padding: '10px 0 8px', minHeight: '56px', color: active || (isMore && showMore) ? '#5ba3e0' : muted, textDecoration: 'none' as const, background: 'none' as const, border: 'none' as const, cursor: 'pointer' as const, fontFamily: 'inherit' as const }
               return isMore ? (
-                <button key="more" onClick={() => { setShowMore(!showMore); setShowNotifications(false) }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '8px 0 6px', flex: 1, minHeight: '56px', background: 'none', border: 'none', color: showMore ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <button key="more" onClick={() => { setShowMore(!showMore); setShowNotifications(false) }} style={itemStyle}>
                   <Icon type="more" size={24} />
-                  <span style={{ fontSize: '11px', fontWeight: showMore ? 600 : 400, letterSpacing: '0.2px' }}>More</span>
+                  <span style={{ fontSize: '11px', fontWeight: showMore ? 600 : 400, textAlign: 'center' as const }}>More</span>
                 </button>
               ) : (
-                <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '8px 0 6px', flex: 1, minHeight: '56px', color: active ? '#5ba3e0' : muted, textDecoration: 'none' }}>
+                <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={itemStyle}>
                   <Icon type={item.icon} size={24} />
-                  <span style={{ fontSize: '11px', fontWeight: active ? 600 : 400, letterSpacing: '0.2px' }}>{item.label}</span>
+                  <span style={{ fontSize: '11px', fontWeight: active ? 600 : 400, textAlign: 'center' as const }}>{item.label}</span>
                 </Link>
               )
             })}
@@ -312,4 +313,4 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       `}</style>
     </div>
   )
-} 
+}
