@@ -32,7 +32,7 @@ const NAV_ITEMS = [
 
 const BOTTOM_NAV = [
   { label: 'Home', href: '/dashboard', icon: 'home' },
-  { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
+  { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
   { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
   { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
   { label: 'More', href: '#more', icon: 'more' },
@@ -272,19 +272,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         <nav className="csdtv-mobile-nav" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'none', background: sidebar, borderTop: `0.5px solid ${border}`, zIndex: 10, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'stretch', padding: '0 4px' }}>
             {BOTTOM_NAV.map(item => {
               const active = item.href !== '#more' && isActive(item.href)
               const isMore = item.href === '#more'
               return isMore ? (
-                <button key="more" onClick={() => { setShowMore(!showMore); setShowNotifications(false) }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', padding: '10px 0', flex: 1, minHeight: '56px', background: 'none', border: 'none', color: showMore ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  <Icon type="more" size={22} />
-                  <span style={{ fontSize: '10px', fontWeight: showMore ? 600 : 400 }}>More</span>
+                <button key="more" onClick={() => { setShowMore(!showMore); setShowNotifications(false) }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '8px 0 6px', flex: 1, minHeight: '56px', background: 'none', border: 'none', color: showMore ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <Icon type="more" size={24} />
+                  <span style={{ fontSize: '11px', fontWeight: showMore ? 600 : 400, letterSpacing: '0.2px' }}>More</span>
                 </button>
               ) : (
-                <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', padding: '10px 0', flex: 1, minHeight: '56px', color: active ? '#5ba3e0' : muted, textDecoration: 'none' }}>
-                  <Icon type={item.icon} size={22} />
-                  <span style={{ fontSize: '10px', fontWeight: active ? 600 : 400 }}>{item.label}</span>
+                <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '8px 0 6px', flex: 1, minHeight: '56px', color: active ? '#5ba3e0' : muted, textDecoration: 'none' }}>
+                  <Icon type={item.icon} size={24} />
+                  <span style={{ fontSize: '11px', fontWeight: active ? 600 : 400, letterSpacing: '0.2px' }}>{item.label}</span>
                 </Link>
               )
             })}
@@ -312,4 +312,4 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       `}</style>
     </div>
   )
-}
+} 
