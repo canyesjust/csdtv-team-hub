@@ -273,15 +273,59 @@ export default function ProductionDetailPage() {
       const d = p.start_datetime ? new Date(p.start_datetime) : null
       const dateStr = d ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD'
       const timeStr = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'TBD'
-      const timeline = (cs.schedule || []).map((t: any) => `${t.time} — ${t.activity}`).join('\n')
-      const equip = (cs.equipment || []).map((e: any) => `☐ ${e.item}`).join('\n')
-      const notes = (cs.producer_notes || []).map((n: any) => `— ${n}`).join('\n')
-      const body = `CALL SHEET: #${p.production_number} ${p.title}\n\nDate: ${dateStr}\nTime: ${timeStr}\nLocation: ${p.filming_location || p.school_department || 'TBD'}\nType: ${p.request_type_label || 'Production'}\n\nTIMELINE:\n${timeline}\n\nEQUIPMENT:\n${equip}\n\nNOTES:\n${notes}\n\nParking: ${cs.parking_access || 'Check in at front office'}\n\n— CSDtv Team Hub`
+      const venue = getSchoolName(p.filming_location) || getSchoolName(p.school_department) || p.filming_location || 'TBD'
+      const address = cs.content?.production_snapshot?.school_address || ''
+      const timelineHtml = (cs.schedule || []).map((t: any) => `<tr><td style="padding:6px 12px;color:#6b7280;font-weight:500;white-space:nowrap">${t.time}</td><td style="padding:6px 12px;font-weight:600">${t.activity}</td></tr>`).join('')
+      const equipHtml = (cs.equipment || []).map((e: any) => `<tr><td style="padding:4px 12px">☐ ${e.item}</td></tr>`).join('')
+      const notesHtml = (cs.producer_notes || []).map((n: string) => `<li style="padding:3px 0">${n}</li>`).join('')
+      const crewHtml = (cs.crew || []).map((c: any) => `<tr><td style="padding:4px 12px;color:#6b7280">${c.role}</td><td style="padding:4px 12px;font-weight:600;text-align:right">${c.name || '<em style="color:#9ca3af">Unassigned</em>'}</td></tr>`).join('')
+
+      const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:0 auto;color:#1a1a1a">
+        <div style="border-bottom:3px solid #1a1a1a;padding-bottom:14px;margin-bottom:16px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:4px">CSDtv Call Sheet</div>
+          <div style="font-size:22px;font-weight:700">#${p.production_number} ${p.title}</div>
+        </div>
+        <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;margin-bottom:16px;font-size:13px">
+          <tr>
+            <td style="padding:10px 14px;border-right:1px solid #e0e0e0;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Date</div><div style="font-weight:600">${dateStr}</div></td>
+            <td style="padding:10px 14px;border-right:1px solid #e0e0e0;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Time</div><div style="font-weight:600">${timeStr}</div></td>
+            <td style="padding:10px 14px;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Type</div><div style="font-weight:600">${p.request_type_label || 'Production'}</div></td>
+          </tr>
+        </table>
+        <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;margin-bottom:16px;font-size:13px">
+          <tr><td style="padding:10px 14px" colspan="2"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:4px">Location</div><div style="font-weight:600;font-size:15px">${venue}</div>${address ? `<div style="color:#6b7280;margin-top:2px">${address}</div>` : ''}${address ? `<div style="margin-top:6px"><a href="https://maps.google.com/?q=${encodeURIComponent(address)}" style="color:#1e6cb5;text-decoration:none;font-size:12px">📍 Open in Google Maps</a></div>` : ''}</td></tr>
+        </table>
+        <table style="width:100%;margin-bottom:16px"><tr><td style="vertical-align:top;width:50%;padding-right:8px">
+          <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;font-size:13px">
+            <tr><td colspan="2" style="padding:8px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;border-bottom:1px solid #f3f4f6">Timeline</td></tr>
+            ${timelineHtml}
+          </table>
+        </td><td style="vertical-align:top;width:50%;padding-left:8px">
+          <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;font-size:13px">
+            <tr><td style="padding:8px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;border-bottom:1px solid #f3f4f6">Equipment</td></tr>
+            ${equipHtml}
+          </table>
+        </td></tr></table>
+        <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+          <tr><td colspan="2" style="padding:8px 12px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;border-bottom:1px solid #f3f4f6">Crew</td></tr>
+          ${crewHtml}
+        </table>
+        ${notesHtml ? `<div style="background:#eff6ff;border-left:3px solid #1e3a5f;padding:12px 16px;border-radius:0 4px 4px 0;margin-bottom:16px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1e3a5f;margin-bottom:6px">Producer Notes</div>
+          <ul style="list-style:none;padding:0;margin:0;font-size:13px">${notesHtml}</ul>
+        </div>` : ''}
+        ${cs.parking_access ? `<div style="background:#f9fafb;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">🅿️ <strong>Parking:</strong> ${cs.parking_access}</div>` : ''}
+        <div style="border-top:2px solid #1a1a1a;padding-top:12px;font-size:12px;display:flex;justify-content:space-between">
+          <div><strong>Organizer:</strong> ${p.organizer_name || 'N/A'} · <span style="color:#6b7280">${p.organizer_email || ''}</span></div>
+        </div>
+        <div style="margin-top:16px;padding-top:10px;border-top:1px solid #e0e0e0;font-size:10px;color:#9ca3af">CSDtv Production Services · Canyons School District</div>
+      </div>`
+
       for (const email of teamEmails) {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ type: 'call_sheet', recipientEmail: email, subject: `Call Sheet: ${p.title} — ${dateStr}`, body }),
+          body: JSON.stringify({ type: 'call_sheet', recipientEmail: email, subject: `Call Sheet: #${p.production_number} ${p.title} — ${dateStr}`, body: '', html }),
         })
       }
       alert('Call sheet emailed to crew!')
