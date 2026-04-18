@@ -16,7 +16,8 @@ const FOLLOW_UP = ['none', 'need to contact', 'contacted', 'done']
 
 export default function ContactsPage() {
   const supabase = createClient()
-  const { dark } = useTheme()
+  const { theme } = useTheme()
+  const dark = theme === 'dark'
   const text = dark ? '#e8edf5' : '#1a1f36'
   const muted = dark ? '#6b7a94' : '#64748b'
   const border = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
