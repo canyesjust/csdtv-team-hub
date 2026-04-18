@@ -199,7 +199,7 @@ export default function ProductionDetailPage() {
     try {
       const { data: { session } } = await supabase.auth.refreshSession()
       if (!session) { alert('Session expired'); setGeneratingSheet(false); return }
-      const teamNames = (production.production_members || []).map((m: any) => m.team?.name).filter(Boolean)
+      const teamNames = members.map(m => m.team?.name).filter(Boolean)
       const checklistTitles = checklist.map(c => c.title)
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-call-sheet`, {
         method: 'POST',
@@ -211,7 +211,7 @@ export default function ProductionDetailPage() {
       else alert(result.error || 'Failed to generate call sheet')
     } catch { alert('Failed to generate call sheet') }
     setGeneratingSheet(false)
-  }, [production, uuid, currentUser, supabase, checklist])
+  }, [production, uuid, currentUser, supabase, checklist, members])
 
   const printCallSheet = () => {
     const el = document.getElementById('call-sheet-print')
@@ -252,7 +252,7 @@ export default function ProductionDetailPage() {
 
   const emailCallSheet = useCallback(async () => {
     if (!production || !callSheet) return
-    const teamEmails = (production.production_members || []).map((m: any) => m.team?.email).filter(Boolean)
+    const teamEmails = members.map(m => allTeam.find(t => t.id === m.user_id)?.email).filter(Boolean) as string[]
     if (teamEmails.length === 0) { alert('No team members assigned to email'); return }
     if (!confirm(`Email call sheet to ${teamEmails.join(', ')}?`)) return
     try {
@@ -276,7 +276,7 @@ export default function ProductionDetailPage() {
       }
       alert('Call sheet emailed to crew!')
     } catch { alert('Failed to email call sheet') }
-  }, [production, callSheet, supabase])
+  }, [production, callSheet, supabase, members, allTeam])
 
   const toggleItem = useCallback(async (item: ChecklistItem) => {
     const updates = { completed: !item.completed, completed_at: !item.completed ? new Date().toISOString() : null }
