@@ -72,9 +72,11 @@ export default function ProductionDetailPage() {
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
   const [linkedVideos, setLinkedVideos] = useState<{ id: string; title: string; video_type: string; status: string; date_published: string | null }[]>([])
   const [linkedTasks, setLinkedTasks] = useState<{ id: string; title: string; status: string; priority: string; assigned_to: string | null; due_date: string | null }[]>([])
+  const [callSheet, setCallSheet] = useState<any>(null)
+  const [generatingSheet, setGeneratingSheet] = useState(false)
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'>('checklist')
+  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'callsheet'>('checklist')
   const [selectedMember, setSelectedMember] = useState<string|null>(null)
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
@@ -152,6 +154,8 @@ export default function ProductionDetailPage() {
     setLinkedVideos(vidData || [])
     const { data: taskData } = await supabase.from('tasks').select('id, title, status, priority, assigned_to, due_date').eq('production_id', prodUUID).order('created_at', { ascending: false })
     setLinkedTasks(taskData || [])
+    const { data: sheetData } = await supabase.from('call_sheets').select('*').eq('production_id', prodUUID).single()
+    if (sheetData) setCallSheet(sheetData)
     const { data: allProdsData } = await supabase.from('productions').select('id, production_number, title').neq('id', prodUUID).order('production_number', { ascending: false }).limit(50)
     setAllProductions(allProdsData || [])
     setLoading(false)
@@ -188,6 +192,91 @@ export default function ProductionDetailPage() {
     const { data } = await supabase.from('checklist_items').insert(items).select('*')
     if (data) { setChecklist(data); await logActivity('Initialized checklist', `${data.length} steps from ${typeLabel} template`) }
   }, [production, currentUser, uuid, supabase, logActivity])
+
+  const generateCallSheet = useCallback(async () => {
+    if (!production || !uuid || !currentUser) return
+    setGeneratingSheet(true)
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) { alert('Session expired'); setGeneratingSheet(false); return }
+      const teamNames = (production.production_members || []).map((m: any) => m.team?.name).filter(Boolean)
+      const checklistTitles = checklist.map(c => c.title)
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-call-sheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ production: { ...production, id: uuid, team_names: teamNames, checklist_items: checklistTitles } }),
+      })
+      const result = await res.json()
+      if (result.success) { setCallSheet(result.call_sheet); setActiveTab('callsheet') }
+      else alert(result.error || 'Failed to generate call sheet')
+    } catch { alert('Failed to generate call sheet') }
+    setGeneratingSheet(false)
+  }, [production, uuid, currentUser, supabase, checklist])
+
+  const printCallSheet = () => {
+    const el = document.getElementById('call-sheet-print')
+    if (!el) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Call Sheet — ${production?.title}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;padding:24px;font-size:13px;line-height:1.5}
+.cs-header{border-bottom:3px solid #1a1a1a;padding-bottom:14px;margin-bottom:16px;display:flex;justify-content:space-between}
+.cs-title{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:4px}
+.cs-name{font-size:20px;font-weight:700}
+.cs-date{font-size:20px;font-weight:500;color:#c0392b;text-align:right}
+.cs-day{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px}
+.cs-bar{display:flex;border:1px solid #e0e0e0;border-radius:4px;margin-bottom:16px;font-size:12px}
+.cs-bar-item{flex:1;padding:8px 12px;border-right:1px solid #e0e0e0}
+.cs-bar-item:last-child{border-right:none}
+.cs-bar-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280;margin-bottom:2px}
+.cs-bar-val{font-weight:600}
+.cs-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.cs-card{border:1px solid #e0e0e0;border-radius:4px;padding:12px 14px}
+.cs-card-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#6b7280;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #f3f4f6}
+.cs-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+.cs-row+.cs-row{border-top:1px dotted #e0e0e0}
+.cs-label{color:#6b7280;font-weight:500}
+.cs-val{font-weight:600;text-align:right}
+.cs-notes{background:#eff6ff;border-left:3px solid #1e3a5f;padding:12px 14px;border-radius:0 4px 4px 0;margin-bottom:14px}
+.cs-notes h3{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1e3a5f;margin-bottom:6px}
+.cs-notes li{padding:3px 0;padding-left:16px;position:relative;list-style:none}
+.cs-notes li::before{content:'—';position:absolute;left:0;color:#1e3a5f;font-weight:700}
+.cs-contact{display:flex;justify-content:space-between;padding-top:14px;border-top:2px solid #1a1a1a;font-size:12px}
+.cs-footer{margin-top:16px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:10px;color:#6b7280}
+.cs-check{display:flex;align-items:center;gap:6px;padding:3px 0}.cs-check input{width:14px;height:14px}
+@media print{body{padding:16px}}
+</style></head><body>${el.innerHTML}</body></html>`)
+    w.document.close()
+    setTimeout(() => w.print(), 300)
+  }
+
+  const emailCallSheet = useCallback(async () => {
+    if (!production || !callSheet) return
+    const teamEmails = (production.production_members || []).map((m: any) => m.team?.email).filter(Boolean)
+    if (teamEmails.length === 0) { alert('No team members assigned to email'); return }
+    if (!confirm(`Email call sheet to ${teamEmails.join(', ')}?`)) return
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) return
+      const cs = callSheet
+      const p = production
+      const d = p.start_datetime ? new Date(p.start_datetime) : null
+      const dateStr = d ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD'
+      const timeStr = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'TBD'
+      const timeline = (cs.schedule || []).map((t: any) => `${t.time} — ${t.activity}`).join('\n')
+      const equip = (cs.equipment || []).map((e: any) => `☐ ${e.item}`).join('\n')
+      const notes = (cs.producer_notes || []).map((n: any) => `— ${n}`).join('\n')
+      const body = `CALL SHEET: #${p.production_number} ${p.title}\n\nDate: ${dateStr}\nTime: ${timeStr}\nLocation: ${p.filming_location || p.school_department || 'TBD'}\nType: ${p.request_type_label || 'Production'}\n\nTIMELINE:\n${timeline}\n\nEQUIPMENT:\n${equip}\n\nNOTES:\n${notes}\n\nParking: ${cs.parking_access || 'Check in at front office'}\n\n— CSDtv Team Hub`
+      for (const email of teamEmails) {
+        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ type: 'call_sheet', recipientEmail: email, subject: `Call Sheet: ${p.title} — ${dateStr}`, body }),
+        })
+      }
+      alert('Call sheet emailed to crew!')
+    } catch { alert('Failed to email call sheet') }
+  }, [production, callSheet, supabase])
 
   const toggleItem = useCallback(async (item: ChecklistItem) => {
     const updates = { completed: !item.completed, completed_at: !item.completed ? new Date().toISOString() : null }
@@ -532,6 +621,7 @@ export default function ProductionDetailPage() {
         {tabBtn('activity', 'Activity')}
         {tabBtn('comments', 'Comments')}
         {tabBtn('videos', 'Videos', linkedVideos.length)}
+        {tabBtn('callsheet', 'Call sheet', callSheet ? 1 : 0)}
       </div>
 
       {/* CHECKLIST TAB */}
@@ -1034,6 +1124,103 @@ export default function ProductionDetailPage() {
               </div>
             </Link>
           ))}
+        </div>
+      )}
+
+      {/* CALL SHEET TAB */}
+      {activeTab === 'callsheet' && (
+        <div>
+          {!callSheet ? (
+            <div style={{ textAlign: 'center' as const, padding: '40px 20px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}` }}>
+              <p style={{ fontSize: '16px', fontWeight: 600, color: text, margin: '0 0 6px' }}>No call sheet yet</p>
+              <p style={{ fontSize: '14px', color: muted, margin: '0 0 16px' }}>Generate one from this production's details using AI</p>
+              <button onClick={generateCallSheet} disabled={generatingSheet} style={{ fontSize: '14px', padding: '12px 24px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: generatingSheet ? 0.7 : 1 }}>
+                {generatingSheet ? 'Generating...' : '✨ Generate call sheet'}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                <button onClick={printCallSheet} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit' }}>🖨 Print</button>
+                <button onClick={emailCallSheet} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit' }}>📧 Email to crew</button>
+                <button onClick={generateCallSheet} disabled={generatingSheet} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>{generatingSheet ? 'Regenerating...' : '🔄 Regenerate'}</button>
+              </div>
+              <div id="call-sheet-print">
+                <div className="cs-header" style={{ borderBottom: `3px solid ${text}`, paddingBottom: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="cs-title" style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase' as const, color: muted, marginBottom: '4px' }}>CSDtv Call Sheet</div>
+                    <div className="cs-name" style={{ fontSize: '20px', fontWeight: 700, color: text }}>{production?.title}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' as const }}>
+                    <div className="cs-date" style={{ fontSize: '20px', fontWeight: 500, color: '#c0392b' }}>{production?.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase() : 'TBD'}</div>
+                    <div className="cs-day" style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px' }}>{production?.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric' }) : ''}</div>
+                  </div>
+                </div>
+                <div className="cs-bar" style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: '4px', marginBottom: '16px', fontSize: '12px' }}>
+                  {[{ l: 'Status', v: production?.status || 'Scheduled' }, { l: 'Type', v: production?.request_type_label || 'Production' }, { l: 'School', v: production?.school_department || '' }].map((item, i) => (
+                    <div key={i} style={{ flex: 1, padding: '8px 12px', borderRight: i < 2 ? `1px solid ${border}` : 'none', background: cardBg }}>
+                      <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.8px', color: muted, marginBottom: '2px' }}>{item.l}</div>
+                      <div style={{ fontWeight: 600, color: text }}>{item.v}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Timeline</div>
+                    {(callSheet.schedule || []).map((s: any, i: number) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px', borderTop: i > 0 ? `1px dotted ${border}` : 'none' }}>
+                        <span style={{ color: muted, fontWeight: 500 }}>{s.time}</span>
+                        <span style={{ fontWeight: 600, color: text, textAlign: 'right' as const }}>{s.activity}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Equipment</div>
+                    {(callSheet.equipment || []).map((e: any, i: number) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0', fontSize: '13px' }}>
+                        <input type="checkbox" checked={e.checked} readOnly style={{ width: '14px', height: '14px' }} />
+                        <span style={{ color: text }}>{e.item}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Location</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px' }}>
+                      <span style={{ color: muted, fontWeight: 500 }}>Venue</span>
+                      <span style={{ fontWeight: 600, color: text }}>{production?.filming_location || production?.school_department || 'TBD'}</span>
+                    </div>
+                    {callSheet.parking_access && <div style={{ fontSize: '13px', color: muted, marginTop: '8px', padding: '6px 8px', background: cardBg, borderRadius: '4px' }}>🅿️ {callSheet.parking_access}</div>}
+                  </div>
+                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Crew</div>
+                    {(callSheet.crew || []).map((c: any, i: number) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px', borderTop: i > 0 ? `1px dotted ${border}` : 'none' }}>
+                        <span style={{ color: muted, fontWeight: 500 }}>{c.role}</span>
+                        <span style={{ fontWeight: 600, color: c.name ? text : muted, fontStyle: c.name ? 'normal' : 'italic' }}>{c.name || 'Unassigned'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {(callSheet.producer_notes || []).length > 0 && (
+                  <div style={{ background: dark ? 'rgba(30,58,95,0.2)' : '#eff6ff', borderLeft: '3px solid #1e3a5f', padding: '12px 14px', borderRadius: '0 4px 4px 0', marginBottom: '14px' }}>
+                    <h3 style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1px', color: '#1e3a5f', marginBottom: '6px' }}>Producer Notes</h3>
+                    <ul style={{ listStyle: 'none', padding: 0 }}>
+                      {callSheet.producer_notes.map((n: string, i: number) => (
+                        <li key={i} style={{ fontSize: '13px', padding: '3px 0', paddingLeft: '16px', position: 'relative' as const, lineHeight: 1.45 }}>
+                          <span style={{ position: 'absolute' as const, left: 0, color: '#1e3a5f', fontWeight: 700 }}>—</span>
+                          {n}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '14px', borderTop: `2px solid ${text}`, fontSize: '12px' }}>
+                  <div><strong>Organizer:</strong> {production?.organizer_name || 'N/A'}<br /><span style={{ color: muted }}>{production?.organizer_email || ''}</span></div>
+                  <div style={{ textAlign: 'right' as const }}><strong>CSDtv</strong><br /><span style={{ color: muted }}>{currentUser?.name || 'Justin Andersen'}</span></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
