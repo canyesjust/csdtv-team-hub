@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   ]},
   { section: 'Resources', items: [
     { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
+    { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
     { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
     { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
     { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
@@ -43,6 +44,7 @@ const MORE_ITEMS = [
   { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
   { label: 'Calendar', href: '/dashboard/calendar', icon: 'calview' },
   { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
+  { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
   { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
   { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
   { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
@@ -63,6 +65,7 @@ const PATHS: Record<string, React.ReactNode> = {
   calview: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="4" x2="9" y2="22"/><line x1="15" y1="4" x2="15" y2="22"/></>,
   chart: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
   more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
+  contact: <><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
 }
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
