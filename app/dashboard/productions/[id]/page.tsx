@@ -201,10 +201,20 @@ export default function ProductionDetailPage() {
       if (!session) { alert('Session expired'); setGeneratingSheet(false); return }
       const teamNames = members.map(m => m.team?.name).filter(Boolean)
       const checklistTitles = checklist.map(c => c.title)
+      const schoolName = getSchoolName(production.school_department) || production.school_department || ''
+      const locationName = getSchoolName(production.filming_location) || production.filming_location || ''
+      // Fetch school address
+      let schoolAddress = ''
+      let schoolPhone = ''
+      if (production.school_department) {
+        const code = production.school_department.replace(/^0+/, '')
+        const { data: schoolData } = await supabase.from('schools').select('address, phone').or(`code.eq.${production.school_department},code.eq.${code}`).limit(1).single()
+        if (schoolData) { schoolAddress = schoolData.address || ''; schoolPhone = schoolData.phone || '' }
+      }
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-call-sheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ production: { ...production, id: uuid, team_names: teamNames, checklist_items: checklistTitles } }),
+        body: JSON.stringify({ production: { ...production, id: uuid, team_names: teamNames, checklist_items: checklistTitles, resolved_school: schoolName, resolved_location: locationName, school_address: schoolAddress, school_phone: schoolPhone } }),
       })
       const result = await res.json()
       if (result.success) { setCallSheet(result.call_sheet); setActiveTab('callsheet') }
@@ -1157,7 +1167,7 @@ export default function ProductionDetailPage() {
                   </div>
                 </div>
                 <div className="cs-bar" style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: '4px', marginBottom: '16px', fontSize: '12px' }}>
-                  {[{ l: 'Status', v: production?.status || 'Scheduled' }, { l: 'Type', v: production?.request_type_label || 'Production' }, { l: 'School', v: production?.school_department || '' }].map((item, i) => (
+                  {[{ l: 'Status', v: production?.status || 'Scheduled' }, { l: 'Type', v: production?.request_type_label || 'Production' }, { l: 'School', v: getSchoolName(production?.school_department) || production?.school_department || '' }].map((item, i) => (
                     <div key={i} style={{ flex: 1, padding: '8px 12px', borderRight: i < 2 ? `1px solid ${border}` : 'none', background: cardBg }}>
                       <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.8px', color: muted, marginBottom: '2px' }}>{item.l}</div>
                       <div style={{ fontWeight: 600, color: text }}>{item.v}</div>
@@ -1187,8 +1197,14 @@ export default function ProductionDetailPage() {
                     <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Location</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px' }}>
                       <span style={{ color: muted, fontWeight: 500 }}>Venue</span>
-                      <span style={{ fontWeight: 600, color: text }}>{production?.filming_location || production?.school_department || 'TBD'}</span>
+                      <span style={{ fontWeight: 600, color: text }}>{getSchoolName(production?.filming_location) || getSchoolName(production?.school_department) || production?.filming_location || 'TBD'}</span>
                     </div>
+                    {callSheet.content?.production_snapshot?.school_address && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px', borderTop: `1px dotted ${border}` }}>
+                        <span style={{ color: muted, fontWeight: 500 }}>Address</span>
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(callSheet.content.production_snapshot.school_address)}`} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 500, color: '#5ba3e0', textDecoration: 'none', textAlign: 'right' as const, maxWidth: '60%' }}>{callSheet.content.production_snapshot.school_address} 📍</a>
+                      </div>
+                    )}
                     {callSheet.parking_access && <div style={{ fontSize: '13px', color: muted, marginTop: '8px', padding: '6px 8px', background: cardBg, borderRadius: '4px' }}>🅿️ {callSheet.parking_access}</div>}
                   </div>
                   <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
