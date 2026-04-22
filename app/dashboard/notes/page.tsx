@@ -90,19 +90,21 @@ export default function NotesPage() {
         setReviewDate(d.date || new Date().toISOString().split('T')[0])
         setReviewSheetId(d.sheet_id || '')
 
-        // Check for re-scan
-        if (d.sheet_id) {
-          const { data: existing } = await supabase.from('tasks').select('id, title, status').eq('scanned_sheet_id', d.sheet_id)
-          if (existing && existing.length > 0) {
-            setIsRescan(true)
-            setExistingTaskIds(existing)
-          } else {
-            setIsRescan(false)
-            setExistingTaskIds([])
-          }
+        // Check for existing tasks — by sheet_id first, then by title match
+        const { data: allMyTasks } = await supabase.from('tasks').select('id, title, status, scanned_sheet_id').eq('assigned_to', currentUser?.id || '').in('status', ['pending', 'in progress', 'in review'])
+        const existing = allMyTasks || []
+
+        // Always provide existing tasks for dedup
+        setExistingTaskIds(existing)
+
+        // If sheet_id matches or titles overlap, flag as re-scan for UI messaging
+        const sheetMatches = d.sheet_id ? existing.filter((t: any) => t.scanned_sheet_id === d.sheet_id) : []
+        const titleSet = new Set(existing.map((t: any) => t.title.toLowerCase().trim()))
+
+        if (sheetMatches.length > 0 || (d.todos || []).some((t: any) => titleSet.has(t.text.toLowerCase().trim()))) {
+          setIsRescan(true)
         } else {
           setIsRescan(false)
-          setExistingTaskIds([])
         }
 
         setShowReview(true)
@@ -140,11 +142,9 @@ export default function NotesPage() {
         const prodId = resolveProductionId(todo.production_number)
         const assigneeId = resolveAssignee(todo.assigned_to_name) || currentUser.id
 
-        if (isRescan) {
-          // Check if this task already exists from a previous scan
-          const existingMatch = existingTaskIds.find(e => e.title.toLowerCase().trim() === todo.text.toLowerCase().trim())
-          if (existingMatch) continue // Already exists, skip
-        }
+        // Always check for existing task with same title (prevents duplicates)
+        const existingMatch = existingTaskIds.find(e => e.title.toLowerCase().trim() === todo.text.toLowerCase().trim())
+        if (existingMatch) continue // Already exists, skip
 
         await supabase.from('tasks').insert({
           title: todo.text,
@@ -159,10 +159,8 @@ export default function NotesPage() {
 
       // Handle follow-ups → create tasks
       for (const fu of reviewFollowUps.filter(f => f.trim())) {
-        if (isRescan) {
-          const existingMatch = existingTaskIds.find(e => e.title.toLowerCase().trim() === fu.toLowerCase().trim())
-          if (existingMatch) continue
-        }
+        const existingMatch = existingTaskIds.find(e => e.title.toLowerCase().trim() === fu.toLowerCase().trim())
+        if (existingMatch) continue
         await supabase.from('tasks').insert({
           title: fu,
           status: 'pending',
@@ -281,7 +279,7 @@ export default function NotesPage() {
                 const realIdx = reviewTodos.indexOf(todo)
                 const prod = todo.production_number ? productions.find(p => p.production_number === todo.production_number) : null
                 const assignee = todo.assigned_to_name ? allTeam.find(t => t.name.toLowerCase().includes(todo.assigned_to_name!.toLowerCase())) : null
-                const alreadyExists = isRescan && existingTaskIds.some(e => e.title.toLowerCase().trim() === todo.text.toLowerCase().trim())
+                const alreadyExists = existingTaskIds.some(e => e.title.toLowerCase().trim() === todo.text.toLowerCase().trim())
                 return (
                   <div key={realIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, opacity: alreadyExists ? 0.5 : 1 }}>
                     <span style={{ fontSize: '14px', color: text, flex: 1 }}>{todo.text}</span>
@@ -335,7 +333,15 @@ export default function NotesPage() {
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <button onClick={() => setShowReview(false)} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             <button onClick={saveAndCreateTasks} disabled={saving} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
-              {saving ? 'Creating tasks...' : isRescan ? 'Update tasks' : `Create ${reviewTodos.filter(t => !t.completed).length + reviewFollowUps.filter(f => f.trim()).length} tasks`}
+              {saving ? 'Creating tasks...' : (() => {
+                const newTodos = reviewTodos.filter(t => !t.completed && !existingTaskIds.some(e => e.title.toLowerCase().trim() === t.text.toLowerCase().trim()))
+                const newFollowUps = reviewFollowUps.filter(f => f.trim() && !existingTaskIds.some(e => e.title.toLowerCase().trim() === f.toLowerCase().trim()))
+                const newCount = newTodos.length + newFollowUps.length
+                const dupeCount = reviewTodos.filter(t => !t.completed).length + reviewFollowUps.filter(f => f.trim()).length - newCount
+                return newCount > 0
+                  ? `Create ${newCount} new task${newCount !== 1 ? 's' : ''}${dupeCount > 0 ? ` (${dupeCount} skipped — already exist)` : ''}`
+                  : 'No new tasks to create'
+              })()}
             </button>
           </div>
         </div>
