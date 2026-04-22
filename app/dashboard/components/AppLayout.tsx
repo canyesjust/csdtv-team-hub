@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { section: 'Resources', items: [
     { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
     { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
+    { label: 'Notes', href: '/dashboard/notes', icon: 'notes' },
     { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
     { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
     { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
@@ -45,6 +46,7 @@ const MORE_ITEMS = [
   { label: 'Calendar', href: '/dashboard/calendar', icon: 'calview' },
   { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
+  { label: 'Notes', href: '/dashboard/notes', icon: 'notes' },
   { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
   { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
   { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
@@ -66,6 +68,7 @@ const PATHS: Record<string, React.ReactNode> = {
   chart: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
   more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
   contact: <><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+  notes: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></>,
 }
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {
