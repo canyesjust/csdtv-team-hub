@@ -227,7 +227,7 @@ export default function KnowledgePage() {
               {selected.author?.name && `By ${selected.author.name} · `}
               Updated {new Date(selected.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </p>
-            <div className="article-content" dangerouslySetInnerHTML={{ __html: selected.content }} />
+            <div className="article-content" dangerouslySetInnerHTML={{ __html: (selected.content || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/on\w+\s*=\s*["'][^"']*["']/gi, '').replace(/javascript:/gi, '') }} />
           </div>
         ) : null}
       </div>

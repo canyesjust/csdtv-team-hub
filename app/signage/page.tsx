@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getSchoolName as getSchoolNameFallback } from '@/lib/schools'
 
+const SIGNAGE_PIN = '2026'  // Change this or move to app_settings
+
 interface Production {
   id: string; production_number: number; title: string
   request_type_label: string | null; status: string | null; school_year: string | null
@@ -39,6 +41,12 @@ export default function SignagePage() {
   const [schedOverrides, setSchedOverrides] = useState<SchedOverride[]>([])
   const [schoolMap, setSchoolMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [pinInput, setPinInput] = useState('')
+  const [authed, setAuthed] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('signage_authed') === 'true') setAuthed(true)
+  }, [])
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
 
@@ -114,6 +122,21 @@ export default function SignagePage() {
 
   const bg = '#070d18'; const cardBg = '#0f1828'; const text = '#eef2ff'; const muted = '#8899bb'; const dimmed = '#4a5670'
   const gridBorder = 'rgba(255,255,255,0.1)'
+
+  if (!authed) return (
+    <div style={{ background: '#0a0f1e', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <div style={{ textAlign: 'center' as const }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#e8edf5', margin: '0 0 8px' }}>CSDtv Signage Display</h1>
+        <p style={{ fontSize: '14px', color: '#6b7a94', margin: '0 0 24px' }}>Enter PIN to continue</p>
+        <input type="password" inputMode="numeric" pattern="[0-9]*" maxLength={6} value={pinInput} onChange={e => {
+          const val = e.target.value.replace(/\D/g, '')
+          setPinInput(val)
+          if (val === SIGNAGE_PIN) { setAuthed(true); sessionStorage.setItem('signage_authed', 'true') }
+        }} placeholder="••••" autoFocus style={{ width: '160px', textAlign: 'center' as const, fontSize: '28px', letterSpacing: '8px', padding: '12px', background: '#1a2540', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#e8edf5', outline: 'none', fontFamily: 'inherit' }} />
+        {pinInput.length >= 4 && pinInput !== SIGNAGE_PIN && <p style={{ fontSize: '13px', color: '#ef4444', marginTop: '10px' }}>Incorrect PIN</p>}
+      </div>
+    </div>
+  )
 
   if (loading) return <div style={{ background: bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' as const }}><p style={{ color: muted, fontSize: '22px', fontFamily: 'system-ui' }}>Loading...</p></div>
 
