@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 
 interface Todo { text: string; completed: boolean; tag: string; matched_production: string | null }
-interface NoteSheet { id: string; date: string | null; todos: Todo[]; notes_text: string | null; follow_ups: string[]; created_at: string }
+interface NoteSheet { id: string; sheet_id: string | null; date: string | null; todos: Todo[]; notes_text: string | null; follow_ups: string[]; created_at: string; updated_at: string }
 
 export default function NotesPage() {
   const supabase = createClient()
@@ -21,11 +21,13 @@ export default function NotesPage() {
   const [sheets, setSheets] = useState<NoteSheet[]>([])
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
-  const [scanResult, setScanResult] = useState<{ date: string | null; todos: Todo[]; notes: string; follow_ups: string[] } | null>(null)
+  const [scanResult, setScanResult] = useState<{ sheet_id: string | null; date: string | null; todos: Todo[]; notes: string; follow_ups: string[] } | null>(null)
+  const [mergeTarget, setMergeTarget] = useState<NoteSheet | null>(null)
   const [editingTodos, setEditingTodos] = useState<Todo[]>([])
   const [editingNotes, setEditingNotes] = useState('')
   const [editingFollowUps, setEditingFollowUps] = useState<string[]>([])
   const [editingDate, setEditingDate] = useState('')
+  const [editingSheetId, setEditingSheetId] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ id: string } | null>(null)
   const [expandedSheet, setExpandedSheet] = useState<string | null>(null)
@@ -45,6 +47,21 @@ export default function NotesPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const mergeTodos = (existing: Todo[], incoming: Todo[]): Todo[] => {
+    const merged = [...existing]
+    for (const inc of incoming) {
+      const match = merged.find(m => m.text.toLowerCase().trim() === inc.text.toLowerCase().trim())
+      if (match) {
+        if (inc.completed && !match.completed) match.completed = true
+        if (inc.tag && !match.tag) match.tag = inc.tag
+        if (inc.matched_production && !match.matched_production) match.matched_production = inc.matched_production
+      } else {
+        merged.push(inc)
+      }
+    }
+    return merged
+  }
+
   const handleScan = async (file: File) => {
     setScanning(true)
     try {
@@ -62,11 +79,33 @@ export default function NotesPage() {
       })
       const result = await res.json()
       if (result.success && result.data) {
-        setScanResult(result.data)
-        setEditingTodos(result.data.todos || [])
-        setEditingNotes(result.data.notes || '')
-        setEditingFollowUps(result.data.follow_ups || [])
-        setEditingDate(result.data.date || new Date().toISOString().split('T')[0])
+        const scanned = result.data
+        const sheetId = scanned.sheet_id
+
+        // Check for existing sheet with same number
+        const existingSheet = sheetId ? sheets.find(s => s.sheet_id === sheetId) : null
+
+        if (existingSheet) {
+          // Merge mode
+          setMergeTarget(existingSheet)
+          const mergedTodos = mergeTodos(existingSheet.todos || [], scanned.todos || [])
+          setEditingTodos(mergedTodos)
+          const existingNotes = existingSheet.notes_text || ''
+          const newNotes = scanned.notes || ''
+          setEditingNotes(existingNotes && newNotes && existingNotes !== newNotes ? `${existingNotes}\n---\n${newNotes}` : newNotes || existingNotes)
+          const allFollowUps = [...new Set([...(existingSheet.follow_ups || []), ...(scanned.follow_ups || [])])]
+          setEditingFollowUps(allFollowUps)
+        } else {
+          // New sheet
+          setMergeTarget(null)
+          setEditingTodos(scanned.todos || [])
+          setEditingNotes(scanned.notes || '')
+          setEditingFollowUps(scanned.follow_ups || [])
+        }
+
+        setScanResult(scanned)
+        setEditingDate(scanned.date || new Date().toISOString().split('T')[0])
+        setEditingSheetId(sheetId || '')
       } else {
         alert(result.error || 'Failed to scan sheet.')
       }
@@ -77,14 +116,23 @@ export default function NotesPage() {
   const saveSheet = async () => {
     if (!currentUser) return
     setSaving(true)
-    await supabase.from('notes').insert({
+    const data = {
+      sheet_id: editingSheetId || null,
       date: editingDate || null,
       todos: editingTodos,
       notes_text: editingNotes || null,
       follow_ups: editingFollowUps.filter(f => f.trim()),
-      created_by: currentUser.id,
-    })
+      updated_at: new Date().toISOString(),
+    }
+
+    if (mergeTarget) {
+      await supabase.from('notes').update(data).eq('id', mergeTarget.id)
+    } else {
+      await supabase.from('notes').insert({ ...data, created_by: currentUser.id })
+    }
+
     setScanResult(null)
+    setMergeTarget(null)
     setEditingTodos([])
     setEditingNotes('')
     setEditingFollowUps([])
@@ -98,16 +146,16 @@ export default function NotesPage() {
     if (uncompleted.length === 0) { alert('No uncompleted items to create tasks from'); return }
     if (!confirm(`Create ${uncompleted.length} task${uncompleted.length > 1 ? 's' : ''} from uncompleted items?`)) return
     for (const todo of uncompleted) {
-      const prodMatch = todo.matched_production ? productions.find(p => todo.matched_production?.includes(`#${p.production_number}`)) : null
-      await supabase.from('tasks').insert({
-        title: todo.text,
-        status: 'pending',
-        created_by: currentUser.id,
-        assigned_to: currentUser.id,
-        production_id: null,
-      })
+      await supabase.from('tasks').insert({ title: todo.text, status: 'pending', created_by: currentUser.id, assigned_to: currentUser.id })
     }
     alert(`${uncompleted.length} task${uncompleted.length > 1 ? 's' : ''} created!`)
+  }
+
+  const deleteSheet = async (id: string) => {
+    if (!confirm('Delete this scanned sheet?')) return
+    await supabase.from('notes').delete().eq('id', id)
+    setSheets(prev => prev.filter(s => s.id !== id))
+    setExpandedSheet(null)
   }
 
   const todoStats = (todos: Todo[]) => {
@@ -130,22 +178,33 @@ export default function NotesPage() {
             {scanning ? 'Scanning...' : '📷 Scan sheet'}
             <input type="file" accept="image/*" capture="environment" onChange={e => { if (e.target.files?.[0]) handleScan(e.target.files[0]); e.target.value = '' }} style={{ display: 'none' }} disabled={scanning} />
           </label>
-          <a href="/csdtv-daily-sheet.pdf" target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', padding: '10px 16px', borderRadius: '10px', background: cardBg, border: `0.5px solid ${border}`, color: text, textDecoration: 'none', fontWeight: 500, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>🖨 Print sheets</a>
+          <a href="/csdtv-daily-sheets.pdf" target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', padding: '10px 16px', borderRadius: '10px', background: cardBg, border: `0.5px solid ${border}`, color: text, textDecoration: 'none', fontWeight: 500, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>🖨 Print sheets</a>
         </div>
       </div>
 
       {scanResult && (
-        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+        <div style={{ background: cardBg, border: `0.5px solid ${mergeTarget ? 'rgba(96,184,240,0.4)' : border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 600, color: text, margin: 0 }}>Scanned sheet — review and save</h2>
-            <button onClick={() => setScanResult(null)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '18px', padding: '4px 8px', minWidth: '44px', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: 600, color: text, margin: 0 }}>
+                {mergeTarget ? `Updating sheet ${editingSheetId} — merged with existing` : `New sheet${editingSheetId ? ` — ${editingSheetId}` : ''}`}
+              </h2>
+              {mergeTarget && <p style={{ fontSize: '13px', color: '#60b8f0', margin: '4px 0 0' }}>Found existing sheet #{editingSheetId}. Todos merged — new items added, completed items updated.</p>}
+            </div>
+            <button onClick={() => { setScanResult(null); setMergeTarget(null) }} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '18px', padding: '4px 8px', minWidth: '44px', minHeight: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
 
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '3px' }}>Date</label>
-            <input type="date" value={editingDate} onChange={e => setEditingDate(e.target.value)} style={{ ...inputStyle, maxWidth: '200px' }} />
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '3px' }}>Sheet </label>
+              <input type="text" value={editingSheetId} onChange={e => setEditingSheetId(e.target.value)} style={{ ...inputStyle, width: '80px' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '3px' }}>Date</label>
+              <input type="date" value={editingDate} onChange={e => setEditingDate(e.target.value)} style={{ ...inputStyle, width: '170px' }} />
+            </div>
           </div>
 
           <div style={{ marginBottom: '12px' }}>
@@ -180,8 +239,8 @@ export default function NotesPage() {
           )}
 
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <button onClick={() => setScanResult(null)} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-            <button onClick={saveSheet} disabled={saving} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : 'Save sheet'}</button>
+            <button onClick={() => { setScanResult(null); setMergeTarget(null) }} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+            <button onClick={saveSheet} disabled={saving} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : mergeTarget ? 'Update sheet' : 'Save sheet'}</button>
           </div>
         </div>
       )}
@@ -200,6 +259,7 @@ export default function NotesPage() {
             return (
               <div key={sheet.id} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden' }}>
                 <div onClick={() => setExpandedSheet(isExpanded ? null : sheet.id)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer' }}>
+                  {sheet.sheet_id && <span style={{ fontSize: '14px', fontWeight: 700, color: '#c0392b', minWidth: '40px' }}>{sheet.sheet_id}</span>}
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: '16px', fontWeight: 600, color: text }}>{d ? d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'No date'}</span>
                     <span style={{ fontSize: '13px', color: muted, marginLeft: '10px' }}>{stats.done}/{stats.total} done{stats.pending > 0 ? ` · ${stats.pending} pending` : ''}</span>
@@ -224,7 +284,7 @@ export default function NotesPage() {
                             </div>
                             <span style={{ fontSize: '14px', color: todo.completed ? muted : text, textDecoration: todo.completed ? 'line-through' : 'none', flex: 1 }}>{todo.text}</span>
                             {todo.tag && <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0' }}>{todo.tag}</span>}
-                            {todo.matched_production && <span style={{ fontSize: '11px', color: '#5ba3e0' }}>{todo.matched_production}</span>}
+                            {todo.matched_production && !todo.tag && <span style={{ fontSize: '11px', color: '#5ba3e0' }}>{todo.matched_production}</span>}
                           </div>
                         ))}
                       </div>
@@ -243,11 +303,14 @@ export default function NotesPage() {
                         ))}
                       </div>
                     )}
-                    <div style={{ display: 'flex', gap: '8px', paddingTop: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', paddingTop: '8px', flexWrap: 'wrap' }}>
                       {sheet.todos.some(t => !t.completed) && (
                         <button onClick={() => createTasksFromSheet(sheet)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit' }}>Create tasks from uncompleted</button>
                       )}
-                      <span style={{ fontSize: '12px', color: muted, flex: 1, textAlign: 'right', alignSelf: 'center' }}>Scanned {new Date(sheet.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                      <button onClick={() => deleteSheet(sheet.id)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: '0.5px solid rgba(239,68,68,0.3)', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
+                      <span style={{ fontSize: '12px', color: muted, flex: 1, textAlign: 'right', alignSelf: 'center' }}>
+                        {sheet.updated_at && sheet.updated_at !== sheet.created_at ? `Updated ${new Date(sheet.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : `Scanned ${new Date(sheet.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
+                      </span>
                     </div>
                   </div>
                 )}
