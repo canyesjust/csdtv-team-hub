@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Loader from '../components/Loader'
 import CommentsSection from '../components/CommentsSection'
@@ -48,7 +47,6 @@ export default function TasksPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
-  const searchParams = useSearchParams()
 
   const [tasks, setTasks] = useState<Task[]>([])
   const [completedTasks, setCompletedTasks] = useState<Task[]>([])
@@ -66,7 +64,15 @@ export default function TasksPage() {
   const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'normal', assigned_to: '', due_date: '', production_id: '', needs_equipment: false, recurring: '' })
   const [panelNotes, setPanelNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
-  const [search, setSearch] = useState(searchParams.get('search') || '')
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const q = params.get('search')
+      if (q) setSearch(q)
+    }
+  }, [])
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
