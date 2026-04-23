@@ -42,7 +42,7 @@ export default function LoginPage() {
     setError('')
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/dashboard` }
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
     })
     if (error) setError(error.message)
     else setMessage('Check your email for a login link.')
@@ -179,7 +179,7 @@ export default function LoginPage() {
               onClick={async () => {
                 if (!email) { setError('Enter your email first'); return }
                 setLoading(true); setError('')
-                const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/login?reset=true` })
+                const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth/callback?next=/login?reset=true` })
                 if (error) setError(error.message)
                 else setMessage('Check your email for a password reset link.')
                 setLoading(false)
