@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Loader from '../components/Loader'
 import CommentsSection from '../components/CommentsSection'
@@ -20,7 +21,7 @@ interface Task {
   due_date: string | null; created_at: string; assigned_to: string | null; created_by: string
   production_id: string | null; needs_equipment: boolean; notes: string | null
   completed_at: string | null; recurring: string | null; recurring_interval: number | null
-  blocked_by: string | null
+  blocked_by: string | null; scanned_sheet_id: string | null
   productions?: { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null } | null
 }
 
@@ -47,6 +48,7 @@ export default function TasksPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
+  const searchParams = useSearchParams()
 
   const [tasks, setTasks] = useState<Task[]>([])
   const [completedTasks, setCompletedTasks] = useState<Task[]>([])
@@ -64,7 +66,7 @@ export default function TasksPage() {
   const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'normal', assigned_to: '', due_date: '', production_id: '', needs_equipment: false, recurring: '' })
   const [panelNotes, setPanelNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(searchParams.get('search') || '')
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
@@ -350,7 +352,7 @@ export default function TasksPage() {
   const filtered = tasks.filter(t => {
     const matchFilter = filter === 'all' || (filter === 'mine' && t.assigned_to === currentUser?.id) || (filter === 'unassigned' && !t.assigned_to)
     const matchStatus = statusFilter === 'all' || t.status === statusFilter
-    const matchSearch = search === '' || t.title.toLowerCase().includes(search.toLowerCase()) || t.description?.toLowerCase().includes(search.toLowerCase()) || t.productions?.title?.toLowerCase().includes(search.toLowerCase())
+    const matchSearch = search === '' || t.title.toLowerCase().includes(search.toLowerCase()) || t.description?.toLowerCase().includes(search.toLowerCase()) || t.productions?.title?.toLowerCase().includes(search.toLowerCase()) || (t.scanned_sheet_id || '').toLowerCase().includes(search.toLowerCase())
     return matchFilter && matchStatus && matchSearch
   })
 
