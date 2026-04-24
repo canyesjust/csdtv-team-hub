@@ -292,7 +292,7 @@ export default function SchedulePage() {
     const dayKey = getDayOfWeekKey(dow) as keyof DaySchedule
     const weekStart = getMondayStr(date)
     const override = overrides.find(o => o.week_start === weekStart)
-    if (override && override[dayKey]) return override[dayKey]
+    if (override && override[dayKey] !== null && override[dayKey] !== undefined) return override[dayKey] || null
     const def = defaults[0]
     return def ? (def[dayKey] || null) : null
   }
@@ -430,13 +430,13 @@ export default function SchedulePage() {
     const existing = overrides.find(o => o.user_id === viewingId && o.week_start === weekStart)
     const trimmed = value.trim()
     if (existing) {
-      await supabase.from('schedule_overrides').update({ [dayKey]: trimmed || null }).eq('id', existing.id)
-      setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, [dayKey]: trimmed || null } : o))
+      await supabase.from('schedule_overrides').update({ [dayKey]: trimmed || '' }).eq('id', existing.id)
+      setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, [dayKey]: trimmed || '' } : o))
     } else {
       const insertRow: Record<string, string | null> = {
         user_id: viewingId, week_start: weekStart,
         monday: null, tuesday: null, wednesday: null, thursday: null, friday: null, notes: null,
-        [dayKey]: trimmed || null,
+        [dayKey]: trimmed || '',
       }
       const { data } = await supabase.from('schedule_overrides').insert(insertRow).select().single()
       if (data) setOverrides(prev => [...prev, data])
