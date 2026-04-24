@@ -20,6 +20,9 @@ interface Production {
 
 interface TeamMember { id: string; name: string; avatar_color: string }
 
+interface PanelChecklist { id: string; title: string; completed: boolean; sort_order: number }
+interface PanelActivity { id: string; action: string; detail: string | null; created_at: string; team: { name: string } | null }
+
 const STATUS_GROUPS = {
   pipeline: ['Idea/Request', 'In Progress'],
   approved: ['Approved/Scheduled'],
@@ -53,6 +56,10 @@ function ProductionsPageContent() {
   const [view, setView] = useState<'pipeline' | 'list'>('pipeline')
   const [scope, setScope] = useState<'all' | 'mine' | 'unassigned'>(searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'unassigned' ? 'unassigned' : 'all')
   const [dismissedConflicts, setDismissedConflicts] = useState<Set<string>>(new Set())
+  const [selectedProdId, setSelectedProdId] = useState<string | null>(null)
+  const [panelChecklist, setPanelChecklist] = useState<PanelChecklist[]>([])
+  const [panelActivity, setPanelActivity] = useState<PanelActivity[]>([])
+  const [panelLoading, setPanelLoading] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
@@ -121,6 +128,33 @@ function ProductionsPageContent() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const selectProduction = useCallback(async (prodId: string) => {
+    if (selectedProdId === prodId) { setSelectedProdId(null); return }
+    setSelectedProdId(prodId)
+    setPanelLoading(true)
+    const prod = productions.find(p => p.id === prodId)
+    if (!prod) { setPanelLoading(false); return }
+    const [checkRes, actRes] = await Promise.all([
+      supabase.from('checklist_items').select('id, title, completed, sort_order').eq('production_id', prodId).order('sort_order'),
+      supabase.from('production_activity').select('id, action, detail, created_at, team:team(name)').eq('production_id', prodId).order('created_at', { ascending: false }).limit(5),
+    ])
+    setPanelChecklist(checkRes.data || [])
+    setPanelActivity((actRes.data as any) || [])
+    setPanelLoading(false)
+  }, [selectedProdId, productions, supabase])
+
+  const togglePanelChecklistItem = async (item: PanelChecklist) => {
+    const updated = !item.completed
+    await supabase.from('checklist_items').update({ completed: updated, completed_at: updated ? new Date().toISOString() : null }).eq('id', item.id)
+    setPanelChecklist(prev => prev.map(c => c.id === item.id ? { ...c, completed: updated } : c))
+    // Update the production's checklist_items in the list too
+    setProductions(prev => prev.map(p => {
+      if (p.id !== selectedProdId) return p
+      const items = (p.checklist_items || []).map((ci, idx) => idx < panelChecklist.length ? { completed: panelChecklist[idx].id === item.id ? updated : panelChecklist[idx].completed } : ci)
+      return { ...p, checklist_items: items }
+    }))
+  }
+
   const dismissConflict = async (aId: string, bId: string) => {
     if (!currentUserId) return
     await supabase.from('dismissed_conflicts').insert({ production_a_id: aId, production_b_id: bId, dismissed_by: currentUserId })
@@ -180,11 +214,11 @@ function ProductionsPageContent() {
     const healthTip = overdue ? 'Overdue — not marked complete' : noTeam ? 'Nobody assigned' : (approaching && !checklistDone) ? `${daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days away`} — checklist incomplete` : checklistDone ? 'Checklist complete' : null
 
     return (
-      <Link href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'block', opacity: past && !overdue ? 0.45 : 1, transition: 'opacity 0.15s' }}>
+      <div onClick={() => selectProduction(prod.id)} style={{ textDecoration: 'none', display: 'block', opacity: past && !overdue ? 0.45 : 1, transition: 'opacity 0.15s', cursor: 'pointer' }}>
         <div
-          style={{ background: cardBg, border: `0.5px solid ${needsAttention ? (healthColor + '40') : border}`, borderRadius: '12px', padding: '14px 16px', marginBottom: '8px', cursor: 'pointer', transition: 'all 0.15s', borderLeft: `3px solid ${overdue ? '#ef4444' : typeColor}` }}
-          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = hoverBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = cardBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
+          style={{ background: selectedProdId === prod.id ? (dark ? 'rgba(30,108,181,0.15)' : 'rgba(30,108,181,0.08)') : cardBg, border: `0.5px solid ${selectedProdId === prod.id ? 'rgba(30,108,181,0.4)' : needsAttention ? (healthColor + '40') : border}`, borderRadius: '12px', padding: '14px 16px', marginBottom: '8px', cursor: 'pointer', transition: 'all 0.15s', borderLeft: `3px solid ${overdue ? '#ef4444' : typeColor}` }}
+          onMouseEnter={e => { if (selectedProdId !== prod.id) { (e.currentTarget as HTMLDivElement).style.background = hoverBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' } }}
+          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = selectedProdId === prod.id ? (dark ? 'rgba(30,108,181,0.15)' : 'rgba(30,108,181,0.08)') : cardBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -224,7 +258,7 @@ function ProductionsPageContent() {
             </div>
           )}
         </div>
-      </Link>
+      </div>
     )
   }
 
@@ -237,11 +271,11 @@ function ProductionsPageContent() {
     const members   = prod.production_members || []
 
     return (
-      <Link
-        href={`/dashboard/productions/${prod.production_number}`}
-        style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 16px', borderBottom: `0.5px solid ${border}`, transition: 'background 0.1s', opacity: past && !overdue ? 0.45 : 1 }}
-        onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = hoverBg}
-        onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
+      <div
+        onClick={() => selectProduction(prod.id)}
+        style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 16px', borderBottom: `0.5px solid ${border}`, transition: 'background 0.1s', opacity: past && !overdue ? 0.45 : 1, cursor: 'pointer', background: selectedProdId === prod.id ? (dark ? 'rgba(30,108,181,0.15)' : 'rgba(30,108,181,0.08)') : 'transparent' }}
+        onMouseEnter={e => { if (selectedProdId !== prod.id) (e.currentTarget as HTMLDivElement).style.background = hoverBg }}
+        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = selectedProdId === prod.id ? (dark ? 'rgba(30,108,181,0.15)' : 'rgba(30,108,181,0.08)') : 'transparent' }}
       >
         <span style={{ fontSize: '13px', color: muted, minWidth: '40px' }}>#{prod.production_number}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -276,7 +310,7 @@ function ProductionsPageContent() {
         <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', background: prod.status === 'Approved/Scheduled' ? 'rgba(34,197,94,0.12)' : prod.status === 'In Progress' ? 'rgba(245,158,11,0.12)' : prod.status === 'Complete' ? 'rgba(30,108,181,0.12)' : 'rgba(100,116,139,0.12)', color: prod.status === 'Approved/Scheduled' ? '#22c55e' : prod.status === 'In Progress' ? '#f59e0b' : prod.status === 'Complete' ? '#5ba3e0' : muted, flexShrink: 0 }}>
           {prod.status || 'Unknown'}
         </span>
-      </Link>
+      </div>
     )
   }
 
@@ -294,8 +328,11 @@ function ProductionsPageContent() {
     </div>
   )
 
+  const selectedProd = productions.find(p => p.id === selectedProdId) || null
+
   return (
-    <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1600px', margin: '0 auto', display: 'flex', gap: '16px' }}>
+      <div style={{ flex: 1, minWidth: 0, transition: 'all 0.2s' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
@@ -481,6 +518,123 @@ function ProductionsPageContent() {
               No productions match your search
             </p>
           ) : filtered.map(prod => <ProductionRow key={prod.id} prod={prod} />)}
+        </div>
+      )}
+      </div>
+
+      {/* QUICK VIEW PANEL */}
+      {selectedProd && (
+        <div style={{ width: '420px', flexShrink: 0, position: 'sticky' as const, top: '0', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto' as const, background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px' }}>
+          {panelLoading ? (
+            <div style={{ textAlign: 'center' as const, padding: '40px 0', color: muted }}>Loading...</div>
+          ) : (
+            <div>
+              {/* Panel header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>#{selectedProd.production_number}</p>
+                  <h2 style={{ fontSize: '20px', fontWeight: 700, color: text, margin: 0, lineHeight: 1.3 }}>{selectedProd.title}</h2>
+                </div>
+                <button onClick={() => setSelectedProdId(null)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', padding: '4px', fontSize: '18px', flexShrink: 0, minWidth: '36px', minHeight: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+
+              {/* Open full details link */}
+              <Link href={`/dashboard/productions/${selectedProd.production_number}`} style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#5ba3e0', textDecoration: 'none', padding: '8px 12px', background: dark ? 'rgba(30,108,181,0.1)' : 'rgba(30,108,181,0.06)', borderRadius: '8px', marginBottom: '16px', textAlign: 'center' as const }}>
+                Open full details →
+              </Link>
+
+              {/* Status & type */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', background: selectedProd.status === 'Approved/Scheduled' ? 'rgba(34,197,94,0.12)' : selectedProd.status === 'In Progress' ? 'rgba(245,158,11,0.12)' : selectedProd.status === 'Complete' ? 'rgba(30,108,181,0.12)' : 'rgba(100,116,139,0.12)', color: selectedProd.status === 'Approved/Scheduled' ? '#22c55e' : selectedProd.status === 'In Progress' ? '#f59e0b' : selectedProd.status === 'Complete' ? '#5ba3e0' : muted }}>
+                  {selectedProd.status || 'Unknown'}
+                </span>
+                <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', background: `${getTypeColor(selectedProd)}18`, color: getTypeColor(selectedProd) }}>
+                  {getTypeLabel(selectedProd)}
+                </span>
+                {isOverdue(selectedProd) && <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.12)', color: '#ef4444', fontWeight: 600 }}>Overdue</span>}
+              </div>
+
+              {/* Key details */}
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '8px', marginBottom: '16px', padding: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px' }}>
+                {selectedProd.start_datetime && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                    <span style={{ color: muted }}>Date</span>
+                    <span style={{ color: text, fontWeight: 500 }}>{new Date(selectedProd.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · {new Date(selectedProd.start_datetime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
+                )}
+                {(selectedProd.filming_location || selectedProd.school_department) && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                    <span style={{ color: muted }}>Location</span>
+                    <span style={{ color: text, fontWeight: 500 }}>{getSchoolName(selectedProd.filming_location) || getSchoolName(selectedProd.school_department) || selectedProd.filming_location || ''}</span>
+                  </div>
+                )}
+                {selectedProd.organizer_name && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                    <span style={{ color: muted }}>Organizer</span>
+                    <span style={{ color: text, fontWeight: 500 }}>{selectedProd.organizer_name}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Team */}
+              {(selectedProd.production_members || []).length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>Team</p>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {(selectedProd.production_members || []).map(m => m.team && (
+                      <span key={m.user_id} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '20px', background: m.team.avatar_color + '22', color: m.team.avatar_color, fontWeight: 500 }}>{m.team.name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Checklist */}
+              {panelChecklist.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: 0 }}>Checklist</p>
+                    <span style={{ fontSize: '11px', color: muted }}>{panelChecklist.filter(c => c.completed).length}/{panelChecklist.length}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '2px' }}>
+                    {panelChecklist.map(item => (
+                      <div key={item.id} onClick={() => togglePanelChecklistItem(item)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.1s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = hoverBg}
+                        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                      >
+                        <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `1.5px solid ${item.completed ? '#22c55e' : border}`, background: item.completed ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                          {item.completed && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                        </div>
+                        <span style={{ fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none', lineHeight: 1.3 }}>{item.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ marginTop: '8px', height: '4px', background: dark ? 'rgba(255,255,255,0.06)' : '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ width: `${(panelChecklist.filter(c => c.completed).length / panelChecklist.length) * 100}%`, height: '100%', background: panelChecklist.every(c => c.completed) ? '#22c55e' : '#5ba3e0', borderRadius: '2px', transition: 'width 0.3s' }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Recent activity */}
+              {panelActivity.length > 0 && (
+                <div>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>Recent Activity</p>
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '6px' }}>
+                    {panelActivity.map(a => (
+                      <div key={a.id} style={{ fontSize: '12px', color: muted, padding: '4px 0', borderBottom: `0.5px solid ${border}` }}>
+                        <span style={{ color: text, fontWeight: 500 }}>{a.team?.name || 'System'}</span>
+                        {' '}{a.action.replace(/_/g, ' ')}
+                        {a.detail && <span style={{ color: muted }}> — {a.detail}</span>}
+                        <span style={{ display: 'block', fontSize: '11px', color: muted, marginTop: '2px' }}>{new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
