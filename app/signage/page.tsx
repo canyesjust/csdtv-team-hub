@@ -267,10 +267,10 @@ export default function SignagePage() {
                   {dayOl.map((evt, oi) => (
                     <div key={`ol-${oi}`} style={{
                       padding: `${Math.round(3 * s)}px ${Math.round(5 * s)}px`, marginBottom: `${Math.round(2 * s)}px`, borderRadius: '3px',
-                      background: 'rgba(155,89,182,0.15)',
-                      borderLeft: '3px solid #9b59b6',
+                      background: 'rgba(8,145,178,0.15)',
+                      borderLeft: '3px solid #0891b2',
                     }}>
-                      <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: 700, color: '#9b59b6', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, display: 'block', lineHeight: 1.2 }}>{evt.title}</span>
+                      <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: 700, color: '#0891b2', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, display: 'block', lineHeight: 1.2 }}>{evt.title}</span>
                       {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>}
                     </div>
                   ))}

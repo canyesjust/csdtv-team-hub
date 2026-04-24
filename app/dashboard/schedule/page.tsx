@@ -598,7 +598,7 @@ export default function SchedulePage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onClick={() => setShowAddEvent(true)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: '#22c55e', border: 'none', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Event</button>
-          <button onClick={() => setShowOutlook(p => !p)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: showOutlook ? '#9b59b6' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), border: 'none', color: showOutlook ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{showOutlook ? '📅 Outlook' : '📅 Outlook off'}</button>
+          <button onClick={() => setShowOutlook(p => !p)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: showOutlook ? '#0891b2' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), border: 'none', color: showOutlook ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{showOutlook ? '📅 Outlook' : '📅 Outlook off'}</button>
           {isManager && <button onClick={remindTeam} disabled={sendingReminder} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit', opacity: sendingReminder ? 0.6 : 1 }}>{sendingReminder ? 'Sending...' : '📧 Remind team'}</button>}
         </div>
       </div>
@@ -882,7 +882,7 @@ export default function SchedulePage() {
                 {/* Outlook calendar events */}
                 {dayOutlook.map((evt, oi) => (
                   <div key={`ol-${oi}`} style={{ marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                    <span style={{ display: 'block', fontSize: '10px', fontWeight: 500, color: '#fff', background: '#9b59b6', borderRadius: '4px', padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, lineHeight: 1.4, cursor: 'default', opacity: 0.85, flex: 1 }} title={`Outlook: ${evt.title}${evt.start_time ? ' · ' + new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}${evt.location ? ' · ' + evt.location : ''}`}>
+                    <span style={{ display: 'block', fontSize: '10px', fontWeight: 500, color: '#fff', background: '#0891b2', borderRadius: '4px', padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, lineHeight: 1.4, cursor: 'default', opacity: 0.85, flex: 1 }} title={`Outlook: ${evt.title}${evt.start_time ? ' · ' + new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}${evt.location ? ' · ' + evt.location : ''}`}>
                       {evt.title.length > 16 ? evt.title.slice(0, 15) + '…' : evt.title}
                     </span>
                     <button onClick={e => { e.stopPropagation(); dismissOutlookEvent(`${evt.date}|${evt.title}`) }} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1, opacity: 0.5 }}>×</button>
