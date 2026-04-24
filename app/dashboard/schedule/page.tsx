@@ -113,7 +113,7 @@ interface ScheduleOverride extends DaySchedule {
 }
 
 interface TeamMember {
-  id: string; name: string; avatar_color: string; role: string
+  id: string; name: string; avatar_color: string; role: string; email?: string
 }
 
 interface CurrentUser extends TeamMember { }
