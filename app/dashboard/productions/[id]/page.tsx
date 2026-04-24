@@ -567,7 +567,7 @@ export default function ProductionDetailPage() {
     setTimeout(() => setNotesSaved(false), 3000)
   }, [uuid, teamNotes, supabase])
 
-  const saveVideos Produced = useCallback(async () => {
+  const saveVideosProduced = useCallback(async () => {
     if (!uuid) return
     setSavingDeliv(true)
     await supabase.from('productions').update({ deliverables_count: delivCount, deliverables_notes: delivNotes || null }).eq('id', uuid)
@@ -1101,7 +1101,7 @@ export default function ProductionDetailPage() {
                 <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Notes</label>
                 <input value={delivNotes} onChange={e => setDelivNotes(e.target.value)} placeholder="e.g. 50 slideshows + 1 highlight reel" style={{ ...inputStyle, padding: '7px 10px' }} />
               </div>
-              <button onClick={saveVideos Produced} disabled={savingDeliv} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
+              <button onClick={saveVideosProduced} disabled={savingDeliv} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
                 {savingDeliv ? 'Saving...' : 'Save'}
               </button>
             </div>
