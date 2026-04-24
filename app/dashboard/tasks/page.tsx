@@ -65,6 +65,7 @@ export default function TasksPage() {
   const [panelNotes, setPanelNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [search, setSearch] = useState('')
+  const [myProductions, setMyProductions] = useState<{ id: string; title: string; production_number: number; total: number; done: number }[]>([])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -125,6 +126,21 @@ export default function TasksPage() {
       if (s.completed) counts[s.task_id].done++
     })
     setSubtaskCounts(counts)
+
+    // Load my productions with checklist progress
+    if (userRes.data) {
+      const { data: myProdMembers } = await supabase.from('production_members').select('production_id').eq('user_id', userRes.data.id)
+      if (myProdMembers && myProdMembers.length > 0) {
+        const prodIds = myProdMembers.map(m => m.production_id)
+        const { data: prods } = await supabase.from('productions').select('id, title, production_number, status, checklist_items(completed)').in('id', prodIds).not('status', 'in', '("Complete","Abandoned")').order('production_number', { ascending: false })
+        const withCounts = (prods || []).map((p: any) => {
+          const items = p.checklist_items || []
+          return { id: p.id, title: p.title, production_number: p.production_number, total: items.length, done: items.filter((i: any) => i.completed).length }
+        }).filter(p => p.total > 0 && p.done < p.total)
+        setMyProductions(withCounts)
+      }
+    }
+
     setLoading(false)
   }, [supabase])
 
@@ -418,6 +434,34 @@ export default function TasksPage() {
             </button>
           </div>
         </div>
+
+        {/* My Productions — checklist progress */}
+        {myProductions.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>My Productions — Outstanding Checklist Items</p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {myProductions.map(p => {
+              const pct = Math.round((p.done / p.total) * 100)
+              return (
+                <a key={p.id} href={`/dashboard/productions/${p.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', minWidth: '180px', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e6cb5'; (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-1px)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = border; (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(0)' }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '13px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{p.production_number} {p.title}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                      <div style={{ flex: 1, height: '3px', background: dark ? 'rgba(255,255,255,0.06)' : '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '2px' }} />
+                      </div>
+                      <span style={{ fontSize: '11px', color: pct === 100 ? '#22c55e' : muted, fontWeight: 500, flexShrink: 0 }}>{p.done}/{p.total}</span>
+                    </div>
+                  </div>
+                </a>
+              )
+            })}
+            </div>
+          </div>
+        )}
 
         {/* Tabs: Open / Completed + View toggle */}
         <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `0.5px solid ${border}`, marginBottom: '16px' }}>

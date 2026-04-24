@@ -179,10 +179,29 @@ export default function ProductionDetailPage() {
     }).select('id, title, status, priority, assigned_to, due_date').single()
     if (error) { alert(`Failed to create task: ${error.message}`); return }
     if (data) setLinkedTasks(prev => [data, ...prev])
+    // Send email to assignee if assigned to someone else
+    if (newTaskAssignee && newTaskAssignee !== currentUser.id && production) {
+      const assignee = allTeam.find(m => m.id === newTaskAssignee)
+      if (assignee?.email) {
+        const { data: { session } } = await supabase.auth.refreshSession()
+        if (session) {
+          await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({
+              type: 'task_assigned', recipientEmail: assignee.email, recipientName: assignee.name.split(' ')[0],
+              subject: `Task assigned: ${newTaskTitle}`,
+              body: `You've been assigned a task on #${production.production_number} ${production.title}:\n\n"${newTaskTitle}"${newTaskDue ? `\nDue: ${new Date(newTaskDue).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}\nPriority: ${newTaskPriority}`,
+              actionUrl: `/dashboard/productions/${production.production_number}`, actionLabel: 'View Production',
+            }),
+          })
+        }
+      }
+    }
     setNewTaskTitle(''); setNewTaskAssignee(''); setNewTaskDue(''); setNewTaskPriority('normal')
     setShowCreateTask(false)
     await logActivity('Created task', newTaskTitle)
-  }, [newTaskTitle, newTaskPriority, newTaskAssignee, newTaskDue, currentUser, uuid, supabase, logActivity])
+  }, [newTaskTitle, newTaskPriority, newTaskAssignee, newTaskDue, currentUser, uuid, supabase, logActivity, allTeam, production])
 
   const initChecklist = useCallback(async () => {
     if (!production || !currentUser || !uuid) return
