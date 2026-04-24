@@ -208,8 +208,19 @@ export default function SignagePage() {
                     // Outlook events with auto-dedup against productions
                     const dayOl = outlookEvents.filter(e => {
                       if (e.date !== ds) return false
-                      const tl = e.title.toLowerCase().trim()
-                      return !dayProds.some(p => { const pl = p.title.toLowerCase().trim(); return pl === tl || pl.includes(tl) || tl.includes(pl) })
+                      const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
+                      const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
+                      const titleWords = getWords(e.title)
+                      return !dayProds.some(p => {
+                        const prodWords = getWords(p.title)
+                        if (titleWords.length === 0 || prodWords.length === 0) return false
+                        const nt = normalize(e.title), np = normalize(p.title)
+                        if (nt === np || nt.includes(np) || np.includes(nt)) return true
+                        const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
+                        const longer = titleWords.length > prodWords.length ? titleWords : prodWords
+                        const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
+                        return overlap >= Math.ceil(shorter.length * 0.5)
+                      })
                     })
                     const n = dayProds.length + dayEvts.length + dayOl.length
                     const s = n <= 3 ? 1 : Math.max(0.55, 3 / n)
@@ -260,7 +271,7 @@ export default function SignagePage() {
                       borderLeft: '3px solid #9b59b6',
                     }}>
                       <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: 700, color: '#9b59b6', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, display: 'block', lineHeight: 1.2 }}>{evt.title}</span>
-                      {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{evt.start_time}</div>}
+                      {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>}
                     </div>
                   ))}
                     </>

@@ -55,18 +55,16 @@ function parseIcal(text: string): CalEvent[] {
     if (allDay) {
       date = `${dtStart.slice(0, 4)}-${dtStart.slice(4, 6)}-${dtStart.slice(6, 8)}`
     } else {
-      // Format: 20260423T140000Z or 20260423T140000
-      const d = new Date(
-        `${dtStart.slice(0, 4)}-${dtStart.slice(4, 6)}-${dtStart.slice(6, 8)}T${dtStart.slice(9, 11)}:${dtStart.slice(11, 13)}:${dtStart.slice(13, 15)}${dtStart.endsWith('Z') ? 'Z' : ''}`
-      )
+      // Parse to ISO string — let the client convert to local time
+      const isoStr = `${dtStart.slice(0, 4)}-${dtStart.slice(4, 6)}-${dtStart.slice(6, 8)}T${dtStart.slice(9, 11)}:${dtStart.slice(11, 13)}:${dtStart.slice(13, 15)}${dtStart.endsWith('Z') ? 'Z' : ''}`
+      const d = new Date(isoStr)
       date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      startTime = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' })
+      // Store as ISO string — client will format
+      startTime = isoStr
 
       if (dtEnd) {
-        const e = new Date(
-          `${dtEnd.slice(0, 4)}-${dtEnd.slice(4, 6)}-${dtEnd.slice(6, 8)}T${dtEnd.slice(9, 11)}:${dtEnd.slice(11, 13)}:${dtEnd.slice(13, 15)}${dtEnd.endsWith('Z') ? 'Z' : ''}`
-        )
-        endTime = e.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' })
+        const endIso = `${dtEnd.slice(0, 4)}-${dtEnd.slice(4, 6)}-${dtEnd.slice(6, 8)}T${dtEnd.slice(9, 11)}:${dtEnd.slice(11, 13)}:${dtEnd.slice(13, 15)}${dtEnd.endsWith('Z') ? 'Z' : ''}`
+        endTime = endIso
       }
     }
 

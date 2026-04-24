@@ -274,36 +274,26 @@ export default function SchedulePage() {
     })
     const weekArr = Array.from(weekStarts)
 
-    const [defRes, ovRes, prodMembersRes] = await Promise.all([
+    const [defRes, ovRes] = await Promise.all([
       supabase.from('schedule_defaults').select('*').eq('user_id', targetId),
       supabase.from('schedule_overrides').select('*').eq('user_id', targetId).in('week_start', weekArr),
-      supabase.from('production_members').select('production_id').eq('user_id', targetId),
     ])
 
     setDefaults(defRes.data || [])
     setOverrides(ovRes.data || [])
 
-    // Load productions for this user that fall in the viewed month
-    const prodIds = (prodMembersRes.data || []).map((r: { production_id: string }) => r.production_id)
-    if (prodIds.length > 0) {
-      const monthStartStr = toLocalDateStr(firstOfMonth)
-      const monthEndStr   = toLocalDateStr(lastOfMonth)
-      // Extend query by 1 day on each side to capture UTC timestamps that
-      // fall on the boundary day in local time (e.g. 11pm UTC = prev day locally)
-      const queryStart = new Date(firstOfMonth)
-      queryStart.setDate(queryStart.getDate() - 1)
-      const queryEnd = new Date(lastOfMonth)
-      queryEnd.setDate(queryEnd.getDate() + 1)
-      const prodsRes = await supabase
-        .from('productions')
-        .select('id,title,production_number,request_type_label,start_datetime')
-        .in('id', prodIds)
-        .gte('start_datetime', toLocalDateStr(queryStart))
-        .lte('start_datetime', toLocalDateStr(queryEnd) + 'T23:59:59')
-      setProductions(prodsRes.data || [])
-    } else {
-      setProductions([])
-    }
+    // Load ALL productions for the viewed month (not just user's)
+    const queryStart = new Date(firstOfMonth)
+    queryStart.setDate(queryStart.getDate() - 1)
+    const queryEnd = new Date(lastOfMonth)
+    queryEnd.setDate(queryEnd.getDate() + 1)
+    const prodsRes = await supabase
+      .from('productions')
+      .select('id,title,production_number,request_type_label,start_datetime')
+      .not('start_datetime', 'is', null)
+      .gte('start_datetime', toLocalDateStr(queryStart))
+      .lte('start_datetime', toLocalDateStr(queryEnd) + 'T23:59:59')
+    setProductions(prodsRes.data || [])
 
     // Pre-fill edit forms with current user's data
     const myDef = (defRes.data || []).find((d: ScheduleDefault) => d.user_id === targetId)
@@ -357,10 +347,23 @@ export default function SchedulePage() {
       const key = `${e.date}|${e.title}`
       if (dismissedOutlook.has(key)) return false
       // Auto-match: skip if title closely matches a production on the same day
-      const titleLower = e.title.toLowerCase().trim()
+      // Smart matching: strips prefixes, compares keywords
+      const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
+      const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
+      const titleWords = getWords(e.title)
       const matched = dayProds.some(p => {
-        const prodLower = p.title.toLowerCase().trim()
-        return prodLower === titleLower || prodLower.includes(titleLower) || titleLower.includes(prodLower)
+        const prodWords = getWords(p.title)
+        if (titleWords.length === 0 || prodWords.length === 0) return false
+        // Exact normalized match
+        if (normalize(e.title) === normalize(p.title)) return true
+        // Substring match on normalized
+        const nt = normalize(e.title), np = normalize(p.title)
+        if (nt.includes(np) || np.includes(nt)) return true
+        // Keyword overlap: if 50%+ of the shorter title's words appear in the longer
+        const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
+        const longer = titleWords.length > prodWords.length ? titleWords : prodWords
+        const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
+        return overlap >= Math.ceil(shorter.length * 0.5)
       })
       return !matched
     })
@@ -879,7 +882,7 @@ export default function SchedulePage() {
                 {/* Outlook calendar events */}
                 {dayOutlook.map((evt, oi) => (
                   <div key={`ol-${oi}`} style={{ marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                    <span style={{ display: 'block', fontSize: '10px', fontWeight: 500, color: '#fff', background: '#9b59b6', borderRadius: '4px', padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, lineHeight: 1.4, cursor: 'default', opacity: 0.85, flex: 1 }} title={`Outlook: ${evt.title}${evt.start_time ? ' · ' + evt.start_time : ''}${evt.location ? ' · ' + evt.location : ''}`}>
+                    <span style={{ display: 'block', fontSize: '10px', fontWeight: 500, color: '#fff', background: '#9b59b6', borderRadius: '4px', padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, lineHeight: 1.4, cursor: 'default', opacity: 0.85, flex: 1 }} title={`Outlook: ${evt.title}${evt.start_time ? ' · ' + new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''}${evt.location ? ' · ' + evt.location : ''}`}>
                       {evt.title.length > 16 ? evt.title.slice(0, 15) + '…' : evt.title}
                     </span>
                     <button onClick={e => { e.stopPropagation(); dismissOutlookEvent(`${evt.date}|${evt.title}`) }} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1, opacity: 0.5 }}>×</button>
