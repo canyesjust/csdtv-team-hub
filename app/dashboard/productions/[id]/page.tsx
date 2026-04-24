@@ -152,6 +152,7 @@ export default function ProductionDetailPage() {
     ])
 
     setChecklist(checkRes.data || [])
+    if ((checkRes.data || []).length === 0) setActiveTab('info')
     setMembers(membersRes.data || [])
     setAllTeam(teamRes.data || [])
     setLinks(linksRes.data || [])
@@ -176,8 +177,10 @@ export default function ProductionDetailPage() {
 
   const logActivity = useCallback(async (action: string, detail?: string) => {
     if (!currentUser || !uuid) return
-    const { data } = await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action, detail: detail || null }).select('*, team:team(name)').single()
-    if (data) setActivity(prev => [data, ...prev])
+    const { error } = await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action, detail: detail || null })
+    if (!error) {
+      setActivity(prev => [{ id: Date.now().toString(), production_id: uuid, user_id: currentUser.id, action, detail: detail || null, created_at: new Date().toISOString(), team: { name: currentUser.name } }, ...prev])
+    }
   }, [currentUser, uuid, supabase])
 
   const createTaskForProduction = useCallback(async () => {

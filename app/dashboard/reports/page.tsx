@@ -319,10 +319,9 @@ export default function ReportsPage() {
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
             {metricCard('Productions', fp.length, `${completedProds} completed`)}
-            {metricCard('Videos', fv.length, `${publishedVideos} published`)}
-            {totalVidsProduced > 0 && metricCard('Videos Produced', totalVidsProduced.toLocaleString(), 'total videos produced')}
+            {metricCard('Videos Produced', totalVidsProduced > 0 ? totalVidsProduced.toLocaleString() : String(fv.length), totalVidsProduced > 0 ? `${fv.length} in library · ${publishedVideos} published` : `${publishedVideos} published`)}
             {metricCard('Tasks done', completedTasks, `${tasks.filter(t => t.status !== 'complete').length} open`)}
-            {metricCard('Total views', totalViews > 0 ? totalViews.toLocaleString() : '—', 'across platforms')}
+            {metricCard('Total Views', (totalViews + totalYtViews) > 0 ? (totalViews + totalYtViews).toLocaleString() : '—', totalYtViews > 0 ? `${totalYtViews.toLocaleString()} YouTube` : 'across platforms')}
             {metricCard('Schools served', String(new Set(fp.filter(p => p.school_department).map(p => p.school_department)).size), 'unique schools')}
             {metricCard('Est. value', `$${Math.round(costSavings / 1000)}k`, 'if outsourced', '#22c55e')}
           </div>
@@ -493,9 +492,8 @@ export default function ReportsPage() {
       {tab === 'videos' && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-            {metricCard('Total videos', fv.length, `${publishedVideos} published`)}
-            {metricCard('Videos Produced', totalVidsProduced > 0 ? totalVidsProduced.toLocaleString() : '—', 'across all productions')}
-            {metricCard('YouTube views', totalYtViews > 0 ? totalYtViews.toLocaleString() : '—', totalYtLikes > 0 ? `${totalYtLikes.toLocaleString()} likes` : '')}
+            {metricCard('Videos Produced', totalVidsProduced > 0 ? totalVidsProduced.toLocaleString() : String(fv.length), totalVidsProduced > 0 ? `${fv.length} in library · ${publishedVideos} published` : `${publishedVideos} published`)}
+            {metricCard('YouTube Views', totalYtViews > 0 ? totalYtViews.toLocaleString() : '—', totalYtLikes > 0 ? `${totalYtLikes.toLocaleString()} likes` : '')}
             {metricCard('Platforms', String(new Set(destinations.map(d => d.platform)).size), 'distribution channels')}
             {metricCard('Release compliance', `${complianceRate}%`, `${signedReleases} of ${totalTalent} cleared`, complianceRate === 100 ? '#22c55e' : complianceRate >= 80 ? '#f59e0b' : '#ef4444')}
           </div>
