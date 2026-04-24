@@ -39,6 +39,7 @@ export default function SignagePage() {
   const [schedOverrides, setSchedOverrides] = useState<SchedOverride[]>([])
   const [schoolMap, setSchoolMap] = useState<Record<string, string>>({})
   const [calEvents, setCalEvents] = useState<{ id: string; title: string; date: string; start_time: string | null; color: string }[]>([])
+  const [outlookEvents, setOutlookEvents] = useState<{ title: string; date: string; start_time: string | null; location: string | null }[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
@@ -57,6 +58,7 @@ export default function SignagePage() {
     setSchedDefaults(defsRes.data || [])
     setSchedOverrides(ovrsRes.data || [])
     setCalEvents(eventsRes.data || [])
+    try { const ir = await fetch('/api/ical'); if (ir.ok) { const { events: oe } = await ir.json(); setOutlookEvents(oe || []) } } catch {}
     const m: Record<string, string> = {}
     ;(schoolsRes.data || []).forEach((s: any) => { m[s.code] = s.name })
     setSchoolMap(m)
@@ -203,7 +205,13 @@ export default function SignagePage() {
                   {(() => {
                     const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
                     const dayEvts = calEvents.filter(e => e.date === ds)
-                    const n = dayProds.length + dayEvts.length
+                    // Outlook events with auto-dedup against productions
+                    const dayOl = outlookEvents.filter(e => {
+                      if (e.date !== ds) return false
+                      const tl = e.title.toLowerCase().trim()
+                      return !dayProds.some(p => { const pl = p.title.toLowerCase().trim(); return pl === tl || pl.includes(tl) || tl.includes(pl) })
+                    })
+                    const n = dayProds.length + dayEvts.length + dayOl.length
                     const s = n <= 3 ? 1 : Math.max(0.55, 3 / n)
                     return <>
                   <div style={{ fontSize: `${Math.round(18 * s)}px`, color: todayCell ? '#60b8f0' : '#c0ccdd', fontWeight: todayCell ? 800 : 600, textAlign: 'right' as const, marginBottom: `${Math.round(2 * s)}px` }}>{date.getDate()}</div>
@@ -242,6 +250,16 @@ export default function SignagePage() {
                       borderLeft: `3px solid ${evt.color || '#22c55e'}`,
                     }}>
                       <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: 700, color: evt.color || '#22c55e', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, display: 'block', lineHeight: 1.2 }}>{evt.title}</span>
+                      {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{evt.start_time}</div>}
+                    </div>
+                  ))}
+                  {dayOl.map((evt, oi) => (
+                    <div key={`ol-${oi}`} style={{
+                      padding: `${Math.round(3 * s)}px ${Math.round(5 * s)}px`, marginBottom: `${Math.round(2 * s)}px`, borderRadius: '3px',
+                      background: 'rgba(155,89,182,0.15)',
+                      borderLeft: '3px solid #9b59b6',
+                    }}>
+                      <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: 700, color: '#9b59b6', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, display: 'block', lineHeight: 1.2 }}>{evt.title}</span>
                       {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{evt.start_time}</div>}
                     </div>
                   ))}
