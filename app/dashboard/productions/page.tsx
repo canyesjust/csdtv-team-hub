@@ -62,26 +62,36 @@ function ProductionsPageContent() {
   const colBg   = dark ? 'rgba(255,255,255,0.02)' : '#f8fafc'
   const hoverBg = dark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
 
+  const isOverdue = (p: Production) => !!p.start_datetime && new Date(p.start_datetime) < new Date() && p.status !== 'Complete' && p.status !== 'Abandoned'
+  const isPast = (p: Production) => !!p.start_datetime && new Date(p.start_datetime) < new Date()
+
   const sortProductions = (data: Production[]): Production[] => {
     const now = new Date()
     return [...data].sort((a, b) => {
       const aDate = a.start_datetime ? new Date(a.start_datetime) : null
       const bDate = b.start_datetime ? new Date(b.start_datetime) : null
+      const aOverdue = isOverdue(a)
+      const bOverdue = isOverdue(b)
       const aIsPast = aDate ? aDate < now : false
       const bIsPast = bDate ? bDate < now : false
+
+      // Overdue items FIRST — most recent overdue at top
+      if (aOverdue && !bOverdue) return -1
+      if (!aOverdue && bOverdue) return 1
+      if (aOverdue && bOverdue) return (bDate?.getTime() || 0) - (aDate?.getTime() || 0)
 
       // Both have no date — sort by production number descending
       if (!aDate && !bDate) return b.production_number - a.production_number
       // No date goes to bottom
       if (!aDate) return 1
       if (!bDate) return -1
-      // Both past — most recent first (so they appear just below upcoming)
+      // Completed past items sink below upcoming
+      if (aIsPast && !bIsPast) return 1
+      if (!aIsPast && bIsPast) return -1
+      // Both past (completed) — most recent first
       if (aIsPast && bIsPast) return bDate.getTime() - aDate.getTime()
       // Both upcoming — soonest first
-      if (!aIsPast && !bIsPast) return aDate.getTime() - bDate.getTime()
-      // Past sinks below upcoming
-      if (aIsPast) return 1
-      return -1
+      return aDate.getTime() - bDate.getTime()
     })
   }
 
@@ -119,7 +129,6 @@ function ProductionsPageContent() {
 
   const getTypeLabel = (p: Production) => p.request_type_label || p.type || 'Unknown'
   const getTypeColor = (p: Production) => TYPE_COLORS[getTypeLabel(p)] || '#64748b'
-  const isPast = (p: Production) => !!p.start_datetime && new Date(p.start_datetime) < new Date()
 
   const getProgress = (p: Production) => {
     const items = p.checklist_items || []
@@ -155,6 +164,7 @@ function ProductionsPageContent() {
 
   const ProductionCard = ({ prod }: { prod: Production }) => {
     const past      = isPast(prod)
+    const overdue   = isOverdue(prod)
     const typeLabel = getTypeLabel(prod)
     const typeColor = getTypeColor(prod)
     const progress  = getProgress(prod)
@@ -165,14 +175,14 @@ function ProductionsPageContent() {
     const daysUntil = prod.start_datetime ? Math.ceil((new Date(prod.start_datetime).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
     const approaching = daysUntil !== null && daysUntil >= 0 && daysUntil <= 7
     const checklistDone = progress ? progress.pct === 100 : false
-    const needsAttention = noTeam || (approaching && !checklistDone && !past)
-    const healthColor = noTeam ? '#ef4444' : (approaching && !checklistDone) ? '#f59e0b' : (checklistDone ? '#22c55e' : null)
-    const healthTip = noTeam ? 'Nobody assigned' : (approaching && !checklistDone) ? `${daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days away`} — checklist incomplete` : checklistDone ? 'Checklist complete' : null
+    const needsAttention = noTeam || (approaching && !checklistDone && !past) || overdue
+    const healthColor = overdue ? '#ef4444' : noTeam ? '#ef4444' : (approaching && !checklistDone) ? '#f59e0b' : (checklistDone ? '#22c55e' : null)
+    const healthTip = overdue ? 'Overdue — not marked complete' : noTeam ? 'Nobody assigned' : (approaching && !checklistDone) ? `${daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `${daysUntil} days away`} — checklist incomplete` : checklistDone ? 'Checklist complete' : null
 
     return (
-      <Link href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'block', opacity: past ? 0.45 : 1, transition: 'opacity 0.15s' }}>
+      <Link href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'block', opacity: past && !overdue ? 0.45 : 1, transition: 'opacity 0.15s' }}>
         <div
-          style={{ background: cardBg, border: `0.5px solid ${needsAttention ? (healthColor + '40') : border}`, borderRadius: '12px', padding: '14px 16px', marginBottom: '8px', cursor: 'pointer', transition: 'all 0.15s', borderLeft: `3px solid ${typeColor}` }}
+          style={{ background: cardBg, border: `0.5px solid ${needsAttention ? (healthColor + '40') : border}`, borderRadius: '12px', padding: '14px 16px', marginBottom: '8px', cursor: 'pointer', transition: 'all 0.15s', borderLeft: `3px solid ${overdue ? '#ef4444' : typeColor}` }}
           onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = hoverBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' }}
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = cardBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
         >
@@ -180,7 +190,8 @@ function ProductionsPageContent() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: '11px', color: muted, margin: '0 0 3px' }}>
                 #{prod.production_number}
-                {past && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
+                {overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: '#ef4444', background: 'rgba(239,68,68,0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>Overdue</span>}
+                {past && !overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
                 {healthColor && !past && <span title={healthTip || ''} style={{ marginLeft: '6px', display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: healthColor, verticalAlign: 'middle' }} />}
               </p>
               <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, lineHeight: 1.3 }}>{prod.title}</p>
@@ -219,6 +230,7 @@ function ProductionsPageContent() {
 
   const ProductionRow = ({ prod }: { prod: Production }) => {
     const past      = isPast(prod)
+    const overdue   = isOverdue(prod)
     const typeLabel = getTypeLabel(prod)
     const typeColor = getTypeColor(prod)
     const progress  = getProgress(prod)
@@ -227,7 +239,7 @@ function ProductionsPageContent() {
     return (
       <Link
         href={`/dashboard/productions/${prod.production_number}`}
-        style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 16px', borderBottom: `0.5px solid ${border}`, transition: 'background 0.1s', opacity: past ? 0.45 : 1 }}
+        style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 16px', borderBottom: `0.5px solid ${border}`, transition: 'background 0.1s', opacity: past && !overdue ? 0.45 : 1 }}
         onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = hoverBg}
         onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
       >
@@ -246,9 +258,10 @@ function ProductionsPageContent() {
           </div>
         )}
         {prod.start_datetime && (
-          <span style={{ fontSize: '12px', color: past ? muted : text, flexShrink: 0 }}>
+          <span style={{ fontSize: '12px', color: overdue ? '#ef4444' : past ? muted : text, flexShrink: 0 }}>
             {formatDate(prod.start_datetime)}
-            {past && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
+            {overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: '#ef4444', background: 'rgba(239,68,68,0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>Overdue</span>}
+            {past && !overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
           </span>
         )}
         {members.length > 0 && (

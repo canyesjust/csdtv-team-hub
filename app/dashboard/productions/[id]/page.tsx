@@ -371,15 +371,39 @@ export default function ProductionDetailPage() {
     if (!memberToAdd || !uuid) return
     const existing = members.find(m => m.user_id === memberToAdd)
     if (existing) { setMemberToAdd(''); return }
-    const { data } = await supabase.from('production_members').insert({ production_id: uuid, user_id: memberToAdd }).select('*, team:team(id, name, role, avatar_color)').single()
+    const { data } = await supabase.from('production_members').insert({ production_id: uuid, user_id: memberToAdd }).select('*, team:team(id, name, role, avatar_color, email)').single()
     if (data) {
       setMembers(prev => [...prev, data])
       const member = allTeam.find(m => m.id === memberToAdd)
       await logActivity('Added team member', member?.name)
+
+      // Send email notification to the added member
+      if (member?.email && production) {
+        const { data: { session } } = await supabase.auth.refreshSession()
+        if (session) {
+          const d = production.start_datetime ? new Date(production.start_datetime) : null
+          const dateStr = d ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'TBD'
+          const timeStr = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+          const venue = getSchoolName(production.filming_location) || getSchoolName(production.school_department) || production.filming_location || 'TBD'
+          await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({
+              type: 'production_assignment',
+              recipientEmail: member.email,
+              recipientName: member.name.split(' ')[0],
+              subject: `You've been added to #${production.production_number} ${production.title}`,
+              body: `You've been assigned to production #${production.production_number} — ${production.title}.\n\nDate: ${dateStr}${timeStr ? ` at ${timeStr}` : ''}\nLocation: ${venue}\nType: ${production.request_type_label || 'Production'}\n\nView the production details and checklist in the Team Hub.`,
+              actionUrl: `/dashboard/productions/${production.production_number}`,
+              actionLabel: 'View Production',
+            }),
+          })
+        }
+      }
     }
     setMemberToAdd('')
     setAddingMember(false)
-  }, [memberToAdd, members, uuid, supabase, allTeam, logActivity])
+  }, [memberToAdd, members, uuid, supabase, allTeam, logActivity, production])
 
   const removeMember = useCallback(async (memberId: string, memberName: string) => {
     if (!uuid) return

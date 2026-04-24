@@ -38,22 +38,25 @@ export default function SignagePage() {
   const [schedDefaults, setSchedDefaults] = useState<SchedDefault[]>([])
   const [schedOverrides, setSchedOverrides] = useState<SchedOverride[]>([])
   const [schoolMap, setSchoolMap] = useState<Record<string, string>>({})
+  const [calEvents, setCalEvents] = useState<{ id: string; title: string; date: string; start_time: string | null; color: string }[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
 
   const loadData = useCallback(async () => {
-    const [prodsRes, teamRes, defsRes, ovrsRes, schoolsRes] = await Promise.all([
+    const [prodsRes, teamRes, defsRes, ovrsRes, schoolsRes, eventsRes] = await Promise.all([
       supabase.from('productions').select('id, production_number, title, request_type_label, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color))').not('start_datetime', 'is', null).order('start_datetime'),
       supabase.from('team').select('id, name, avatar_color, role').eq('active', true),
       supabase.from('schedule_defaults').select('*'),
       supabase.from('schedule_overrides').select('*'),
       supabase.from('schools').select('code, name'),
+      supabase.from('calendar_events').select('id, title, date, start_time, color').order('date'),
     ])
     setProductions((prodsRes.data as any) || [])
     setTeam(teamRes.data || [])
     setSchedDefaults(defsRes.data || [])
     setSchedOverrides(ovrsRes.data || [])
+    setCalEvents(eventsRes.data || [])
     const m: Record<string, string> = {}
     ;(schoolsRes.data || []).forEach((s: any) => { m[s.code] = s.name })
     setSchoolMap(m)
@@ -198,7 +201,9 @@ export default function SignagePage() {
                   padding: '2px 3px', opacity, overflow: 'hidden' as const,
                 }}>
                   {(() => {
-                    const n = dayProds.length
+                    const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                    const dayEvts = calEvents.filter(e => e.date === ds)
+                    const n = dayProds.length + dayEvts.length
                     const s = n <= 3 ? 1 : Math.max(0.55, 3 / n)
                     return <>
                   <div style={{ fontSize: `${Math.round(18 * s)}px`, color: todayCell ? '#60b8f0' : '#c0ccdd', fontWeight: todayCell ? 800 : 600, textAlign: 'right' as const, marginBottom: `${Math.round(2 * s)}px` }}>{date.getDate()}</div>
@@ -210,7 +215,7 @@ export default function SignagePage() {
                     const active = p.status === 'In Progress'
                     const d = p.start_datetime ? new Date(p.start_datetime) : null
                     const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
-                    const loc = getSchoolName(p.school_department) || p.filming_location || ''
+                    const loc = getSchoolName(p.filming_location) || p.filming_location || getSchoolName(p.school_department) || ''
                     return (
                       <div key={p.id} style={{
                         padding: `${Math.round(3 * s)}px ${Math.round(5 * s)}px`, marginBottom: `${Math.round(2 * s)}px`, borderRadius: '3px',
@@ -230,6 +235,16 @@ export default function SignagePage() {
                       </div>
                     )
                   })}
+                  {dayEvts.map(evt => (
+                    <div key={evt.id} style={{
+                      padding: `${Math.round(3 * s)}px ${Math.round(5 * s)}px`, marginBottom: `${Math.round(2 * s)}px`, borderRadius: '3px',
+                      background: `${evt.color || '#22c55e'}22`,
+                      borderLeft: `3px solid ${evt.color || '#22c55e'}`,
+                    }}>
+                      <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: 700, color: evt.color || '#22c55e', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, display: 'block', lineHeight: 1.2 }}>{evt.title}</span>
+                      {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{evt.start_time}</div>}
+                    </div>
+                  ))}
                     </>
                   })()}
                 </div>

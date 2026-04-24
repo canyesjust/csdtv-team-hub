@@ -37,6 +37,7 @@ export default function DashboardPage() {
   const [allTasks, setAllTasks] = useState<Task[]>([])
   const [totalProductions, setTotalProductions] = useState(0)
   const [todayProductions, setTodayProductions] = useState<Production[]>([])
+  const [overdueProductions, setOverdueProductions] = useState<Production[]>([])
   const [view, setView] = useState<'my' | 'team'>('my')
   const [loading, setLoading] = useState(true)
   const [todayHours, setTodayHours] = useState<string | null>(null)
@@ -81,6 +82,10 @@ export default function DashboardPage() {
     setTotalProductions(countRes.count || 0)
     setTodayProductions((todayProdsRes.data as any) || [])
     setRecentActivity(activityRes.data || [])
+
+    // Load overdue productions (past date, not Complete/Abandoned)
+    const { data: overdueData } = await supabase.from('productions').select('id, title, production_number, request_type_label, status, start_datetime').lt('start_datetime', new Date().toISOString()).not('status', 'in', '("Complete","Abandoned")').order('start_datetime', { ascending: false }).limit(10)
+    setOverdueProductions((overdueData || []) as any)
 
     // Figure out today's scheduled hours
     const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
@@ -233,6 +238,25 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Overdue productions */}
+      {overdueProductions.length > 0 && (
+        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '14px', padding: '16px 20px', marginBottom: '20px' }}>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: '#ef4444', margin: '0 0 10px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>⚠ {overdueProductions.length} Overdue production{overdueProductions.length > 1 ? 's' : ''}</p>
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '6px' }}>
+            {overdueProductions.map(p => (
+              <Link key={p.id} href={`/dashboard/productions/${p.production_number}`} style={{ textDecoration: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: dark ? 'rgba(239,68,68,0.06)' : 'rgba(239,68,68,0.04)', borderRadius: '8px', gap: '10px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: text }}>#{p.production_number} {p.title}</span>
+                </div>
+                <span style={{ fontSize: '12px', color: '#ef4444', flexShrink: 0 }}>
+                  {p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Today's productions — prominent + expandable */}
       {todayProductions.length > 0 && (

@@ -128,6 +128,8 @@ const DAY_LABELS = ['Mon','Tue','Wed','Thu','Fri']
 
 const EMPTY_DEFAULT: DaySchedule = { monday:'', tuesday:'', wednesday:'', thursday:'', friday:'' }
 
+interface CalendarEvent { id: string; title: string; date: string; start_time: string | null; end_time: string | null; all_day: boolean; color: string; created_by: string | null }
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function SchedulePage() {
   const { theme } = useTheme()
@@ -142,6 +144,7 @@ export default function SchedulePage() {
   const [overrides, setOverrides]       = useState<ScheduleOverride[]>([])
   const [allTeamDefaults, setAllTeamDefaults] = useState<ScheduleDefault[]>([])
   const [productions, setProductions]   = useState<Production[]>([])
+  const [calEvents, setCalEvents]       = useState<CalendarEvent[]>([])
   const [loading, setLoading]           = useState(true)
   const [editingDefault, setEditingDefault] = useState(false)
   const [editingOverride, setEditingOverride] = useState(false)
@@ -153,6 +156,9 @@ export default function SchedulePage() {
   const [showMassFill, setShowMassFill] = useState(false)
   const [massFillValue, setMassFillValue] = useState('')
   const [massFilling, setMassFilling]   = useState(false)
+  const [showAddEvent, setShowAddEvent] = useState(false)
+  const [newEvent, setNewEvent]         = useState({ title: '', date: '', start_time: '', end_time: '', color: '#22c55e' })
+  const [sendingReminder, setSendingReminder] = useState(false)
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
   const muted   = dark ? '#8899bb' : '#6b7280'
@@ -214,6 +220,9 @@ export default function SchedulePage() {
     // Load all team schedule defaults for team availability view
     const { data: allDefs } = await supabase.from('schedule_defaults').select('*')
     setAllTeamDefaults(allDefs || [])
+
+    const { data: eventsData } = await supabase.from('calendar_events').select('*').order('date')
+    setCalEvents(eventsData || [])
 
     if (user) setViewingId(v => v || user.id)
     setLoading(false)
@@ -292,11 +301,53 @@ export default function SchedulePage() {
     return productions.filter(p => {
       if (!p.start_datetime) return false
       const prodDate = new Date(p.start_datetime)
-      // Compare in local time so UTC timestamps display on the correct local day
       return prodDate.getFullYear() === date.getFullYear() &&
              prodDate.getMonth()    === date.getMonth() &&
              prodDate.getDate()     === date.getDate()
     })
+  }
+
+  const getEventsForDay = (date: Date): CalendarEvent[] => {
+    const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    return calEvents.filter(e => e.date === ds)
+  }
+
+  const saveEvent = async () => {
+    if (!currentUser || !newEvent.title || !newEvent.date) return
+    const { data } = await supabase.from('calendar_events').insert({ title: newEvent.title, date: newEvent.date, start_time: newEvent.start_time || null, end_time: newEvent.end_time || null, color: newEvent.color, created_by: currentUser.id }).select().single()
+    if (data) setCalEvents(prev => [...prev, data])
+    setNewEvent({ title: '', date: '', start_time: '', end_time: '', color: '#22c55e' })
+    setShowAddEvent(false)
+  }
+
+  const deleteEvent = async (id: string) => {
+    if (!confirm('Delete this event?')) return
+    await supabase.from('calendar_events').delete().eq('id', id)
+    setCalEvents(prev => prev.filter(e => e.id !== id))
+  }
+
+  const remindTeam = async () => {
+    if (!currentUser) return
+    setSendingReminder(true)
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) { setSendingReminder(false); return }
+      const activeTeam = team.filter(t => t.email && t.id !== currentUser.id)
+      const monday = new Date()
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+      const friday = new Date(monday)
+      friday.setDate(monday.getDate() + 4)
+      const weekStr = `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${friday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+      for (const member of activeTeam) {
+        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ type: 'calendar_reminder', recipientEmail: member.email, recipientName: member.name.split(' ')[0], subject: `Reminder: Fill in your schedule for ${weekStr}`, body: `Hey ${member.name.split(' ')[0]},\n\nPlease fill in your hours for the week of ${weekStr} in the Team Hub.\n\nThanks!`, actionUrl: '/dashboard/schedule', actionLabel: 'Open Schedule' }),
+        })
+      }
+      alert(`Reminder sent to ${activeTeam.length} team member${activeTeam.length !== 1 ? 's' : ''}!`)
+    } catch { alert('Failed to send reminders') }
+    setSendingReminder(false)
   }
 
   const isInPayPeriod = (d: Date, pp: typeof primaryPP): boolean => {
@@ -342,48 +393,48 @@ export default function SchedulePage() {
 
   // ─── Save default ─────────────────────────────────────────────────────────
   const saveDefault = useCallback(async () => {
-    if (!currentUser) return
-    const existing = defaults.find(d => d.user_id === currentUser.id)
+    if (!currentUser || !viewingId) return
+    const existing = defaults.find(d => d.user_id === viewingId)
     if (existing) {
       await supabase.from('schedule_defaults').update({ ...myDefault }).eq('id', existing.id)
       setDefaults(prev => prev.map(d => d.id === existing.id ? { ...d, ...myDefault } : d))
     } else {
-      const { data } = await supabase.from('schedule_defaults').insert({ user_id: currentUser.id, ...myDefault }).select().single()
+      const { data } = await supabase.from('schedule_defaults').insert({ user_id: viewingId, ...myDefault }).select().single()
       if (data) setDefaults(prev => [...prev, data])
     }
     setEditingDefault(false)
-  }, [currentUser, defaults, myDefault, supabase])
+  }, [currentUser, viewingId, defaults, myDefault, supabase])
 
   // ─── Save override ────────────────────────────────────────────────────────
   const saveOverride = useCallback(async () => {
-    if (!currentUser || !overrideWeek) return
+    if (!currentUser || !viewingId || !overrideWeek) return
     const { notes, ...days } = myOverride
-    const existing = overrides.find(o => o.user_id === currentUser.id && o.week_start === overrideWeek)
+    const existing = overrides.find(o => o.user_id === viewingId && o.week_start === overrideWeek)
     if (existing) {
       await supabase.from('schedule_overrides').update({ ...days, notes: notes || null }).eq('id', existing.id)
       setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, ...days, notes: notes || null } : o))
     } else {
-      const { data } = await supabase.from('schedule_overrides').insert({ user_id: currentUser.id, week_start: overrideWeek, ...days, notes: notes || null }).select().single()
+      const { data } = await supabase.from('schedule_overrides').insert({ user_id: viewingId, week_start: overrideWeek, ...days, notes: notes || null }).select().single()
       if (data) setOverrides(prev => [...prev, data])
     }
     setEditingOverride(false)
-  }, [currentUser, overrides, myOverride, overrideWeek, supabase])
+  }, [currentUser, viewingId, overrides, myOverride, overrideWeek, supabase])
 
   // ─── Save a single day override ──────────────────────────────────────────
   const saveDay = useCallback(async (date: Date, value: string) => {
-    if (!currentUser) return
+    if (!currentUser || !viewingId) return
     const dow = date.getDay()
     if (dow === 0 || dow === 6) return
     const dayKey = getDayOfWeekKey(dow) as keyof DaySchedule
     const weekStart = getMondayStr(date)
-    const existing = overrides.find(o => o.user_id === currentUser.id && o.week_start === weekStart)
+    const existing = overrides.find(o => o.user_id === viewingId && o.week_start === weekStart)
     const trimmed = value.trim()
     if (existing) {
       await supabase.from('schedule_overrides').update({ [dayKey]: trimmed || null }).eq('id', existing.id)
       setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, [dayKey]: trimmed || null } : o))
     } else {
       const insertRow: Record<string, string | null> = {
-        user_id: currentUser.id, week_start: weekStart,
+        user_id: viewingId, week_start: weekStart,
         monday: null, tuesday: null, wednesday: null, thursday: null, friday: null, notes: null,
         [dayKey]: trimmed || null,
       }
@@ -391,11 +442,11 @@ export default function SchedulePage() {
       if (data) setOverrides(prev => [...prev, data])
     }
     setEditingCell(null)
-  }, [currentUser, overrides, supabase])
+  }, [currentUser, viewingId, overrides, supabase])
 
   // ─── Mass fill all weekdays in the viewed month ───────────────────────────
   const runMassFill = useCallback(async () => {
-    if (!currentUser || !massFillValue.trim()) return
+    if (!currentUser || !viewingId || !massFillValue.trim()) return
     setMassFilling(true)
     const val = massFillValue.trim()
 
@@ -411,7 +462,7 @@ export default function SchedulePage() {
     })
 
     for (const [weekStart, days] of weekMap) {
-      const existing = overrides.find(o => o.user_id === currentUser.id && o.week_start === weekStart)
+      const existing = overrides.find(o => o.user_id === viewingId && o.week_start === weekStart)
       const updates: Record<string, string> = {}
       days.forEach(d => { updates[d] = val })
 
@@ -420,7 +471,7 @@ export default function SchedulePage() {
         setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, ...updates } : o))
       } else {
         const insertRow = {
-          user_id: currentUser.id, week_start: weekStart,
+          user_id: viewingId, week_start: weekStart,
           monday: null as string | null, tuesday: null as string | null,
           wednesday: null as string | null, thursday: null as string | null,
           friday: null as string | null, notes: null as string | null,
@@ -428,7 +479,7 @@ export default function SchedulePage() {
         }
         const { data } = await supabase.from('schedule_overrides').insert(insertRow).select().single()
         if (data) setOverrides(prev => {
-          const without = prev.filter(o => !(o.user_id === currentUser.id && o.week_start === weekStart))
+          const without = prev.filter(o => !(o.user_id === viewingId && o.week_start === weekStart))
           return [...without, data]
         })
       }
@@ -436,7 +487,7 @@ export default function SchedulePage() {
     setShowMassFill(false)
     setMassFillValue('')
     setMassFilling(false)
-  }, [currentUser, massFillValue, overrides, supabase, viewYear, viewMonth])
+  }, [currentUser, viewingId, massFillValue, overrides, supabase, viewYear, viewMonth])
 
   // ─── Styles ───────────────────────────────────────────────────────────────
   const inputStyle: React.CSSProperties = {
@@ -489,8 +540,43 @@ export default function SchedulePage() {
           <button onClick={() => setMonthOffset(p => p + 1)} style={{ width: '38px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
+          <button onClick={() => setShowAddEvent(true)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: '#22c55e', border: 'none', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Event</button>
+          {isManager && <button onClick={remindTeam} disabled={sendingReminder} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit', opacity: sendingReminder ? 0.6 : 1 }}>{sendingReminder ? 'Sending...' : '📧 Remind team'}</button>}
         </div>
       </div>
+
+      {/* ── Add event form ── */}
+      {showAddEvent && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0 }}>Add event</h3>
+            <button onClick={() => setShowAddEvent(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '18px' }}>×</button>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ flex: '1 1 160px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Title</label>
+              <input value={newEvent.title} onChange={e => setNewEvent(p => ({ ...p, title: e.target.value }))} placeholder="Team meeting, PD day..." style={{ ...inputStyle, padding: '8px 10px', fontSize: '14px' }} />
+            </div>
+            <div style={{ flex: '0 0 140px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Date</label>
+              <input type="date" value={newEvent.date} onChange={e => setNewEvent(p => ({ ...p, date: e.target.value }))} style={{ ...inputStyle, padding: '8px 10px', fontSize: '14px' }} />
+            </div>
+            <div style={{ flex: '0 0 100px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Start</label>
+              <input type="time" value={newEvent.start_time} onChange={e => setNewEvent(p => ({ ...p, start_time: e.target.value }))} style={{ ...inputStyle, padding: '8px 10px', fontSize: '14px' }} />
+            </div>
+            <div style={{ flex: '0 0 100px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>End</label>
+              <input type="time" value={newEvent.end_time} onChange={e => setNewEvent(p => ({ ...p, end_time: e.target.value }))} style={{ ...inputStyle, padding: '8px 10px', fontSize: '14px' }} />
+            </div>
+            <div style={{ flex: '0 0 50px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Color</label>
+              <input type="color" value={newEvent.color} onChange={e => setNewEvent(p => ({ ...p, color: e.target.value }))} style={{ width: '100%', height: '36px', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', background: 'transparent' }} />
+            </div>
+            <button onClick={saveEvent} disabled={!newEvent.title || !newEvent.date} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: newEvent.title && newEvent.date ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: newEvent.title && newEvent.date ? '#fff' : muted, border: 'none', cursor: newEvent.title && newEvent.date ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Pay period banner ── */}
       {primaryPP && (
@@ -618,6 +704,7 @@ export default function SchedulePage() {
             const inPP = primaryPP ? isInPayPeriod(day, primaryPP) : false
             const hours = !isWeekend ? getHoursForDay(day) : null
             const dayProds = getProdsForDay(day)
+            const dayEvents = getEventsForDay(day)
             const isLastRow = idx >= totalCells - 7
             const isLastCol = dow === 6
 
@@ -722,6 +809,16 @@ export default function SchedulePage() {
                     </div>
                   )
                 })}
+
+                {/* Calendar event chips */}
+                {dayEvents.map(evt => (
+                  <div key={evt.id} style={{ marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    <span style={{ display: 'block', fontSize: '10px', fontWeight: 500, color: '#fff', background: evt.color || '#22c55e', borderRadius: '4px', padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, lineHeight: 1.4, flex: 1, cursor: 'default' }} title={evt.start_time ? `${evt.title} · ${evt.start_time}${evt.end_time ? '-' + evt.end_time : ''}` : evt.title}>
+                      {evt.title.length > 18 ? evt.title.slice(0, 17) + '…' : evt.title}
+                    </span>
+                    <button onClick={e => { e.stopPropagation(); deleteEvent(evt.id) }} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1, opacity: 0.5 }}>×</button>
+                  </div>
+                ))}
               </div>
             )
           })}
