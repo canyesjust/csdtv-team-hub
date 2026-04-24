@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
+import { toast } from '@/lib/toast'
 
 type Category = {
   id: string
@@ -147,7 +148,7 @@ export default function EquipmentPage() {
       notes: addForm.notes || null,
       photo_url: `/images/equipment/${tag}.png`,
     }).select('*').single()
-    if (error) { alert('Error: ' + error.message); setAddSaving(false); return }
+    if (error) { toast('Error: ' + error.message); setAddSaving(false); return }
     if (data) {
       await supabase.from('equipment_activity').insert({ equipment_id: data.id, action: 'created', detail: `Added ${addForm.name} (${tag})`, user_id: user.id })
       setEquipment(prev => [...prev, data].sort((a, b) => a.asset_tag.localeCompare(b.asset_tag)))
@@ -208,7 +209,7 @@ export default function EquipmentPage() {
       checked_out_by: user.id,
       due_date: dueDate || null,
     })
-    if (loanError) { alert('Error: ' + loanError.message); return }
+    if (loanError) { toast('Error: ' + loanError.message); return }
 
     await supabase.from('equipment').update({ status: 'checked_out' }).eq('id', checkoutItem.id)
     await supabase.from('equipment_activity').insert({
@@ -232,7 +233,7 @@ export default function EquipmentPage() {
       description: kitDesc.trim() || null,
       created_by: user.id,
     })
-    if (error) { alert('Error: ' + error.message); return }
+    if (error) { toast('Error: ' + error.message); return }
     setKitName('')
     setKitDesc('')
     setShowKitForm(false)

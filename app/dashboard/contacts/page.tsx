@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
+import { toast } from '@/lib/toast'
 
 interface Contact {
   id: string; name: string; title: string | null; organization: string | null
@@ -59,7 +60,7 @@ export default function ContactsPage() {
         reader.readAsDataURL(file)
       })
       const { data: { session } } = await supabase.auth.refreshSession()
-      if (!session) { alert('Session expired. Please refresh.'); setScanning(false); return }
+      if (!session) { toast('Session expired. Please refresh.', 'error'); setScanning(false); return }
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/scan-card`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -71,9 +72,9 @@ export default function ContactsPage() {
         setShowAdd(true)
         setEditingId(null)
       } else {
-        alert(result.error || 'Failed to scan card.')
+        toast(result.error || 'Failed to scan card.', 'error')
       }
-    } catch { alert('Scan failed. Please try again.') }
+    } catch { toast('Scan failed. Please try again.', 'error') }
     setScanning(false)
   }
 

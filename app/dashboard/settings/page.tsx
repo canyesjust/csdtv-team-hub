@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
+import { toast } from '@/lib/toast'
 
 interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string; supabase_user_id: string | null }
 interface NotificationPrefs {
@@ -330,7 +331,7 @@ export default function SettingsPage() {
                     <button onClick={async () => {
                       try {
                         const { data: { session } } = await supabase.auth.refreshSession()
-                        if (!session) { alert('Session expired. Please refresh the page.'); return }
+                        if (!session) { toast('Session expired. Please refresh.', 'error'); return }
                         const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
@@ -338,12 +339,12 @@ export default function SettingsPage() {
                         })
                         const result = await res.json()
                         if (res.ok && result.success) {
-                          alert(`Invite sent to ${member.email}`)
+                          toast(`Invite sent to ${member.email}`, 'success')
                           loadData()
                         } else {
-                          alert(result.error || 'Failed to send invite')
+                          toast(result.error || 'Failed to send invite', 'error')
                         }
-                      } catch { alert('Failed to send invite') }
+                      } catch { toast('Failed to send invite') }
                     }} style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.2)', cursor: 'pointer', fontFamily: 'inherit' }}>Send invite</button>
                   )}
                 </p>

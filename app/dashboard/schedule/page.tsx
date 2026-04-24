@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from '../components/Loader'
+import { toast } from '@/lib/toast'
 
 // ─── Pay periods from PDF ────────────────────────────────────────────────────
 const PAY_PERIODS: { num: number; start: string; end: string; cutoff: string; payday: string }[] = [
@@ -159,6 +160,9 @@ export default function SchedulePage() {
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [newEvent, setNewEvent]         = useState({ title: '', date: '', start_time: '', end_time: '', color: '#22c55e' })
   const [sendingReminder, setSendingReminder] = useState(false)
+  const [outlookEvents, setOutlookEvents] = useState<{ title: string; date: string; start_time: string | null; end_time: string | null; location: string | null; all_day: boolean }[]>([])
+  const [showOutlook, setShowOutlook] = useState(true)
+  const [dismissedOutlook, setDismissedOutlook] = useState<Set<string>>(new Set())
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
   const muted   = dark ? '#8899bb' : '#6b7280'
@@ -224,9 +228,40 @@ export default function SchedulePage() {
     const { data: eventsData } = await supabase.from('calendar_events').select('*').order('date')
     setCalEvents(eventsData || [])
 
+    // Load Outlook calendar
+    try {
+      const icalRes = await fetch('/api/ical')
+      if (icalRes.ok) {
+        const { events: oe } = await icalRes.json()
+        setOutlookEvents(oe || [])
+      }
+    } catch { /* ignore iCal errors */ }
+
     if (user) setViewingId(v => v || user.id)
     setLoading(false)
   }, [supabase])
+
+  // Load Outlook dismissed from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dismissed-outlook')
+      if (saved) setDismissedOutlook(new Set(JSON.parse(saved)))
+    }
+  }, [])
+
+  const dismissOutlookEvent = (key: string) => {
+    setDismissedOutlook(prev => {
+      const next = new Set(prev)
+      next.add(key)
+      localStorage.setItem('dismissed-outlook', JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  const resetDismissed = () => {
+    setDismissedOutlook(new Set())
+    localStorage.removeItem('dismissed-outlook')
+  }
 
   const loadScheduleData = useCallback(async () => {
     const targetId = viewingId
@@ -312,6 +347,25 @@ export default function SchedulePage() {
     return calEvents.filter(e => e.date === ds)
   }
 
+  const getOutlookForDay = (date: Date) => {
+    if (!showOutlook) return []
+    const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const dayProds = getProdsForDay(date)
+    return outlookEvents.filter(e => {
+      if (e.date !== ds) return false
+      // Skip dismissed
+      const key = `${e.date}|${e.title}`
+      if (dismissedOutlook.has(key)) return false
+      // Auto-match: skip if title closely matches a production on the same day
+      const titleLower = e.title.toLowerCase().trim()
+      const matched = dayProds.some(p => {
+        const prodLower = p.title.toLowerCase().trim()
+        return prodLower === titleLower || prodLower.includes(titleLower) || titleLower.includes(prodLower)
+      })
+      return !matched
+    })
+  }
+
   const saveEvent = async () => {
     if (!currentUser || !newEvent.title || !newEvent.date) return
     const { data } = await supabase.from('calendar_events').insert({ title: newEvent.title, date: newEvent.date, start_time: newEvent.start_time || null, end_time: newEvent.end_time || null, color: newEvent.color, created_by: currentUser.id }).select().single()
@@ -345,8 +399,8 @@ export default function SchedulePage() {
           body: JSON.stringify({ type: 'calendar_reminder', recipientEmail: member.email, recipientName: member.name.split(' ')[0], subject: `Reminder: Fill in your schedule for ${weekStr}`, body: `Hey ${member.name.split(' ')[0]},\n\nPlease fill in your hours for the week of ${weekStr} in the Team Hub.\n\nThanks!`, actionUrl: '/dashboard/schedule', actionLabel: 'Open Schedule' }),
         })
       }
-      alert(`Reminder sent to ${activeTeam.length} team member${activeTeam.length !== 1 ? 's' : ''}!`)
-    } catch { alert('Failed to send reminders') }
+      toast(`Reminder sent to ${activeTeam.length} team member${activeTeam.length !== 1 ? 's' : ''}!`)
+    } catch { toast('Failed to send reminders') }
     setSendingReminder(false)
   }
 
@@ -541,6 +595,7 @@ export default function SchedulePage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onClick={() => setShowAddEvent(true)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: '#22c55e', border: 'none', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Event</button>
+          <button onClick={() => setShowOutlook(p => !p)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: showOutlook ? '#9b59b6' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), border: 'none', color: showOutlook ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{showOutlook ? '📅 Outlook' : '📅 Outlook off'}</button>
           {isManager && <button onClick={remindTeam} disabled={sendingReminder} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit', opacity: sendingReminder ? 0.6 : 1 }}>{sendingReminder ? 'Sending...' : '📧 Remind team'}</button>}
         </div>
       </div>
@@ -614,7 +669,7 @@ export default function SchedulePage() {
             }
             lines.push('', `Total: ${ppTotalHours}h`)
             navigator.clipboard.writeText(lines.join('\n'))
-            alert('Hours copied to clipboard!')
+            toast('Hours copied to clipboard!', 'success')
           }} style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto' }}>
             Copy hours
           </button>
@@ -674,7 +729,7 @@ export default function SchedulePage() {
                 ...days.map(dayKey => {
                   const def = allTeamDefaults.find(d => d.user_id === member.id)
                   const hrs = def ? (def as any)[dayKey] : null
-                  return <div key={`${member.id}-${dayKey}`} style={{ padding: '6px 0', textAlign: 'center' as const, color: hrs ? '#22c55e' : (dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), fontSize: '12px', fontWeight: hrs ? 500 : 400 }}>{hrs || 'Off'}</div>
+                  return <div key={`${member.id}-${dayKey}`} style={{ padding: '6px 0', textAlign: 'center' as const, color: hrs ? '#22c55e' : (dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), fontSize: '12px', fontWeight: hrs ? 500 : 400 }}>{hrs || '—'}</div>
                 })
               ]
             })}
@@ -705,6 +760,7 @@ export default function SchedulePage() {
             const hours = !isWeekend ? getHoursForDay(day) : null
             const dayProds = getProdsForDay(day)
             const dayEvents = getEventsForDay(day)
+            const dayOutlook = getOutlookForDay(day)
             const isLastRow = idx >= totalCells - 7
             const isLastCol = dow === 6
 
@@ -817,6 +873,16 @@ export default function SchedulePage() {
                       {evt.title.length > 18 ? evt.title.slice(0, 17) + '…' : evt.title}
                     </span>
                     <button onClick={e => { e.stopPropagation(); deleteEvent(evt.id) }} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1, opacity: 0.5 }}>×</button>
+                  </div>
+                ))}
+
+                {/* Outlook calendar events */}
+                {dayOutlook.map((evt, oi) => (
+                  <div key={`ol-${oi}`} style={{ marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    <span style={{ display: 'block', fontSize: '10px', fontWeight: 500, color: '#fff', background: '#9b59b6', borderRadius: '4px', padding: '2px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, lineHeight: 1.4, cursor: 'default', opacity: 0.85, flex: 1 }} title={`Outlook: ${evt.title}${evt.start_time ? ' · ' + evt.start_time : ''}${evt.location ? ' · ' + evt.location : ''}`}>
+                      {evt.title.length > 16 ? evt.title.slice(0, 15) + '…' : evt.title}
+                    </span>
+                    <button onClick={e => { e.stopPropagation(); dismissOutlookEvent(`${evt.date}|${evt.title}`) }} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '10px', padding: '0 2px', lineHeight: 1, opacity: 0.5 }}>×</button>
                   </div>
                 ))}
               </div>

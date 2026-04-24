@@ -17,7 +17,6 @@ const NAV_ITEMS = [
     { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
     { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
-    { label: 'Calendar', href: '/dashboard/calendar', icon: 'calview' },
   ]},
   { section: 'Resources', items: [
     { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
@@ -43,7 +42,6 @@ const BOTTOM_NAV = [
 const MORE_ITEMS = [
   { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
   { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
-  { label: 'Calendar', href: '/dashboard/calendar', icon: 'calview' },
   { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
   { label: 'Notes', href: '/dashboard/notes', icon: 'notes' },
@@ -94,6 +92,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [showSearch, setShowSearch] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([])
+
+  // Global toast listener
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { message, type = 'info' } = (e as CustomEvent).detail
+      const id = Date.now()
+      setToasts(prev => [...prev, { id, message, type }])
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
+    }
+    window.addEventListener('toast', handler)
+    return () => window.removeEventListener('toast', handler)
+  }, [])
 
   const dark = theme === 'dark'
   const bg       = dark ? '#0a0f1e' : '#f8f9fc'
@@ -306,7 +317,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {showNotifications && <NotificationPanel onClose={() => setShowNotifications(false)} onUnreadChange={setUnreadCount} userId={userId} />}
       {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
 
+      {/* Toast notifications */}
+      <div style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 9999, display: 'flex', flexDirection: 'column' as const, gap: '8px', pointerEvents: 'none' }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{
+            padding: '12px 20px', borderRadius: '10px', fontSize: '14px', fontWeight: 500, fontFamily: 'inherit',
+            color: '#fff', pointerEvents: 'auto', cursor: 'pointer',
+            background: t.type === 'success' ? '#22c55e' : t.type === 'error' ? '#ef4444' : '#1e6cb5',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+            animation: 'toast-in 0.25s ease-out',
+            maxWidth: '380px',
+          }} onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}>
+            {t.type === 'success' ? '✓ ' : t.type === 'error' ? '✕ ' : ''}{t.message}
+          </div>
+        ))}
+      </div>
+
       <style>{`
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateY(-12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @media (min-width: 768px) {
           .csdtv-sidebar { display: flex !important; }
           .csdtv-main { margin-left: 220px !important; }

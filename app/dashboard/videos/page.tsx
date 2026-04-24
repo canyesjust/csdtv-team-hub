@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Loader from '../components/Loader'
+import { toast } from '@/lib/toast'
 
 interface Video {
   id: string; title: string; description: string | null; video_type: string; status: string
@@ -89,7 +90,7 @@ export default function VideosPage() {
       date_filmed: newVideo.date_filmed || null,
       created_by: currentUser.id,
     }).select('*, productions(title, production_number)').single()
-    if (error) { alert('Error: ' + error.message); setSaving(false); return }
+    if (error) { toast('Error: ' + error.message); setSaving(false); return }
     // Add tags
     if (data && newVideo.tags.trim()) {
       const tags = newVideo.tags.split(',').map(t => t.trim()).filter(Boolean)

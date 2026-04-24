@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Loader from '../../components/Loader'
 import CommentsSection from '../../components/CommentsSection'
+import { toast } from '@/lib/toast'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -177,7 +178,7 @@ export default function ProductionDetailPage() {
       assigned_to: newTaskAssignee || null, due_date: newTaskDue || null,
       production_id: uuid, status: 'pending', created_by: currentUser.id,
     }).select('id, title, status, priority, assigned_to, due_date').single()
-    if (error) { alert(`Failed to create task: ${error.message}`); return }
+    if (error) { toast(`Failed to create task: ${error.message}`); return }
     if (data) setLinkedTasks(prev => [data, ...prev])
     // Send email to assignee if assigned to someone else
     if (newTaskAssignee && newTaskAssignee !== currentUser.id && production) {
@@ -217,7 +218,7 @@ export default function ProductionDetailPage() {
     setGeneratingSheet(true)
     try {
       const { data: { session } } = await supabase.auth.refreshSession()
-      if (!session) { alert('Session expired'); setGeneratingSheet(false); return }
+      if (!session) { toast('Session expired', 'error'); setGeneratingSheet(false); return }
       const teamNames = members.map(m => m.team?.name).filter(Boolean)
       const checklistTitles = checklist.map(c => c.title)
       const schoolName = getSchoolName(production.school_department) || production.school_department || ''
@@ -237,8 +238,8 @@ export default function ProductionDetailPage() {
       })
       const result = await res.json()
       if (result.success) { setCallSheet(result.call_sheet); setActiveTab('callsheet') }
-      else alert(result.error || 'Failed to generate call sheet')
-    } catch { alert('Failed to generate call sheet') }
+      else toast(result.error || 'Failed to generate call sheet', 'error')
+    } catch { toast('Failed to generate call sheet') }
     setGeneratingSheet(false)
   }, [production, uuid, currentUser, supabase, checklist, members])
 
@@ -282,7 +283,7 @@ export default function ProductionDetailPage() {
   const emailCallSheet = useCallback(async () => {
     if (!production || !callSheet) return
     const teamEmails = members.map(m => allTeam.find(t => t.id === m.user_id)?.email).filter(Boolean) as string[]
-    if (teamEmails.length === 0) { alert('No team members assigned to email'); return }
+    if (teamEmails.length === 0) { toast('No team members assigned to email'); return }
     if (!confirm(`Email call sheet to ${teamEmails.join(', ')}?`)) return
     try {
       const { data: { session } } = await supabase.auth.refreshSession()
@@ -347,8 +348,8 @@ export default function ProductionDetailPage() {
           body: JSON.stringify({ type: 'call_sheet', recipientEmail: email, subject: `Call Sheet: #${p.production_number} ${p.title} — ${dateStr}`, body: '', html }),
         })
       }
-      alert('Call sheet emailed to crew!')
-    } catch { alert('Failed to email call sheet') }
+      toast('Call sheet emailed to crew!')
+    } catch { toast('Failed to email call sheet') }
   }, [production, callSheet, supabase, members, allTeam])
 
   const toggleItem = useCallback(async (item: ChecklistItem) => {
@@ -491,7 +492,7 @@ export default function ProductionDetailPage() {
     await supabase.from('production_activity').insert({ production_id: copyTargetId, user_id: currentUser.id, action: 'setup_copied', detail: `Copied from #${production?.production_number || ''}` })
     setShowCopySetup(false)
     setCopyTargetId('')
-    alert('Setup copied successfully!')
+    toast('Setup copied!', 'success')
   }, [copyTargetId, uuid, currentUser, checklist, members, supabase, production])
 
   const markProductionComplete = useCallback(async () => {
@@ -728,10 +729,10 @@ export default function ProductionDetailPage() {
             <button onClick={async () => {
               if (!production || !uuid) return
               const typeLabel = production.request_type_label || production.type
-              if (!typeLabel) { alert('No production type set'); return }
+              if (!typeLabel) { toast('No production type set'); return }
               // Find the most recent completed production of same type
               const { data: lastProd } = await supabase.from('productions').select('id, production_number, title').eq('request_type_label', typeLabel).neq('id', uuid).order('start_datetime', { ascending: false }).limit(1).single()
-              if (!lastProd) { alert(`No previous ${typeLabel} production found`); return }
+              if (!lastProd) { toast(`No previous ${typeLabel} production found`, 'error'); return }
               if (!confirm(`Apply checklist and team from #${lastProd.production_number} ${lastProd.title}?`)) return
               const [clRes, tmRes] = await Promise.all([
                 supabase.from('checklist_items').select('title, sort_order').eq('production_id', lastProd.id).order('sort_order'),

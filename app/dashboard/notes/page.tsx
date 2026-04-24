@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
+import { toast } from '@/lib/toast'
 
 interface ScannedTodo {
   text: string; completed: boolean; tag: string
@@ -75,7 +76,7 @@ export default function NotesPage() {
         reader.readAsDataURL(file)
       })
       const { data: { session } } = await supabase.auth.refreshSession()
-      if (!session) { alert('Session expired. Please refresh.'); setScanning(false); return }
+      if (!session) { toast('Session expired. Please refresh.', 'error'); setScanning(false); return }
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/scan-notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
@@ -109,9 +110,9 @@ export default function NotesPage() {
 
         setShowReview(true)
       } else {
-        alert(result.error || 'Failed to scan sheet.')
+        toast(result.error || 'Failed to scan sheet.', 'error')
       }
-    } catch { alert('Scan failed. Please try again.') }
+    } catch { toast('Scan failed. Please try again.', 'error') }
     setScanning(false)
   }
 
@@ -212,7 +213,7 @@ export default function NotesPage() {
       const msg = isRescan
         ? `Re-scan complete: ${tasksCreated} new task${tasksCreated !== 1 ? 's' : ''}, ${tasksCompleted} marked complete`
         : `${tasksCreated} task${tasksCreated !== 1 ? 's' : ''} created`
-      alert(msg)
+      toast(msg, 'success')
 
       setShowReview(false)
       setReviewTodos([])
@@ -222,7 +223,7 @@ export default function NotesPage() {
       setExistingTaskIds([])
       loadData()
     } catch (err) {
-      alert('Failed to save. Please try again.')
+      toast('Failed to save. Please try again.')
     }
     setSaving(false)
   }
