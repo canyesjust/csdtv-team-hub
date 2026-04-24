@@ -63,10 +63,10 @@ export default function ReportsPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     const [prodsRes, tasksRes, actRes, videosRes, destRes, talentRes, loansRes, eqRes, teamRes, pmRes, schoolsRes, timeRes, taskProdsRes] = await Promise.all([
-      supabase.from('productions').select('id, title, production_number, status, request_type_label, school_department, start_datetime, school_year, synced_at, estimated_external_cost').order('production_number'),
+      supabase.from('productions').select('id, title, production_number, status, request_type_label, school_department, start_datetime, school_year, synced_at, estimated_external_cost, deliverables_count').order('production_number'),
       supabase.from('tasks').select('id, status, assigned_to, completed_at, created_at, priority'),
       supabase.from('production_activity').select('id, production_id, action, created_at').order('created_at'),
-      supabase.from('videos').select('id, title, status, video_type, date_published, created_at'),
+      supabase.from('videos').select('id, title, status, video_type, date_published, created_at, youtube_views, youtube_likes, youtube_url, youtube_thumbnail'),
       supabase.from('video_destinations').select('id, video_id, platform, view_count'),
       supabase.from('video_talent').select('id, video_id, release_status'),
       supabase.from('equipment_loans').select('id, equipment_id, checked_out_at, checked_in_at, equipment(name, asset_tag)').order('checked_out_at', { ascending: false }),
@@ -148,6 +148,10 @@ export default function ReportsPage() {
   const completedTasks = tasks.filter(t => t.status === 'complete').length
   const publishedVideos = fv.filter(v => v.status === 'Published').length
   const totalViews = destinations.reduce((sum, d) => sum + (d.view_count || 0), 0)
+  const totalDeliverables = fp.reduce((sum: number, p: any) => sum + (p.deliverables_count || 0), 0)
+  const totalYtViews = fv.reduce((sum: number, v: any) => sum + (v.youtube_views || 0), 0)
+  const totalYtLikes = fv.reduce((sum: number, v: any) => sum + (v.youtube_likes || 0), 0)
+  const topYtVideos = [...fv].filter((v: any) => v.youtube_views > 0).sort((a: any, b: any) => (b.youtube_views || 0) - (a.youtube_views || 0)).slice(0, 10)
 
   // Production type breakdown
   const typeBreakdown = Object.entries(fp.reduce((acc, p) => {
@@ -316,6 +320,7 @@ export default function ReportsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
             {metricCard('Productions', fp.length, `${completedProds} completed`)}
             {metricCard('Videos', fv.length, `${publishedVideos} published`)}
+            {totalDeliverables > 0 && metricCard('Deliverables', totalDeliverables.toLocaleString(), 'total video output')}
             {metricCard('Tasks done', completedTasks, `${tasks.filter(t => t.status !== 'complete').length} open`)}
             {metricCard('Total views', totalViews > 0 ? totalViews.toLocaleString() : '—', 'across platforms')}
             {metricCard('Schools served', String(new Set(fp.filter(p => p.school_department).map(p => p.school_department)).size), 'unique schools')}
@@ -489,10 +494,25 @@ export default function ReportsPage() {
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '20px' }}>
             {metricCard('Total videos', fv.length, `${publishedVideos} published`)}
-            {metricCard('Total views', totalViews > 0 ? totalViews.toLocaleString() : '—', 'across platforms')}
+            {metricCard('Deliverables', totalDeliverables > 0 ? totalDeliverables.toLocaleString() : '—', 'across all productions')}
+            {metricCard('YouTube views', totalYtViews > 0 ? totalYtViews.toLocaleString() : '—', totalYtLikes > 0 ? `${totalYtLikes.toLocaleString()} likes` : '')}
             {metricCard('Platforms', String(new Set(destinations.map(d => d.platform)).size), 'distribution channels')}
             {metricCard('Release compliance', `${complianceRate}%`, `${signedReleases} of ${totalTalent} cleared`, complianceRate === 100 ? '#22c55e' : complianceRate >= 80 ? '#f59e0b' : '#ef4444')}
           </div>
+          {topYtVideos.length > 0 && sectionCard(`Top YouTube videos (${topYtVideos.length})`, (
+            <div>
+              {topYtVideos.map((v: any) => (
+                <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', borderBottom: `0.5px solid ${border}` }}>
+                  {v.youtube_thumbnail && <img src={v.youtube_thumbnail} alt="" style={{ width: '80px', height: '45px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0 }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '13px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
+                  </div>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#22c55e', flexShrink: 0 }}>{(v.youtube_views || 0).toLocaleString()}</span>
+                  <span style={{ fontSize: '12px', color: muted, flexShrink: 0 }}>views</span>
+                </div>
+              ))}
+            </div>
+          ))}
           {platformBreakdown.length > 0 && sectionCard('Distribution by platform', (
             <div>
               {platformBreakdown.map(([platform, count]) => {

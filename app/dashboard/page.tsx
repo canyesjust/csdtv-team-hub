@@ -47,6 +47,8 @@ export default function DashboardPage() {
   const [expandedTodayProd, setExpandedTodayProd] = useState<string | null>(null)
   const [monthStats, setMonthStats] = useState({ prodsCompleted: 0, tasksCompleted: 0, videosPublished: 0 })
   const [yearProdCount, setYearProdCount] = useState(0)
+  const [totalDeliverables, setTotalDeliverables] = useState(0)
+  const [totalYtViews, setTotalYtViews] = useState(0)
 
   const text     = dark ? '#f0f4ff' : '#1a1f36'
   const muted    = dark ? '#94a3b8' : '#6b7280'
@@ -117,9 +119,16 @@ export default function DashboardPage() {
       supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
       supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
     ])
+    // Total deliverables and YouTube views
+    const { data: delivData } = await supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0)
+    const delivSum = (delivData || []).reduce((s: number, p: any) => s + (p.deliverables_count || 0), 0)
+    const { data: ytData } = await supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null)
+    const viewsSum = (ytData || []).reduce((s: number, v: any) => s + (v.youtube_views || 0), 0)
     setWeekStats({ prodsCompleted: weekProds.count || 0, tasksCompleted: weekTasks.count || 0, videosPublished: weekVids.count || 0 })
     setMonthStats({ prodsCompleted: monthProds.count || 0, tasksCompleted: monthTasks.count || 0, videosPublished: monthVids.count || 0 })
     setYearProdCount(yearProds.count || 0)
+    setTotalDeliverables(delivSum)
+    setTotalYtViews(viewsSum)
 
     if (prodMembersRes.data && prodMembersRes.data.length > 0) {
       const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
@@ -319,6 +328,7 @@ export default function DashboardPage() {
           { label: 'This week', items: [`${weekStats.prodsCompleted} productions`, `${weekStats.tasksCompleted} tasks`, `${weekStats.videosPublished} videos`], color: '#5ba3e0' },
           { label: 'This month', items: [`${monthStats.prodsCompleted} productions`, `${monthStats.tasksCompleted} tasks`, `${monthStats.videosPublished} videos`], color: '#a855f7' },
           { label: 'Year pace', items: [`${yearProdCount} completed`, `${Math.round(yearProdCount / Math.max(1, new Date().getMonth() + 1) * 12)} projected/yr`], color: '#22c55e' },
+          ...(totalDeliverables > 0 || totalYtViews > 0 ? [{ label: 'Video output', items: [`${totalDeliverables} deliverables`, ...(totalYtViews > 0 ? [`${totalYtViews.toLocaleString()} YT views`] : [])], color: '#ef4444' }] : []),
         ].map(s => (
           <div key={s.label} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px' }}>
             <p style={{ fontSize: '11px', fontWeight: 700, color: s.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{s.label}</p>

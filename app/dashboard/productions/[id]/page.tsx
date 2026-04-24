@@ -72,7 +72,7 @@ export default function ProductionDetailPage() {
   const [links, setLinks] = useState<ProductionLink[]>([])
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
-  const [linkedVideos, setLinkedVideos] = useState<{ id: string; title: string; video_type: string; status: string; date_published: string | null }[]>([])
+  const [linkedVideos, setLinkedVideos] = useState<{ id: string; title: string; video_type: string; status: string; date_published: string | null; youtube_url: string | null; youtube_id: string | null; youtube_views: number | null; youtube_likes: number | null; youtube_duration: string | null; youtube_thumbnail: string | null }[]>([])
   const [linkedTasks, setLinkedTasks] = useState<{ id: string; title: string; status: string; priority: string; assigned_to: string | null; due_date: string | null }[]>([])
   const [callSheet, setCallSheet] = useState<any>(null)
   const [generatingSheet, setGeneratingSheet] = useState(false)
@@ -159,7 +159,7 @@ export default function ProductionDetailPage() {
     setCurrentUser(userRes.data)
     setKbArticles(kbRes.data || [])
     // Load linked videos
-    const { data: vidData } = await supabase.from('videos').select('id, title, video_type, status, date_published').eq('production_id', prodUUID).order('created_at', { ascending: false })
+    const { data: vidData } = await supabase.from('videos').select('id, title, video_type, status, date_published, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail').eq('production_id', prodUUID).order('created_at', { ascending: false })
     setLinkedVideos(vidData || [])
     const { data: taskData } = await supabase.from('tasks').select('id, title, status, priority, assigned_to, due_date').eq('production_id', prodUUID).order('created_at', { ascending: false })
     setLinkedTasks(taskData || [])
@@ -572,7 +572,19 @@ export default function ProductionDetailPage() {
     await supabase.from('productions').update({ deliverables_count: delivCount, deliverables_notes: delivNotes || null }).eq('id', uuid)
     setSavingDeliv(false)
     toast('Deliverables saved', 'success')
-  }, [uuid, delivCount, delivNotes, supabase])
+    await logActivity('Updated deliverables', `${delivCount} items${delivNotes ? ' — ' + delivNotes : ''}`)
+  }, [uuid, delivCount, delivNotes, supabase, logActivity])
+
+  const refreshYoutubeStats = useCallback(async (videoId: string, ytId: string) => {
+    try {
+      const res = await fetch(`/api/youtube?url=${encodeURIComponent(ytId)}`)
+      if (!res.ok) { toast('Failed to refresh stats', 'error'); return }
+      const yt = await res.json()
+      await supabase.from('videos').update({ youtube_views: yt.views, youtube_likes: yt.likes, youtube_synced_at: new Date().toISOString() }).eq('id', videoId)
+      setLinkedVideos(prev => prev.map(v => v.id === videoId ? { ...v, youtube_views: yt.views, youtube_likes: yt.likes } : v))
+      toast(`Updated: ${yt.views.toLocaleString()} views`, 'success')
+    } catch { toast('Refresh failed', 'error') }
+  }, [supabase])
 
   const linkYoutubeVideo = useCallback(async () => {
     if (!youtubeUrl || !uuid || !currentUser || !production) return
@@ -597,6 +609,9 @@ export default function ProductionDetailPage() {
         toast(`Linked "${yt.title}" — ${yt.views.toLocaleString()} views`, 'success')
         setYoutubeUrl('')
         await logActivity('Linked YouTube video', yt.title)
+        // Reload linked videos
+        const { data: refreshed } = await supabase.from('videos').select('id, title, video_type, status, date_published, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail').eq('production_id', uuid).order('created_at', { ascending: false })
+        if (refreshed) setLinkedVideos(refreshed)
       }
     } catch { toast('Failed to connect to YouTube', 'error') }
     setFetchingYt(false)
@@ -742,7 +757,7 @@ export default function ProductionDetailPage() {
             </a>
           )}
           {members.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               {members.slice(0, 4).map((m, i) => m.team && (
                 <div key={m.id} title={m.team.name} style={{ width: '24px', height: '24px', borderRadius: '50%', background: m.team.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: '#0a0f1e', marginLeft: i > 0 ? '-6px' : 0, border: `2px solid ${cardBg}`, position: 'relative', zIndex: members.length - i }}>
                   {m.team.name.slice(0, 2).toUpperCase()}
@@ -750,6 +765,12 @@ export default function ProductionDetailPage() {
               ))}
               {members.length > 4 && <span style={{ fontSize: '11px', color: muted, marginLeft: '4px' }}>+{members.length - 4}</span>}
             </div>
+          )}
+          {delivCount > 0 && (
+            <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', fontWeight: 600 }}>📦 {delivCount} deliverable{delivCount !== 1 ? 's' : ''}</span>
+          )}
+          {linkedVideos.length > 0 && (
+            <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontWeight: 500 }}>▶ {linkedVideos.length} video{linkedVideos.length !== 1 ? 's' : ''}{linkedVideos.some(v => v.youtube_views) ? ` · ${linkedVideos.reduce((s, v) => s + (v.youtube_views || 0), 0).toLocaleString()} views` : ''}</span>
           )}
         </div>
       </div>
@@ -1281,21 +1302,43 @@ export default function ProductionDetailPage() {
 
       {/* VIDEOS TAB */}
       {activeTab === 'videos' && (
-        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+        <div>
           {linkedVideos.length === 0 ? (
-            <div style={{ textAlign: 'center' as const, padding: '30px 20px' }}>
+            <div style={{ textAlign: 'center' as const, padding: '30px 20px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px' }}>
               <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No videos linked to this production</p>
-              <Link href="/dashboard/videos" style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none' }}>Go to video library to create one →</Link>
+              <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>Use the "Link YouTube Video" section in the Info tab to add one</p>
             </div>
-          ) : linkedVideos.map(v => (
-            <Link key={v.id} href={`/dashboard/videos/${v.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '10px', border: `0.5px solid ${border}`, marginBottom: '8px', textDecoration: 'none', background: dark ? 'rgba(255,255,255,0.02)' : '#fafbfc' }}>
-              <div style={{ width: '4px', height: '32px', borderRadius: '2px', background: v.status === 'Published' ? '#22c55e' : v.status === 'Draft' ? '#94a3b8' : '#f59e0b', flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0 }}>{v.title}</p>
-                <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{v.video_type} · {v.status}{v.date_published ? ` · Published ${new Date(v.date_published).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
-              </div>
-            </Link>
-          ))}
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
+              {linkedVideos.map(v => (
+                <div key={v.id} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', gap: '14px', padding: '14px' }}>
+                    {v.youtube_thumbnail && (
+                      <a href={v.youtube_url || `https://youtube.com/watch?v=${v.youtube_id}`} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0 }}>
+                        <img src={v.youtube_thumbnail} alt="" style={{ width: '160px', height: '90px', objectFit: 'cover' as const, borderRadius: '8px' }} />
+                      </a>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
+                      <p style={{ fontSize: '12px', color: muted, margin: '0 0 8px' }}>{v.video_type} · {v.status}{v.date_published ? ` · ${new Date(v.date_published).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
+                      {(v.youtube_views !== null || v.youtube_likes !== null || v.youtube_duration) && (
+                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                          {v.youtube_views !== null && <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>👁 {v.youtube_views.toLocaleString()} views</span>}
+                          {v.youtube_likes !== null && <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>👍 {v.youtube_likes.toLocaleString()}</span>}
+                          {v.youtube_duration && <span style={{ fontSize: '13px', color: muted }}>⏱ {v.youtube_duration}</span>}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        {v.youtube_url && <a href={v.youtube_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#ef4444', textDecoration: 'none', fontWeight: 500 }}>▶ Watch on YouTube</a>}
+                        {v.youtube_id && <button onClick={() => refreshYoutubeStats(v.id, v.youtube_id!)} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>🔄 Refresh stats</button>}
+                        <Link href={`/dashboard/videos/${v.id}`} style={{ fontSize: '12px', color: muted, textDecoration: 'none' }}>Open in library →</Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
