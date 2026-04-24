@@ -21,6 +21,7 @@ interface Production {
   additional_notes: string | null; video_description: string | null
   livestream_url: string | null; thumbnail_url: string | null
   project_lead: string | null; synced_at: string | null; team_notes: string | null
+  deliverables_count: number; deliverables_notes: string | null
 }
 
 interface ChecklistItem {
@@ -95,6 +96,11 @@ export default function ProductionDetailPage() {
   const [teamNotes, setTeamNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
+  const [delivCount, setDelivCount] = useState(0)
+  const [delivNotes, setDelivNotes] = useState('')
+  const [savingDeliv, setSavingDeliv] = useState(false)
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [fetchingYt, setFetchingYt] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [completeChecks, setCompleteChecks] = useState({ deliverables: false, organizer: false, files: false, quality: false })
@@ -131,6 +137,8 @@ export default function ProductionDetailPage() {
     setProduction(prodRes.data)
     setUuid(prodUUID)
     setTeamNotes(prodRes.data.team_notes || '')
+    setDelivCount(prodRes.data.deliverables_count || 0)
+    setDelivNotes(prodRes.data.deliverables_notes || '')
 
     // All related queries use the UUID as FK
     const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes] = await Promise.all([
@@ -557,6 +565,42 @@ export default function ProductionDetailPage() {
     setNotesSaved(true)
     setTimeout(() => setNotesSaved(false), 3000)
   }, [uuid, teamNotes, supabase])
+
+  const saveDeliverables = useCallback(async () => {
+    if (!uuid) return
+    setSavingDeliv(true)
+    await supabase.from('productions').update({ deliverables_count: delivCount, deliverables_notes: delivNotes || null }).eq('id', uuid)
+    setSavingDeliv(false)
+    toast('Deliverables saved', 'success')
+  }, [uuid, delivCount, delivNotes, supabase])
+
+  const linkYoutubeVideo = useCallback(async () => {
+    if (!youtubeUrl || !uuid || !currentUser || !production) return
+    setFetchingYt(true)
+    try {
+      const res = await fetch(`/api/youtube?url=${encodeURIComponent(youtubeUrl)}`)
+      if (!res.ok) { const e = await res.json(); toast(e.error || 'Failed to fetch video', 'error'); setFetchingYt(false); return }
+      const yt = await res.json()
+      // Create video entry linked to this production
+      const { data, error } = await supabase.from('videos').insert({
+        title: yt.title, type: production.request_type_label || 'Video', status: 'Published',
+        date_published: yt.published_at ? new Date(yt.published_at).toISOString().split('T')[0] : null,
+        description: yt.description?.slice(0, 500) || null,
+        production_id: uuid, created_by: currentUser.id,
+        youtube_url: youtubeUrl, youtube_id: yt.youtube_id,
+        youtube_views: yt.views, youtube_likes: yt.likes,
+        youtube_duration: yt.duration, youtube_thumbnail: yt.thumbnail,
+        youtube_synced_at: new Date().toISOString(),
+      }).select().single()
+      if (error) { toast('Failed to create video entry: ' + error.message, 'error') }
+      else {
+        toast(`Linked "${yt.title}" — ${yt.views.toLocaleString()} views`, 'success')
+        setYoutubeUrl('')
+        await logActivity('Linked YouTube video', yt.title)
+      }
+    } catch { toast('Failed to connect to YouTube', 'error') }
+    setFetchingYt(false)
+  }, [youtubeUrl, uuid, currentUser, production, supabase, logActivity])
 
   const addLink = useCallback(async () => {
     if (!newLinkTitle || !newLinkUrl || !currentUser || !uuid) return
@@ -1021,6 +1065,36 @@ export default function ProductionDetailPage() {
             <button onClick={saveTeamNotes} disabled={savingNotes} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: notesSaved ? '#22c55e' : '#1e6cb5', color: '#fff', border: 'none', cursor: savingNotes ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500, transition: 'background 0.2s' }}>
               {notesSaved ? '✓ Saved!' : savingNotes ? 'Saving...' : 'Save notes'}
             </button>
+          </div>
+
+          {/* Deliverables */}
+          <div style={{ marginTop: '16px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Deliverables</h3>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '8px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Count</label>
+                <input type="number" value={delivCount} onChange={e => setDelivCount(parseInt(e.target.value) || 0)} min={0} style={{ ...inputStyle, width: '80px', padding: '7px 10px' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Notes</label>
+                <input value={delivNotes} onChange={e => setDelivNotes(e.target.value)} placeholder="e.g. 50 slideshows + 1 highlight reel" style={{ ...inputStyle, padding: '7px 10px' }} />
+              </div>
+              <button onClick={saveDeliverables} disabled={savingDeliv} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
+                {savingDeliv ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+
+          {/* Link YouTube Video */}
+          <div style={{ marginTop: '16px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Link YouTube Video</h3>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} placeholder="Paste YouTube URL..." style={{ ...inputStyle, flex: 1, padding: '7px 10px' }} onKeyDown={e => e.key === 'Enter' && linkYoutubeVideo()} />
+              <button onClick={linkYoutubeVideo} disabled={fetchingYt || !youtubeUrl} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: youtubeUrl ? '#ef4444' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: youtubeUrl ? '#fff' : muted, border: 'none', cursor: youtubeUrl ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
+                {fetchingYt ? 'Fetching...' : '▶ Link'}
+              </button>
+            </div>
+            <p style={{ fontSize: '11px', color: muted, margin: '6px 0 0' }}>Creates a Video Library entry with title, views, likes, and thumbnail from YouTube</p>
           </div>
         </div>
         </div>
