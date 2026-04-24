@@ -583,7 +583,7 @@ export default function ProductionDetailPage() {
       const yt = await res.json()
       // Create video entry linked to this production
       const { data, error } = await supabase.from('videos').insert({
-        title: yt.title, type: production.request_type_label || 'Video', status: 'Published',
+        title: yt.title, video_type: production.request_type_label || 'Video', status: 'Published',
         date_published: yt.published_at ? new Date(yt.published_at).toISOString().split('T')[0] : null,
         description: yt.description?.slice(0, 500) || null,
         production_id: uuid, created_by: currentUser.id,
