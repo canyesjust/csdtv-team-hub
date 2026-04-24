@@ -106,7 +106,7 @@ export default function SignagePage() {
   const currentSchoolYear = (() => { const m = now.getMonth(); const y = now.getFullYear(); return m >= 7 ? `${y + 1}` : `${y}` })()
   const ytdCompleted = productions.filter(p => p.status === 'Complete' && p.school_year === currentSchoolYear).length
   const ytdTotal = productions.filter(p => p.school_year === currentSchoolYear).length
-  const ytdDeliverables = productions.filter(p => p.school_year === currentSchoolYear).reduce((s, p) => s + ((p as any).deliverables_count || 0), 0)
+  const ytdVidsProduced = productions.filter(p => p.school_year === currentSchoolYear).reduce((s, p) => s + ((p as any).deliverables_count || 0), 0)
   const nextProd = productions.find(p => { if (!p.start_datetime || p.status === 'Complete' || p.status === 'Cancelled') return false; return new Date(p.start_datetime) > now })
   const countdown = (() => {
     if (!nextProd?.start_datetime) return null
@@ -146,7 +146,7 @@ export default function SignagePage() {
       <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexShrink: 0, fontSize: '15px' }}>
         <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#60b8f0', fontWeight: 700 }}>THIS WEEK</span> <span style={{ fontWeight: 600 }}>{thisWeekProds.length}</span> production{thisWeekProds.length !== 1 ? 's' : ''}</span>
         <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#34d399', fontWeight: 700 }}>YEAR</span> <span style={{ fontWeight: 600 }}>{ytdCompleted}</span> completed of {ytdTotal}</span>
-        {ytdDeliverables > 0 && <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#ef4444', fontWeight: 700 }}>VIDEOS</span> <span style={{ fontWeight: 600 }}>{ytdDeliverables}</span> produced</span>}
+        {ytdVidsProduced > 0 && <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#ef4444', fontWeight: 700 }}>VIDEOS</span> <span style={{ fontWeight: 600 }}>{ytdVidsProduced}</span> produced</span>}
         {inProgressProds.length > 0 && <span style={{ background: cardBg, border: '1px solid rgba(251,191,36,0.2)', borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#fbbf24', fontWeight: 700 }}>IN PROGRESS</span> {inProgressProds.map(p => p.title).join(' · ')}</span>}
       </div>
 

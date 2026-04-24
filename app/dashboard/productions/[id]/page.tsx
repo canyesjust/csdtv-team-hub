@@ -176,7 +176,8 @@ export default function ProductionDetailPage() {
 
   const logActivity = useCallback(async (action: string, detail?: string) => {
     if (!currentUser || !uuid) return
-    await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action, detail: detail || null })
+    const { data } = await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action, detail: detail || null }).select('*, team:team(name)').single()
+    if (data) setActivity(prev => [data, ...prev])
   }, [currentUser, uuid, supabase])
 
   const createTaskForProduction = useCallback(async () => {
@@ -566,13 +567,13 @@ export default function ProductionDetailPage() {
     setTimeout(() => setNotesSaved(false), 3000)
   }, [uuid, teamNotes, supabase])
 
-  const saveDeliverables = useCallback(async () => {
+  const saveVideos Produced = useCallback(async () => {
     if (!uuid) return
     setSavingDeliv(true)
     await supabase.from('productions').update({ deliverables_count: delivCount, deliverables_notes: delivNotes || null }).eq('id', uuid)
     setSavingDeliv(false)
-    toast('Deliverables saved', 'success')
-    await logActivity('Updated deliverables', `${delivCount} items${delivNotes ? ' — ' + delivNotes : ''}`)
+    toast('Videos Produced saved', 'success')
+    await logActivity('Updated videos produced', `${delivCount} items${delivNotes ? ' — ' + delivNotes : ''}`)
   }, [uuid, delivCount, delivNotes, supabase, logActivity])
 
   const refreshYoutubeStats = useCallback(async (videoId: string, ytId: string) => {
@@ -1088,9 +1089,9 @@ export default function ProductionDetailPage() {
             </button>
           </div>
 
-          {/* Deliverables */}
+          {/* Videos Produced */}
           <div style={{ marginTop: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Deliverables</h3>
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Videos Produced</h3>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '8px' }}>
               <div>
                 <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Count</label>
@@ -1100,7 +1101,7 @@ export default function ProductionDetailPage() {
                 <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Notes</label>
                 <input value={delivNotes} onChange={e => setDelivNotes(e.target.value)} placeholder="e.g. 50 slideshows + 1 highlight reel" style={{ ...inputStyle, padding: '7px 10px' }} />
               </div>
-              <button onClick={saveDeliverables} disabled={savingDeliv} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
+              <button onClick={saveVideos Produced} disabled={savingDeliv} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
                 {savingDeliv ? 'Saving...' : 'Save'}
               </button>
             </div>
