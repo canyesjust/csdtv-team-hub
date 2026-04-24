@@ -11,9 +11,10 @@ import Loader from '../components/Loader'
 interface Production {
   id: string; production_number: number; title: string
   type: string | null; request_type_label: string | null; status: string | null
-  organizer_name: string | null; school_department: string | null
-  start_datetime: string | null; filming_location: string | null
+  organizer_name: string | null; organizer_email: string | null; school_department: string | null
+  start_datetime: string | null; end_datetime: string | null; filming_location: string | null
   school_year: string | null; synced_at: string | null
+  additional_notes: string | null; video_description: string | null
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
   checklist_items?: { completed: boolean }[]
 }
@@ -564,19 +565,36 @@ function ProductionsPageContent() {
                     <span style={{ color: text, fontWeight: 500 }}>{new Date(selectedProd.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · {new Date(selectedProd.start_datetime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
                   </div>
                 )}
+                {selectedProd.end_datetime && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                    <span style={{ color: muted }}>End</span>
+                    <span style={{ color: text, fontWeight: 500 }}>{new Date(selectedProd.end_datetime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                  </div>
+                )}
                 {(selectedProd.filming_location || selectedProd.school_department) && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                     <span style={{ color: muted }}>Location</span>
                     <span style={{ color: text, fontWeight: 500 }}>{getSchoolName(selectedProd.filming_location) || getSchoolName(selectedProd.school_department) || selectedProd.filming_location || ''}</span>
                   </div>
                 )}
-                {selectedProd.organizer_name && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                    <span style={{ color: muted }}>Organizer</span>
-                    <span style={{ color: text, fontWeight: 500 }}>{selectedProd.organizer_name}</span>
-                  </div>
-                )}
               </div>
+
+              {/* Organizer */}
+              {selectedProd.organizer_name && (
+                <div style={{ marginBottom: '16px', padding: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 6px' }}>Organizer</p>
+                  <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0 }}>{selectedProd.organizer_name}</p>
+                  {selectedProd.organizer_email && <a href={`mailto:${selectedProd.organizer_email}`} style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none' }}>{selectedProd.organizer_email}</a>}
+                </div>
+              )}
+
+              {/* Notes / Description */}
+              {(selectedProd.additional_notes || selectedProd.video_description) && (
+                <div style={{ marginBottom: '16px', padding: '12px', background: dark ? 'rgba(30,58,95,0.15)' : '#eff6ff', borderRadius: '8px', borderLeft: '3px solid #1e3a5f' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 600, color: '#1e3a5f', textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 6px' }}>Notes</p>
+                  <p style={{ fontSize: '13px', color: text, margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{selectedProd.additional_notes || selectedProd.video_description}</p>
+                </div>
+              )}
 
               {/* Team */}
               {(selectedProd.production_members || []).length > 0 && (

@@ -625,7 +625,7 @@ export default function SchedulePage() {
       )}
 
       {/* ── Mass fill bar ── */}
-      {viewingOwnSchedule && (
+      {(viewingOwnSchedule || isManager) && (
         <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {showMassFill ? (
             <>
@@ -723,9 +723,9 @@ export default function SchedulePage() {
               >
                 {/* Day number + hours row */}
                 <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', cursor: (!isWeekend && inMonth && viewingOwnSchedule) ? 'text' : 'default' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', cursor: (!isWeekend && inMonth && (viewingOwnSchedule || isManager)) ? 'text' : 'default' }}
                   onClick={e => {
-                    if (isWeekend || !inMonth || !viewingOwnSchedule) return
+                    if (isWeekend || !inMonth || (!viewingOwnSchedule && !isManager)) return
                     const ds = toLocalDateStr(day)
                     setEditingCell({ dateStr: ds, value: hours || '' })
                   }}
@@ -759,10 +759,10 @@ export default function SchedulePage() {
                   ) : hours && inMonth ? (
                     <span
                       title="Click to edit"
-                      style={{ fontSize: '10px', fontWeight: 500, color: '#5ba3e0', background: dark ? 'rgba(30,108,181,0.18)' : 'rgba(30,108,181,0.1)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' as const, cursor: (!isWeekend && inMonth && viewingOwnSchedule) ? 'text' : 'default' }}>
+                      style={{ fontSize: '10px', fontWeight: 500, color: '#5ba3e0', background: dark ? 'rgba(30,108,181,0.18)' : 'rgba(30,108,181,0.1)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' as const, cursor: (!isWeekend && inMonth && (viewingOwnSchedule || isManager)) ? 'text' : 'default' }}>
                       {hours.replace(/\s/g, '')}
                     </span>
-                  ) : !isWeekend && inMonth && viewingOwnSchedule ? (
+                  ) : !isWeekend && inMonth && (viewingOwnSchedule || isManager) ? (
                     <span style={{ fontSize: '10px', color: dark ? 'rgba(136,153,187,0.3)' : 'rgba(107,114,128,0.25)', padding: '1px 5px' }}>+</span>
                   ) : null}
                 </div>
@@ -826,7 +826,7 @@ export default function SchedulePage() {
       </div>
 
       {/* ── Edit sections — only show for the person's own schedule ── */}
-      {viewingOwnSchedule && (
+      {(viewingOwnSchedule || isManager) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px' }}>
 
           {/* Default schedule */}
