@@ -131,10 +131,24 @@ export default function VideosPage() {
         existing: existingIds.has(v.youtube_id),
         matchedProd: existingIds.has(v.youtube_id) ? null : findMatch(v.title),
       }))
+
+      // Auto-fix dates on existing videos (UTC→Mountain)
+      let dateFixed = 0
+      for (const v of results.filter((r: any) => r.existing)) {
+        if (v.published_at) {
+          const correctDate = new Date(v.published_at).toLocaleDateString('en-CA', { timeZone: 'America/Denver' })
+          const existingVideo = videos.find((ev: any) => ev.youtube_id === v.youtube_id)
+          if (existingVideo && existingVideo.date_published !== correctDate) {
+            await supabase.from('videos').update({ date_published: correctDate, youtube_views: v.views, youtube_likes: v.likes }).eq('youtube_id', v.youtube_id)
+            dateFixed++
+          }
+        }
+      }
+
       setSyncResults(results)
       const newCount = results.filter((r: any) => !r.existing).length
       const matchedCount = results.filter((r: any) => !r.existing && r.matchedProd).length
-      toast(`Found ${data.total} videos. ${newCount} new, ${matchedCount} matched to productions.`, 'info')
+      toast(`Found ${data.total} videos. ${newCount} new, ${matchedCount} matched.${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
     } catch { toast('Channel sync failed', 'error') }
     setSyncing(false)
   }
@@ -147,7 +161,7 @@ export default function VideosPage() {
     for (let i = 0; i < newVids.length; i += 20) {
       const batch = newVids.slice(i, i + 20).map(v => ({
         title: v.title, video_type: 'Other', status: 'Published', visibility: 'Public',
-        date_published: v.published_at ? new Date(v.published_at).toISOString().split('T')[0] : null,
+        date_published: v.published_at ? new Date(v.published_at).toLocaleDateString('en-CA', { timeZone: 'America/Denver' }) : null,
         description: (v as any).description?.slice(0, 500) || null,
         production_id: v.matchedProd?.id || null,
         youtube_url: `https://www.youtube.com/watch?v=${v.youtube_id}`, youtube_id: v.youtube_id,
