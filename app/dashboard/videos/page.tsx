@@ -14,11 +14,13 @@ interface Video {
   thumbnail_url: string | null; created_by: string | null; created_at: string; updated_at: string
   youtube_url: string | null; youtube_id: string | null; youtube_views: number | null
   youtube_likes: number | null; youtube_duration: string | null; youtube_thumbnail: string | null
+  needs_review: boolean; youtube_tags: string[] | null
   video_tags?: { tag: string }[]
   productions?: { title: string; production_number: number } | null
 }
 interface TeamMember { id: string; name: string; role: string }
 interface Production { id: string; title: string; production_number: number }
+interface School { code: string; name: string }
 
 const VIDEO_TYPES = ['Recap', 'Promo', 'Event Coverage', 'Interview', 'B-Roll', 'Tutorial', 'Announcement', 'Highlight Reel', 'Other']
 const STATUSES = ['Filming', 'Editing', 'Review', 'Published', 'Archived']
@@ -51,10 +53,12 @@ export default function VideosPage() {
   const [videos, setVideos] = useState<Video[]>([])
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [productions, setProductions] = useState<Production[]>([])
+  const [schools, setSchools] = useState<School[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [filterReview, setFilterReview] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
   const [bulkCSV, setBulkCSV] = useState('')
@@ -62,20 +66,23 @@ export default function VideosPage() {
   const [saving, setSaving] = useState(false)
   const [newVideo, setNewVideo] = useState({ title: '', description: '', video_type: 'Other', status: 'Filming', visibility: 'Internal', production_id: '', school_year: '', date_filmed: '', tags: '' })
   const [syncing, setSyncing] = useState(false)
-  const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; existing: boolean }[] | null>(null)
+  const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; existing: boolean; matchedProd: Production | null }[] | null>(null)
   const [syncImporting, setSyncImporting] = useState(false)
+  const [categorizing, setCategorizing] = useState(false)
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [videosRes, userRes, prodsRes] = await Promise.all([
-      supabase.from('videos').select('*, video_tags(tag), productions(title, production_number)').order('updated_at', { ascending: false }),
+    const [videosRes, userRes, prodsRes, schoolsRes] = await Promise.all([
+      supabase.from('videos').select('*, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }),
       supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single(),
-      supabase.from('productions').select('id, title, production_number').order('production_number', { ascending: false }).limit(100),
+      supabase.from('productions').select('id, title, production_number').order('production_number', { ascending: false }).limit(500),
+      supabase.from('schools').select('code, name'),
     ])
     setVideos(videosRes.data || [])
     setCurrentUser(userRes.data)
     setProductions(prodsRes.data || [])
+    setSchools(schoolsRes.data || [])
     setLoading(false)
   }, [supabase])
 
@@ -89,12 +96,41 @@ export default function VideosPage() {
       const data = await res.json()
       // Check which videos already exist in our DB
       const existingIds = new Set(videos.map((v: any) => v.youtube_id).filter(Boolean))
+
+      // Fuzzy match helper
+      const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
+      const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
+
+      const findMatch = (title: string): Production | null => {
+        const titleWords = getWords(title)
+        const nt = normalize(title)
+        for (const prod of productions) {
+          const np = normalize(prod.title)
+          const prodWords = getWords(prod.title)
+          // Exact normalized match
+          if (nt === np) return prod
+          // Substring match
+          if (nt.length >= 5 && np.length >= 5 && (nt.includes(np) || np.includes(nt))) return prod
+          // Keyword overlap: 50%+ of shorter title's words in longer
+          if (titleWords.length > 0 && prodWords.length > 0) {
+            const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
+            const longer = titleWords.length > prodWords.length ? titleWords : prodWords
+            const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
+            if (overlap >= Math.ceil(shorter.length * 0.5)) return prod
+          }
+        }
+        return null
+      }
+
       const results = data.videos.map((v: any) => ({
         ...v,
         existing: existingIds.has(v.youtube_id),
+        matchedProd: existingIds.has(v.youtube_id) ? null : findMatch(v.title),
       }))
       setSyncResults(results)
-      toast(`Found ${data.total} videos on channel. ${results.filter((r: any) => !r.existing).length} new.`, 'info')
+      const newCount = results.filter((r: any) => !r.existing).length
+      const matchedCount = results.filter((r: any) => !r.existing && r.matchedProd).length
+      toast(`Found ${data.total} videos. ${newCount} new, ${matchedCount} matched to productions.`, 'info')
     } catch { toast('Channel sync failed', 'error') }
     setSyncing(false)
   }
@@ -104,30 +140,100 @@ export default function VideosPage() {
     setSyncImporting(true)
     const newVids = syncResults.filter(r => !r.existing)
     let imported = 0
-    // Batch insert in chunks of 20
     for (let i = 0; i < newVids.length; i += 20) {
       const batch = newVids.slice(i, i + 20).map(v => ({
-        title: v.title,
-        video_type: 'Other',
-        status: 'Published',
-        visibility: 'Public',
+        title: v.title, video_type: 'Other', status: 'Published', visibility: 'Public',
         date_published: v.published_at ? new Date(v.published_at).toISOString().split('T')[0] : null,
-        description: null,
-        youtube_url: `https://www.youtube.com/watch?v=${v.youtube_id}`,
-        youtube_id: v.youtube_id,
-        youtube_views: v.views,
-        youtube_likes: v.likes,
-        youtube_duration: v.duration,
-        youtube_thumbnail: v.thumbnail,
-        youtube_synced_at: new Date().toISOString(),
-        created_by: currentUser.id,
+        description: (v as any).description?.slice(0, 500) || null,
+        production_id: v.matchedProd?.id || null,
+        youtube_url: `https://www.youtube.com/watch?v=${v.youtube_id}`, youtube_id: v.youtube_id,
+        youtube_views: v.views, youtube_likes: v.likes, youtube_duration: v.duration,
+        youtube_thumbnail: v.thumbnail, youtube_synced_at: new Date().toISOString(),
+        youtube_tags: (v as any).tags || null, needs_review: true, created_by: currentUser.id,
       }))
       const { error } = await supabase.from('videos').insert(batch)
       if (!error) imported += batch.length
     }
-    toast(`Imported ${imported} videos from YouTube`, 'success')
+    const matchedCount = newVids.filter(v => v.matchedProd).length
+    toast(`Imported ${imported} videos. ${matchedCount} linked. Running AI categorization...`, 'success')
     setSyncResults(null)
     setSyncImporting(false)
+    await loadData()
+    await categorizeVideos()
+  }
+
+  const categorizeVideos = async () => {
+    setCategorizing(true)
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) { setCategorizing(false); return }
+      // Get videos needing review
+      const { data: reviewVids } = await supabase.from('videos').select('id, title, description, youtube_tags').eq('needs_review', true).limit(50)
+      if (!reviewVids || reviewVids.length === 0) { toast('No videos need categorization', 'info'); setCategorizing(false); return }
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/categorize-videos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ videos: reviewVids, schools, productions }),
+      })
+      if (!res.ok) { toast('AI categorization failed', 'error'); setCategorizing(false); return }
+      const { results } = await res.json()
+
+      // Apply AI suggestions
+      let updated = 0
+      for (const r of (results || [])) {
+        const video = reviewVids[r.index]
+        if (!video) continue
+        const updates: Record<string, any> = {}
+        if (r.video_type && r.video_type !== 'Other') updates.video_type = r.video_type
+        if (r.school) {
+          const schoolMatch = schools.find(s => s.name.toLowerCase().includes(r.school.toLowerCase()) || r.school.toLowerCase().includes(s.name.toLowerCase()))
+          if (schoolMatch) updates.school_department = schoolMatch.code
+        }
+        if (r.production_number) {
+          const prodMatch = productions.find(p => p.production_number === r.production_number)
+          if (prodMatch && !video.production_id) updates.production_id = prodMatch.id
+        }
+        if (r.confidence === 'high') updates.needs_review = false
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('videos').update(updates).eq('id', video.id)
+          updated++
+        }
+      }
+      toast(`AI categorized ${updated} videos. ${results?.filter((r: any) => r.confidence !== 'high').length || 0} need your review.`, 'success')
+      await loadData()
+    } catch { toast('Categorization failed', 'error') }
+    setCategorizing(false)
+  }
+
+  const matchExistingVideos = async () => {
+    const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
+    const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
+    const unlinked = videos.filter(v => !v.production_id)
+    let matched = 0
+    for (const video of unlinked) {
+      const titleWords = getWords(video.title)
+      const nt = normalize(video.title)
+      for (const prod of productions) {
+        const np = normalize(prod.title)
+        const prodWords = getWords(prod.title)
+        let isMatch = false
+        if (nt === np) isMatch = true
+        else if (nt.length >= 5 && np.length >= 5 && (nt.includes(np) || np.includes(nt))) isMatch = true
+        else if (titleWords.length > 0 && prodWords.length > 0) {
+          const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
+          const longer = titleWords.length > prodWords.length ? titleWords : prodWords
+          const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
+          if (overlap >= Math.ceil(shorter.length * 0.5)) isMatch = true
+        }
+        if (isMatch) {
+          await supabase.from('videos').update({ production_id: prod.id }).eq('id', video.id)
+          matched++
+          break
+        }
+      }
+    }
+    toast(`Matched ${matched} of ${unlinked.length} unlinked videos to productions`, 'success')
     loadData()
   }
 
@@ -161,14 +267,18 @@ export default function VideosPage() {
     setSaving(false)
   }
 
+  const needsReviewCount = videos.filter(v => v.needs_review).length
+
   const filtered = videos.filter(v => {
     const matchSearch = search === '' ||
       v.title.toLowerCase().includes(search.toLowerCase()) ||
       v.description?.toLowerCase().includes(search.toLowerCase()) ||
-      (v.video_tags || []).some(t => t.tag.toLowerCase().includes(search.toLowerCase()))
+      (v.video_tags || []).some(t => t.tag.toLowerCase().includes(search.toLowerCase())) ||
+      (v.youtube_tags || []).some((t: string) => t.toLowerCase().includes(search.toLowerCase()))
     const matchType = filterType === 'all' || v.video_type === filterType
     const matchStatus = filterStatus === 'all' || v.status === filterStatus
-    return matchSearch && matchType && matchStatus
+    const matchReview = !filterReview || v.needs_review
+    return matchSearch && matchType && matchStatus && matchReview
   })
 
   const inputStyle: React.CSSProperties = { width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
@@ -188,6 +298,9 @@ export default function VideosPage() {
           <button onClick={syncChannel} disabled={syncing} style={{ background: '#ef4444', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: syncing ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px', opacity: syncing ? 0.7 : 1 }}>
             {syncing ? '⏳ Syncing...' : '▶ Sync YouTube'}
           </button>
+          <button onClick={matchExistingVideos} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            🔗 Match to Productions
+          </button>
           <button onClick={() => { setShowBulkImport(!showBulkImport); setShowNew(false) }} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
             Bulk import
           </button>
@@ -197,13 +310,31 @@ export default function VideosPage() {
         </div>
       </div>
 
+      {/* Needs Review Banner */}
+      {needsReviewCount > 0 && (
+        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '10px', padding: '12px 16px', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#f59e0b' }}>⚠ {needsReviewCount} video{needsReviewCount !== 1 ? 's' : ''} need review</span>
+            <span style={{ fontSize: '13px', color: muted, marginLeft: '8px' }}>Missing type, school, or production link</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => setFilterReview(!filterReview)} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: filterReview ? '#f59e0b' : cardBg, color: filterReview ? '#fff' : muted, border: `0.5px solid ${filterReview ? '#f59e0b' : border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+              {filterReview ? 'Show all' : 'Show needs review'}
+            </button>
+            <button onClick={categorizeVideos} disabled={categorizing} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: categorizing ? 0.7 : 1 }}>
+              {categorizing ? '🤖 Categorizing...' : '🤖 AI Categorize'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sync Channel Results */}
       {syncResults && (
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div>
               <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>YouTube Channel Sync</h3>
-              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{syncResults.length} total · {syncResults.filter(r => !r.existing).length} new · {syncResults.filter(r => r.existing).length} already imported</p>
+              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{syncResults.length} total · {syncResults.filter(r => !r.existing).length} new · {syncResults.filter(r => !r.existing && r.matchedProd).length} matched to productions · {syncResults.filter(r => r.existing).length} already imported</p>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setSyncResults(null)} style={{ padding: '8px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px' }}>Cancel</button>
@@ -218,7 +349,8 @@ export default function VideosPage() {
                 {v.thumbnail && <img src={v.thumbnail} alt="" style={{ width: '80px', height: '45px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0 }} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: '12px', fontWeight: 500, color: text, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
-                  <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.views.toLocaleString()} views{v.existing ? ' · ✓ imported' : ''}</p>
+                  <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.views.toLocaleString()} views{v.existing ? ' · ✓ imported' : v.matchedProd ? ` · → #${v.matchedProd.production_number}` : ''}</p>
+                  {v.matchedProd && !v.existing && <p style={{ fontSize: '10px', color: '#22c55e', margin: '2px 0 0', fontWeight: 500 }}>✓ {v.matchedProd.title}</p>}
                 </div>
               </div>
             ))}
@@ -411,6 +543,11 @@ export default function VideosPage() {
                     <p style={{ fontSize: '12px', color: muted, margin: 0, opacity: 0.7 }}>
                       {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : video.date_filmed ? new Date(video.date_filmed + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
                     </p>
+                    {video.needs_review && (
+                      <button onClick={async e => { e.preventDefault(); e.stopPropagation(); await supabase.from('videos').update({ needs_review: false }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, needs_review: false } : v)); toast('Approved', 'success') }} style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '0.5px solid rgba(245,158,11,0.2)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '6px' }}>
+                        ✓ Approve
+                      </button>
+                    )}
                   </div>
                 </div>
               </Link>

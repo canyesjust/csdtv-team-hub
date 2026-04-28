@@ -9,7 +9,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('videos')
-    .select('id, title, video_type, status, date_published, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, description')
+    .select('id, title, video_type, status, date_published, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, description, school_department')
     .eq('status', 'Published')
     .not('youtube_id', 'is', null)
     .order('date_published', { ascending: false })
