@@ -19,7 +19,7 @@ interface Video {
   productions?: { title: string; production_number: number } | null
 }
 interface TeamMember { id: string; name: string; role: string }
-interface Production { id: string; title: string; production_number: number }
+interface Production { id: string; title: string; production_number: number; start_datetime?: string; organizer_name?: string }
 interface School { code: string; name: string }
 
 const VIDEO_TYPES = ['Recap', 'Promo', 'Event Coverage', 'Interview', 'B-Roll', 'Tutorial', 'Announcement', 'Highlight Reel', 'Other']
@@ -71,6 +71,8 @@ export default function VideosPage() {
   const [syncImporting, setSyncImporting] = useState(false)
   const [categorizing, setCategorizing] = useState(false)
   const [aiSuggestions, setAiSuggestions] = useState<{ videoId: string; videoTitle: string; video_type: string; school: string | null; production_number: number | null; prodTitle: string | null; confidence: string; approved: boolean }[] | null>(null)
+  const [linkingVideoId, setLinkingVideoId] = useState<string | null>(null)
+  const [linkSearch, setLinkSearch] = useState('')
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -78,7 +80,7 @@ export default function VideosPage() {
     const [videosRes, userRes, prodsRes, schoolsRes] = await Promise.all([
       supabase.from('videos').select('*, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }),
       supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single(),
-      supabase.from('productions').select('id, title, production_number').order('production_number', { ascending: false }).limit(500),
+      supabase.from('productions').select('id, title, production_number, start_datetime, organizer_name').order('production_number', { ascending: false }).limit(500),
       supabase.from('schools').select('code, name'),
     ])
     setVideos(videosRes.data || [])
@@ -608,7 +610,17 @@ export default function VideosPage() {
                         ✓ Approve
                       </button>
                     )}
-                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                      {!video.production_id && (
+                        <button onClick={e => { e.preventDefault(); e.stopPropagation(); setLinkingVideoId(linkingVideoId === video.id ? null : video.id); setLinkSearch('') }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: linkingVideoId === video.id ? '#1e6cb5' : 'rgba(34,197,94,0.1)', color: linkingVideoId === video.id ? '#fff' : '#22c55e', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                          🔗 Link to production
+                        </button>
+                      )}
+                      {video.production_id && (
+                        <button onClick={async e => { e.preventDefault(); e.stopPropagation(); await supabase.from('videos').update({ production_id: null }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: null, productions: null } : v)); toast('Unlinked from production', 'success') }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          Unlink
+                        </button>
+                      )}
                       {!video.production_id && (
                         <button onClick={async e => {
                           e.preventDefault(); e.stopPropagation()
@@ -637,6 +649,46 @@ export default function VideosPage() {
                         Hide
                       </button>
                     </div>
+                    {/* Link to production search dropdown */}
+                    {linkingVideoId === video.id && (
+                      <div onClick={e => { e.preventDefault(); e.stopPropagation() }} style={{ marginTop: '8px', background: dark ? '#0a0f1e' : '#fff', border: `1px solid ${border}`, borderRadius: '8px', padding: '8px', position: 'relative', zIndex: 10 }}>
+                        <input value={linkSearch} onChange={e => setLinkSearch(e.target.value)} placeholder="Search by title, date, organizer..." autoFocus style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: `0.5px solid ${border}`, fontSize: '12px', color: text, background: inputBg, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+                        {linkSearch.length >= 2 && (
+                          <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '4px' }}>
+                            {productions.filter(p => {
+                              const q = linkSearch.toLowerCase()
+                              return p.title.toLowerCase().includes(q) ||
+                                (p.organizer_name || '').toLowerCase().includes(q) ||
+                                (p.start_datetime && new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase().includes(q)) ||
+                                String(p.production_number).includes(q)
+                            }).slice(0, 10).map(p => (
+                              <div key={p.id} onClick={async () => {
+                                await supabase.from('videos').update({ production_id: p.id, needs_review: false }).eq('id', video.id)
+                                setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: p.id, needs_review: false, productions: { title: p.title, production_number: p.production_number } } : v))
+                                setLinkingVideoId(null)
+                                setLinkSearch('')
+                                toast(`Linked to #${p.production_number} ${p.title}`, 'success')
+                              }} style={{ padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}
+                                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
+                                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                              >
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>
+                                  {p.organizer_name && <span style={{ color: muted, marginLeft: '6px' }}>· {p.organizer_name}</span>}
+                                </div>
+                                <span style={{ fontSize: '11px', color: muted, flexShrink: 0 }}>
+                                  {p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
+                                </span>
+                              </div>
+                            ))}
+                            {productions.filter(p => {
+                              const q = linkSearch.toLowerCase()
+                              return p.title.toLowerCase().includes(q) || (p.organizer_name || '').toLowerCase().includes(q) || (p.start_datetime && new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase().includes(q)) || String(p.production_number).includes(q)
+                            }).length === 0 && <p style={{ fontSize: '12px', color: muted, padding: '6px 8px', margin: 0 }}>No matching productions</p>}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </Link>
