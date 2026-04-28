@@ -12,6 +12,8 @@ interface Video {
   production_id: string | null; school_department: string | null; school_year: string | null
   visibility: string; date_filmed: string | null; date_published: string | null
   thumbnail_url: string | null; created_by: string | null; created_at: string; updated_at: string
+  youtube_url: string | null; youtube_id: string | null; youtube_views: number | null
+  youtube_likes: number | null; youtube_duration: string | null; youtube_thumbnail: string | null
   video_tags?: { tag: string }[]
   productions?: { title: string; production_number: number } | null
 }
@@ -59,6 +61,9 @@ export default function VideosPage() {
   const [bulkImporting, setBulkImporting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [newVideo, setNewVideo] = useState({ title: '', description: '', video_type: 'Other', status: 'Filming', visibility: 'Internal', production_id: '', school_year: '', date_filmed: '', tags: '' })
+  const [syncing, setSyncing] = useState(false)
+  const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; existing: boolean }[] | null>(null)
+  const [syncImporting, setSyncImporting] = useState(false)
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -75,6 +80,56 @@ export default function VideosPage() {
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
+
+  const syncChannel = async () => {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/youtube/channel')
+      if (!res.ok) { toast('Failed to fetch channel videos', 'error'); setSyncing(false); return }
+      const data = await res.json()
+      // Check which videos already exist in our DB
+      const existingIds = new Set(videos.map((v: any) => v.youtube_id).filter(Boolean))
+      const results = data.videos.map((v: any) => ({
+        ...v,
+        existing: existingIds.has(v.youtube_id),
+      }))
+      setSyncResults(results)
+      toast(`Found ${data.total} videos on channel. ${results.filter((r: any) => !r.existing).length} new.`, 'info')
+    } catch { toast('Channel sync failed', 'error') }
+    setSyncing(false)
+  }
+
+  const importSyncResults = async () => {
+    if (!syncResults || !currentUser) return
+    setSyncImporting(true)
+    const newVids = syncResults.filter(r => !r.existing)
+    let imported = 0
+    // Batch insert in chunks of 20
+    for (let i = 0; i < newVids.length; i += 20) {
+      const batch = newVids.slice(i, i + 20).map(v => ({
+        title: v.title,
+        video_type: 'Other',
+        status: 'Published',
+        visibility: 'Public',
+        date_published: v.published_at ? new Date(v.published_at).toISOString().split('T')[0] : null,
+        description: null,
+        youtube_url: `https://www.youtube.com/watch?v=${v.youtube_id}`,
+        youtube_id: v.youtube_id,
+        youtube_views: v.views,
+        youtube_likes: v.likes,
+        youtube_duration: v.duration,
+        youtube_thumbnail: v.thumbnail,
+        youtube_synced_at: new Date().toISOString(),
+        created_by: currentUser.id,
+      }))
+      const { error } = await supabase.from('videos').insert(batch)
+      if (!error) imported += batch.length
+    }
+    toast(`Imported ${imported} videos from YouTube`, 'success')
+    setSyncResults(null)
+    setSyncImporting(false)
+    loadData()
+  }
 
   const createVideo = async () => {
     if (!newVideo.title || !currentUser) return
@@ -130,6 +185,9 @@ export default function VideosPage() {
           <p style={{ fontSize: '14px', color: muted, margin: '4px 0 0' }}>{videos.length} video{videos.length !== 1 ? 's' : ''} tracked</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={syncChannel} disabled={syncing} style={{ background: '#ef4444', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: syncing ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px', opacity: syncing ? 0.7 : 1 }}>
+            {syncing ? '⏳ Syncing...' : '▶ Sync YouTube'}
+          </button>
           <button onClick={() => { setShowBulkImport(!showBulkImport); setShowNew(false) }} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
             Bulk import
           </button>
@@ -138,6 +196,35 @@ export default function VideosPage() {
           </button>
         </div>
       </div>
+
+      {/* Sync Channel Results */}
+      {syncResults && (
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>YouTube Channel Sync</h3>
+              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{syncResults.length} total · {syncResults.filter(r => !r.existing).length} new · {syncResults.filter(r => r.existing).length} already imported</p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setSyncResults(null)} style={{ padding: '8px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px' }}>Cancel</button>
+              <button onClick={importSyncResults} disabled={syncImporting || syncResults.filter(r => !r.existing).length === 0} style={{ padding: '8px 14px', borderRadius: '8px', background: syncResults.filter(r => !r.existing).length > 0 ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), color: syncResults.filter(r => !r.existing).length > 0 ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500 }}>
+                {syncImporting ? 'Importing...' : `Import ${syncResults.filter(r => !r.existing).length} new videos`}
+              </button>
+            </div>
+          </div>
+          <div style={{ maxHeight: '400px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
+            {syncResults.slice(0, 50).map(v => (
+              <div key={v.youtube_id} style={{ display: 'flex', gap: '10px', padding: '8px', borderRadius: '8px', border: `0.5px solid ${border}`, opacity: v.existing ? 0.4 : 1 }}>
+                {v.thumbnail && <img src={v.thumbnail} alt="" style={{ width: '80px', height: '45px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0 }} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: '12px', fontWeight: 500, color: text, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
+                  <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.views.toLocaleString()} views{v.existing ? ' · ✓ imported' : ''}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Bulk import panel */}
       {showBulkImport && (
@@ -287,9 +374,10 @@ export default function VideosPage() {
                   onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = border; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
                 >
                   {/* Thumbnail or colored bar */}
-                  {video.thumbnail_url ? (
-                    <div style={{ height: '140px', background: dark ? '#111d33' : '#f0f4ff', overflow: 'hidden' }}>
-                      <img src={video.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  {(video.youtube_thumbnail || video.thumbnail_url) ? (
+                    <div style={{ position: 'relative', height: '160px', background: dark ? '#111d33' : '#f0f4ff', overflow: 'hidden' }}>
+                      <img src={video.youtube_thumbnail || video.thumbnail_url || ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      {video.youtube_duration && <span style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}>{video.youtube_duration}</span>}
                     </div>
                   ) : (
                     <div style={{ height: '6px', background: typeColor }} />
@@ -303,14 +391,17 @@ export default function VideosPage() {
                       )}
                     </div>
                     <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{video.title}</p>
-                    {video.description && (
-                      <p style={{ fontSize: '13px', color: muted, margin: '0 0 8px', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{video.description}</p>
+                    {(video.youtube_views !== null || video.youtube_likes !== null) && (
+                      <div style={{ display: 'flex', gap: '10px', fontSize: '12px', color: muted, marginBottom: '6px' }}>
+                        {video.youtube_views !== null && <span>👁 {video.youtube_views.toLocaleString()}</span>}
+                        {video.youtube_likes !== null && <span>👍 {video.youtube_likes.toLocaleString()}</span>}
+                      </div>
                     )}
                     {video.productions && (
-                      <p style={{ fontSize: '12px', color: '#5ba3e0', margin: '0 0 8px' }}>🎬 #{video.productions.production_number} {video.productions.title}</p>
+                      <p style={{ fontSize: '12px', color: '#5ba3e0', margin: '0 0 6px' }}>🎬 #{video.productions.production_number} {video.productions.title}</p>
                     )}
                     {tags.length > 0 && (
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
                         {tags.slice(0, 4).map(tag => (
                           <span key={tag} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{tag}</span>
                         ))}
@@ -318,8 +409,7 @@ export default function VideosPage() {
                       </div>
                     )}
                     <p style={{ fontSize: '12px', color: muted, margin: 0, opacity: 0.7 }}>
-                      {video.date_filmed ? new Date(video.date_filmed + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
-                      {video.school_year ? ` · ${video.school_year}` : ''}
+                      {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : video.date_filmed ? new Date(video.date_filmed + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
                     </p>
                   </div>
                 </div>
