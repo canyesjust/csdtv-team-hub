@@ -168,7 +168,7 @@ export default function VideosPage() {
       const { data: { session } } = await supabase.auth.refreshSession()
       if (!session) { setCategorizing(false); return }
       // Get videos needing review
-      const { data: reviewVids } = await supabase.from('videos').select('id, title, description, youtube_tags').eq('needs_review', true).limit(50)
+      const { data: reviewVids } = await supabase.from('videos').select('id, title, description, youtube_tags, production_id').eq('needs_review', true).limit(50)
       if (!reviewVids || reviewVids.length === 0) { toast('No videos need categorization', 'info'); setCategorizing(false); return }
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/categorize-videos`, {
