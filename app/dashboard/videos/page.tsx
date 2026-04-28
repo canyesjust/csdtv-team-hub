@@ -23,7 +23,7 @@ interface Production { id: string; title: string; production_number: number }
 interface School { code: string; name: string }
 
 const VIDEO_TYPES = ['Recap', 'Promo', 'Event Coverage', 'Interview', 'B-Roll', 'Tutorial', 'Announcement', 'Highlight Reel', 'Other']
-const STATUSES = ['Filming', 'Editing', 'Review', 'Published', 'Archived']
+const STATUSES = ['Filming', 'Editing', 'Review', 'Published', 'Archived', 'Hidden']
 const VISIBILITIES = ['Public', 'Internal', 'Unlisted']
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -32,6 +32,7 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   'Review': { bg: 'rgba(59,130,246,0.15)', color: '#3b82f6' },
   'Published': { bg: 'rgba(34,197,94,0.15)', color: '#22c55e' },
   'Archived': { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8' },
+  'Hidden': { bg: 'rgba(100,116,139,0.15)', color: '#64748b' },
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -69,6 +70,7 @@ export default function VideosPage() {
   const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; existing: boolean; matchedProd: Production | null }[] | null>(null)
   const [syncImporting, setSyncImporting] = useState(false)
   const [categorizing, setCategorizing] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState<{ videoId: string; videoTitle: string; video_type: string; school: string | null; production_number: number | null; prodTitle: string | null; confidence: string; approved: boolean }[] | null>(null)
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -155,11 +157,10 @@ export default function VideosPage() {
       if (!error) imported += batch.length
     }
     const matchedCount = newVids.filter(v => v.matchedProd).length
-    toast(`Imported ${imported} videos. ${matchedCount} linked. Running AI categorization...`, 'success')
+    toast(`Imported ${imported} videos. ${matchedCount} linked to productions. Click "🤖 AI Categorize" to categorize them.`, 'success')
     setSyncResults(null)
     setSyncImporting(false)
     await loadData()
-    await categorizeVideos()
   }
 
   const categorizeVideos = async () => {
@@ -167,43 +168,65 @@ export default function VideosPage() {
     try {
       const { data: { session } } = await supabase.auth.refreshSession()
       if (!session) { setCategorizing(false); return }
-      // Get videos needing review
-      const { data: reviewVids } = await supabase.from('videos').select('id, title, description, youtube_tags, production_id').eq('needs_review', true).limit(50)
+      const { data: reviewVids } = await supabase.from('videos').select('id, title, description, youtube_tags, production_id, date_published').eq('needs_review', true).limit(50)
       if (!reviewVids || reviewVids.length === 0) { toast('No videos need categorization', 'info'); setCategorizing(false); return }
+
+      // Load productions with dates for date matching
+      const { data: prodsWithDates } = await supabase.from('productions').select('id, title, production_number, start_datetime').order('production_number', { ascending: false }).limit(500)
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/categorize-videos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ videos: reviewVids, schools, productions }),
+        body: JSON.stringify({ videos: reviewVids, schools, productions: prodsWithDates || [] }),
       })
       if (!res.ok) { toast('AI categorization failed', 'error'); setCategorizing(false); return }
       const { results } = await res.json()
 
-      // Apply AI suggestions
-      let updated = 0
-      for (const r of (results || [])) {
+      // Build suggestions for review — DO NOT auto-apply
+      const suggestions = (results || []).map((r: any) => {
         const video = reviewVids[r.index]
-        if (!video) continue
-        const updates: Record<string, any> = {}
-        if (r.video_type && r.video_type !== 'Other') updates.video_type = r.video_type
-        if (r.school) {
-          const schoolMatch = schools.find(s => s.name.toLowerCase().includes(r.school.toLowerCase()) || r.school.toLowerCase().includes(s.name.toLowerCase()))
-          if (schoolMatch) updates.school_department = schoolMatch.code
+        if (!video) return null
+        const matchedProd = r.production_number ? (prodsWithDates || []).find((p: any) => p.production_number === r.production_number) : null
+        return {
+          videoId: video.id,
+          videoTitle: video.title,
+          video_type: r.video_type || 'Other',
+          school: r.school || null,
+          production_number: r.production_number || null,
+          prodTitle: matchedProd ? `#${matchedProd.production_number} ${matchedProd.title}` : null,
+          confidence: r.confidence || 'low',
+          approved: false,
         }
-        if (r.production_number) {
-          const prodMatch = productions.find(p => p.production_number === r.production_number)
-          if (prodMatch && !video.production_id) updates.production_id = prodMatch.id
-        }
-        if (r.confidence === 'high') updates.needs_review = false
-        if (Object.keys(updates).length > 0) {
-          await supabase.from('videos').update(updates).eq('id', video.id)
-          updated++
-        }
-      }
-      toast(`AI categorized ${updated} videos. ${results?.filter((r: any) => r.confidence !== 'high').length || 0} need your review.`, 'success')
-      await loadData()
+      }).filter(Boolean)
+
+      setAiSuggestions(suggestions)
+      toast(`AI generated ${suggestions.length} suggestions. Review and approve below.`, 'info')
     } catch { toast('Categorization failed', 'error') }
     setCategorizing(false)
+  }
+
+  const applyApprovedSuggestions = async () => {
+    if (!aiSuggestions) return
+    const approved = aiSuggestions.filter(s => s.approved)
+    if (approved.length === 0) { toast('No suggestions approved', 'info'); return }
+    let applied = 0
+    for (const s of approved) {
+      const updates: Record<string, any> = { needs_review: false }
+      if (s.video_type && s.video_type !== 'Other') updates.video_type = s.video_type
+      if (s.school) {
+        const schoolMatch = schools.find(sc => sc.name.toLowerCase().includes(s.school!.toLowerCase()) || s.school!.toLowerCase().includes(sc.name.toLowerCase()))
+        if (schoolMatch) updates.school_department = schoolMatch.code
+      }
+      if (s.production_number) {
+        const prodMatch = productions.find(p => p.production_number === s.production_number)
+        if (prodMatch) updates.production_id = prodMatch.id
+      }
+      await supabase.from('videos').update(updates).eq('id', s.videoId)
+      applied++
+    }
+    toast(`Applied ${applied} categorizations`, 'success')
+    setAiSuggestions(null)
+    await loadData()
   }
 
   const matchExistingVideos = async () => {
@@ -276,7 +299,7 @@ export default function VideosPage() {
       (v.video_tags || []).some(t => t.tag.toLowerCase().includes(search.toLowerCase())) ||
       (v.youtube_tags || []).some((t: string) => t.toLowerCase().includes(search.toLowerCase()))
     const matchType = filterType === 'all' || v.video_type === filterType
-    const matchStatus = filterStatus === 'all' || v.status === filterStatus
+    const matchStatus = filterStatus === 'all' ? v.status !== 'Hidden' : v.status === filterStatus
     const matchReview = !filterReview || v.needs_review
     return matchSearch && matchType && matchStatus && matchReview
   })
@@ -292,7 +315,7 @@ export default function VideosPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 700, color: text, margin: 0 }}>Video library</h1>
-          <p style={{ fontSize: '14px', color: muted, margin: '4px 0 0' }}>{videos.length} video{videos.length !== 1 ? 's' : ''} tracked</p>
+          <p style={{ fontSize: '14px', color: muted, margin: '4px 0 0' }}>{videos.filter(v => v.status !== 'Hidden').length} video{videos.filter(v => v.status !== 'Hidden').length !== 1 ? 's' : ''} tracked{videos.some(v => v.status === 'Hidden') ? ` · ${videos.filter(v => v.status === 'Hidden').length} hidden` : ''}</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button onClick={syncChannel} disabled={syncing} style={{ background: '#ef4444', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: syncing ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px', opacity: syncing ? 0.7 : 1 }}>
@@ -324,6 +347,43 @@ export default function VideosPage() {
             <button onClick={categorizeVideos} disabled={categorizing} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: categorizing ? 0.7 : 1 }}>
               {categorizing ? '🤖 Categorizing...' : '🤖 AI Categorize'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Suggestions Review */}
+      {aiSuggestions && aiSuggestions.length > 0 && (
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>🤖 AI Suggestions — Review Before Applying</h3>
+              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{aiSuggestions.filter(s => s.approved).length} of {aiSuggestions.length} approved</p>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setAiSuggestions(prev => prev ? prev.map(s => ({ ...s, approved: true })) : null)} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Select all</button>
+              <button onClick={() => setAiSuggestions(null)} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={applyApprovedSuggestions} disabled={aiSuggestions.filter(s => s.approved).length === 0} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: aiSuggestions.some(s => s.approved) ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), color: aiSuggestions.some(s => s.approved) ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                Apply {aiSuggestions.filter(s => s.approved).length} approved
+              </button>
+            </div>
+          </div>
+          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            {aiSuggestions.map((s, i) => (
+              <div key={i} onClick={() => setAiSuggestions(prev => prev ? prev.map((x, j) => j === i ? { ...x, approved: !x.approved } : x) : null)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', border: `0.5px solid ${s.approved ? 'rgba(34,197,94,0.3)' : border}`, background: s.approved ? 'rgba(34,197,94,0.04)' : 'transparent', cursor: 'pointer' }}>
+                <div style={{ width: '20px', height: '20px', borderRadius: '4px', border: `1.5px solid ${s.approved ? '#22c55e' : border}`, background: s.approved ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {s.approved && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: '13px', fontWeight: 500, color: text, margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{s.videoTitle}</p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', fontSize: '12px' }}>
+                    <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>{s.video_type}</span>
+                    {s.school && <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>{s.school}</span>}
+                    {s.prodTitle && <span style={{ padding: '1px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>→ {s.prodTitle}</span>}
+                  </div>
+                </div>
+                <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: s.confidence === 'high' ? 'rgba(34,197,94,0.1)' : s.confidence === 'medium' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)', color: s.confidence === 'high' ? '#22c55e' : s.confidence === 'medium' ? '#f59e0b' : '#ef4444', flexShrink: 0 }}>{s.confidence}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -548,6 +608,35 @@ export default function VideosPage() {
                         ✓ Approve
                       </button>
                     )}
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                      {!video.production_id && (
+                        <button onClick={async e => {
+                          e.preventDefault(); e.stopPropagation()
+                          const { data: { session } } = await supabase.auth.refreshSession()
+                          if (!session) return
+                          const { data: settingData } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
+                          const adminEmail = settingData?.value || ''
+                          if (!adminEmail) { toast('Admin assistant email not configured in Settings', 'error'); return }
+                          const pubDate = video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'
+                          await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+                            body: JSON.stringify({ type: 'create_production_request', recipientEmail: adminEmail, subject: `Please create production: ${video.title}`, body: `Please create a new production in the district system and mark it as complete:\n\nTitle: ${video.title}\nDate: ${pubDate}\nYouTube: ${video.youtube_url || ''}\n\nThis video exists on YouTube but has no matching production in the system.\n\n— CSDtv Team Hub` }),
+                          })
+                          toast('Email sent to admin assistant', 'success')
+                        }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          📧 Request production
+                        </button>
+                      )}
+                      <button onClick={async e => {
+                        e.preventDefault(); e.stopPropagation()
+                        await supabase.from('videos').update({ status: 'Hidden' }).eq('id', video.id)
+                        setVideos(prev => prev.map(v => v.id === video.id ? { ...v, status: 'Hidden' } : v))
+                        toast('Video hidden', 'success')
+                      }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', color: muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        Hide
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Link>
