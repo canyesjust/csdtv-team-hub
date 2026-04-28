@@ -468,6 +468,23 @@ function ProductionsPageContent() {
         )
       })()}
 
+      {/* Overdue productions + Scheduling conflicts side by side */}
+      {(() => {
+        const overdueProds = filtered.filter(p => isOverdue(p))
+        if (overdueProds.length === 0) return null
+        return (
+          <div style={{ background: 'rgba(239,68,68,0.06)', border: '0.5px solid rgba(239,68,68,0.25)', borderRadius: '10px', padding: '12px 16px', marginBottom: '14px' }}>
+            <p style={{ fontSize: '13px', fontWeight: 600, color: '#ef4444', margin: '0 0 6px' }}>⚠ {overdueProds.length} overdue production{overdueProds.length !== 1 ? 's' : ''}</p>
+            {overdueProds.slice(0, 8).map(p => (
+              <div key={p.id} onClick={() => selectProduction(p.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', cursor: 'pointer' }}>
+                <span style={{ fontSize: '12px', color: text }}>#{p.production_number} {p.title}</span>
+                <span style={{ fontSize: '11px', color: '#ef4444' }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
       {/* PIPELINE VIEW */}
       {view === 'pipeline' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>

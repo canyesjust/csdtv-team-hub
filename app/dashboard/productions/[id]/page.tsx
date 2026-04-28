@@ -534,6 +534,28 @@ export default function ProductionDetailPage() {
     setCompleteChecks({ deliverables: false, organizer: false, files: false, quality: false })
   }, [production, currentUser, uuid, supabase])
 
+  const requestInProgress = useCallback(async () => {
+    if (!production || !currentUser || !uuid) return
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session) return
+      const { data: settingData } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
+      const adminEmail = settingData?.value || ''
+      const recipients = [currentUser.email, adminEmail].filter(Boolean)
+      const prodTitle = `#${production.production_number} ${production.title}`
+      const body = `Production ${prodTitle} is now in progress in CSDtv Team Hub.\n\nPlease update this production's status to "In Progress" in the district productions system.\n\nType: ${production.request_type_label || 'Unknown'}\nOrganizer: ${production.organizer_name || 'N/A'}\nDate: ${production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}\n\n— CSDtv Team Hub`
+      for (const email of recipients) {
+        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ type: 'production_in_progress', recipientEmail: email, subject: `Production in progress: ${prodTitle}`, body }),
+        })
+      }
+      await logActivity('requested_in_progress', 'Requested status change to In Progress — email sent to admin')
+      toast('In Progress request sent', 'success')
+    } catch { toast('Failed to send request', 'error') }
+  }, [production, currentUser, uuid, supabase, logActivity])
+
   const sendOrganizerEmail = useCallback(async () => {
     if (!production?.organizer_email || !emailBody || !currentUser) return
     setSendingEmail(true)
@@ -719,6 +741,22 @@ export default function ProductionDetailPage() {
                 Email organizer
               </button>
             )}
+            {production.organizer_email && (
+              <a
+                href={`mailto:${production.organizer_email}?subject=${encodeURIComponent(`Re: #${production.production_number} ${production.title}`)}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, textDecoration: 'none', marginTop: '8px' }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>
+                Draft email to organizer
+              </a>
+            )}
+            <button
+              onClick={requestInProgress}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '0.5px solid rgba(245,158,11,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '8px' }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Request In Progress
+            </button>
             <button
               onClick={() => setShowCompleteModal(true)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '0.5px solid rgba(34,197,94,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '8px' }}
