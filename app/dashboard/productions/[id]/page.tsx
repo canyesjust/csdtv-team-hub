@@ -43,6 +43,7 @@ interface KBArticle { id: string; title: string; category: string }
 
 interface ActivityItem {
   id: string; action: string; detail: string | null; created_at: string
+  user_id: string
   team?: { name: string } | null
 }
 
@@ -146,7 +147,7 @@ export default function ProductionDetailPage() {
       supabase.from('production_members').select('*, team:team(id, name, role, avatar_color)').eq('production_id', prodUUID),
       supabase.from('team').select('*').eq('active', true),
       supabase.from('production_links').select('*').eq('production_id', prodUUID).order('created_at'),
-      supabase.from('production_activity').select('*, team:team(name)').eq('production_id', prodUUID).order('created_at', { ascending: false }).limit(20),
+      supabase.from('production_activity').select('*').eq('production_id', prodUUID).order('created_at', { ascending: false }).limit(50),
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
       supabase.from('knowledge_base').select('id, title, category').order('title'),
     ])
@@ -733,41 +734,25 @@ export default function ProductionDetailPage() {
               </p>
             )}
             {production.organizer_email && (
-              <button
-                onClick={() => setShowEmailModal(true)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '8px' }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>
-                Email organizer
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                <button onClick={() => setShowEmailModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                  ✉ Email organizer
+                </button>
+                <a href={`mailto:${production.organizer_email}?subject=${encodeURIComponent(`Re: #${production.production_number} ${production.title}`)}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, textDecoration: 'none' }}>
+                  ✉ Draft email to organizer
+                </a>
+                <button onClick={requestInProgress} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '0.5px solid rgba(245,158,11,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                  ◴ Request In Progress
+                </button>
+                <button onClick={() => setShowCompleteModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '0.5px solid rgba(34,197,94,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                  ✓ Mark complete
+                </button>
+              </div>
             )}
-            {production.organizer_email && (
-              <a
-                href={`mailto:${production.organizer_email}?subject=${encodeURIComponent(`Re: #${production.production_number} ${production.title}`)}`}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, textDecoration: 'none', marginTop: '8px' }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>
-                Draft email to organizer
-              </a>
-            )}
-            <button
-              onClick={requestInProgress}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '0.5px solid rgba(245,158,11,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '8px' }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              Request In Progress
-            </button>
-            <button
-              onClick={() => setShowCompleteModal(true)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '0.5px solid rgba(34,197,94,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '8px' }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-              Mark complete
-            </button>
           </div>
-          {production.thumbnail_url && (
-            <div style={{ width: '120px', height: '68px', borderRadius: '8px', overflow: 'hidden', background: border, flexShrink: 0 }}>
-              <img src={production.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          {production.thumbnail_url && production.thumbnail_url.startsWith('http') && (
+            <div style={{ width: '120px', height: '68px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+              <img src={production.thumbnail_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).parentElement!.style.display = 'none' }} />
             </div>
           )}
         </div>
@@ -782,12 +767,12 @@ export default function ProductionDetailPage() {
               <span style={{ color: text }}>{formatDateTime(production.start_datetime)}</span>
             </div>
           )}
-          {production.filming_location && (
+          {(production.filming_location || production.school_department) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: muted }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
               </svg>
-              <span style={{ color: text }}>{getSchoolName(production.filming_location)}</span>
+              <span style={{ color: text }}>{getSchoolName(production.filming_location) || getSchoolName(production.school_department) || production.filming_location || ''}</span>
             </div>
           )}
           {production.livestream_url && (
@@ -808,11 +793,11 @@ export default function ProductionDetailPage() {
               {members.length > 4 && <span style={{ fontSize: '11px', color: muted, marginLeft: '4px' }}>+{members.length - 4}</span>}
             </div>
           )}
-          {delivCount > 0 && (
-            <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', fontWeight: 600 }}>📦 {delivCount} deliverable{delivCount !== 1 ? 's' : ''}</span>
-          )}
-          {linkedVideos.length > 0 && (
-            <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontWeight: 500 }}>▶ {linkedVideos.length} video{linkedVideos.length !== 1 ? 's' : ''}{linkedVideos.some(v => v.youtube_views) ? ` · ${linkedVideos.reduce((s, v) => s + (v.youtube_views || 0), 0).toLocaleString()} views` : ''}</span>
+          {(delivCount > 0 || linkedVideos.length > 0) && (
+            <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontWeight: 500 }}>
+              🎬 {delivCount > 0 ? `${delivCount} produced` : `${linkedVideos.length} video${linkedVideos.length !== 1 ? 's' : ''}`}
+              {linkedVideos.some(v => v.youtube_views) ? ` · ${linkedVideos.reduce((s, v) => s + (v.youtube_views || 0), 0).toLocaleString()} views` : ''}
+            </span>
           )}
         </div>
       </div>
@@ -1066,8 +1051,8 @@ export default function ProductionDetailPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0', position: 'relative' as const }}>
               {(() => {
                 const steps = [
-                  { label: 'Requested', date: production.synced_at, done: true },
-                  { label: 'Approved', date: production.status !== 'Idea/Request' ? production.synced_at : null, done: production.status !== 'Idea/Request' },
+                  { label: 'Requested', date: null, done: true },
+                  { label: 'Approved', date: null, done: production.status !== 'Idea/Request' },
                   { label: 'Scheduled', date: production.start_datetime, done: !!production.start_datetime },
                   { label: 'Complete', date: activity.find(a => a.action === 'marked_complete')?.created_at || null, done: production.status === 'Complete' || activity.some(a => a.action === 'marked_complete') },
                 ]
@@ -1103,7 +1088,7 @@ export default function ProductionDetailPage() {
           </div>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Schedule & location</h3>
-            {([['Start', formatDateTime(production.start_datetime)], ['End', formatDateTime(production.end_datetime)], ['Filming', getSchoolName(production.filming_location)], ['Venue', production.event_location]] as [string, string | null][]).map(([l, v]) => v ? (
+            {([['Start', formatDateTime(production.start_datetime)], ['End', formatDateTime(production.end_datetime)], ['Location', getSchoolName(production.filming_location) || production.filming_location || getSchoolName(production.school_department)], ['Venue', production.event_location]] as [string, string | null][]).map(([l, v]) => v ? (
               <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
                 <span style={{ color: muted, minWidth: '60px', flexShrink: 0 }}>{l}</span>
                 <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
@@ -1321,7 +1306,7 @@ export default function ProductionDetailPage() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '13px', color: text, margin: '0 0 2px' }}>
-                      <span style={{ fontWeight: 500 }}>{item.team?.name || 'Someone'}</span> {item.action.toLowerCase()}
+                      <span style={{ fontWeight: 500 }}>{allTeam.find(t => t.id === item.user_id)?.name || item.team?.name || 'System'}</span> {item.action.replace(/_/g, ' ').toLowerCase()}
                     </p>
                     {item.detail && <p style={{ fontSize: '12px', color: muted, margin: 0 }}>{item.detail}</p>}
                     <p style={{ fontSize: '11px', color: muted, margin: '3px 0 0' }}>
@@ -1345,6 +1330,19 @@ export default function ProductionDetailPage() {
       {/* VIDEOS TAB */}
       {activeTab === 'videos' && (
         <div>
+          {linkedVideos.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <span style={{ fontSize: '13px', color: muted }}>{linkedVideos.length} video{linkedVideos.length !== 1 ? 's' : ''} linked{linkedVideos.some(v => v.youtube_views) ? ` · ${linkedVideos.reduce((s, v) => s + (v.youtube_views || 0), 0).toLocaleString()} total views` : ''}</span>
+              <button onClick={async () => {
+                if (!confirm(`Unlink all ${linkedVideos.length} videos from this production?`)) return
+                for (const v of linkedVideos) await supabase.from('videos').update({ production_id: null }).eq('id', v.id)
+                setLinkedVideos([])
+                toast(`Unlinked ${linkedVideos.length} videos`, 'success')
+              }} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                Unlink all
+              </button>
+            </div>
+          )}
           {linkedVideos.length === 0 ? (
             <div style={{ textAlign: 'center' as const, padding: '30px 20px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px' }}>
               <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No videos linked to this production</p>

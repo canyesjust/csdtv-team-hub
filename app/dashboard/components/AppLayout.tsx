@@ -21,7 +21,6 @@ const NAV_ITEMS = [
   { section: 'Resources', items: [
     { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
     { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
-    { label: 'Notes', href: '/dashboard/notes', icon: 'notes' },
     { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
     { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
     { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
@@ -44,7 +43,6 @@ const MORE_ITEMS = [
   { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
   { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
   { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
-  { label: 'Notes', href: '/dashboard/notes', icon: 'notes' },
   { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
   { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
   { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },

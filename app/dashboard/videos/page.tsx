@@ -569,153 +569,124 @@ export default function VideosPage() {
         })}
       </div>
 
-      {/* Video grid */}
+      {/* Video table */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center' as const, padding: '60px 20px' }}>
           <p style={{ fontSize: '40px', margin: '0 0 12px' }}>🎬</p>
-          <p style={{ fontSize: '16px', color: text, fontWeight: 500, margin: '0 0 6px' }}>No videos yet</p>
-          <p style={{ fontSize: '14px', color: muted, margin: '0 0 16px' }}>Start building your video library by adding your first video.</p>
-          <button onClick={() => setShowNew(true)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ New video</button>
+          <p style={{ fontSize: '16px', color: text, fontWeight: 500, margin: '0 0 6px' }}>No videos match your filters</p>
+          <button onClick={() => { setSearch(''); setFilterType('all'); setFilterStatus('all'); setFilterReview(false) }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Clear filters</button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
-          {filtered.map(video => {
-            const typeColor = TYPE_COLORS[video.video_type] || '#94a3b8'
-            const statusStyle = STATUS_COLORS[video.status] || STATUS_COLORS['Archived']
-            const tags = (video.video_tags || []).map(t => t.tag)
-            return (
-              <Link key={video.id} href={`/dashboard/videos/${video.id}`} style={{ textDecoration: 'none' }}>
-                <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', overflow: 'hidden', transition: 'border-color 0.15s, transform 0.15s', cursor: 'pointer' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = typeColor; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = border; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
-                >
-                  {/* Thumbnail or colored bar */}
-                  {(video.youtube_thumbnail || video.thumbnail_url) ? (
-                    <div style={{ position: 'relative', height: '160px', background: dark ? '#111d33' : '#f0f4ff', overflow: 'hidden' }}>
-                      <img src={video.youtube_thumbnail || video.thumbnail_url || ''} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      {video.youtube_duration && <span style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}>{video.youtube_duration}</span>}
-                    </div>
-                  ) : (
-                    <div style={{ height: '6px', background: typeColor }} />
-                  )}
-                  <div style={{ padding: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: `${typeColor}20`, color: typeColor, fontWeight: 500 }}>{video.video_type}</span>
-                      <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: statusStyle.bg, color: statusStyle.color, fontWeight: 500 }}>{video.status}</span>
-                      {video.visibility !== 'Internal' && (
-                        <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{video.visibility}</span>
-                      )}
-                    </div>
-                    <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{video.title}</p>
-                    {(video.youtube_views !== null || video.youtube_likes !== null) && (
-                      <div style={{ display: 'flex', gap: '10px', fontSize: '12px', color: muted, marginBottom: '6px' }}>
-                        {video.youtube_views !== null && <span>👁 {video.youtube_views.toLocaleString()}</span>}
-                        {video.youtube_likes !== null && <span>👍 {video.youtube_likes.toLocaleString()}</span>}
-                      </div>
-                    )}
-                    {video.productions && (
-                      <p style={{ fontSize: '12px', color: '#5ba3e0', margin: '0 0 6px' }}>🎬 #{video.productions.production_number} {video.productions.title}</p>
-                    )}
-                    {tags.length > 0 && (
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                        {tags.slice(0, 4).map(tag => (
-                          <span key={tag} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{tag}</span>
-                        ))}
-                        {tags.length > 4 && <span style={{ fontSize: '11px', color: muted }}>+{tags.length - 4}</span>}
-                      </div>
-                    )}
-                    <p style={{ fontSize: '12px', color: muted, margin: 0, opacity: 0.7 }}>
-                      {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : video.date_filmed ? new Date(video.date_filmed + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
-                    </p>
-                    {video.needs_review && (
-                      <button onClick={async e => { e.preventDefault(); e.stopPropagation(); await supabase.from('videos').update({ needs_review: false }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, needs_review: false } : v)); toast('Approved', 'success') }} style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '0.5px solid rgba(245,158,11,0.2)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, marginTop: '6px' }}>
-                        ✓ Approve
-                      </button>
-                    )}
-                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
-                      {!video.production_id && (
-                        <button onClick={e => { e.preventDefault(); e.stopPropagation(); setLinkingVideoId(linkingVideoId === video.id ? null : video.id); setLinkSearch('') }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: linkingVideoId === video.id ? '#1e6cb5' : 'rgba(34,197,94,0.1)', color: linkingVideoId === video.id ? '#fff' : '#22c55e', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
-                          🔗 Link to production
-                        </button>
-                      )}
-                      {video.production_id && (
-                        <button onClick={async e => { e.preventDefault(); e.stopPropagation(); await supabase.from('videos').update({ production_id: null }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: null, productions: null } : v)); toast('Unlinked from production', 'success') }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-                          Unlink
-                        </button>
-                      )}
-                      {!video.production_id && (
-                        <button onClick={async e => {
-                          e.preventDefault(); e.stopPropagation()
-                          const { data: { session } } = await supabase.auth.refreshSession()
-                          if (!session) return
-                          const { data: settingData } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
-                          const adminEmail = settingData?.value || ''
-                          if (!adminEmail) { toast('Admin assistant email not configured in Settings', 'error'); return }
-                          const pubDate = video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'
-                          await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-                            body: JSON.stringify({ type: 'create_production_request', recipientEmail: adminEmail, subject: `Please create production: ${video.title}`, body: `Please create a new production in the district system and mark it as complete:\n\nTitle: ${video.title}\nDate: ${pubDate}\nYouTube: ${video.youtube_url || ''}\n\nThis video exists on YouTube but has no matching production in the system.\n\n— CSDtv Team Hub` }),
-                          })
-                          toast('Email sent to admin assistant', 'success')
-                        }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-                          📧 Request production
-                        </button>
-                      )}
-                      <button onClick={async e => {
-                        e.preventDefault(); e.stopPropagation()
-                        await supabase.from('videos').update({ status: 'Hidden' }).eq('id', video.id)
-                        setVideos(prev => prev.map(v => v.id === video.id ? { ...v, status: 'Hidden' } : v))
-                        toast('Video hidden', 'success')
-                      }} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', color: muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-                        Hide
-                      </button>
-                    </div>
-                    {/* Link to production search dropdown */}
-                    {linkingVideoId === video.id && (
-                      <div onClick={e => { e.preventDefault(); e.stopPropagation() }} style={{ marginTop: '8px', background: dark ? '#0a0f1e' : '#fff', border: `1px solid ${border}`, borderRadius: '8px', padding: '8px', position: 'relative', zIndex: 10 }}>
-                        <input value={linkSearch} onChange={e => setLinkSearch(e.target.value)} placeholder="Search by title, date, organizer..." autoFocus style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: `0.5px solid ${border}`, fontSize: '12px', color: text, background: inputBg, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
-                        {linkSearch.length >= 2 && (
-                          <div style={{ maxHeight: '200px', overflowY: 'auto', marginTop: '4px' }}>
-                            {productions.filter(p => {
-                              const q = linkSearch.toLowerCase()
-                              return p.title.toLowerCase().includes(q) ||
-                                (p.organizer_name || '').toLowerCase().includes(q) ||
-                                (p.start_datetime && new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase().includes(q)) ||
-                                String(p.production_number).includes(q)
-                            }).slice(0, 10).map(p => (
-                              <div key={p.id} onClick={async () => {
-                                await supabase.from('videos').update({ production_id: p.id, needs_review: false }).eq('id', video.id)
-                                setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: p.id, needs_review: false, productions: { title: p.title, production_number: p.production_number } } : v))
-                                setLinkingVideoId(null)
-                                setLinkSearch('')
-                                toast(`Linked to #${p.production_number} ${p.title}`, 'success')
-                              }} style={{ padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}
-                                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
-                                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
-                              >
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>
-                                  {p.organizer_name && <span style={{ color: muted, marginLeft: '6px' }}>· {p.organizer_name}</span>}
-                                </div>
-                                <span style={{ fontSize: '11px', color: muted, flexShrink: 0 }}>
-                                  {p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
-                                </span>
-                              </div>
-                            ))}
-                            {productions.filter(p => {
-                              const q = linkSearch.toLowerCase()
-                              return p.title.toLowerCase().includes(q) || (p.organizer_name || '').toLowerCase().includes(q) || (p.start_datetime && new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase().includes(q)) || String(p.production_number).includes(q)
-                            }).length === 0 && <p style={{ fontSize: '12px', color: muted, padding: '6px 8px', margin: 0 }}>No matching productions</p>}
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${border}` }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left' as const, fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Video</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left' as const, fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', width: '110px' }}>Type</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left' as const, fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', width: '160px' }}>Production</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'right' as const, fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', width: '70px' }}>Views</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left' as const, fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', width: '90px' }}>Date</th>
+                  <th style={{ padding: '10px 8px', width: '120px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(video => {
+                  const statusDot = video.needs_review ? '#f59e0b' : video.production_id ? '#22c55e' : '#ef4444'
+                  return (
+                    <tr key={video.id} style={{ borderBottom: `0.5px solid ${border}` }}
+                      onMouseEnter={e => (e.currentTarget as HTMLTableRowElement).style.background = dark ? 'rgba(255,255,255,0.02)' : '#fafbfc'}
+                      onMouseLeave={e => (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'}
+                    >
+                      {/* Title + thumbnail */}
+                      <td style={{ padding: '8px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusDot, flexShrink: 0 }} title={video.needs_review ? 'Needs review' : video.production_id ? 'Linked' : 'No production'} />
+                          {video.youtube_thumbnail ? (
+                            <a href={video.youtube_url || `https://youtube.com/watch?v=${video.youtube_id}`} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0 }}>
+                              <img src={video.youtube_thumbnail} alt="" style={{ width: '64px', height: '36px', objectFit: 'cover' as const, borderRadius: '4px' }} />
+                            </a>
+                          ) : <div style={{ width: '64px', height: '36px', borderRadius: '4px', background: dark ? '#1a2540' : '#e2e8f0', flexShrink: 0 }} />}
+                          <div style={{ minWidth: 0 }}>
+                            <Link href={`/dashboard/videos/${video.id}`} style={{ fontSize: '13px', fontWeight: 500, color: text, textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '280px' }}>{video.title}</Link>
+                            {video.youtube_duration && <span style={{ fontSize: '11px', color: muted }}>{video.youtube_duration}</span>}
                           </div>
+                        </div>
+                      </td>
+                      {/* Type - inline editable */}
+                      <td style={{ padding: '8px' }}>
+                        <select value={video.video_type} onChange={async e => { const val = e.target.value; await supabase.from('videos').update({ video_type: val }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, video_type: val } : v)) }} style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: `0.5px solid ${border}`, background: 'transparent', color: text, fontFamily: 'inherit', cursor: 'pointer', maxWidth: '100px' }}>
+                          {VIDEO_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </td>
+                      {/* Production */}
+                      <td style={{ padding: '8px' }}>
+                        {video.productions ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Link href={`/dashboard/productions/${video.productions.production_number}`} style={{ fontSize: '11px', color: '#5ba3e0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '120px', display: 'block' }}>#{video.productions.production_number} {video.productions.title}</Link>
+                            <button onClick={async () => { await supabase.from('videos').update({ production_id: null }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: null, productions: null } : v)); toast('Unlinked', 'success') }} style={{ fontSize: '9px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                          </div>
+                        ) : linkingVideoId === video.id ? (
+                          <div style={{ position: 'relative' }}>
+                            <input value={linkSearch} onChange={e => setLinkSearch(e.target.value)} placeholder="Search..." autoFocus onBlur={() => setTimeout(() => setLinkingVideoId(null), 200)} style={{ width: '140px', padding: '3px 6px', borderRadius: '4px', border: `0.5px solid ${border}`, fontSize: '11px', color: text, background: inputBg, fontFamily: 'inherit', outline: 'none' }} />
+                            {linkSearch.length >= 2 && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, width: '280px', maxHeight: '200px', overflowY: 'auto', background: dark ? '#0d1526' : '#fff', border: `1px solid ${border}`, borderRadius: '6px', zIndex: 20, marginTop: '2px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                                {productions.filter(p => { const q = linkSearch.toLowerCase(); return p.title.toLowerCase().includes(q) || (p.organizer_name || '').toLowerCase().includes(q) || (p.start_datetime && new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase().includes(q)) || String(p.production_number).includes(q) }).slice(0, 8).map(p => (
+                                  <div key={p.id} onMouseDown={async e => {
+                                    e.preventDefault()
+                                    await supabase.from('videos').update({ production_id: p.id, needs_review: false }).eq('id', video.id)
+                                    setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: p.id, needs_review: false, productions: { title: p.title, production_number: p.production_number } } : v))
+                                    setLinkingVideoId(null); setLinkSearch('')
+                                    toast(`Linked to #${p.production_number}`, 'success')
+                                  }} style={{ padding: '5px 8px', cursor: 'pointer', fontSize: '11px', borderBottom: `0.5px solid ${border}` }}
+                                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
+                                    onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                                  >
+                                    <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>
+                                    <span style={{ display: 'block', fontSize: '10px', color: muted }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}{p.organizer_name ? ` · ${p.organizer_name}` : ''}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <button onClick={() => { setLinkingVideoId(video.id); setLinkSearch('') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(34,197,94,0.08)', color: '#22c55e', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>🔗 Link</button>
                         )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            )
-          })}
+                      </td>
+                      {/* Views */}
+                      <td style={{ padding: '8px', textAlign: 'right' as const, fontSize: '12px', color: muted }}>
+                        {video.youtube_views != null ? video.youtube_views.toLocaleString() : '—'}
+                      </td>
+                      {/* Date */}
+                      <td style={{ padding: '8px', fontSize: '12px', color: muted }}>
+                        {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
+                      </td>
+                      {/* Actions */}
+                      <td style={{ padding: '8px' }}>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {video.needs_review && (
+                            <button onClick={async () => { await supabase.from('videos').update({ needs_review: false }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, needs_review: false } : v)); toast('Approved', 'success') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>✓</button>
+                          )}
+                          {!video.production_id && (
+                            <button onClick={async () => {
+                              const { data: { session } } = await supabase.auth.refreshSession()
+                              if (!session) return
+                              const { data: sd } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
+                              if (!sd?.value) { toast('Admin email not configured', 'error'); return }
+                              const pubDate = video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'
+                              await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, body: JSON.stringify({ type: 'create_production_request', recipientEmail: sd.value, subject: `Please create production: ${video.title}`, body: `Create a production and mark complete:\n\nTitle: ${video.title}\nDate: ${pubDate}\nYouTube: ${video.youtube_url || ''}\n\n— CSDtv` }) })
+                              toast('Email sent', 'success')
+                            }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(30,108,181,0.08)', color: '#5ba3e0', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
+                          )}
+                          <button onClick={async () => { await supabase.from('videos').update({ status: 'Hidden' }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, status: 'Hidden' } : v)); toast('Hidden', 'success') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', color: muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>👁‍🗨</button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
