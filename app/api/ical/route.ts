@@ -74,8 +74,15 @@ function parseIcal(text: string): CalEvent[] {
   return events
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!ICAL_URL) return NextResponse.json({ error: 'Calendar not configured' }, { status: 500 })
+
+  // Require auth
+  const authCookie = request.headers.get('cookie')
+  if (!authCookie || !authCookie.includes('sb-')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const res = await fetch(ICAL_URL, { next: { revalidate: 300 } }) // Cache 5 min
     if (!res.ok) return NextResponse.json({ error: 'Failed to fetch calendar' }, { status: 502 })
