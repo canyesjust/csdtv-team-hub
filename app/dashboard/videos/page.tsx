@@ -67,7 +67,7 @@ export default function VideosPage() {
   const [saving, setSaving] = useState(false)
   const [newVideo, setNewVideo] = useState({ title: '', description: '', video_type: 'Other', status: 'Filming', visibility: 'Internal', production_id: '', school_year: '', date_filmed: '', tags: '' })
   const [syncing, setSyncing] = useState(false)
-  const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; existing: boolean; matchedProd: Production | null }[] | null>(null)
+  const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; local_date: string; existing: boolean; matchedProd: Production | null }[] | null>(null)
   const [syncImporting, setSyncImporting] = useState(false)
   const [categorizing, setCategorizing] = useState(false)
   const [aiSuggestions, setAiSuggestions] = useState<{ videoId: string; videoTitle: string; video_type: string; school: string | null; production_number: number | null; prodTitle: string | null; confidence: string; approved: boolean }[] | null>(null)
