@@ -210,8 +210,8 @@ export default function TasksPage() {
           actionLabel: 'View task',
         }),
       })
-      if (!res.ok) { // email failed silently }
-    } catch { // email error }
+      if (!res.ok) { /* email failed */ }
+    } catch { /* email error */ }
   }, [team, currentUser, supabase])
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {

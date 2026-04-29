@@ -529,7 +529,7 @@ export default function ProductionDetailPage() {
       }
       await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin' })
       setActivity(prev => [{ id: Date.now().toString(), production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin', created_at: new Date().toISOString(), team: { name: currentUser.name } }, ...prev])
-    } catch { // error }
+    } catch { /* error */ }
     setSendingComplete(false)
     setShowCompleteModal(false)
     setCompleteChecks({ deliverables: false, organizer: false, files: false, quality: false })
