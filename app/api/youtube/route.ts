@@ -34,15 +34,31 @@ export async function GET(request: Request) {
   if (!apiKey) return NextResponse.json({ error: 'YouTube API key not configured' }, { status: 500 })
 
   try {
-    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoId}&key=${apiKey}`)
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails,liveStreamingDetails&id=${videoId}&key=${apiKey}`)
     if (!res.ok) return NextResponse.json({ error: 'YouTube API error' }, { status: 502 })
     const data = await res.json()
     if (!data.items || data.items.length === 0) return NextResponse.json({ error: 'Video not found' }, { status: 404 })
 
     const item = data.items[0]
-    const pubDate = new Date(item.snippet.publishedAt)
-    const mtDate = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000)
-    const localDate = `${mtDate.getUTCFullYear()}-${String(mtDate.getUTCMonth() + 1).padStart(2, '0')}-${String(mtDate.getUTCDate()).padStart(2, '0')}`
+
+    // Determine best date: liveStreamingDetails > title date > publishedAt
+    let localDate: string
+    const liveStart = item.liveStreamingDetails?.actualStartTime
+    if (liveStart) {
+      const d = new Date(liveStart)
+      const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
+      localDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+    } else {
+      const titleDateMatch = item.snippet.title.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+      if (titleDateMatch) {
+        const [, mo, day, yr] = titleDateMatch
+        localDate = `${yr}-${mo.padStart(2, '0')}-${day.padStart(2, '0')}`
+      } else {
+        const pubDate = new Date(item.snippet.publishedAt)
+        const mt = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000)
+        localDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+      }
+    }
 
     return NextResponse.json({
       youtube_id: videoId,

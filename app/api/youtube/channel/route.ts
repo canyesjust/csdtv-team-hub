@@ -36,7 +36,7 @@ export async function GET() {
     const videos: any[] = []
     for (let i = 0; i < allVideoIds.length; i += 50) {
       const batch = allVideoIds.slice(i, i + 50)
-      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${batch.join(',')}&part=snippet,statistics,contentDetails&key=${apiKey}`)
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${batch.join(',')}&part=snippet,statistics,contentDetails,liveStreamingDetails&key=${apiKey}`)
       if (!vRes.ok) continue
       const vData = await vRes.json()
       for (const item of vData.items || []) {
@@ -47,17 +47,36 @@ export async function GET() {
         const s = parseInt(durMatch?.[3] || '0')
         const duration = h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
 
-        // Convert publish date to Mountain Time (UTC-7 MDT / UTC-6 MST)
-        const pubDate = new Date(item.snippet.publishedAt)
-        const mtDate = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000) // approximate MDT
-        const localDate = `${mtDate.getUTCFullYear()}-${String(mtDate.getUTCMonth() + 1).padStart(2, '0')}-${String(mtDate.getUTCDate()).padStart(2, '0')}`
+        // Determine the best date:
+        // 1. liveStreamingDetails.actualStartTime (for livestreams)
+        // 2. Date extracted from video title (e.g. "Board Meeting 3/31/2026")
+        // 3. publishedAt adjusted to Mountain Time
+        let bestDate: string
+        const liveStart = item.liveStreamingDetails?.actualStartTime
+        if (liveStart) {
+          const d = new Date(liveStart)
+          const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
+          bestDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+        } else {
+          // Try to extract date from title: M/D/YYYY or M/DD/YYYY or MM/DD/YYYY
+          const titleDateMatch = item.snippet.title.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+          if (titleDateMatch) {
+            const [, mo, day, yr] = titleDateMatch
+            bestDate = `${yr}-${mo.padStart(2, '0')}-${day.padStart(2, '0')}`
+          } else {
+            // Fallback: publishedAt adjusted to Mountain Time
+            const pubDate = new Date(item.snippet.publishedAt)
+            const mt = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000)
+            bestDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+          }
+        }
 
         videos.push({
           youtube_id: item.id,
           title: item.snippet.title,
           description: item.snippet.description?.slice(0, 500) || '',
           published_at: item.snippet.publishedAt,
-          local_date: localDate,
+          local_date: bestDate,
           thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || '',
           views: parseInt(item.statistics.viewCount || '0'),
           likes: parseInt(item.statistics.likeCount || '0'),
