@@ -40,11 +40,16 @@ export async function GET(request: Request) {
     if (!data.items || data.items.length === 0) return NextResponse.json({ error: 'Video not found' }, { status: 404 })
 
     const item = data.items[0]
+    const pubDate = new Date(item.snippet.publishedAt)
+    const mtDate = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000)
+    const localDate = `${mtDate.getUTCFullYear()}-${String(mtDate.getUTCMonth() + 1).padStart(2, '0')}-${String(mtDate.getUTCDate()).padStart(2, '0')}`
+
     return NextResponse.json({
       youtube_id: videoId,
       title: item.snippet.title,
       description: item.snippet.description,
       published_at: item.snippet.publishedAt,
+      local_date: localDate,
       thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || '',
       views: parseInt(item.statistics.viewCount || '0'),
       likes: parseInt(item.statistics.likeCount || '0'),

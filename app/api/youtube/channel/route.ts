@@ -47,11 +47,17 @@ export async function GET() {
         const s = parseInt(durMatch?.[3] || '0')
         const duration = h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
 
+        // Convert publish date to Mountain Time (UTC-7 MDT / UTC-6 MST)
+        const pubDate = new Date(item.snippet.publishedAt)
+        const mtDate = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000) // approximate MDT
+        const localDate = `${mtDate.getUTCFullYear()}-${String(mtDate.getUTCMonth() + 1).padStart(2, '0')}-${String(mtDate.getUTCDate()).padStart(2, '0')}`
+
         videos.push({
           youtube_id: item.id,
           title: item.snippet.title,
           description: item.snippet.description?.slice(0, 500) || '',
           published_at: item.snippet.publishedAt,
+          local_date: localDate,
           thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || '',
           views: parseInt(item.statistics.viewCount || '0'),
           likes: parseInt(item.statistics.likeCount || '0'),
