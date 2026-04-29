@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
+import { toast } from '@/lib/toast'
 
 type Equipment = {
   id: string; asset_tag: string; name: string; brand: string | null; model: string | null
@@ -80,7 +81,7 @@ export default function KitDetailPage() {
   async function handleAddItem(equipmentId: string) {
     if (!user) return
     const { error } = await supabase.from('equipment_kit_items').insert({ kit_id: kitId, equipment_id: equipmentId })
-    if (error) { alert(error.message); return }
+    if (error) { toast(error.message, 'error'); return }
     const eq = allEquipment.find(e => e.id === equipmentId)
     await supabase.from('equipment_activity').insert({
       equipment_id: equipmentId, action: 'added_to_kit',

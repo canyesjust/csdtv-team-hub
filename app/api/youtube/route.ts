@@ -27,6 +27,12 @@ export async function GET(request: Request) {
   const url = searchParams.get('url')
   if (!url) return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 })
 
+  // Require auth - check for session cookie
+  const authCookie = request.headers.get('cookie')
+  if (!authCookie || !authCookie.includes('sb-')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const videoId = extractVideoId(url)
   if (!videoId) return NextResponse.json({ error: 'Invalid YouTube URL' }, { status: 400 })
 

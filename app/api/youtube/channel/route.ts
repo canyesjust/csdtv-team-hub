@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server'
 
 const CHANNEL_HANDLE = '@canyonsdistricttv'
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Require auth
+  const authCookie = request.headers.get('cookie')
+  if (!authCookie || !authCookie.includes('sb-')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const apiKey = process.env.YOUTUBE_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'YouTube API key not configured' }, { status: 500 })
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const ICAL_URL = 'https://outlook.office365.com/owa/calendar/91a1ea912f6b4c92b28addb797e8525b@canyonsdistrict.org/b3bb8905419f4595848ca620dfcb54bb12541316991211874848/calendar.ics'
+const ICAL_URL = process.env.OUTLOOK_ICAL_URL || ''
 
 interface CalEvent {
   title: string
@@ -75,6 +75,7 @@ function parseIcal(text: string): CalEvent[] {
 }
 
 export async function GET() {
+  if (!ICAL_URL) return NextResponse.json({ error: 'Calendar not configured' }, { status: 500 })
   try {
     const res = await fetch(ICAL_URL, { next: { revalidate: 300 } }) // Cache 5 min
     if (!res.ok) return NextResponse.json({ error: 'Failed to fetch calendar' }, { status: 502 })

@@ -23,10 +23,10 @@ export default function EmbedVideosPage() {
     }).catch(() => setLoading(false))
   }, [])
 
-  const types = [...new Set(videos.map(v => v.video_type).filter(Boolean))]
+  const types = [...new Set(videos.map(v => v.video_type).filter(t => t && t !== 'Other'))].map(t => t.replace(/\(.*\)/, '').trim()).filter((t, i, a) => a.indexOf(t) === i)
 
   const filtered = videos.filter(v => {
-    if (typeFilter !== 'all' && v.video_type !== typeFilter) return false
+    if (typeFilter !== 'all' && v.video_type.replace(/\(.*\)/, '').trim() !== typeFilter) return false
     if (search && !v.title.toLowerCase().includes(search.toLowerCase())) return false
     return true
   }).sort((a, b) => {
@@ -93,7 +93,7 @@ export default function EmbedVideosPage() {
                 {v.youtube_likes !== null && <span>👍 {v.youtube_likes.toLocaleString()}</span>}
                 {v.date_published && <span>{new Date(v.date_published).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
               </div>
-              {v.video_type && <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#f1f5f9', color: '#475569' }}>{v.video_type}</span>}
+              {v.video_type && v.video_type !== 'Other' && <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#f1f5f9', color: '#475569' }}>{v.video_type.replace(/\(.*\)/, '').trim()}</span>}
             </div>
           </a>
         ))}
