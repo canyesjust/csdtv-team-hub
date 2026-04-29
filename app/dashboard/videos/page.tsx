@@ -149,6 +149,7 @@ export default function VideosPage() {
       const newCount = results.filter((r: any) => !r.existing).length
       const matchedCount = results.filter((r: any) => !r.existing && r.matchedProd).length
       toast(`Found ${data.total} videos. ${newCount} new, ${matchedCount} matched.${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
+      if (dateFixed > 0) await loadData()
     } catch { toast('Channel sync failed', 'error') }
     setSyncing(false)
   }
@@ -246,6 +247,7 @@ export default function VideosPage() {
   }
 
   const matchExistingVideos = async () => {
+    toast('Matching videos to productions...', 'info')
     const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
     const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
     const unlinked = videos.filter(v => !v.production_id)
@@ -253,9 +255,16 @@ export default function VideosPage() {
     for (const video of unlinked) {
       const titleWords = getWords(video.title)
       const nt = normalize(video.title)
+      const videoDate = video.date_published ? new Date(video.date_published + 'T00:00:00') : null
       for (const prod of productions) {
         const np = normalize(prod.title)
         const prodWords = getWords(prod.title)
+        // Date check: if both have dates, must be within 60 days
+        if (videoDate && prod.start_datetime) {
+          const prodDate = new Date(prod.start_datetime)
+          const daysDiff = Math.abs((videoDate.getTime() - prodDate.getTime()) / (1000 * 60 * 60 * 24))
+          if (daysDiff > 60) continue
+        }
         let isMatch = false
         if (nt === np) isMatch = true
         else if (nt.length >= 5 && np.length >= 5 && (nt.includes(np) || np.includes(nt))) isMatch = true
@@ -273,7 +282,7 @@ export default function VideosPage() {
       }
     }
     toast(`Matched ${matched} of ${unlinked.length} unlinked videos to productions`, 'success')
-    loadData()
+    await loadData()
   }
 
   const createVideo = async () => {
