@@ -113,7 +113,13 @@ function ProductionsPageContent() {
       const { data: user } = await supabase.from('team').select('id').eq('supabase_user_id', session.user.id).single()
       if (user) setCurrentUserId(user.id)
     }
-    const sorted = sortProductions(prodsRes.data || [])
+    // Strip leading "N - " prefix from status (e.g. "2 - Approved/Scheduled" → "Approved/Scheduled")
+    // Defensive normalization in case the sync ever sends prefixed values from the district site
+    const cleaned = (prodsRes.data || []).map(p => ({
+      ...p,
+      status: p.status ? p.status.replace(/^\d+\s*-\s*/, '') : p.status
+    }))
+    const sorted = sortProductions(cleaned)
     setProductions(sorted)
     setTeam(teamRes.data || [])
     // Load dismissed conflicts
