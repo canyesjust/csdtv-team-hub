@@ -7,9 +7,9 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Optional ?days=N filter — when provided, only returns videos
-  // published in the last N days. Without it, returns all (backward
-  // compatible with the existing /embed/videos grid).
+  // Optional ?days=N filter — returns videos published in the last N days
+  // (today through today minus N-1 days, inclusive). Future-dated videos
+  // are always excluded so scheduled livestreams don't appear early.
   const daysParam = req.nextUrl.searchParams.get('days')
   const days = daysParam ? parseInt(daysParam, 10) : null
 
@@ -21,10 +21,14 @@ export async function GET(req: NextRequest) {
     .order('date_published', { ascending: false })
 
   if (days && !isNaN(days) && days > 0) {
-    const cutoff = new Date()
-    cutoff.setDate(cutoff.getDate() - days)
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+    const cutoff = new Date(today)
+    cutoff.setDate(cutoff.getDate() - (days - 1))
     const cutoffStr = cutoff.toISOString().split('T')[0]
-    query = query.gte('date_published', cutoffStr)
+    query = query
+      .gte('date_published', cutoffStr)
+      .lte('date_published', todayStr)
   }
 
   const { data, error } = await query
