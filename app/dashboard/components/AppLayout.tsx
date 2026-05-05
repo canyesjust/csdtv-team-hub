@@ -8,7 +8,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
-import { uiStyles, statusTone } from '@/lib/ui/styles'
+import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
 
 const NAV_ITEMS = [
   { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
@@ -284,7 +284,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
           <button onClick={() => { setShowNotifications(!showNotifications); setShowSearch(false) }} style={{ position: 'relative', width: '44px', height: '44px', borderRadius: '10px', background: iconBg, border: `0.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: muted, flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-            {unreadCount > 0 && <span style={{ position: 'absolute', top: '6px', right: '6px', minWidth: '16px', height: '16px', borderRadius: '8px', background: 'var(--status-warning)', fontSize: '9px', fontWeight: 700, color: '#071020', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+            {unreadCount > 0 && <span style={{ position: 'absolute', top: '6px', right: '6px', minWidth: '16px', height: '16px', fontSize: '9px', color: '#071020', display: 'flex', alignItems: 'center', justifyContent: 'center', ...statusBadge('warning', true) }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </button>
           <button onClick={toggleTheme} style={{ width: '44px', height: '44px', borderRadius: '10px', background: iconBg, border: `0.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', flexShrink: 0 }}>
             {dark ? '☀️' : '🌙'}
