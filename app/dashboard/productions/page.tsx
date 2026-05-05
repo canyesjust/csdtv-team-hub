@@ -248,11 +248,22 @@ function ProductionsPageContent() {
         supabase.from('checklist_items').select('id, title, completed, sort_order').eq('production_id', prodId).order('sort_order'),
         supabase.from('production_activity').select('id, action, detail, created_at, team:team(name)').eq('production_id', prodId).order('created_at', { ascending: false }).limit(5),
       ])
-      if (checkRes.error || actRes.error) {
+      // Checklist is the critical data for this panel; activity is optional.
+      if (checkRes.error) {
         toast('Failed to load production details', 'error')
+        setPanelChecklist([])
+      } else {
+        setPanelChecklist(checkRes.data || [])
       }
-      setPanelChecklist(checkRes.data || [])
-      setPanelActivity((actRes.data as any) || [])
+      if (actRes.error) {
+        setPanelActivity([])
+      } else {
+        setPanelActivity((actRes.data as any) || [])
+      }
+    } catch {
+      toast('Failed to load production details', 'error')
+      setPanelChecklist([])
+      setPanelActivity([])
     } finally {
       setPanelLoading(false)
     }
