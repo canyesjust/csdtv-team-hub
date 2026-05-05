@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
@@ -39,6 +39,24 @@ interface Activity { id: string; action: string; detail: string | null; created_
 interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
 interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
 
+function ZoneHeader({
+  label,
+  hint,
+  accent,
+  action,
+}: { label: string; hint?: string; accent?: string; action?: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', margin: '0 0 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', minWidth: 0 }}>
+        <span style={{ ...uiStyles.zoneLabel, color: accent || 'var(--text-muted)' }}>{label}</span>
+        {hint && <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>{hint}</span>}
+      </div>
+      <div style={uiStyles.zoneRule} />
+      {action}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
@@ -51,7 +69,8 @@ export default function DashboardPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [totalProductions, setTotalProductions] = useState(0)
   const [todayProductions, setTodayProductions] = useState<Production[]>([])
-  const [showDetails, setShowDetails] = useState(true)
+  const [insightsOpen, setInsightsOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(true)
   const [loading, setLoading] = useState(true)
   const [todayHours, setTodayHours] = useState<string | null>(null)
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
@@ -74,7 +93,7 @@ export default function DashboardPage() {
   const muted    = 'var(--text-muted)'
   const border   = 'var(--border-subtle)'
   const cardBg   = 'var(--surface-1)'
-  const metricBg = 'var(--surface-2)'
+  const surface2 = 'var(--surface-2)'
   const rowHover = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
   const warning = statusTone.warning.color
   const warningBg = statusTone.warning.background
@@ -85,6 +104,12 @@ export default function DashboardPage() {
   const review = statusTone.review.color
   const success = statusTone.success.color
   const successBg = statusTone.success.background
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setManagerOpen(false)
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     setLoadError(null)
@@ -103,7 +128,7 @@ export default function DashboardPage() {
         supabase.from('production_members').select('production_id').eq('user_id', user.id),
         supabase.from('team').select('*').eq('active', true),
         supabase.from('productions').select('id', { count: 'exact', head: true }),
-        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).limit(10),
+        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
         supabase.from('schedule_defaults').select('*').eq('user_id', user.id).single(),
         supabase.from('production_activity').select('*, team:team(name)').order('created_at', { ascending: false }).limit(10),
       ])
@@ -114,11 +139,11 @@ export default function DashboardPage() {
       setTodayProductions((todayProdsRes.data as any) || [])
       setRecentActivity(activityRes.data || [])
 
-      // Figure out today's scheduled hours
       const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
       const todayDayName = dayNames[new Date().getDay()]
-      const isWeekday = todayDayName !== 'sunday' && todayDayName !== 'saturday'; if (isWeekday) { const dayKey = todayDayName as keyof ScheduleDay
-        // Check for override this week first
+      const isWeekday = todayDayName !== 'sunday' && todayDayName !== 'saturday'
+      if (isWeekday) {
+        const dayKey = todayDayName as keyof ScheduleDay
         const monday = new Date()
         monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
         const weekStart = monday.toISOString().split('T')[0]
@@ -132,7 +157,6 @@ export default function DashboardPage() {
         }
       }
 
-      // Weekly/monthly stats pulse
       const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
       const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds] = await Promise.all([
@@ -144,7 +168,6 @@ export default function DashboardPage() {
         supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
         supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
       ])
-      // Total videos produced and YouTube views
       const { data: delivData } = await supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0)
       const delivSum = (delivData || []).reduce((s: number, p: any) => s + (p.deliverables_count || 0), 0)
       const { data: ytData } = await supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null)
@@ -190,7 +213,6 @@ export default function DashboardPage() {
         })
         setOverdueOwnerRows((overdueOwnerRes.data as OverdueOwnerRow[]) || [])
 
-        // Student crew coverage, scoped to near-term productions when possible.
         if (soonProdIds.length > 0) {
           const [slotsRes, filledRes] = await Promise.all([
             (supabase as any).from('crew_role_slots').select('id', { count: 'exact', head: true }).in('production_id', soonProdIds),
@@ -375,117 +397,67 @@ export default function DashboardPage() {
   const taskStatusBadge = (status: string) => {
     const s = status?.toLowerCase()
     const st = { 'in progress': { bg: warningBg, color: warning }, 'pending': { bg: 'var(--surface-2)', color: muted }, 'complete': { bg: successBg, color: success } }[s] || { bg: 'var(--surface-2)', color: muted }
-    return <span style={{ fontSize: '14px', fontWeight: 500, padding: '4px 10px', borderRadius: '20px', background: st.bg, color: st.color, whiteSpace: 'nowrap' as const }}>{status}</span>
+    return <span style={{ fontSize: '12px', fontWeight: 500, padding: '3px 9px', borderRadius: '20px', background: st.bg, color: st.color, whiteSpace: 'nowrap' as const }}>{status}</span>
   }
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}><Loader /></div>
 
   const QUICK_ACTIONS = [
-    { href: '/dashboard/tasks', label: 'New task', desc: 'Create a task', color: 'var(--brand-primary)', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> },
-    { href: '/dashboard/productions', label: 'Productions', desc: `${totalProductions} total`, color: warning, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
-    { href: '/dashboard/schedule', label: 'My schedule', desc: 'Set your hours', color: success, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-    { href: '/dashboard/knowledge', label: 'Knowledge base', desc: 'Guides & docs', color: review, icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg> },
+    { href: '/dashboard/tasks', label: 'New task', desc: 'Create a task', color: 'var(--brand-primary)', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> },
+    { href: '/dashboard/productions', label: 'Productions', desc: `${totalProductions} total`, color: warning, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
+    { href: '/dashboard/schedule', label: 'My schedule', desc: 'Set your hours', color: success, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+    { href: '/dashboard/knowledge', label: 'Knowledge base', desc: 'Guides & docs', color: review, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg> },
   ]
 
   return (
     <div style={{ maxWidth: '1760px', margin: '0 auto' }}>
-
-      {/* Header */}
-      <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px' }}>{greeting()}, {currentUser?.name?.split(' ')[0]}</h1>
+      {/* ============== HEADER ============== */}
+      <header style={{ marginBottom: '20px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>{greeting()}, {currentUser?.name?.split(' ')[0]}</h1>
         <p style={{ fontSize: '14px', color: muted, margin: '0 0 6px' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
         <p style={{ fontSize: '14px', color: urgentCount > 0 || overdueCount > 0 ? warning : muted, margin: 0 }}>{getMorningBriefing()}</p>
         {loadError && <p style={{ margin: '8px 0 0', fontSize: '13px', color: danger }}>{loadError}</p>}
-      </div>
+      </header>
 
-      {/* Your day at a glance */}
-      <div className="dashboard-glance-row" style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
+      {/* Glance chips */}
+      <div className="dashboard-glance-row" style={{ display: 'flex', gap: '8px', marginBottom: '28px', flexWrap: 'wrap' as const }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span style={{ fontSize: '14px', color: todayHours ? text : muted, fontWeight: todayHours ? 500 : 400 }}>
+          <span style={{ fontSize: '13px', color: todayHours ? text : muted, fontWeight: todayHours ? 500 : 400 }}>
             {todayHours || 'No hours set'}
           </span>
         </div>
         {myTasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: warningBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: warningBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={warning} strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-            <span style={{ fontSize: '14px', color: warning, fontWeight: 500 }}>
+            <span style={{ fontSize: '13px', color: warning, fontWeight: 500 }}>
               {myTasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length} due today
             </span>
           </div>
         )}
         {overdueCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: dangerBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: dangerBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span style={{ fontSize: '14px', color: danger, fontWeight: 500 }}>{overdueCount} overdue</span>
+            <span style={{ fontSize: '13px', color: danger, fontWeight: 500 }}>{overdueCount} overdue</span>
           </div>
         )}
         {todayProductions.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: infoBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: infoBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={info} strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-            <span style={{ fontSize: '14px', color: info, fontWeight: 500 }}>{todayProductions.length} production{todayProductions.length > 1 ? 's' : ''} today</span>
+            <span style={{ fontSize: '13px', color: info, fontWeight: 500 }}>{todayProductions.length} production{todayProductions.length > 1 ? 's' : ''} today</span>
           </div>
         )}
       </div>
 
-      {/* Ops today */}
-      <div style={{ ...uiStyles.card, marginBottom: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-soft)' }}>
-        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-          <div>
-            <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Ops today</h2>
-            <p style={{ fontSize: '13px', color: muted, margin: '2px 0 0' }}>Priority queue and risk flags</p>
-          </div>
-          <Link href="/dashboard/tasks" style={{ ...uiStyles.actionLink, fontSize: '13px' }}>Open task center →</Link>
-        </div>
-        <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', borderBottom: `1px solid ${border}` }}>
-          {[
-            { label: 'At risk tasks', value: overdueCount + blockedCount, sub: `${overdueCount} overdue · ${blockedCount} blocked`, color: danger },
-            { label: 'Due in 48h', value: dueSoonCount, sub: 'needs scheduling attention', color: warning },
-            { label: 'At risk productions', value: atRiskProductions.length, sub: 'event soon with low checklist progress', color: review },
-          ].map(card => (
-            <div key={card.label} style={{ background: 'var(--surface-2)', border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: card.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{card.label}</p>
-              <p style={{ fontSize: '26px', fontWeight: 800, color: text, margin: 0, lineHeight: 1 }}>{card.value}</p>
-              <p style={{ fontSize: '12px', color: muted, margin: '6px 0 0' }}>{card.sub}</p>
-            </div>
-          ))}
-        </div>
-        <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
-          <div>
-            <p style={{ fontSize: '12px', fontWeight: 700, color: muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Focus queue</p>
-            {queueItems.length === 0 ? (
-              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No active tasks in your queue.</p>
-            ) : queueItems.slice(0, 5).map(item => {
-              return (
-                <Link key={`${item.type}-${item.id}`} href={item.href} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
-                  <span style={{ fontSize: '13px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.title}</span>
-                  <span style={{ ...statusBadge(item.type === 'task' ? 'warning' : 'review', true), fontSize: '11px', flexShrink: 0 }}>{item.reason}</span>
-                </Link>
-              )
-            })}
-          </div>
-          <div>
-            <p style={{ fontSize: '12px', fontWeight: 700, color: muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>At-risk productions</p>
-            {atRiskProductions.length === 0 ? (
-              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No immediate production risks detected.</p>
-            ) : atRiskProductions.map(prod => {
-              const progress = getProgress(prod)
-              return (
-                <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
-                  <span style={{ fontSize: '13px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{prod.production_number} {prod.title}</span>
-                  <span style={{ fontSize: '12px', color: review, flexShrink: 0 }}>{progress ? `${progress.pct}%` : 'No checklist'}</span>
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Today's productions — prominent + expandable */}
+      {/* ============== ZONE: TODAY ============== */}
       {todayProductions.length > 0 && (
-        <div style={{ ...uiStyles.cardSoft, background: infoBg, borderRadius: '14px', padding: '14px 16px', marginBottom: '16px' }}>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: info, margin: '0 0 12px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>🎬 Today — {todayProductions.length} production{todayProductions.length > 1 ? 's' : ''}</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
+        <section style={uiStyles.zoneSection}>
+          <ZoneHeader
+            label="Today"
+            hint={`${todayProductions.length} production${todayProductions.length > 1 ? 's' : ''} on the schedule`}
+            accent={info}
+          />
+          <div className="today-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '12px' }}>
             {todayProductions.map(p => {
               const d = p.start_datetime ? new Date(p.start_datetime) : null
               const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
@@ -495,7 +467,7 @@ export default function DashboardPage() {
               const items = (p.checklist_items || []).sort((a, b) => (a as any).sort_order - (b as any).sort_order)
               const doneCount = items.filter(c => c.completed).length
               return (
-                <div key={p.id} onClick={() => setExpandedTodayProd(isExpanded ? null : p.id)} style={{ padding: '14px 16px', borderRadius: '12px', background: 'var(--surface-1)', border: `1px solid ${isExpanded ? 'var(--border-strong)' : border}`, cursor: 'pointer' }}>
+                <div key={p.id} onClick={() => setExpandedTodayProd(isExpanded ? null : p.id)} style={{ padding: '14px 16px', borderRadius: '14px', background: cardBg, border: `1px solid ${isExpanded ? 'var(--border-strong)' : border}`, cursor: 'pointer', boxShadow: 'var(--shadow-soft)', transition: 'border-color var(--motion-fast) var(--ease-standard)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ width: '4px', height: '44px', borderRadius: '2px', background: info, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -517,7 +489,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   {isExpanded && (
-                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `0.5px solid ${border}` }} onClick={e => e.stopPropagation()}>
+                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${border}` }} onClick={e => e.stopPropagation()}>
                       {items.length > 0 ? items.map(item => (
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
                           <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `1.5px solid ${item.completed ? success : border}`, background: item.completed ? success : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -533,63 +505,61 @@ export default function DashboardPage() {
               )
             })}
           </div>
-        </div>
+        </section>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-        <button
-          onClick={() => setShowDetails(prev => !prev)}
-          style={{
-            fontSize: '13px',
-            borderRadius: '9px',
-            border: `1px solid ${border}`,
-            background: cardBg,
-            color: muted,
-            padding: '8px 12px',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            fontWeight: 600,
-          }}
-        >
-          {showDetails ? 'Hide secondary panels' : 'Show secondary panels'}
-        </button>
-      </div>
+      {/* ============== ZONE: OPERATE ============== */}
+      <section style={uiStyles.zoneSection}>
+        <ZoneHeader
+          label="Operate"
+          hint={`Updated ${lastUpdatedLabel}`}
+          action={<Link href="/dashboard/tasks" style={{ ...uiStyles.actionLink, fontSize: '12px' }}>Open task center →</Link>}
+        />
 
-      {/* Stats pulse */}
-      {showDetails && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+        {/* Personal metric strip — 4 metrics */}
+        <div className="metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '16px' }}>
           {[
-            { label: 'This week', items: [`${weekStats.prodsCompleted} productions`, `${weekStats.tasksCompleted} tasks`, `${weekStats.videosPublished} videos`], color: info },
-            { label: 'This month', items: [`${monthStats.prodsCompleted} productions`, `${monthStats.tasksCompleted} tasks`, `${monthStats.videosPublished} videos`], color: review },
-            { label: 'Year pace', items: [`${yearProdCount} completed`, `${Math.round(yearProdCount / Math.max(1, new Date().getMonth() + 1) * 12)} projected/yr`], color: success },
-            ...(totalVidsProduced > 0 || totalYtViews > 0 ? [{ label: 'Output', items: [`${totalVidsProduced} videos produced`, ...(totalYtViews > 0 ? [`${totalYtViews.toLocaleString()} YT views`] : [])], color: danger }] : []),
-          ].map(s => (
-            <div key={s.label} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 700, color: s.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{s.label}</p>
-              {s.items.map((item, i) => <p key={i} style={{ fontSize: '13px', color: i === 0 ? text : muted, margin: '2px 0', fontWeight: i === 0 ? 600 : 400 }}>{item}</p>)}
-            </div>
+            { label: 'Open tasks', value: String(myTasks.length), sub: 'assigned to you', hi: false, color: info, href: '/dashboard/tasks' },
+            { label: 'Overdue', value: String(overdueCount), sub: overdueCount === 0 ? 'all on track' : 'need attention', hi: overdueCount > 0, color: danger, href: '/dashboard/tasks' },
+            { label: 'High priority', value: String(urgentCount), sub: urgentCount === 0 ? 'nothing urgent' : 'urgent now', hi: urgentCount > 0, color: warning, href: '/dashboard/tasks' },
+            { label: 'Next due', value: nextDueInfo?.label || '—', sub: nextDue?.title || 'no tasks due', hi: false, color: muted, valueColor: nextDueInfo?.color, href: '/dashboard/tasks' },
+          ].map(({ label, value, sub, hi, color, valueColor, href }) => (
+            <Link key={label} href={href} style={{ textDecoration: 'none' }}>
+              <div style={{ ...uiStyles.metricCard, padding: '16px 18px', background: hi ? `${color}10` : surface2, border: `1px solid ${hi ? `${color}40` : border}` }}
+                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'}
+              >
+                <p style={{ fontSize: '11px', fontWeight: 700, color: hi ? color : muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '1px' }}>{label}</p>
+                <p style={{ fontSize: '32px', fontWeight: 800, color: valueColor || (hi ? color : text), margin: '0 0 4px', lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</p>
+                <p style={{ fontSize: '13px', color: muted, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{sub}</p>
+              </div>
+            </Link>
           ))}
         </div>
-      )}
 
-      <div style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-        <p style={{ margin: 0, fontSize: '13px', color: muted }}>Focus queue ranked by operational risk · updated {lastUpdatedLabel}</p>
-      </div>
-
-      <div>
-        <div style={{ ...uiStyles.card, marginBottom: '18px', overflow: 'hidden' }}>
-          <div style={{ ...uiStyles.panelHeader, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Focus queue</h2>
-            <Link href="/dashboard/tasks" style={uiStyles.panelLink}>Open task center →</Link>
+        {/* Focus queue — single source of truth */}
+        <div style={{ ...uiStyles.card, marginBottom: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-soft)' }}>
+          <div style={{ padding: '14px 18px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            <div>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: text, margin: 0 }}>Focus queue</h2>
+              <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Ranked by operational risk</p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{overdueCount + blockedCount} at risk · {dueSoonCount} due 48h</span>
+              <Link href="/dashboard/tasks" style={uiStyles.panelLink}>Open task center →</Link>
+            </div>
           </div>
-          <div style={{ padding: '8px 10px' }}>
+          <div>
             {queueItems.length === 0 ? (
-              <p style={{ margin: '10px 8px', fontSize: '13px', color: muted }}>No critical queue items right now.</p>
-            ) : queueItems.map(item => (
-              <Link key={`${item.type}-${item.id}`} href={item.href} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 12px', borderRadius: '10px' }}>
+              <p style={{ padding: '24px 20px', fontSize: '14px', color: muted, margin: 0, textAlign: 'center' as const }}>Nothing in your queue right now.</p>
+            ) : queueItems.map((item, i) => (
+              <Link key={`${item.type}-${item.id}`} href={item.href} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '12px 18px', borderBottom: i < queueItems.length - 1 ? `1px solid ${border}` : 'none', transition: 'background 0.1s' }}
+                onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = rowHover}
+                onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
+              >
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <p style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.title}</p>
-                  <p style={{ margin: '3px 0 0', fontSize: '12px', color: muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.subtitle}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.subtitle}</p>
                 </div>
                 <span style={{ ...statusBadge(item.type === 'task' ? 'warning' : 'review', true), fontSize: '11px', flexShrink: 0 }}>{item.reason}</span>
               </Link>
@@ -597,231 +567,259 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div>
-          {/* Metric cards */}
-          <div className="metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
-            {[
-              { label: 'Open tasks', value: String(myTasks.length), sub: 'assigned to you', hi: false, href: '/dashboard/tasks' },
-              { label: 'Overdue', value: String(overdueCount), sub: overdueCount === 0 ? 'all on track ✓' : 'need attention', hi: overdueCount > 0, color: danger, href: '/dashboard/tasks' },
-              { label: 'High priority', value: String(urgentCount), sub: urgentCount === 0 ? 'nothing urgent' : 'urgent tasks', hi: urgentCount > 0, color: warning, href: '/dashboard/tasks' },
-              { label: 'Next due', value: nextDueInfo?.label || '—', sub: nextDue?.title || 'no tasks due', hi: false, valueColor: nextDueInfo?.color, href: '/dashboard/tasks' },
-              { label: 'My productions', value: String(myProductions.length), sub: 'you are assigned to', hi: false, href: '/dashboard/productions?scope=mine' },
-            ].map(({ label, value, sub, hi, color, valueColor, href }) => (
-              <Link key={label} href={href} style={{ textDecoration: 'none' }}>
-              <div style={{ ...uiStyles.metricCard, background: hi ? `${color}12` : metricBg, border: `1px solid ${hi ? `${color}35` : border}` }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'}
-                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'}
-              >
-                <p style={{ fontSize: '13px', fontWeight: 700, color: hi ? color : muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '1px' }}>{label}</p>
-                <p style={{ fontSize: '38px', fontWeight: 800, color: valueColor || (hi ? color : text), margin: '0 0 4px', lineHeight: 1 }}>{value}</p>
-                <p style={{ fontSize: '15px', color: muted, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{sub}</p>
-              </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Quick actions */}
-          <div className="quick-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
-            {QUICK_ACTIONS.map(({ href, label, desc, color, icon }) => (
-              <Link key={href} href={href} style={{ textDecoration: 'none' }}>
-                <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', padding: '18px 20px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '16px', minHeight: '80px' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = color; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 4px 20px ${color}20` }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = border; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}
-                >
-                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>{icon}</div>
-                  <div>
-                    <p style={{ fontSize: '15px', fontWeight: 700, color: text, margin: 0 }}>{label}</p>
-                    <p style={{ fontSize: '15px', color: muted, margin: '2px 0 0' }}>{desc}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Tasks + Productions — full height */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '16px' }}>
-
-            <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>My tasks</h2>
-                <Link href="/dashboard/tasks" style={uiStyles.panelLink}>View all →</Link>
-              </div>
-              <div style={{ flex: 1 }}>
-                {myTasks.length === 0 ? (
-                  <div style={{ padding: '40px 20px', textAlign: 'center' as const }}>
-                    <p style={{ fontSize: '15px', color: muted, margin: '0 0 10px' }}>No open tasks</p>
-                    <Link href="/dashboard/tasks" style={uiStyles.panelLink}>Create a task →</Link>
-                  </div>
-                ) : myTasks.map((task, i) => {
-                  const dateInfo = formatDate(task.due_date)
-                  const isCompleting = completing.has(task.id)
-                  return (
-                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', borderBottom: i < myTasks.length - 1 ? `1px solid ${border}` : 'none', transition: 'all 0.3s', opacity: isCompleting ? 0.4 : 1, background: isCompleting ? successBg : 'transparent' }}
-                      onMouseEnter={e => { if (!isCompleting) (e.currentTarget as HTMLDivElement).style.background = rowHover }}
-                      onMouseLeave={e => { if (!isCompleting) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-                    >
-                      <button onClick={() => !isCompleting && completeTask(task.id)} style={{ width: '18px', height: '18px', borderRadius: '5px', border: `2px solid ${isCompleting ? success : task.status === 'in progress' ? warning : border}`, flexShrink: 0, background: isCompleting ? success : task.status === 'in progress' ? warningBg : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                        {isCompleting && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                      </button>
-                      <Link href="/dashboard/tasks" style={{ flex: 1, minWidth: 0, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</p>
-                          {task.productions && <p style={{ fontSize: '14px', color: muted, margin: '3px 0 0' }}>{task.productions.title}</p>}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
-                          {taskStatusBadge(task.status)}
-                          {dateInfo && <span style={{ fontSize: '13px', color: dateInfo.color, fontWeight: 700 }}>{dateInfo.label}</span>}
-                        </div>
-                      </Link>
-                    </div>
-                  )
-                })}
-              </div>
+        {/* My tasks + My productions */}
+        <div className="operate-panels" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+          <div style={{ ...uiStyles.card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${border}` }}>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: text, margin: 0 }}>My tasks</h2>
+              <Link href="/dashboard/tasks" style={uiStyles.panelLink}>View all →</Link>
             </div>
-
-            <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>My productions</h2>
-                <Link href="/dashboard/productions" style={uiStyles.panelLink}>View all →</Link>
-              </div>
-              <div style={{ flex: 1 }}>
-                {myProductions.length === 0 ? (
-                  <div style={{ padding: '40px 20px', textAlign: 'center' as const }}>
-                    <p style={{ fontSize: '15px', color: muted, margin: '0 0 10px' }}>No active productions</p>
-                    <Link href="/dashboard/productions" style={uiStyles.panelLink}>Browse productions →</Link>
-                  </div>
-                ) : myProductions.map((prod, i) => {
-                  const progress = getProgress(prod)
-                  const typeLabel = prod.request_type_label || prod.type || 'Unknown'
-                  return (
-                    <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'block', padding: '14px 20px', borderBottom: i < myProductions.length - 1 ? `1px solid ${border}` : 'none', transition: 'background 0.1s' }}
-                      onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = rowHover}
-                      onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, paddingRight: '10px' }}>{prod.title}</p>
-                        <span style={{ fontSize: '14px', color: muted, flexShrink: 0, fontWeight: 500 }}>{progress ? `${progress.pct}%` : '—'}</span>
+            <div style={{ flex: 1 }}>
+              {myTasks.length === 0 ? (
+                <div style={{ padding: '32px 18px', textAlign: 'center' as const }}>
+                  <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No open tasks</p>
+                  <Link href="/dashboard/tasks" style={uiStyles.panelLink}>Create a task →</Link>
+                </div>
+              ) : myTasks.slice(0, 8).map((task, i, arr) => {
+                const dateInfo = formatDate(task.due_date)
+                const isCompleting = completing.has(task.id)
+                return (
+                  <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 18px', borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none', transition: 'all 0.3s', opacity: isCompleting ? 0.4 : 1, background: isCompleting ? successBg : 'transparent' }}
+                    onMouseEnter={e => { if (!isCompleting) (e.currentTarget as HTMLDivElement).style.background = rowHover }}
+                    onMouseLeave={e => { if (!isCompleting) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+                  >
+                    <button onClick={() => !isCompleting && completeTask(task.id)} style={{ width: '18px', height: '18px', borderRadius: '5px', border: `2px solid ${isCompleting ? success : task.status === 'in progress' ? warning : border}`, flexShrink: 0, background: isCompleting ? success : task.status === 'in progress' ? warningBg : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                      {isCompleting && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </button>
+                    <Link href="/dashboard/tasks" style={{ flex: 1, minWidth: 0, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</p>
+                        {task.productions && <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{task.productions.title}</p>}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ flex: 1, height: '5px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
-                          {progress && <div style={{ width: `${progress.pct}%`, height: '100%', background: progress.pct === 100 ? success : 'var(--brand-primary)', borderRadius: '3px' }} />}
-                        </div>
-                        <span style={{ fontSize: '14px', color: muted, flexShrink: 0, maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{typeLabel}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
+                        {taskStatusBadge(task.status)}
+                        {dateInfo && <span style={{ fontSize: '12px', color: dateInfo.color, fontWeight: 700 }}>{dateInfo.label}</span>}
                       </div>
                     </Link>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {isManager && (
-        <div style={{ marginTop: '18px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <h2 style={{ margin: 0, fontSize: '18px', color: text }}>Manager ops</h2>
-            <span style={{ fontSize: '12px', color: muted }}>Exceptions and intervention queues</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px', marginBottom: '12px' }}>
-            {[
-              { label: 'Unstaffed productions', value: String(unstaffedProductions.length), sub: 'start within 48h', tone: 'danger' as const },
-              { label: 'Understaffed productions', value: String(understaffedProductions.length), sub: 'need added coverage', tone: 'warning' as const },
-              { label: 'Unassigned tasks', value: String(managerRiskCounts.unassigned), sub: 'owner missing', tone: 'review' as const },
-              { label: 'Blocked tasks', value: String(managerRiskCounts.blocked), sub: 'dependency blocked', tone: 'review' as const },
-              { label: 'Student crew fill', value: `${crewFillPct}%`, sub: `${crewSlotsFilled}/${crewSlotsTotal} spots filled`, tone: crewFillPct < 70 ? 'danger' as const : crewFillPct < 90 ? 'warning' as const : 'success' as const },
-              { label: 'Production data exceptions', value: String(missingProdMetadata.length), sub: 'missing time/location', tone: 'warning' as const },
-            ].map(kpi => (
-              <div key={kpi.label} style={{ ...uiStyles.cardSoft, padding: '12px 14px' }}>
-                <p style={{ margin: 0, fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' as const, color: statusTone[kpi.tone].color, fontWeight: 700 }}>{kpi.label}</p>
-                <p style={{ margin: '6px 0 0', fontSize: '26px', color: text, fontWeight: 800, lineHeight: 1 }}>{kpi.value}</p>
-                <p style={{ margin: '6px 0 0', fontSize: '12px', color: muted }}>{kpi.sub}</p>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: '12px' }}>
-            <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
-              <div style={uiStyles.panelHeader}>
-                <h3 style={{ margin: 0, fontSize: '16px', color: text }}>Overdue by owner · {managerRiskCounts.overdue}</h3>
-              </div>
-              <div style={{ padding: '10px 14px' }}>
-                {overdueByOwner.length === 0 ? (
-                  <p style={{ margin: 0, fontSize: '13px', color: muted }}>No overdue tasks across team.</p>
-                ) : overdueByOwner.map(row => (
-                  <div key={row.member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
-                    <span style={{ fontSize: '13px', color: text }}>{row.member.name}</span>
-                    <span style={{ fontSize: '12px', color: muted }}>{row.total} total · {row.aging.a}/{row.aging.b}/{row.aging.c} (1-2d/3-7d/8+d)</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
-              <div style={uiStyles.panelHeader}>
-                <h3 style={{ margin: 0, fontSize: '16px', color: text }}>Coverage and staffing exceptions</h3>
-              </div>
-              <div style={{ padding: '10px 14px' }}>
-                {[...unstaffedProductions, ...understaffedProductions].slice(0, 6).map(prod => (
-                  <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
-                    <span style={{ fontSize: '13px', color: text }}>#{prod.production_number} {prod.title}</span>
-                    <span style={{ ...statusBadge((prod.production_members || []).length === 0 ? 'danger' : 'warning', true), fontSize: '11px' }}>
-                      {(prod.production_members || []).length === 0 ? 'Unstaffed' : 'Understaffed'}
-                    </span>
-                  </Link>
-                ))}
-                {unstaffedProductions.length + understaffedProductions.length === 0 && (
-                  <p style={{ margin: 0, fontSize: '13px', color: muted }}>No immediate staffing exceptions in next 48h.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Recent activity */}
-      {showDetails ? (
-        <div style={{ marginTop: '20px' }}>
-          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden' as const }}>
-            <div style={{ padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
-              <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Recent activity</h2>
-            </div>
-            {recentActivity.length === 0 ? (
-              <p style={{ padding: '24px 20px', color: muted, fontSize: '14px', margin: 0, textAlign: 'center' as const }}>No recent activity — actions on productions will appear here</p>
-            ) : recentActivity.map((a, i) => {
-                const time = new Date(a.created_at)
-                const diff = Date.now() - time.getTime()
-                const mins = Math.floor(diff / 60000)
-                const hrs = Math.floor(mins / 60)
-                const days = Math.floor(hrs / 24)
-                const ago = days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : mins > 0 ? `${mins}m ago` : 'just now'
-                return (
-                  <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 20px', borderBottom: i < recentActivity.length - 1 ? `1px solid ${border}` : 'none', fontSize: '13px' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: info, marginTop: '6px', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ color: text, fontWeight: 500 }}>{a.team?.name || 'System'}</span>
-                      <span style={{ color: muted }}> {a.action}</span>
-                      {a.detail && <span style={{ color: muted }}> — {a.detail}</span>}
-                    </div>
-                    <span style={{ color: muted, flexShrink: 0, fontSize: '12px' }}>{ago}</span>
                   </div>
                 )
               })}
+            </div>
+          </div>
+
+          <div style={{ ...uiStyles.card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${border}` }}>
+              <h2 style={{ fontSize: '15px', fontWeight: 700, color: text, margin: 0 }}>My productions</h2>
+              <Link href="/dashboard/productions" style={uiStyles.panelLink}>View all →</Link>
+            </div>
+            <div style={{ flex: 1 }}>
+              {myProductions.length === 0 ? (
+                <div style={{ padding: '32px 18px', textAlign: 'center' as const }}>
+                  <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No active productions</p>
+                  <Link href="/dashboard/productions" style={uiStyles.panelLink}>Browse productions →</Link>
+                </div>
+              ) : myProductions.slice(0, 8).map((prod, i, arr) => {
+                const progress = getProgress(prod)
+                const typeLabel = prod.request_type_label || prod.type || 'Unknown'
+                return (
+                  <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'block', padding: '12px 18px', borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none', transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = rowHover}
+                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, paddingRight: '10px' }}>{prod.title}</p>
+                      <span style={{ fontSize: '13px', color: muted, flexShrink: 0, fontWeight: 500 }}>{progress ? `${progress.pct}%` : '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ flex: 1, height: '4px', background: surface2, borderRadius: '3px', overflow: 'hidden' }}>
+                        {progress && <div style={{ width: `${progress.pct}%`, height: '100%', background: progress.pct === 100 ? success : 'var(--brand-primary)', borderRadius: '3px' }} />}
+                      </div>
+                      <span style={{ fontSize: '12px', color: muted, flexShrink: 0, maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{typeLabel}</span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
           </div>
         </div>
-      ) : null}
+
+        {/* Quick actions — compact strip */}
+        <div className="quick-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+          {QUICK_ACTIONS.map(({ href, label, desc, color, icon }) => (
+            <Link key={href} href={href} style={{ textDecoration: 'none' }}>
+              <div style={{ background: surface2, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '12px', minHeight: '64px' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = color; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = border; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
+              >
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>{icon}</div>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: text, margin: 0 }}>{label}</p>
+                  <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{desc}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ============== ZONE: MANAGER OPS ============== */}
+      {isManager && (
+        <section style={uiStyles.zoneSection}>
+          <ZoneHeader
+            label="Manager ops"
+            hint="Exceptions and intervention queues"
+            accent={review}
+            action={
+              <button
+                onClick={() => setManagerOpen(v => !v)}
+                aria-expanded={managerOpen}
+                aria-controls="manager-ops-content"
+                style={{ background: 'transparent', border: 'none', color: muted, fontSize: '12px', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+              >
+                {managerOpen ? 'Collapse' : 'Expand'}
+              </button>
+            }
+          />
+          {managerOpen && (
+            <div id="manager-ops-content">
+              {/* 4 KPIs only */}
+              <div className="manager-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '14px' }}>
+                {[
+                  { label: 'Unstaffed', value: String(unstaffedProductions.length), sub: 'starts within 48h', tone: 'danger' as const },
+                  { label: 'Understaffed', value: String(understaffedProductions.length), sub: 'need added coverage', tone: 'warning' as const },
+                  { label: 'Crew fill', value: `${crewFillPct}%`, sub: `${crewSlotsFilled}/${crewSlotsTotal} spots filled`, tone: crewFillPct < 70 ? 'danger' as const : crewFillPct < 90 ? 'warning' as const : 'success' as const },
+                  { label: 'Unassigned tasks', value: String(managerRiskCounts.unassigned), sub: 'owner missing', tone: 'review' as const },
+                ].map(kpi => (
+                  <div key={kpi.label} style={{ ...uiStyles.cardSoft, padding: '14px 16px' }}>
+                    <p style={{ margin: 0, fontSize: '11px', letterSpacing: '0.8px', textTransform: 'uppercase' as const, color: statusTone[kpi.tone].color, fontWeight: 700 }}>{kpi.label}</p>
+                    <p style={{ margin: '6px 0 0', fontSize: '28px', color: text, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em' }}>{kpi.value}</p>
+                    <p style={{ margin: '6px 0 0', fontSize: '12px', color: muted }}>{kpi.sub}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="manager-panels" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: '12px' }}>
+                <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>Ownership risks</h3>
+                    <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{managerRiskCounts.overdue} overdue · {managerRiskCounts.blocked} blocked</span>
+                  </div>
+                  <div>
+                    {overdueByOwner.length === 0 ? (
+                      <p style={{ padding: '20px 16px', margin: 0, fontSize: '13px', color: muted, textAlign: 'center' as const }}>No overdue tasks across team.</p>
+                    ) : overdueByOwner.map((row, i) => (
+                      <div key={row.member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: i < overdueByOwner.length - 1 ? `1px solid ${border}` : 'none' }}>
+                        <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>{row.member.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: muted }}>{row.total}</span>
+                          <span style={{ fontSize: '11px', color: muted, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{row.aging.a}/{row.aging.b}/{row.aging.c}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>Coverage risks</h3>
+                    <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{missingProdMetadata.length} data gaps</span>
+                  </div>
+                  <div>
+                    {[...unstaffedProductions, ...understaffedProductions].slice(0, 6).map((prod, i, arr) => (
+                      <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none', transition: 'background 0.1s' }}
+                        onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = rowHover}
+                        onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
+                      >
+                        <span style={{ fontSize: '13px', color: text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, minWidth: 0, paddingRight: '10px' }}>#{prod.production_number} {prod.title}</span>
+                        <span style={{ ...statusBadge((prod.production_members || []).length === 0 ? 'danger' : 'warning', true), fontSize: '10px', flexShrink: 0 }}>
+                          {(prod.production_members || []).length === 0 ? 'Unstaffed' : 'Understaffed'}
+                        </span>
+                      </Link>
+                    ))}
+                    {unstaffedProductions.length + understaffedProductions.length === 0 && (
+                      <p style={{ padding: '20px 16px', margin: 0, fontSize: '13px', color: muted, textAlign: 'center' as const }}>No staffing exceptions in next 48h.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ============== ZONE: INSIGHTS ============== */}
+      <section style={{ ...uiStyles.zoneSection, marginBottom: '16px' }}>
+        <ZoneHeader
+          label="Insights"
+          hint="Pulse and recent activity"
+          action={
+            <button
+              onClick={() => setInsightsOpen(v => !v)}
+              aria-expanded={insightsOpen}
+              aria-controls="insights-content"
+              style={{ background: 'transparent', border: 'none', color: muted, fontSize: '12px', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+            >
+              {insightsOpen ? 'Collapse' : 'Expand'}
+            </button>
+          }
+        />
+        {insightsOpen && (
+          <div id="insights-content">
+            <div className="stats-pulse" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+              {[
+                { label: 'This week', items: [`${weekStats.prodsCompleted} productions`, `${weekStats.tasksCompleted} tasks`, `${weekStats.videosPublished} videos`], color: info },
+                { label: 'This month', items: [`${monthStats.prodsCompleted} productions`, `${monthStats.tasksCompleted} tasks`, `${monthStats.videosPublished} videos`], color: review },
+                { label: 'Year pace', items: [`${yearProdCount} completed`, `${Math.round(yearProdCount / Math.max(1, new Date().getMonth() + 1) * 12)} projected/yr`], color: success },
+                ...(totalVidsProduced > 0 || totalYtViews > 0 ? [{ label: 'Output', items: [`${totalVidsProduced} videos produced`, ...(totalYtViews > 0 ? [`${totalYtViews.toLocaleString()} YT views`] : [])], color: danger }] : []),
+              ].map(s => (
+                <div key={s.label} style={{ ...uiStyles.cardSoft, padding: '12px 14px' }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: s.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>{s.label}</p>
+                  {s.items.map((item, i) => <p key={i} style={{ fontSize: '13px', color: i === 0 ? text : muted, margin: '2px 0', fontWeight: i === 0 ? 600 : 400 }}>{item}</p>)}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ ...uiStyles.card, overflow: 'hidden' as const }}>
+              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${border}` }}>
+                <h2 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: 0 }}>Recent activity</h2>
+              </div>
+              {recentActivity.length === 0 ? (
+                <p style={{ padding: '20px', color: muted, fontSize: '13px', margin: 0, textAlign: 'center' as const }}>No recent activity</p>
+              ) : recentActivity.map((a, i) => {
+                  const time = new Date(a.created_at)
+                  const diff = Date.now() - time.getTime()
+                  const mins = Math.floor(diff / 60000)
+                  const hrs = Math.floor(mins / 60)
+                  const days = Math.floor(hrs / 24)
+                  const ago = days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : mins > 0 ? `${mins}m ago` : 'just now'
+                  return (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '10px 18px', borderBottom: i < recentActivity.length - 1 ? `1px solid ${border}` : 'none', fontSize: '13px' }}>
+                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: info, marginTop: '6px', flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ color: text, fontWeight: 500 }}>{a.team?.name || 'System'}</span>
+                        <span style={{ color: muted }}> {a.action}</span>
+                        {a.detail && <span style={{ color: muted }}> — {a.detail}</span>}
+                      </div>
+                      <span style={{ color: muted, flexShrink: 0, fontSize: '12px' }}>{ago}</span>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+      </section>
 
       <style>{`
-        .dashboard-glance-row > div { min-height: 40px; }
+        .dashboard-glance-row > div { min-height: 38px; }
         @media (min-width: 640px) {
-          .metric-grid { grid-template-columns: repeat(5, 1fr) !important; }
+          .metric-grid { grid-template-columns: repeat(4, 1fr) !important; }
           .quick-grid { grid-template-columns: repeat(4, 1fr) !important; }
-        }
-        @media (min-width: 1440px) {
-          .metric-grid { gap: 10px !important; }
-          .quick-grid { gap: 10px !important; }
+          .manager-kpis { grid-template-columns: repeat(4, 1fr) !important; }
         }
         @media (max-width: 767px) {
-          .dashboard-glance-row { gap: 8px !important; margin-bottom: 12px !important; }
+          .dashboard-glance-row { gap: 6px !important; margin-bottom: 18px !important; }
+          .today-grid { gap: 10px !important; }
+          .operate-panels, .manager-panels { gap: 12px !important; }
         }
       `}</style>
     </div>
