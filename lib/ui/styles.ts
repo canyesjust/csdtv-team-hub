@@ -37,6 +37,21 @@ export const uiStyles = {
   mutedText: {
     color: 'var(--text-muted)',
   } as CSSProperties,
+  zoneSection: {
+    marginBottom: '32px',
+  } as CSSProperties,
+  zoneLabel: {
+    fontSize: '11px',
+    fontWeight: 800,
+    letterSpacing: '1.6px',
+    textTransform: 'uppercase' as const,
+    color: 'var(--text-muted)',
+  } as CSSProperties,
+  zoneRule: {
+    flex: 1,
+    height: '1px',
+    background: 'var(--border-subtle)',
+  } as CSSProperties,
 }
 
 export const statusTone = {
