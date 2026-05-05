@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from './components/Loader'
+import { ZoneHeader } from './components/ZoneHeader'
 import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 
@@ -38,24 +39,6 @@ interface CurrentUser { id: string; name: string; role: string }
 interface Activity { id: string; action: string; detail: string | null; created_at: string; production_id: string; team?: { name: string } | null }
 interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
 interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
-
-function ZoneHeader({
-  label,
-  hint,
-  accent,
-  action,
-}: { label: string; hint?: string; accent?: string; action?: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', margin: '0 0 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', minWidth: 0 }}>
-        <span style={{ ...uiStyles.zoneLabel, color: accent || 'var(--text-muted)' }}>{label}</span>
-        {hint && <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>{hint}</span>}
-      </div>
-      <div style={uiStyles.zoneRule} />
-      {action}
-    </div>
-  )
-}
 
 export default function DashboardPage() {
   const { theme } = useTheme()
