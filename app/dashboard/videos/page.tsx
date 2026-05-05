@@ -73,6 +73,12 @@ export default function VideosPage() {
   const [aiSuggestions, setAiSuggestions] = useState<{ videoId: string; videoTitle: string; video_type: string; school: string | null; production_number: number | null; prodTitle: string | null; confidence: string; approved: boolean }[] | null>(null)
   const [linkingVideoId, setLinkingVideoId] = useState<string | null>(null)
   const [linkSearch, setLinkSearch] = useState('')
+  const [reviewQueue, setReviewQueue] = useState<Video[] | null>(null)
+  const [reviewIdx, setReviewIdx] = useState(0)
+  const [reviewSearchQuery, setReviewSearchQuery] = useState('')
+  const [reviewQueue, setReviewQueue] = useState<Video[] | null>(null)
+  const [reviewIdx, setReviewIdx] = useState(0)
+  const [reviewSearchQuery, setReviewSearchQuery] = useState('')
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -92,6 +98,46 @@ export default function VideosPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Keyboard shortcuts for the review queue
+  useEffect(() => {
+    if (!reviewQueue) return
+    const handler = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || '').toUpperCase()
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      const video = reviewQueue[reviewIdx]
+      if (!video) return
+      const candidates = findCandidates(video)
+      if (e.key === '1' && candidates[0]) { linkReviewVideo(candidates[0].prod.id, `#${candidates[0].prod.production_number} ${candidates[0].prod.title}`) }
+      else if (e.key === '2' && candidates[1]) { linkReviewVideo(candidates[1].prod.id, `#${candidates[1].prod.production_number} ${candidates[1].prod.title}`) }
+      else if (e.key === '3' && candidates[2]) { linkReviewVideo(candidates[2].prod.id, `#${candidates[2].prod.production_number} ${candidates[2].prod.title}`) }
+      else if (e.key === 's' || e.key === 'S') { skipReviewVideo() }
+      else if (e.key === 'Escape') { closeReviewQueue() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewQueue, reviewIdx, productions])
+
+  // Keyboard shortcuts for the review queue
+  useEffect(() => {
+    if (!reviewQueue) return
+    const handler = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || '').toUpperCase()
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      const video = reviewQueue[reviewIdx]
+      if (!video) return
+      const candidates = findCandidates(video)
+      if (e.key === '1' && candidates[0]) { linkReviewVideo(candidates[0].prod.id, `#${candidates[0].prod.production_number} ${candidates[0].prod.title}`) }
+      else if (e.key === '2' && candidates[1]) { linkReviewVideo(candidates[1].prod.id, `#${candidates[1].prod.production_number} ${candidates[1].prod.title}`) }
+      else if (e.key === '3' && candidates[2]) { linkReviewVideo(candidates[2].prod.id, `#${candidates[2].prod.production_number} ${candidates[2].prod.title}`) }
+      else if (e.key === 's' || e.key === 'S') { skipReviewVideo() }
+      else if (e.key === 'Escape') { closeReviewQueue() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewQueue, reviewIdx, productions])
+
   const syncChannel = async () => {
     setSyncing(true)
     try {
@@ -101,35 +147,13 @@ export default function VideosPage() {
       // Check which videos already exist in our DB
       const existingIds = new Set(videos.map((v: any) => v.youtube_id).filter(Boolean))
 
-      // Fuzzy match helper
-      const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
-      const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
-
-      const findMatch = (title: string): Production | null => {
-        const titleWords = getWords(title)
-        const nt = normalize(title)
-        for (const prod of productions) {
-          const np = normalize(prod.title)
-          const prodWords = getWords(prod.title)
-          // Exact normalized match
-          if (nt === np) return prod
-          // Substring match
-          if (nt.length >= 5 && np.length >= 5 && (nt.includes(np) || np.includes(nt))) return prod
-          // Keyword overlap: 50%+ of shorter title's words in longer
-          if (titleWords.length > 0 && prodWords.length > 0) {
-            const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
-            const longer = titleWords.length > prodWords.length ? titleWords : prodWords
-            const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
-            if (overlap >= Math.ceil(shorter.length * 0.5)) return prod
-          }
-        }
-        return null
-      }
-
+      // Sync no longer auto-matches videos to productions.
+      // Use the "Review unlinked" queue instead — it suggests candidates
+      // with date filtering and title-similarity scoring you can confirm.
       const results = data.videos.map((v: any) => ({
         ...v,
         existing: existingIds.has(v.youtube_id),
-        matchedProd: existingIds.has(v.youtube_id) ? null : findMatch(v.title),
+        matchedProd: null,
       }))
 
       // Auto-fix dates on existing videos (UTC→Mountain)
@@ -146,8 +170,7 @@ export default function VideosPage() {
 
       setSyncResults(results)
       const newCount = results.filter((r: any) => !r.existing).length
-      const matchedCount = results.filter((r: any) => !r.existing && r.matchedProd).length
-      toast(`Found ${data.total} videos. ${newCount} new, ${matchedCount} matched.${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
+      toast(`Found ${data.total} videos. ${newCount} new.${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
       if (dateFixed > 0) await loadData()
     } catch { toast('Channel sync failed', 'error') }
     setSyncing(false)
@@ -172,8 +195,7 @@ export default function VideosPage() {
       const { error } = await supabase.from('videos').insert(batch)
       if (!error) imported += batch.length
     }
-    const matchedCount = newVids.filter(v => v.matchedProd).length
-    toast(`Imported ${imported} videos. ${matchedCount} linked to productions. Click "🤖 AI Categorize" to categorize them.`, 'success')
+    toast(`Imported ${imported} videos. Click "🔍 Review unlinked" to link them to productions.`, 'success')
     setSyncResults(null)
     setSyncImporting(false)
     await loadData()
@@ -245,43 +267,82 @@ export default function VideosPage() {
     await loadData()
   }
 
-  const matchExistingVideos = async () => {
-    toast('Matching videos to productions...', 'info')
-    const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
-    const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
+  // ─── Review unlinked queue ────────────────────────────────────────────
+  // Replaces the old auto-matcher. Filters productions by ±14-day date window,
+  // ranks by title-token Jaccard similarity + date proximity, surfaces top 3
+  // with a Match/Skip flow. Keyboard: 1/2/3 = match, s = skip, esc = close.
+  const REVIEW_STOP_WORDS = new Set(['the','a','an','of','and','or','with','for','in','at','on','to','from','csd','csdtv','video','recording'])
+  const reviewTokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !REVIEW_STOP_WORDS.has(w))
+  const reviewTitleSim = (a: string, b: string): number => {
+    const ta = new Set(reviewTokenize(a))
+    const tb = new Set(reviewTokenize(b))
+    if (ta.size === 0 || tb.size === 0) return 0
+    let inter = 0
+    for (const t of ta) if (tb.has(t)) inter++
+    return inter / Math.max(ta.size, tb.size)
+  }
+  const reviewDateProx = (videoDate: string | null, prodDate: string | null | undefined): number => {
+    if (!videoDate || !prodDate) return 0.5
+    const days = Math.abs((new Date(videoDate + 'T00:00:00').getTime() - new Date(prodDate).getTime()) / 86400000)
+    if (days > 14) return 0
+    return 1 - (days / 14)
+  }
+  const findCandidates = (video: Video) => {
+    const scored = productions.map(p => {
+      const ds = reviewDateProx(video.date_published, p.start_datetime)
+      // If both have dates and they're outside the 14-day window, exclude
+      if (ds === 0 && video.date_published && p.start_datetime) return null
+      const ts = reviewTitleSim(video.title, p.title)
+      const score = 0.7 * ts + 0.3 * ds
+      const days = video.date_published && p.start_datetime
+        ? Math.round(Math.abs((new Date(video.date_published + 'T00:00:00').getTime() - new Date(p.start_datetime).getTime()) / 86400000))
+        : null
+      return { prod: p, score, titlePct: Math.round(ts * 100), daysApart: days }
+    }).filter((c): c is { prod: Production; score: number; titlePct: number; daysApart: number | null } => c !== null && c.score >= 0.20)
+    scored.sort((a, b) => b.score - a.score)
+    return scored.slice(0, 3)
+  }
+
+  const openReviewQueue = () => {
     const unlinked = videos.filter(v => !v.production_id)
-    let matched = 0
-    for (const video of unlinked) {
-      const titleWords = getWords(video.title)
-      const nt = normalize(video.title)
-      const videoDate = video.date_published ? new Date(video.date_published + 'T00:00:00') : null
-      for (const prod of productions) {
-        const np = normalize(prod.title)
-        const prodWords = getWords(prod.title)
-        // Date check: if both have dates, must be within 60 days
-        if (videoDate && prod.start_datetime) {
-          const prodDate = new Date(prod.start_datetime)
-          const daysDiff = Math.abs((videoDate.getTime() - prodDate.getTime()) / (1000 * 60 * 60 * 24))
-          if (daysDiff > 60) continue
-        }
-        let isMatch = false
-        if (nt === np) isMatch = true
-        else if (nt.length >= 5 && np.length >= 5 && (nt.includes(np) || np.includes(nt))) isMatch = true
-        else if (titleWords.length > 0 && prodWords.length > 0) {
-          const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
-          const longer = titleWords.length > prodWords.length ? titleWords : prodWords
-          const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
-          if (overlap >= Math.ceil(shorter.length * 0.5)) isMatch = true
-        }
-        if (isMatch) {
-          await supabase.from('videos').update({ production_id: prod.id }).eq('id', video.id)
-          matched++
-          break
-        }
-      }
+    if (unlinked.length === 0) { toast('No unlinked videos to review', 'info'); return }
+    setReviewQueue(unlinked)
+    setReviewIdx(0)
+    setReviewSearchQuery('')
+  }
+
+  const closeReviewQueue = () => {
+    setReviewQueue(null)
+    setReviewIdx(0)
+    setReviewSearchQuery('')
+  }
+
+  const linkReviewVideo = async (productionId: string, productionLabel: string) => {
+    if (!reviewQueue) return
+    const video = reviewQueue[reviewIdx]
+    if (!video) return
+    await supabase.from('videos').update({ production_id: productionId, needs_review: false }).eq('id', video.id)
+    const prod = productions.find(p => p.id === productionId)
+    setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: productionId, needs_review: false, productions: prod ? { title: prod.title, production_number: prod.production_number } : null } : v))
+    toast(`Linked to ${productionLabel}`, 'success')
+    setReviewSearchQuery('')
+    if (reviewIdx + 1 >= reviewQueue.length) {
+      closeReviewQueue()
+      toast('All caught up!', 'success')
+    } else {
+      setReviewIdx(reviewIdx + 1)
     }
-    toast(`Matched ${matched} of ${unlinked.length} unlinked videos to productions`, 'success')
-    await loadData()
+  }
+
+  const skipReviewVideo = () => {
+    if (!reviewQueue) return
+    setReviewSearchQuery('')
+    if (reviewIdx + 1 >= reviewQueue.length) {
+      closeReviewQueue()
+      toast('All caught up!', 'success')
+    } else {
+      setReviewIdx(reviewIdx + 1)
+    }
   }
 
   const createVideo = async () => {
@@ -345,8 +406,8 @@ export default function VideosPage() {
           <button onClick={syncChannel} disabled={syncing} style={{ background: '#ef4444', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: syncing ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px', opacity: syncing ? 0.7 : 1 }}>
             {syncing ? '⏳ Syncing...' : '▶ Sync YouTube'}
           </button>
-          <button onClick={matchExistingVideos} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
-            🔗 Match to Productions
+          <button onClick={openReviewQueue} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            🔍 Review unlinked ({videos.filter(v => !v.production_id).length})
           </button>
           <button onClick={() => { setShowBulkImport(!showBulkImport); setShowNew(false) }} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
             Bulk import
@@ -441,6 +502,166 @@ export default function VideosPage() {
           </div>
         </div>
       )}
+
+      {/* Review unlinked queue */}
+      {reviewQueue && reviewQueue.length > 0 && reviewQueue[reviewIdx] && (() => {
+        const video = reviewQueue[reviewIdx]
+        const candidates = findCandidates(video)
+        const filteredOther = reviewSearchQuery.length >= 2 ? productions.filter(p => {
+          const q = reviewSearchQuery.toLowerCase()
+          return p.title.toLowerCase().includes(q) || (p.organizer_name || '').toLowerCase().includes(q) || String(p.production_number).includes(q)
+        }).slice(0, 8) : []
+        return (
+          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>🔍 Review unlinked videos</h3>
+                <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{reviewIdx + 1} of {reviewQueue.length} · keyboard: <strong>1</strong>/<strong>2</strong>/<strong>3</strong> = match · <strong>s</strong> = skip · <strong>esc</strong> = close</p>
+              </div>
+              <button onClick={closeReviewQueue} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px 8px' }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '14px', padding: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '10px', marginBottom: '14px' }}>
+              {video.youtube_thumbnail && <img src={video.youtube_thumbnail} alt="" style={{ width: '120px', height: '68px', objectFit: 'cover' as const, borderRadius: '6px', flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{video.title}</p>
+                <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
+                  {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
+                  {video.youtube_views !== null ? ` · ${video.youtube_views.toLocaleString()} views` : ''}
+                  {video.youtube_duration ? ` · ${video.youtube_duration}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>
+                {candidates.length > 0 ? 'Suggested matches' : 'No good matches found'}
+              </p>
+              {candidates.length === 0 ? (
+                <p style={{ fontSize: '13px', color: muted, margin: 0, padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px' }}>
+                  No production within 14 days has a similar title. Search for one below or skip this video.
+                </p>
+              ) : candidates.map((c, i) => (
+                <div key={c.prod.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', marginBottom: '6px', border: `0.5px solid ${border}` }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: dark ? 'rgba(91,163,224,0.15)' : '#dbeafe', color: '#5ba3e0', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 2px' }}>#{c.prod.production_number} {c.prod.title}</p>
+                    <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
+                      Title {c.titlePct}% match
+                      {c.daysApart !== null ? ` · ${c.daysApart} day${c.daysApart !== 1 ? 's' : ''} apart` : ''}
+                      {c.prod.start_datetime ? ` · ${new Date(c.prod.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                    </p>
+                  </div>
+                  <button onClick={() => linkReviewVideo(c.prod.id, `#${c.prod.production_number} ${c.prod.title}`)} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>Match</button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: '14px', position: 'relative' as const }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 6px' }}>Search other productions</p>
+              <input value={reviewSearchQuery} onChange={e => setReviewSearchQuery(e.target.value)} placeholder="Type a title, number, or organizer..." style={inputStyle} />
+              {filteredOther.length > 0 && (
+                <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, maxHeight: '240px', overflowY: 'auto' as const, background: dark ? '#0d1526' : '#fff', border: `1px solid ${border}`, borderRadius: '8px', zIndex: 20, marginTop: '4px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                  {filteredOther.map(p => (
+                    <div key={p.id} onClick={() => linkReviewVideo(p.id, `#${p.production_number} ${p.title}`)} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', borderBottom: `0.5px solid ${border}` }}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
+                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                    >
+                      <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>
+                      <span style={{ display: 'block', fontSize: '11px', color: muted }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}{p.organizer_name ? ` · ${p.organizer_name}` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: `0.5px solid ${border}` }}>
+              <button onClick={skipReviewVideo} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Skip (s)</button>
+              <span style={{ fontSize: '12px', color: muted }}>{reviewQueue.length - reviewIdx - 1} more after this</span>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Review unlinked queue */}
+      {reviewQueue && reviewQueue.length > 0 && reviewQueue[reviewIdx] && (() => {
+        const video = reviewQueue[reviewIdx]
+        const candidates = findCandidates(video)
+        const filteredOther = reviewSearchQuery.length >= 2 ? productions.filter(p => {
+          const q = reviewSearchQuery.toLowerCase()
+          return p.title.toLowerCase().includes(q) || (p.organizer_name || '').toLowerCase().includes(q) || String(p.production_number).includes(q)
+        }).slice(0, 8) : []
+        return (
+          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>🔍 Review unlinked videos</h3>
+                <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{reviewIdx + 1} of {reviewQueue.length} · keyboard: <strong>1</strong>/<strong>2</strong>/<strong>3</strong> = match · <strong>s</strong> = skip · <strong>esc</strong> = close</p>
+              </div>
+              <button onClick={closeReviewQueue} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px 8px' }}>×</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '14px', padding: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '10px', marginBottom: '14px' }}>
+              {video.youtube_thumbnail && <img src={video.youtube_thumbnail} alt="" style={{ width: '120px', height: '68px', objectFit: 'cover' as const, borderRadius: '6px', flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{video.title}</p>
+                <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
+                  {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
+                  {video.youtube_views !== null ? ` · ${video.youtube_views.toLocaleString()} views` : ''}
+                  {video.youtube_duration ? ` · ${video.youtube_duration}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>
+                {candidates.length > 0 ? 'Suggested matches' : 'No good matches found'}
+              </p>
+              {candidates.length === 0 ? (
+                <p style={{ fontSize: '13px', color: muted, margin: 0, padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px' }}>
+                  No production within 14 days has a similar title. Search for one below or skip this video.
+                </p>
+              ) : candidates.map((c, i) => (
+                <div key={c.prod.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', marginBottom: '6px', border: `0.5px solid ${border}` }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: dark ? 'rgba(91,163,224,0.15)' : '#dbeafe', color: '#5ba3e0', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 2px' }}>#{c.prod.production_number} {c.prod.title}</p>
+                    <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
+                      Title {c.titlePct}% match
+                      {c.daysApart !== null ? ` · ${c.daysApart} day${c.daysApart !== 1 ? 's' : ''} apart` : ''}
+                      {c.prod.start_datetime ? ` · ${new Date(c.prod.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                    </p>
+                  </div>
+                  <button onClick={() => linkReviewVideo(c.prod.id, `#${c.prod.production_number} ${c.prod.title}`)} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>Match</button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: '14px', position: 'relative' as const }}>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 6px' }}>Search other productions</p>
+              <input value={reviewSearchQuery} onChange={e => setReviewSearchQuery(e.target.value)} placeholder="Type a title, number, or organizer..." style={inputStyle} />
+              {filteredOther.length > 0 && (
+                <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, maxHeight: '240px', overflowY: 'auto' as const, background: dark ? '#0d1526' : '#fff', border: `1px solid ${border}`, borderRadius: '8px', zIndex: 20, marginTop: '4px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                  {filteredOther.map(p => (
+                    <div key={p.id} onClick={() => linkReviewVideo(p.id, `#${p.production_number} ${p.title}`)} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', borderBottom: `0.5px solid ${border}` }}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
+                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+                    >
+                      <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>
+                      <span style={{ display: 'block', fontSize: '11px', color: muted }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}{p.organizer_name ? ` · ${p.organizer_name}` : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: `0.5px solid ${border}` }}>
+              <button onClick={skipReviewVideo} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Skip (s)</button>
+              <span style={{ fontSize: '12px', color: muted }}>{reviewQueue.length - reviewIdx - 1} more after this</span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Bulk import panel */}
       {showBulkImport && (
