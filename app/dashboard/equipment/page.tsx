@@ -202,24 +202,21 @@ export default function EquipmentPage() {
 
   const handleCheckout = useCallback(async () => {
     if (!checkoutItem || !borrowerName.trim() || !user) return
-    const { error: loanError } = await supabase.from('equipment_loans').insert({
-      equipment_id: checkoutItem.id,
-      borrower_name: borrowerName.trim(),
-      borrower_info: borrowerInfo.trim() || null,
-      checked_out_by: user.id,
-      due_date: dueDate || null,
+    const res = await fetch('/api/equipment/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        equipmentId: checkoutItem.id,
+        borrowerName: borrowerName.trim(),
+        borrowerInfo: borrowerInfo.trim() || null,
+        dueDate: dueDate || null,
+      }),
     })
-    if (loanError) { toast('Error: ' + loanError.message); return }
-
-    const { error: statusError } = await supabase.from('equipment').update({ status: 'checked_out' }).eq('id', checkoutItem.id)
-    if (statusError) { toast('Error: ' + statusError.message); return }
-    const { error: activityError } = await supabase.from('equipment_activity').insert({
-      equipment_id: checkoutItem.id,
-      action: 'checked_out',
-      detail: `Checked out to ${borrowerName.trim()}${dueDate ? ` — due ${dueDate}` : ''}`,
-      user_id: user.id,
-    })
-    if (activityError) { toast('Error: ' + activityError.message); return }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast(body.error || 'Checkout failed', 'error')
+      return
+    }
 
     setCheckoutItem(null)
     setBorrowerName('')
@@ -586,10 +583,15 @@ export default function EquipmentPage() {
                     onClick={async () => {
                       if (!user) return
                       if (!confirm(`Check in "${loan.equipment?.name || loan.kit?.name}" from ${loan.borrower_name}?`)) return
-                      await supabase.from('equipment_loans').update({ checked_in_at: new Date().toISOString(), checked_in_by: user.id }).eq('id', loan.id)
-                      if (loan.equipment_id) {
-                        await supabase.from('equipment').update({ status: 'available' }).eq('id', loan.equipment_id)
-                        await supabase.from('equipment_activity').insert({ equipment_id: loan.equipment_id, action: 'checked_in', detail: `Returned by ${loan.borrower_name}`, user_id: user.id })
+                      const res = await fetch('/api/equipment/checkin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ loanId: loan.id }),
+                      })
+                      if (!res.ok) {
+                        const body = await res.json().catch(() => ({}))
+                        toast(body.error || 'Check-in failed', 'error')
+                        return
                       }
                       loadData()
                     }}

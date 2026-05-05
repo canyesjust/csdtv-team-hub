@@ -36,6 +36,26 @@ function isRateLimited(key: string): boolean {
   return recent.length > SIGNUP_MAX_PER_WINDOW
 }
 
+async function isRateLimitedPersistent(
+  supabase: ReturnType<typeof createClient>,
+  key: string
+): Promise<boolean> {
+  const windowStart = new Date(Date.now() - SIGNUP_WINDOW_MS).toISOString()
+  const { error: insertError } = await supabase
+    .from('api_rate_limits')
+    .insert({ scope: 'crew_signup', rate_key: key })
+  if (insertError) return false
+
+  const { count, error: countError } = await supabase
+    .from('api_rate_limits')
+    .select('id', { count: 'exact', head: true })
+    .eq('scope', 'crew_signup')
+    .eq('rate_key', key)
+    .gte('created_at', windowStart)
+  if (countError) return false
+  return (count || 0) > SIGNUP_MAX_PER_WINDOW
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ production_number: string }> }
@@ -61,7 +81,8 @@ export async function POST(
     }
     const ip = getClientIp(request)
     const rateKey = `${num}:${ip}`
-    if (isRateLimited(rateKey)) {
+    const persistentLimited = await isRateLimitedPersistent(supabase, rateKey)
+    if (persistentLimited || isRateLimited(rateKey)) {
       return NextResponse.json({ error: 'Too many signup attempts. Please wait a minute and try again.' }, { status: 429 })
     }
 

@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../components/Loader'
+import { toast } from '@/lib/toast'
 
 type Equipment = {
   id: string; asset_tag: string; name: string; brand: string | null; model: string | null
@@ -107,9 +108,21 @@ export default function EquipmentDetailPage() {
 
   const handleCheckout = async () => {
     if (!item || !borrowerName.trim() || !userId) return
-    await supabase.from('equipment_loans').insert({ equipment_id: item.id, borrower_name: borrowerName.trim(), borrower_info: borrowerInfo.trim() || null, checked_out_by: userId, due_date: dueDate || null, notes: checkoutNote.trim() || null })
-    await supabase.from('equipment').update({ status: 'checked_out' }).eq('id', item.id)
-    await supabase.from('equipment_activity').insert({ equipment_id: item.id, action: 'checked_out', detail: `Checked out to ${borrowerName.trim()}`, user_id: userId })
+    const res = await fetch('/api/equipment/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        equipmentId: item.id,
+        borrowerName: borrowerName.trim(),
+        borrowerInfo: borrowerInfo.trim() || null,
+        dueDate: dueDate || null,
+      }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast(body.error || 'Checkout failed', 'error')
+      return
+    }
     setItem(prev => prev ? { ...prev, status: 'checked_out' } : null)
     setEditForm(prev => ({ ...prev, status: 'checked_out' }))
     setShowCheckout(false); setBorrowerName(''); setBorrowerInfo(''); setDueDate(''); setCheckoutNote('')
@@ -118,9 +131,16 @@ export default function EquipmentDetailPage() {
 
   const handleCheckin = async (loan: Loan) => {
     if (!item || !userId) return
-    await supabase.from('equipment_loans').update({ checked_in_at: new Date().toISOString() }).eq('id', loan.id)
-    await supabase.from('equipment').update({ status: 'available' }).eq('id', item.id)
-    await supabase.from('equipment_activity').insert({ equipment_id: item.id, action: 'checked_in', detail: `Returned by ${loan.borrower_name}`, user_id: userId })
+    const res = await fetch('/api/equipment/checkin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loanId: loan.id }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast(body.error || 'Check-in failed', 'error')
+      return
+    }
     setItem(prev => prev ? { ...prev, status: 'available' } : null)
     setEditForm(prev => ({ ...prev, status: 'available' }))
     loadData()
