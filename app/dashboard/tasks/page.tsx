@@ -59,6 +59,7 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [activeTab, setActiveTab] = useState<'open' | 'completed'>('open')
   const [filter, setFilter] = useState<'all' | 'mine' | 'unassigned'>('all')
+  const [focusFilter, setFocusFilter] = useState<'all' | 'at-risk' | 'due-soon' | 'blocked' | 'unassigned'>('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [groupBy, setGroupBy] = useState<'none' | 'person' | 'status' | 'priority'>('none')
   const [showNewTask, setShowNewTask] = useState(false)
@@ -385,11 +386,45 @@ export default function TasksPage() {
     return { label: `Event in ${diff} days`, color: muted }
   }
 
+  const daysUntilDue = (dueDate: string | null): number | null => {
+    if (!dueDate) return null
+    const due = new Date(dueDate)
+    const now = new Date()
+    due.setHours(0, 0, 0, 0)
+    now.setHours(0, 0, 0, 0)
+    return Math.ceil((due.getTime() - now.getTime()) / 86400000)
+  }
+
+  const isAtRiskTask = (task: Task): boolean => {
+    const dueInDays = daysUntilDue(task.due_date)
+    const overdue = dueInDays !== null && dueInDays < 0
+    const dueWithin48h = dueInDays !== null && dueInDays >= 0 && dueInDays <= 2
+    return overdue || task.status === 'in review' || task.priority === 'day of' || dueWithin48h
+  }
+
+  const focusCounts = {
+    all: tasks.length,
+    ['at-risk']: tasks.filter(isAtRiskTask).length,
+    ['due-soon']: tasks.filter(t => {
+      const dueInDays = daysUntilDue(t.due_date)
+      return dueInDays !== null && dueInDays >= 0 && dueInDays <= 2
+    }).length,
+    blocked: tasks.filter(t => Boolean(t.blocked_by)).length,
+    unassigned: tasks.filter(t => !t.assigned_to).length,
+  }
+
   const filtered = tasks.filter(t => {
+    const dueInDays = daysUntilDue(t.due_date)
+    const matchFocus =
+      focusFilter === 'all' ||
+      (focusFilter === 'at-risk' && isAtRiskTask(t)) ||
+      (focusFilter === 'due-soon' && dueInDays !== null && dueInDays >= 0 && dueInDays <= 2) ||
+      (focusFilter === 'blocked' && Boolean(t.blocked_by)) ||
+      (focusFilter === 'unassigned' && !t.assigned_to)
     const matchFilter = filter === 'all' || (filter === 'mine' && t.assigned_to === currentUser?.id) || (filter === 'unassigned' && !t.assigned_to)
     const matchStatus = statusFilter === 'all' || t.status === statusFilter
     const matchSearch = search === '' || t.title.toLowerCase().includes(search.toLowerCase()) || t.description?.toLowerCase().includes(search.toLowerCase()) || t.productions?.title?.toLowerCase().includes(search.toLowerCase()) || (t.scanned_sheet_id || '').toLowerCase().includes(search.toLowerCase())
-    return matchFilter && matchStatus && matchSearch
+    return matchFocus && matchFilter && matchStatus && matchSearch
   })
 
   const grouped = (): { label: string | null; tasks: Task[] }[] => {
@@ -569,6 +604,37 @@ export default function TasksPage() {
         {/* OPEN TAB */}
         {activeTab === 'open' && (
           <div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '8px', marginBottom: '12px' }}>
+              {[
+                { key: 'all', label: 'All open', hint: 'Everything active', color: muted },
+                { key: 'at-risk', label: 'At risk', hint: 'Overdue, review, day-of', color: '#ef4444' },
+                { key: 'due-soon', label: 'Due in 48h', hint: 'Next two days', color: '#f59e0b' },
+                { key: 'blocked', label: 'Blocked', hint: 'Needs dependency', color: '#a855f7' },
+                { key: 'unassigned', label: 'Unassigned', hint: 'Needs an owner', color: '#5ba3e0' },
+              ].map(item => {
+                const active = focusFilter === item.key
+                const count = focusCounts[item.key as keyof typeof focusCounts]
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setFocusFilter(item.key as typeof focusFilter)}
+                    style={{
+                      textAlign: 'left',
+                      borderRadius: '10px',
+                      border: `0.5px solid ${active ? item.color : border}`,
+                      background: active ? (dark ? 'rgba(255,255,255,0.02)' : '#f8fbff') : cardBg,
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: '11px', letterSpacing: '0.3px', textTransform: 'uppercase', color: active ? item.color : muted, fontWeight: 700 }}>{item.label}</p>
+                    <p style={{ margin: '4px 0 0', fontSize: '22px', color: text, fontWeight: 700 }}>{count}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: muted }}>{item.hint}</p>
+                  </button>
+                )
+              })}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '8px 14px', marginBottom: '12px' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks..." style={{ background: 'none', border: 'none', outline: 'none', fontSize: '14px', color: text, fontFamily: 'inherit', width: '100%' }} />
