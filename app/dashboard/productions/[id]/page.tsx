@@ -84,7 +84,30 @@ const CHECKLIST_TEMPLATES: Record<string, string[]> = {
   'Other, Unsure, Or Consultation': ['Initial consultation','Define scope and deliverables','Execute','Review and deliver'],
 }
 
-const THUMB_MOOD_OPTIONS = ['Celebratory', 'Elegant', 'Bold', 'Dramatic', 'Playful', 'Formal', 'Energetic', 'Cinematic'] as const
+const THUMB_EVENT_TYPES = ['concert', 'ceremony', 'recognition', 'panel', 'sports', 'parent-meeting', 'performance', 'competition', 'graduation'] as const
+const THUMB_TONES = ['bold-energetic', 'bright-celebratory', 'dignified-ceremonial', 'warm-community', 'refined-academic'] as const
+const THUMB_MASCOT_MODES = ['name', 'unknown', 'none-applicable'] as const
+const THUMB_DRAFT_VERSION = 1
+const THUMB_DRAFT_TTL_MS = 1000 * 60 * 60 * 24 * 30
+
+interface ThumbnailDraft {
+  version: number
+  savedAt: number
+  schoolCode: string
+  eventName: string
+  date: string
+  time: string
+  schoolOverride: string
+  detail: string
+  mascotMode: (typeof THUMB_MASCOT_MODES)[number]
+  eventType: (typeof THUMB_EVENT_TYPES)[number]
+  tone: (typeof THUMB_TONES)[number]
+  eventDescription: string
+  logistics: string
+  conceptAnchor: string
+  prompt: string
+  svgInput: string
+}
 
 export default function ProductionDetailPage() {
   const { theme } = useTheme()
@@ -148,13 +171,19 @@ export default function ProductionDetailPage() {
   const [thumbTime, setThumbTime] = useState('')
   const [thumbSchoolOverride, setThumbSchoolOverride] = useState('')
   const [thumbDetail, setThumbDetail] = useState('')
-  const [thumbMoods, setThumbMoods] = useState<string[]>(['Bold'])
-  const [thumbNotes, setThumbNotes] = useState('')
+  const [thumbMascotMode, setThumbMascotMode] = useState<(typeof THUMB_MASCOT_MODES)[number]>('unknown')
+  const [thumbEventType, setThumbEventType] = useState<(typeof THUMB_EVENT_TYPES)[number]>('recognition')
+  const [thumbTone, setThumbTone] = useState<(typeof THUMB_TONES)[number]>('dignified-ceremonial')
+  const [thumbEventDescription, setThumbEventDescription] = useState('')
+  const [thumbLogistics, setThumbLogistics] = useState('')
+  const [thumbConceptAnchor, setThumbConceptAnchor] = useState('')
   const [thumbPrompt, setThumbPrompt] = useState('')
   const [thumbSvgInput, setThumbSvgInput] = useState('')
   const [thumbSanitizedSvg, setThumbSanitizedSvg] = useState('')
   const [thumbSvgError, setThumbSvgError] = useState<string | null>(null)
   const [thumbCopied, setThumbCopied] = useState(false)
+  const [thumbDraftRestored, setThumbDraftRestored] = useState(false)
+  const [thumbDraftSavedAt, setThumbDraftSavedAt] = useState<number | null>(null)
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -228,6 +257,8 @@ export default function ProductionDetailPage() {
       .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
       .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '')
       .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, '')
+      .replace(/\s(?:xlink:href|href)\s*=\s*"(?!#)[^"]*"/gi, '')
+      .replace(/\s(?:xlink:href|href)\s*=\s*'(?!#)[^']*'/gi, '')
       .replace(/javascript:/gi, '')
       .trim()
   }, [])
@@ -739,6 +770,7 @@ export default function ProductionDetailPage() {
   }
 
   useEffect(() => {
+    if (thumbDraftRestored) return
     if (!production) return
     const eventDate = production.start_datetime ? new Date(production.start_datetime) : null
     const dateVal = eventDate ? `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}` : ''
@@ -752,8 +784,29 @@ export default function ProductionDetailPage() {
     setThumbDate(dateVal)
     setThumbTime(timeVal)
     setThumbDetail(production.request_type_label || production.type || '')
-    setThumbNotes(production.additional_notes || '')
-  }, [production, schools])
+    setThumbEventDescription(production.additional_notes || '')
+    setThumbLogistics('')
+    setThumbConceptAnchor('stacked typography hero left, concept-relevant graphic accent right')
+    const typeLabel = (production.request_type_label || production.type || '').toLowerCase()
+    if (typeLabel.includes('board') || typeLabel.includes('meeting') || typeLabel.includes('panel')) {
+      setThumbEventType('panel')
+      setThumbTone('refined-academic')
+    } else if (typeLabel.includes('concert') || typeLabel.includes('choir') || typeLabel.includes('band')) {
+      setThumbEventType('concert')
+      setThumbTone('bright-celebratory')
+    } else if (typeLabel.includes('graduat') || typeLabel.includes('portrait')) {
+      setThumbEventType('recognition')
+      setThumbTone('dignified-ceremonial')
+    } else if (typeLabel.includes('sport') || typeLabel.includes('championship')) {
+      setThumbEventType('sports')
+      setThumbTone('bold-energetic')
+    } else {
+      setThumbEventType('recognition')
+      setThumbTone('warm-community')
+    }
+    const hasMascot = Boolean(matchingSchool?.mascot)
+    setThumbMascotMode(hasMascot ? 'name' : 'none-applicable')
+  }, [production, schools, thumbDraftRestored])
 
   const selectedThumbSchool = (() => {
     if (thumbSchoolCode === 'district') {
@@ -776,41 +829,126 @@ export default function ProductionDetailPage() {
   }, [selectedThumbSchool, thumbSchoolOverride])
 
   useEffect(() => {
+    if (!productionNum || typeof window === 'undefined') return
+    const key = `thumbnail-draft:${productionNum}`
+    try {
+      // Best-effort cleanup for stale draft keys.
+      const now = Date.now()
+      for (let i = 0; i < window.localStorage.length; i += 1) {
+        const storageKey = window.localStorage.key(i)
+        if (!storageKey || !storageKey.startsWith('thumbnail-draft:')) continue
+        const rawItem = window.localStorage.getItem(storageKey)
+        if (!rawItem) continue
+        const parsed = JSON.parse(rawItem) as Partial<ThumbnailDraft>
+        if (!parsed.savedAt || now - parsed.savedAt > THUMB_DRAFT_TTL_MS) {
+          window.localStorage.removeItem(storageKey)
+        }
+      }
+      const raw = window.localStorage.getItem(key)
+      if (!raw) return
+      const draft = JSON.parse(raw) as ThumbnailDraft
+      if (!draft.savedAt || Date.now() - draft.savedAt > THUMB_DRAFT_TTL_MS) {
+        window.localStorage.removeItem(key)
+        return
+      }
+      setThumbSchoolCode(draft.schoolCode || 'district')
+      setThumbEventName(draft.eventName || '')
+      setThumbDate(draft.date || '')
+      setThumbTime(draft.time || '')
+      setThumbSchoolOverride(draft.schoolOverride || '')
+      setThumbDetail(draft.detail || '')
+      setThumbMascotMode(draft.mascotMode || 'unknown')
+      setThumbEventType(draft.eventType || 'recognition')
+      setThumbTone(draft.tone || 'dignified-ceremonial')
+      setThumbEventDescription(draft.eventDescription || '')
+      setThumbLogistics(draft.logistics || '')
+      setThumbConceptAnchor(draft.conceptAnchor || '')
+      setThumbPrompt(draft.prompt || '')
+      setThumbSvgInput(draft.svgInput || '')
+      setThumbDraftRestored(true)
+      setThumbDraftSavedAt(draft.savedAt || null)
+    } catch {
+      window.localStorage.removeItem(key)
+    }
+  }, [productionNum])
+
+  const normalizedThumbSchool = (thumbSchoolOverride || selectedThumbSchool?.name || '').trim()
+  const normalizedThumbEventName = thumbEventName.trim()
+  const missingThumbFields = [
+    !normalizedThumbSchool ? 'School' : null,
+    !normalizedThumbEventName ? 'Event Name' : null,
+  ].filter(Boolean) as string[]
+
+  useEffect(() => {
+    if (!productionNum || typeof window === 'undefined') return
+    const key = `thumbnail-draft:${productionNum}`
+    const payload: ThumbnailDraft = {
+      version: THUMB_DRAFT_VERSION,
+      savedAt: Date.now(),
+      schoolCode: thumbSchoolCode,
+      eventName: thumbEventName,
+      date: thumbDate,
+      time: thumbTime,
+      schoolOverride: thumbSchoolOverride,
+      detail: thumbDetail,
+      mascotMode: thumbMascotMode,
+      eventType: thumbEventType,
+      tone: thumbTone,
+      eventDescription: thumbEventDescription,
+      logistics: thumbLogistics,
+      conceptAnchor: thumbConceptAnchor,
+      prompt: thumbPrompt,
+      svgInput: thumbSvgInput,
+    }
+    try {
+      window.localStorage.setItem(key, JSON.stringify(payload))
+      setThumbDraftSavedAt(payload.savedAt)
+    } catch {
+      // Ignore local storage failures (private mode/quota).
+    }
+  }, [productionNum, thumbSchoolCode, thumbEventName, thumbDate, thumbTime, thumbSchoolOverride, thumbDetail, thumbMascotMode, thumbEventType, thumbTone, thumbEventDescription, thumbLogistics, thumbConceptAnchor, thumbPrompt, thumbSvgInput])
+
+  useEffect(() => {
+    const mascotLine = thumbMascotMode === 'none-applicable'
+      ? '- mascot: none-applicable'
+      : thumbMascotMode === 'unknown'
+        ? '- mascot: unknown'
+        : `- mascot: ${selectedThumbSchool?.mascot || 'unknown'}`
+
     const lines = [
-      'Create a unique YouTube thumbnail as a complete, self-contained SVG at exactly 1280×720px.',
+      'Create one complete, self-contained SVG thumbnail (1280x720). Return ONLY raw <svg>...</svg>.',
       '',
-      'EVENT INFORMATION:',
-      `- Event: ${thumbEventName || 'Event Name'}`,
-      `- School: ${thumbSchoolOverride || selectedThumbSchool?.name || 'School Name'}`,
-      selectedThumbSchool?.mascot ? `- Mascot: ${selectedThumbSchool.mascot} (reference but do not attempt to render a logo - use typography or abstract shapes instead)` : '- Mascot: (unknown) (reference but do not attempt to render a logo - use typography or abstract shapes instead)',
-      thumbDate ? `- Date: ${fmtPromptDate(thumbDate)}` : '',
-      thumbTime ? `- Time: ${thumbTime}` : '',
-      thumbDetail ? `- Detail: ${thumbDetail}` : '',
+      'INPUTS',
+      `- school: ${normalizedThumbSchool || 'School Name'}`,
+      mascotLine,
+      `- event_name: ${normalizedThumbEventName || 'Event Name'}`,
+      `- event_type: ${thumbEventType}`,
+      `- date: ${thumbDate ? fmtPromptDate(thumbDate) : 'TBD'}`,
+      `- time: ${thumbTime || 'TBD'}`,
+      thumbDetail ? `- detail: ${thumbDetail}` : '',
+      `- tone: ${thumbTone}`,
+      `- event_description: ${thumbEventDescription || 'n/a'}`,
+      `- logistics: ${thumbLogistics || 'n/a'}`,
+      `- concept_anchor: ${thumbConceptAnchor || 'n/a'}`,
       '',
-      'SCHOOL COLORS:',
-      `- Primary: ${selectedThumbSchool?.primary_color || '#003087'}`,
-      `- Secondary: ${selectedThumbSchool?.secondary_color || '#e8a020'}`,
-      selectedThumbSchool?.accent_color ? `- Accent: ${selectedThumbSchool.accent_color}` : '',
+      'BRAND COLORS',
+      `- primary: ${selectedThumbSchool?.primary_color || '#003087'}`,
+      `- secondary: ${selectedThumbSchool?.secondary_color || '#e8a020'}`,
+      selectedThumbSchool?.accent_color ? `- accent: ${selectedThumbSchool.accent_color}` : '',
       '',
-      `MOOD / FEEL: ${thumbMoods.length > 0 ? thumbMoods.join(', ') : 'Bold'}`,
+      'HARD RULES',
+      '- Exact 1280x720 SVG viewBox.',
+      '- CSDtv brand lockup in bottom-left: chevron + "CSDtv" + "CANYONS SCHOOL DISTRICT".',
+      '- Use only inline vectors, gradients, patterns, masks, and text. No external images/fonts/scripts/CSS.',
+      '- Event title must be prominent and readable at mobile size.',
+      '- No LIVE chip or LIVE badge under any condition.',
+      '- Keep output production-ready: no placeholder geometry, no lorem ipsum.',
       '',
-      `CREATIVE NOTES: ${thumbNotes || 'None provided'}`,
-      '',
-      'DESIGN REQUIREMENTS:',
-      '- Size: exactly 1280x720px viewBox',
-      '- Must include "CSDtv" branding in the bottom left corner with the Canyons School District chevron mark (a right-pointing chevron/arrow shape in the secondary color) followed by "CSDtv" in bold and "CANYONS SCHOOL DISTRICT" in small caps',
-      '- Use the school\'s primary and secondary colors as the dominant palette',
-      '- Typography should be bold and broadcast-quality - this is a YouTube thumbnail that needs to read at small sizes',
-      '- Do NOT use placeholder rectangles or generic layouts - design something genuinely unique and visually interesting',
-      '- Do NOT include any external image references or URLs - everything must be inline SVG',
-      '- Do NOT attempt to render a photographic mascot - use the mascot name as text, or suggest the mascot through abstract shapes, silhouettes, or graphic elements',
-      '- Diagonal design elements, bold color blocks, and dynamic composition are encouraged',
-      '- Vary the layout - do not default to a left-text / right-logo split every time',
-      '',
-      'OUTPUT: Return only the raw SVG code. No explanation, no markdown code fences, no preamble. Start with <svg and end with </svg>.',
+      'OUTPUT CONTRACT',
+      '- Return only valid SVG markup, starting with <svg and ending with </svg>.',
     ].filter(Boolean)
     setThumbPrompt(lines.join('\n'))
-  }, [thumbEventName, thumbSchoolOverride, selectedThumbSchool, thumbDate, thumbTime, thumbDetail, thumbMoods, thumbNotes])
+  }, [thumbSchoolOverride, selectedThumbSchool, thumbEventName, thumbEventType, thumbDate, thumbTime, thumbDetail, thumbTone, thumbEventDescription, thumbLogistics, thumbConceptAnchor, thumbMascotMode])
 
   useEffect(() => {
     if (!thumbSvgInput.trim()) {
@@ -828,11 +966,11 @@ export default function ProductionDetailPage() {
     setThumbSanitizedSvg(clean)
   }, [thumbSvgInput, sanitizeSvgMarkup])
 
-  const toggleMood = (mood: string) => {
-    setThumbMoods(prev => prev.includes(mood) ? prev.filter(m => m !== mood) : [...prev, mood])
-  }
-
   const copyThumbPrompt = async () => {
+    if (missingThumbFields.length > 0) {
+      toast(`Add required fields first: ${missingThumbFields.join(', ')}`, 'error')
+      return
+    }
     if (!thumbPrompt.trim()) return
     try {
       await navigator.clipboard.writeText(thumbPrompt)
@@ -844,6 +982,10 @@ export default function ProductionDetailPage() {
   }
 
   const downloadThumbnailPng = async () => {
+    if (missingThumbFields.length > 0) {
+      toast(`Add required fields first: ${missingThumbFields.join(', ')}`, 'error')
+      return
+    }
     if (!thumbSanitizedSvg) return
     try {
       const canvas = document.createElement('canvas')
@@ -865,11 +1007,86 @@ export default function ProductionDetailPage() {
       const schoolPart = slug((selectedThumbSchool?.short_name || thumbSchoolOverride || 'School'))
       const eventPart = slug(thumbEventName || 'Event')
       link.download = `CSDtv_${schoolPart}_${eventPart}_${datePart}.png`
-      link.href = canvas.toDataURL('image/png')
+      const pngBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
+      if (!pngBlob) throw new Error('Unable to export PNG')
+      const pngUrl = URL.createObjectURL(pngBlob)
+      link.href = pngUrl
+      document.body.appendChild(link)
       link.click()
+      link.remove()
+      URL.revokeObjectURL(pngUrl)
     } catch {
       toast('Failed to convert SVG to PNG', 'error')
     }
+  }
+
+  const downloadThumbnailSvg = () => {
+    if (missingThumbFields.length > 0) {
+      toast(`Add required fields first: ${missingThumbFields.join(', ')}`, 'error')
+      return
+    }
+    if (!thumbSanitizedSvg) return
+    try {
+      const datePart = thumbDate || new Date().toISOString().slice(0, 10)
+      const schoolPart = slug((selectedThumbSchool?.short_name || thumbSchoolOverride || 'School'))
+      const eventPart = slug(thumbEventName || 'Event')
+      const svgBlob = new Blob([thumbSanitizedSvg], { type: 'image/svg+xml;charset=utf-8' })
+      const svgUrl = URL.createObjectURL(svgBlob)
+      const link = document.createElement('a')
+      link.download = `CSDtv_${schoolPart}_${eventPart}_${datePart}.svg`
+      link.href = svgUrl
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(svgUrl)
+    } catch {
+      toast('Failed to save SVG', 'error')
+    }
+  }
+
+  const clearThumbnailDraft = () => {
+    if (typeof window === 'undefined') return
+    const key = `thumbnail-draft:${productionNum}`
+    try {
+      window.localStorage.removeItem(key)
+      setThumbDraftSavedAt(null)
+      setThumbDraftRestored(false)
+      toast('Saved thumbnail draft cleared', 'success')
+    } catch {
+      toast('Failed to clear saved draft', 'error')
+    }
+  }
+
+  const buildThumbnailPreviewDoc = (svgMarkup: string): string => {
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      svg {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100%;
+        max-height: 100%;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>${svgMarkup}</body>
+</html>`
   }
 
   if (loading) return (
@@ -1582,7 +1799,7 @@ export default function ProductionDetailPage() {
 
       {/* THUMBNAIL TAB */}
       {activeTab === 'thumbnail' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Thumbnail prompt inputs</h3>
 
@@ -1620,7 +1837,7 @@ export default function ProductionDetailPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '8px' }}>
               <div>
                 <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>School override</label>
                 <input value={thumbSchoolOverride} onChange={e => setThumbSchoolOverride(e.target.value)} placeholder="Mount Jordan Middle School" style={inputStyle} />
@@ -1629,49 +1846,70 @@ export default function ProductionDetailPage() {
                 <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Additional detail</label>
                 <input value={thumbDetail} onChange={e => setThumbDetail(e.target.value)} placeholder="Band & Orchestra" style={inputStyle} />
               </div>
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '6px' }}>Mood</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px' }}>
-                {THUMB_MOOD_OPTIONS.map(m => (
-                  <button
-                    key={m}
-                    onClick={() => toggleMood(m)}
-                    style={{
-                      fontSize: '12px',
-                      padding: '5px 10px',
-                      borderRadius: '999px',
-                      border: `0.5px solid ${thumbMoods.includes(m) ? infoTone : border}`,
-                      background: thumbMoods.includes(m) ? statusTone.info.background : 'transparent',
-                      color: thumbMoods.includes(m) ? infoTone : muted,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    {m}
-                  </button>
-                ))}
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Event type</label>
+                <select value={thumbEventType} onChange={e => setThumbEventType(e.target.value as (typeof THUMB_EVENT_TYPES)[number])} style={inputStyle}>
+                  {THUMB_EVENT_TYPES.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Tone</label>
+                <select value={thumbTone} onChange={e => setThumbTone(e.target.value as (typeof THUMB_TONES)[number])} style={inputStyle}>
+                  {THUMB_TONES.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Mascot mode</label>
+                <select value={thumbMascotMode} onChange={e => setThumbMascotMode(e.target.value as (typeof THUMB_MASCOT_MODES)[number])} style={inputStyle}>
+                  {THUMB_MASCOT_MODES.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
             <div style={{ marginBottom: '8px' }}>
-              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Creative notes</label>
-              <textarea value={thumbNotes} onChange={e => setThumbNotes(e.target.value)} rows={3} placeholder="Include musical notes, make it feel like a championship..." style={{ ...inputStyle, minHeight: '78px', resize: 'vertical' as const }} />
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Event description</label>
+              <textarea value={thumbEventDescription} onChange={e => setThumbEventDescription(e.target.value)} rows={3} placeholder="Briefly describe who/what should be represented in the art direction." style={{ ...inputStyle, minHeight: '78px', resize: 'vertical' as const }} />
+            </div>
+
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Logistics</label>
+              <textarea value={thumbLogistics} onChange={e => setThumbLogistics(e.target.value)} rows={2} placeholder="Date/time cues, venue context, lower-third constraints, etc." style={{ ...inputStyle, minHeight: '66px', resize: 'vertical' as const }} />
+            </div>
+
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Concept anchor</label>
+              <textarea value={thumbConceptAnchor} onChange={e => setThumbConceptAnchor(e.target.value)} rows={2} placeholder="A single layout and composition direction to ground the design." style={{ ...inputStyle, minHeight: '66px', resize: 'vertical' as const }} />
             </div>
 
             <div style={{ marginBottom: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <label style={{ fontSize: '11px', color: muted, display: 'block' }}>Generated prompt (editable)</label>
-                <button onClick={copyThumbPrompt} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: thumbCopied ? successTone : brandTone, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>{thumbCopied ? 'Copied' : 'Copy'}</button>
+                <button onClick={copyThumbPrompt} disabled={missingThumbFields.length > 0} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: missingThumbFields.length > 0 ? inputBg : (thumbCopied ? successTone : brandTone), color: missingThumbFields.length > 0 ? muted : '#fff', border: 'none', cursor: missingThumbFields.length > 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>{thumbCopied ? 'Copied' : 'Copy'}</button>
               </div>
+              {missingThumbFields.length > 0 && (
+                <p style={{ margin: '0 0 6px', fontSize: '11px', color: warningTone }}>Required: {missingThumbFields.join(', ')}</p>
+              )}
               <textarea value={thumbPrompt} onChange={e => setThumbPrompt(e.target.value)} rows={16} style={{ ...inputStyle, minHeight: '280px', resize: 'vertical' as const, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px', lineHeight: 1.4 }} />
             </div>
 
             <div style={{ padding: '10px 12px', background: inputBg, borderRadius: '10px', border: `0.5px solid ${border}` }}>
               <p style={{ fontSize: '11px', color: muted, margin: 0 }}>
-                Tip: Be specific in Creative Notes. Mood pills + specific visual language usually produce better first results.
+                Tip: Event Name and School are required to copy. Keep concept anchor concise for stronger consistency.
               </p>
+              <p style={{ fontSize: '11px', color: muted, margin: '6px 0 0' }}>
+                Drafts auto-save on this device for 30 days{thumbDraftSavedAt ? ` · last saved ${new Date(thumbDraftSavedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}.
+              </p>
+              {thumbDraftRestored && (
+                <p style={{ fontSize: '11px', color: infoTone, margin: '6px 0 0' }}>
+                  Restored saved thumbnail draft for this production.
+                </p>
+              )}
             </div>
           </div>
 
@@ -1683,19 +1921,32 @@ export default function ProductionDetailPage() {
 
             <div style={{ marginTop: '10px', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', aspectRatio: '16 / 9', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {thumbSanitizedSvg ? (
-                <iframe title="Thumbnail SVG preview" sandbox="" srcDoc={thumbSanitizedSvg} style={{ width: '100%', height: '100%', border: 'none' }} />
+                <iframe title="Thumbnail SVG preview" sandbox="" srcDoc={buildThumbnailPreviewDoc(thumbSanitizedSvg)} style={{ width: '100%', height: '100%', border: 'none' }} />
               ) : (
                 <p style={{ fontSize: '12px', color: muted, margin: 0 }}>Paste SVG to preview</p>
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px', gap: '8px', flexWrap: 'wrap' as const }}>
+              <button
+                onClick={downloadThumbnailSvg}
+                disabled={!thumbSanitizedSvg || missingThumbFields.length > 0}
+                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: (!thumbSanitizedSvg || missingThumbFields.length > 0) ? muted : text, border: `0.5px solid ${(!thumbSanitizedSvg || missingThumbFields.length > 0) ? border : infoTone}`, cursor: (!thumbSanitizedSvg || missingThumbFields.length > 0) ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+              >
+                Save SVG
+              </button>
               <button
                 onClick={downloadThumbnailPng}
-                disabled={!thumbSanitizedSvg}
-                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: thumbSanitizedSvg ? brandTone : inputBg, color: thumbSanitizedSvg ? '#fff' : muted, border: 'none', cursor: thumbSanitizedSvg ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+                disabled={!thumbSanitizedSvg || missingThumbFields.length > 0}
+                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: (thumbSanitizedSvg && missingThumbFields.length === 0) ? brandTone : inputBg, color: (thumbSanitizedSvg && missingThumbFields.length === 0) ? '#fff' : muted, border: 'none', cursor: (thumbSanitizedSvg && missingThumbFields.length === 0) ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
               >
                 Download PNG
+              </button>
+              <button
+                onClick={clearThumbnailDraft}
+                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Clear Saved Draft
               </button>
             </div>
           </div>
