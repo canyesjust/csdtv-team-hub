@@ -243,13 +243,19 @@ function ProductionsPageContent() {
     setPanelTeamNotes(prod?.team_notes || '')
     setMemberToAdd('')
     setNewChecklistTitle('')
-    const [checkRes, actRes] = await Promise.all([
-      supabase.from('checklist_items').select('id, title, completed, sort_order').eq('production_id', prodId).order('sort_order'),
-      supabase.from('production_activity').select('id, action, detail, created_at, team:team(name)').eq('production_id', prodId).order('created_at', { ascending: false }).limit(5),
-    ])
-    setPanelChecklist(checkRes.data || [])
-    setPanelActivity((actRes.data as any) || [])
-    setPanelLoading(false)
+    try {
+      const [checkRes, actRes] = await Promise.all([
+        supabase.from('checklist_items').select('id, title, completed, sort_order').eq('production_id', prodId).order('sort_order'),
+        supabase.from('production_activity').select('id, action, detail, created_at, team:team(name)').eq('production_id', prodId).order('created_at', { ascending: false }).limit(5),
+      ])
+      if (checkRes.error || actRes.error) {
+        toast('Failed to load production details', 'error')
+      }
+      setPanelChecklist(checkRes.data || [])
+      setPanelActivity((actRes.data as any) || [])
+    } finally {
+      setPanelLoading(false)
+    }
   }, [selectedProdId, supabase, productions])
 
   // Sync panelTeamNotes when underlying production changes
@@ -320,7 +326,7 @@ function ProductionsPageContent() {
   }
 
   const addPanelMember = async () => {
-    if (!memberToAdd || !selectedProdId || !currentUser) return
+    if (!memberToAdd || !selectedProdId) return
     const prod = productions.find(p => p.id === selectedProdId)
     if (!prod) return
     if ((prod.production_members || []).some(m => m.user_id === memberToAdd)) {
@@ -921,7 +927,7 @@ function ProductionsPageContent() {
                   </div>
 
                   {/* QUICK ACTIONS */}
-                  <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap' as const }}>
                     <Link href={`/dashboard/productions/${selectedProd.production_number}`} style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: 'var(--brand-primary)', textDecoration: 'none', padding: '8px 10px', background: surface2, border: `1px solid ${border}`, borderRadius: '8px', textAlign: 'center' as const }}>
                       Open full details →
                     </Link>
@@ -998,7 +1004,7 @@ function ProductionsPageContent() {
                           <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
                       </select>
-                      <button onClick={addPanelMember} disabled={!memberToAdd} style={{ fontSize: '12px', fontWeight: 600, padding: '7px 14px', background: memberToAdd ? 'var(--brand-primary)' : surface2, color: memberToAdd ? '#fff' : muted, border: `1px solid ${memberToAdd ? 'var(--brand-primary)' : border}`, borderRadius: '8px', cursor: memberToAdd ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+                      <button onClick={addPanelMember} disabled={!memberToAdd} style={{ fontSize: '12px', fontWeight: 600, padding: '7px 14px', background: memberToAdd ? 'var(--brand-primary)' : surface2, color: memberToAdd ? '#fff' : muted, border: `1px solid ${memberToAdd ? 'var(--brand-primary)' : border}`, borderRadius: '8px', cursor: memberToAdd ? 'pointer' : 'not-allowed', fontFamily: 'inherit', minWidth: '72px' }}>
                         Add
                       </button>
                     </div>
@@ -1063,9 +1069,11 @@ function ProductionsPageContent() {
                     </div>
                   </div>
 
-                  {panelActivity.length > 0 && (
-                    <div>
-                      <p style={{ fontSize: '11px', fontWeight: 700, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px', margin: '0 0 6px' }}>Recent activity</p>
+                  <div>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px', margin: '0 0 6px' }}>Recent activity</p>
+                    {panelActivity.length === 0 ? (
+                      <p style={{ fontSize: '12px', color: muted, margin: 0, fontStyle: 'italic' as const }}>No recent activity yet.</p>
+                    ) : (
                       <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
                         {panelActivity.map(a => (
                           <div key={a.id} style={{ fontSize: '12px', color: muted, padding: '4px 0', borderBottom: `1px solid ${border}` }}>
@@ -1076,8 +1084,8 @@ function ProductionsPageContent() {
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
             </aside>
@@ -1093,6 +1101,12 @@ function ProductionsPageContent() {
           max-height: calc(100vh - 100px);
         }
         .drawer-backdrop { display: none; }
+        .cl-row:hover {
+          background: ${hoverBg};
+        }
+        .cl-row:hover .cl-remove {
+          opacity: 1 !important;
+        }
         @media (max-width: 1023px) {
           .drawer-backdrop {
             display: block;
@@ -1110,6 +1124,7 @@ function ProductionsPageContent() {
             border-radius: 16px 16px 0 0 !important;
             z-index: 90;
             box-shadow: var(--shadow-raised);
+            padding-bottom: env(safe-area-inset-bottom);
           }
         }
       `}</style>
