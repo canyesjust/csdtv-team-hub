@@ -6,9 +6,11 @@ import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from './components/Loader'
 import { getSchoolName } from '@/lib/schools'
+import { uiStyles, statusTone } from '@/lib/ui/styles'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
+  blocked_by?: string | null
   productions?: { title: string } | null
 }
 
@@ -50,12 +52,21 @@ export default function DashboardPage() {
   const [totalVidsProduced, setTotalVidsProduced] = useState(0)
   const [totalYtViews, setTotalYtViews] = useState(0)
 
-  const text     = dark ? '#f0f4ff' : '#1a1f36'
-  const muted    = dark ? '#94a3b8' : '#6b7280'
-  const border   = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
-  const cardBg   = dark ? '#111827' : '#ffffff'
-  const metricBg = dark ? '#1a2740' : '#f0f4ff'
-  const rowHover = dark ? 'rgba(255,255,255,0.04)' : '#f8fafc'
+  const text     = 'var(--text-primary)'
+  const muted    = 'var(--text-muted)'
+  const border   = 'var(--border-subtle)'
+  const cardBg   = 'var(--surface-1)'
+  const metricBg = 'var(--surface-2)'
+  const rowHover = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
+  const warning = statusTone.warning.color
+  const warningBg = statusTone.warning.background
+  const danger = statusTone.danger.color
+  const dangerBg = statusTone.danger.background
+  const info = statusTone.info.color
+  const infoBg = statusTone.info.background
+  const review = statusTone.review.color
+  const success = statusTone.success.color
+  const successBg = statusTone.success.background
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -160,9 +171,9 @@ export default function DashboardPage() {
     if (!d) return null
     const date = new Date(d), today = new Date()
     const diff = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    if (diff < 0) return { label: 'Overdue', color: '#ef4444' }
-    if (diff === 0) return { label: 'Today', color: '#f59e0b' }
-    if (diff === 1) return { label: 'Tomorrow', color: '#f59e0b' }
+    if (diff < 0) return { label: 'Overdue', color: danger }
+    if (diff === 0) return { label: 'Today', color: warning }
+    if (diff === 1) return { label: 'Tomorrow', color: warning }
     if (diff <= 7) return { label: `${diff}d`, color: muted }
     return { label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: muted }
   }
@@ -182,7 +193,7 @@ export default function DashboardPage() {
     const days = Math.ceil((due.getTime() - Date.now()) / 86400000)
     return days >= 0 && days <= 2
   }).length
-  const blockedCount = myTasks.filter(t => t.status.toLowerCase() === 'in review').length
+  const blockedCount = myTasks.filter(t => Boolean(t.blocked_by)).length
   const focusQueue = [...myTasks].sort((a, b) => {
     const priorityWeight = (p: string) => p === 'day of' ? 3 : p === 'high' ? 2 : p === 'normal' ? 1 : 0
     const pa = priorityWeight(a.priority)
@@ -217,7 +228,7 @@ export default function DashboardPage() {
 
   const statusBadge = (status: string) => {
     const s = status?.toLowerCase()
-    const st = { 'in progress': { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b' }, 'pending': { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8' }, 'complete': { bg: 'rgba(34,197,94,0.15)', color: '#22c55e' } }[s] || { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8' }
+    const st = { 'in progress': { bg: warningBg, color: warning }, 'pending': { bg: 'var(--surface-2)', color: muted }, 'complete': { bg: successBg, color: success } }[s] || { bg: 'var(--surface-2)', color: muted }
     return <span style={{ fontSize: '14px', fontWeight: 500, padding: '4px 10px', borderRadius: '20px', background: st.bg, color: st.color, whiteSpace: 'nowrap' as const }}>{status}</span>
   }
 
@@ -231,61 +242,61 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1760px', margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ marginBottom: '20px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px' }}>{greeting()}, {currentUser?.name?.split(' ')[0]}</h1>
         <p style={{ fontSize: '14px', color: muted, margin: '0 0 6px' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-        <p style={{ fontSize: '14px', color: urgentCount > 0 || overdueCount > 0 ? '#f59e0b' : muted, margin: 0 }}>{getMorningBriefing()}</p>
+        <p style={{ fontSize: '14px', color: urgentCount > 0 || overdueCount > 0 ? warning : muted, margin: 0 }}>{getMorningBriefing()}</p>
       </div>
 
       {/* Your day at a glance */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 16px' }}>
+      <div className="dashboard-glance-row" style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span style={{ fontSize: '14px', color: todayHours ? text : muted, fontWeight: todayHours ? 500 : 400 }}>
             {todayHours || 'No hours set'}
           </span>
         </div>
         {myTasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '10px', padding: '10px 16px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-            <span style={{ fontSize: '14px', color: '#f59e0b', fontWeight: 500 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: warningBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={warning} strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            <span style={{ fontSize: '14px', color: warning, fontWeight: 500 }}>
               {myTasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length} due today
             </span>
           </div>
         )}
         {overdueCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '10px', padding: '10px 16px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span style={{ fontSize: '14px', color: '#ef4444', fontWeight: 500 }}>{overdueCount} overdue</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: dangerBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{ fontSize: '14px', color: danger, fontWeight: 500 }}>{overdueCount} overdue</span>
           </div>
         )}
         {todayProductions.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(30,108,181,0.08)', border: '1px solid rgba(30,108,181,0.2)', borderRadius: '10px', padding: '10px 16px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5ba3e0" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-            <span style={{ fontSize: '14px', color: '#5ba3e0', fontWeight: 500 }}>{todayProductions.length} production{todayProductions.length > 1 ? 's' : ''} today</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: infoBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '9px 14px' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={info} strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <span style={{ fontSize: '14px', color: info, fontWeight: 500 }}>{todayProductions.length} production{todayProductions.length > 1 ? 's' : ''} today</span>
           </div>
         )}
       </div>
 
       {/* Ops today */}
-      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', marginBottom: '20px', overflow: 'hidden' }}>
+      <div style={{ ...uiStyles.card, marginBottom: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-soft)' }}>
         <div style={{ padding: '16px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Ops today</h2>
             <p style={{ fontSize: '13px', color: muted, margin: '2px 0 0' }}>Priority queue and risk flags</p>
           </div>
-          <Link href="/dashboard/tasks" style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 600 }}>Open task center →</Link>
+          <Link href="/dashboard/tasks" style={{ ...uiStyles.actionLink, fontSize: '13px' }}>Open task center →</Link>
         </div>
         <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', borderBottom: `1px solid ${border}` }}>
           {[
-            { label: 'At risk tasks', value: overdueCount + blockedCount, sub: `${overdueCount} overdue · ${blockedCount} blocked`, color: '#ef4444' },
-            { label: 'Due in 48h', value: dueSoonCount, sub: 'needs scheduling attention', color: '#f59e0b' },
-            { label: 'At risk productions', value: atRiskProductions.length, sub: 'event soon with low checklist progress', color: '#a855f7' },
+            { label: 'At risk tasks', value: overdueCount + blockedCount, sub: `${overdueCount} overdue · ${blockedCount} blocked`, color: danger },
+            { label: 'Due in 48h', value: dueSoonCount, sub: 'needs scheduling attention', color: warning },
+            { label: 'At risk productions', value: atRiskProductions.length, sub: 'event soon with low checklist progress', color: review },
           ].map(card => (
-            <div key={card.label} style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px' }}>
+            <div key={card.label} style={{ background: 'var(--surface-2)', border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px' }}>
               <p style={{ fontSize: '11px', fontWeight: 700, color: card.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{card.label}</p>
               <p style={{ fontSize: '26px', fontWeight: 800, color: text, margin: 0, lineHeight: 1 }}>{card.value}</p>
               <p style={{ fontSize: '12px', color: muted, margin: '6px 0 0' }}>{card.sub}</p>
@@ -316,7 +327,7 @@ export default function DashboardPage() {
               return (
                 <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
                   <span style={{ fontSize: '13px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{prod.production_number} {prod.title}</span>
-                  <span style={{ fontSize: '12px', color: '#a855f7', flexShrink: 0 }}>{progress ? `${progress.pct}%` : 'No checklist'}</span>
+                  <span style={{ fontSize: '12px', color: review, flexShrink: 0 }}>{progress ? `${progress.pct}%` : 'No checklist'}</span>
                 </Link>
               )
             })}
@@ -326,8 +337,8 @@ export default function DashboardPage() {
 
       {/* Today's productions — prominent + expandable */}
       {todayProductions.length > 0 && (
-        <div style={{ background: 'rgba(30,108,181,0.08)', border: '1px solid rgba(30,108,181,0.2)', borderRadius: '14px', padding: '16px 20px', marginBottom: '20px' }}>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: '#5ba3e0', margin: '0 0 12px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>🎬 Today — {todayProductions.length} production{todayProductions.length > 1 ? 's' : ''}</p>
+        <div style={{ ...uiStyles.cardSoft, background: infoBg, borderRadius: '14px', padding: '14px 16px', marginBottom: '16px' }}>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: info, margin: '0 0 12px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>🎬 Today — {todayProductions.length} production{todayProductions.length > 1 ? 's' : ''}</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
             {todayProductions.map(p => {
               const d = p.start_datetime ? new Date(p.start_datetime) : null
@@ -338,13 +349,13 @@ export default function DashboardPage() {
               const items = (p.checklist_items || []).sort((a, b) => (a as any).sort_order - (b as any).sort_order)
               const doneCount = items.filter(c => c.completed).length
               return (
-                <div key={p.id} onClick={() => setExpandedTodayProd(isExpanded ? null : p.id)} style={{ padding: '14px 16px', borderRadius: '12px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', border: `1px solid ${isExpanded ? 'rgba(30,108,181,0.4)' : border}`, cursor: 'pointer' }}>
+                <div key={p.id} onClick={() => setExpandedTodayProd(isExpanded ? null : p.id)} style={{ padding: '14px 16px', borderRadius: '12px', background: 'var(--surface-1)', border: `1px solid ${isExpanded ? 'var(--border-strong)' : border}`, cursor: 'pointer' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '4px', height: '44px', borderRadius: '2px', background: '#5ba3e0', flexShrink: 0 }} />
+                    <div style={{ width: '4px', height: '44px', borderRadius: '2px', background: info, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title}</p>
                       <p style={{ fontSize: '13px', color: muted, margin: '3px 0 0' }}>
-                        {time && <span style={{ fontWeight: 500, color: '#5ba3e0' }}>{time}</span>}
+                        {time && <span style={{ fontWeight: 500, color: info }}>{time}</span>}
                         {time && loc ? ' · ' : ''}{loc}
                       </p>
                       <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>
@@ -363,13 +374,13 @@ export default function DashboardPage() {
                     <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `0.5px solid ${border}` }} onClick={e => e.stopPropagation()}>
                       {items.length > 0 ? items.map(item => (
                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
-                          <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `1.5px solid ${item.completed ? '#22c55e' : border}`, background: item.completed ? '#22c55e' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `1.5px solid ${item.completed ? success : border}`, background: item.completed ? success : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             {item.completed && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
                           </div>
                           <span style={{ fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>{item.title}</span>
                         </div>
                       )) : <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No checklist items</p>}
-                      <Link href={`/dashboard/productions/${p.production_number}`} style={{ display: 'inline-block', fontSize: '12px', color: '#5ba3e0', textDecoration: 'none', marginTop: '10px', fontWeight: 500 }}>Open production →</Link>
+                      <Link href={`/dashboard/productions/${p.production_number}`} style={{ ...uiStyles.actionLink, display: 'inline-block', fontSize: '12px', marginTop: '10px', fontWeight: 500 }}>Open production →</Link>
                     </div>
                   )}
                 </div>
@@ -379,7 +390,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
         <button
           onClick={() => setShowDetails(prev => !prev)}
           style={{
@@ -634,9 +645,17 @@ export default function DashboardPage() {
       ) : null}
 
       <style>{`
+        .dashboard-glance-row > div { min-height: 40px; }
         @media (min-width: 640px) {
           .metric-grid { grid-template-columns: repeat(5, 1fr) !important; }
           .quick-grid { grid-template-columns: repeat(4, 1fr) !important; }
+        }
+        @media (min-width: 1440px) {
+          .metric-grid { gap: 10px !important; }
+          .quick-grid { gap: 10px !important; }
+        }
+        @media (max-width: 767px) {
+          .dashboard-glance-row { gap: 8px !important; margin-bottom: 12px !important; }
         }
       `}</style>
     </div>

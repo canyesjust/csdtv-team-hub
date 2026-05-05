@@ -8,6 +8,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
+import { uiStyles, statusTone } from '@/lib/ui/styles'
 
 const NAV_ITEMS = [
   { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
@@ -108,13 +109,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   const dark = theme === 'dark'
-  const bg       = dark ? '#0a0f1e' : '#f8f9fc'
-  const sidebar  = dark ? '#0d1525' : '#ffffff'
-  const border   = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const text     = dark ? '#f0f4ff' : '#1a1f36'
-  const muted    = dark ? '#8899bb' : '#6b7280'
-  const searchBg = dark ? '#0d1525' : '#f3f4f6'
-  const iconBg   = dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6'
+  const bg       = 'var(--bg-main)'
+  const sidebar  = 'var(--bg-sidebar)'
+  const border   = 'var(--border-subtle)'
+  const text     = 'var(--text-primary)'
+  const muted    = 'var(--text-muted)'
+  const searchBg = 'var(--surface-2)'
+  const iconBg   = 'var(--surface-2)'
 
   useEffect(() => {
     const loadUser = async () => {
@@ -183,10 +184,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <Link href={href} onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px',
       borderRadius: '8px', fontSize: '15px', marginBottom: '2px', textDecoration: 'none',
-      borderLeft: isActive(href) ? '2px solid #1e6cb5' : '2px solid transparent',
-      background: isActive(href) ? 'rgba(30,108,181,0.12)' : 'transparent',
-      color: isActive(href) ? '#5ba3e0' : muted,
-      fontWeight: isActive(href) ? 500 : 400, minHeight: '40px',
+      borderLeft: isActive(href) ? '2px solid var(--brand-primary)' : '2px solid transparent',
+      background: isActive(href) ? 'var(--status-info-bg)' : 'transparent',
+      color: isActive(href) ? 'var(--brand-primary-strong)' : muted,
+      fontWeight: isActive(href) ? 600 : 450, minHeight: '40px',
+      transition: 'background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)',
     }}>
       <Icon type={icon} />
       {label}
@@ -195,13 +197,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sidebarContent = (onNavClick?: () => void) => (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: sidebar }}>
-      <div style={{ padding: '12px 16px', borderBottom: `0.5px solid ${border}` }}>
+      <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${border}` }}>
         <Image src="/images/CSDtv Logo - New Logo Outlined.png" alt="CSDtv" width={110} height={48} style={{ objectFit: 'contain' }} priority />
       </div>
       <nav style={{ flex: 1, overflowY: 'auto' as const, padding: '8px' }}>
         {NAV_ITEMS.map(({ section, items }) => (
           <div key={section}>
-            <p style={{ fontSize: '9px', fontWeight: 500, color: muted, letterSpacing: '1.5px', textTransform: 'uppercase' as const, padding: '10px 8px 4px', margin: 0 }}>{section}</p>
+            <p style={{ fontSize: '10px', fontWeight: 600, color: muted, letterSpacing: '1.2px', textTransform: 'uppercase' as const, padding: '10px 8px 4px', margin: 0 }}>{section}</p>
             {items.map(item => <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} onClick={onNavClick} />)}
           </div>
         ))}
@@ -209,7 +211,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div style={{ padding: '8px', borderTop: `0.5px solid ${border}` }}>
         {userName && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', marginBottom: '4px' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: userColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 600, color: '#0a0f1e', flexShrink: 0 }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: userColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 600, color: '#071020', flexShrink: 0 }}>
               {userName.slice(0, 2).toUpperCase()}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -227,16 +229,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: bg, color: text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: bg, color: text, fontFamily: 'var(--font-sans)' }}>
 
-      <aside className="csdtv-sidebar" style={{ width: '220px', flexShrink: 0, position: 'fixed', top: 0, left: 0, height: '100vh', borderRight: `0.5px solid ${border}`, display: 'none', flexDirection: 'column' }}>
+      <aside className="csdtv-sidebar" style={{ width: '236px', flexShrink: 0, position: 'fixed', top: 0, left: 0, height: '100vh', borderRight: `0.5px solid ${border}`, display: 'none', flexDirection: 'column', boxShadow: 'var(--shadow-soft)' }}>
         {sidebarContent()}
       </aside>
 
       {mobileOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setMobileOpen(false)}>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
-          <aside style={{ position: 'relative', width: '260px', height: '100%', borderRight: `0.5px solid ${border}`, zIndex: 1 }} onClick={e => e.stopPropagation()}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.56)' }} />
+          <aside style={{ position: 'relative', width: '270px', height: '100%', borderRight: `0.5px solid ${border}`, zIndex: 1 }} onClick={e => e.stopPropagation()}>
             {sidebarContent(() => setMobileOpen(false))}
           </aside>
         </div>
@@ -244,8 +246,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {showMore && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setShowMore(false)}>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)' }} />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: sidebar, borderRadius: '20px 20px 0 0', padding: '12px 16px 40px', zIndex: 1 }} onClick={e => e.stopPropagation()}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.48)' }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: sidebar, borderRadius: '20px 20px 0 0', padding: '12px 16px 40px', zIndex: 1, borderTop: `1px solid ${border}` }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <p style={{ fontSize: '13px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 0 4px' }}>More</p>
               <button onClick={() => setShowMore(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', padding: '8px', fontSize: '18px', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: '44px', minHeight: '44px' }}>
@@ -253,16 +255,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             {MORE_ITEMS.map(item => (
-              <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', textDecoration: 'none', marginBottom: '4px', background: isActive(item.href) ? 'rgba(30,108,181,0.12)' : 'transparent', color: isActive(item.href) ? '#5ba3e0' : text }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: isActive(item.href) ? 'rgba(30,108,181,0.2)' : (dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive(item.href) ? '#5ba3e0' : muted }}>
+              <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', textDecoration: 'none', marginBottom: '4px', background: isActive(item.href) ? 'var(--status-info-bg)' : 'transparent', color: isActive(item.href) ? 'var(--brand-primary-strong)' : text }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: isActive(item.href) ? 'var(--status-info-bg)' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive(item.href) ? 'var(--brand-primary-strong)' : muted }}>
                   <Icon type={item.icon} size={18} />
                 </div>
                 <span style={{ fontSize: '15px', fontWeight: 500 }}>{item.label}</span>
               </Link>
             ))}
             <div style={{ height: '1px', background: border, margin: '12px 0' }} />
-            <button onClick={() => { setShowMore(false); handleSignOut() }} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', width: '100%', fontSize: '15px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+            <button onClick={() => { setShowMore(false); handleSignOut() }} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', color: statusTone.danger.color, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', width: '100%', fontSize: '15px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: statusTone.danger.background, display: 'flex', alignItems: 'center', justifyContent: 'center', color: statusTone.danger.color }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
               </div>
               Sign out
@@ -272,7 +274,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="csdtv-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <header style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', borderBottom: `0.5px solid ${border}`, background: sidebar }}>
+        <header style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', borderBottom: `0.5px solid ${border}`, background: 'var(--bg-topbar)', backdropFilter: 'blur(8px)' }}>
           <button className="csdtv-hamburger" onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', display: 'none', padding: '4px', minWidth: '44px', minHeight: '44px', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
@@ -282,7 +284,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
           <button onClick={() => { setShowNotifications(!showNotifications); setShowSearch(false) }} style={{ position: 'relative', width: '44px', height: '44px', borderRadius: '10px', background: iconBg, border: `0.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: muted, flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-            {unreadCount > 0 && <span style={{ position: 'absolute', top: '6px', right: '6px', minWidth: '16px', height: '16px', borderRadius: '8px', background: '#e8a020', fontSize: '9px', fontWeight: 700, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+            {unreadCount > 0 && <span style={{ position: 'absolute', top: '6px', right: '6px', minWidth: '16px', height: '16px', borderRadius: '8px', background: 'var(--status-warning)', fontSize: '9px', fontWeight: 700, color: '#071020', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
           </button>
           <button onClick={toggleTheme} style={{ width: '44px', height: '44px', borderRadius: '10px', background: iconBg, border: `0.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', flexShrink: 0 }}>
             {dark ? '☀️' : '🌙'}
@@ -290,7 +292,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className="csdtv-content" style={{ flex: 1, padding: '20px 16px' }}>
-          {children}
+          <div style={{ width: '100%', maxWidth: '1800px', margin: '0 auto' }}>
+            {children}
+          </div>
         </main>
 
         <nav className="csdtv-mobile-nav" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'none', background: sidebar, borderTop: `0.5px solid ${border}`, zIndex: 10, paddingBottom: 'env(safe-area-inset-bottom)' }}>
@@ -298,7 +302,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {BOTTOM_NAV.map(item => {
               const active = item.href !== '#more' && isActive(item.href)
               const isMore = item.href === '#more'
-              const itemStyle = { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '3px', padding: '10px 0 8px', minHeight: '56px', color: active || (isMore && showMore) ? '#5ba3e0' : muted, textDecoration: 'none' as const, background: 'none' as const, border: 'none' as const, cursor: 'pointer' as const, fontFamily: 'inherit' as const }
+              const itemStyle = { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '3px', padding: '10px 0 8px', minHeight: '56px', color: active || (isMore && showMore) ? 'var(--brand-primary-strong)' : muted, textDecoration: 'none' as const, background: 'none' as const, border: 'none' as const, cursor: 'pointer' as const, fontFamily: 'inherit' as const }
               return isMore ? (
                 <button key="more" onClick={() => { setShowMore(!showMore); setShowNotifications(false) }} style={itemStyle}>
                   <Icon type="more" size={24} />
@@ -324,10 +328,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div key={t.id} style={{
             padding: '12px 20px', borderRadius: '10px', fontSize: '14px', fontWeight: 500, fontFamily: 'inherit',
             color: '#fff', pointerEvents: 'auto', cursor: 'pointer',
-            background: t.type === 'success' ? '#22c55e' : t.type === 'error' ? '#ef4444' : '#1e6cb5',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+            background: t.type === 'success' ? 'var(--status-success)' : t.type === 'error' ? 'var(--status-danger)' : 'var(--brand-primary)',
+            boxShadow: 'var(--shadow-raised)',
             animation: 'toast-in 0.25s ease-out',
             maxWidth: '380px',
+            border: uiStyles.cardSoft.border,
           }} onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}>
             {t.type === 'success' ? '✓ ' : t.type === 'error' ? '✕ ' : ''}{t.message}
           </div>
@@ -341,15 +346,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
         @media (min-width: 768px) {
           .csdtv-sidebar { display: flex !important; }
-          .csdtv-main { margin-left: 220px !important; }
+          .csdtv-main { margin-left: 236px !important; }
           .csdtv-hamburger { display: none !important; }
           .csdtv-mobile-nav { display: none !important; }
-          .csdtv-content { padding: 24px 24px !important; }
+          .csdtv-content { padding: 20px 24px !important; }
+        }
+        @media (min-width: 1440px) {
+          .csdtv-content { padding: 22px 28px !important; }
         }
         @media (max-width: 767px) {
           .csdtv-hamburger { display: flex !important; }
           .csdtv-mobile-nav { display: flex !important; }
-          .csdtv-content { padding: 12px 8px 80px 8px !important; }
+          .csdtv-content { padding: 10px 10px 80px 10px !important; }
           .csdtv-search-label { display: none !important; }
         }
       `}</style>
