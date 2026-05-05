@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [totalProductions, setTotalProductions] = useState(0)
   const [todayProductions, setTodayProductions] = useState<Production[]>([])
   const [view, setView] = useState<'my' | 'team'>('my')
+  const [showDetails, setShowDetails] = useState(false)
   const [loading, setLoading] = useState(true)
   const [todayHours, setTodayHours] = useState<string | null>(null)
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
@@ -378,6 +379,27 @@ export default function DashboardPage() {
         </div>
       )}
 
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+        <button
+          onClick={() => setShowDetails(prev => !prev)}
+          style={{
+            fontSize: '13px',
+            borderRadius: '9px',
+            border: `1px solid ${border}`,
+            background: cardBg,
+            color: muted,
+            padding: '8px 12px',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontWeight: 600,
+          }}
+        >
+          {showDetails ? 'Hide details' : 'Show details'}
+        </button>
+      </div>
+
+      {showDetails && (
+        <>
       {/* Stats pulse */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '20px' }}>
         {[
@@ -576,9 +598,11 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      </>
+      )}
 
       {/* Recent activity */}
-      <div style={{ marginTop: '20px' }}>
+      {showDetails && <div style={{ marginTop: '20px' }}>
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden' as const }}>
           <div style={{ padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
             <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Recent activity</h2>
@@ -606,6 +630,7 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
+      </div>}
 
       <style>{`
         @media (min-width: 640px) {
