@@ -79,19 +79,19 @@ export async function POST(
     if (!/^\d{4,20}$/.test(trimmedNum)) {
       return NextResponse.json({ error: "We couldn't process that student number. Double-check it and try again." }, { status: 400 })
     }
-    const ip = getClientIp(request)
-    const rateKey = `${num}:${ip}`
-    const persistentLimited = await isRateLimitedPersistent(supabase, rateKey)
-    if (persistentLimited || isRateLimited(rateKey)) {
-      return NextResponse.json({ error: 'Too many signup attempts. Please wait a minute and try again.' }, { status: 429 })
-    }
-
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!url || !key) {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
     }
     const supabase = createClient(url, key)
+
+    const ip = getClientIp(request)
+    const rateKey = `${num}:${ip}`
+    const persistentLimited = await isRateLimitedPersistent(supabase, rateKey)
+    if (persistentLimited || isRateLimited(rateKey)) {
+      return NextResponse.json({ error: 'Too many signup attempts. Please wait a minute and try again.' }, { status: 429 })
+    }
     const { data: rpcData, error: rpcError } = await supabase.rpc('signup_student_crew_atomic', {
       p_production_number: num,
       p_slot_id: slot_id,
