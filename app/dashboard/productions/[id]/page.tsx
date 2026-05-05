@@ -470,9 +470,13 @@ export default function ProductionDetailPage() {
     const dateShort = production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBD'
     const venue = production.event_location || getSchoolName(production.filming_location) || 'TBD'
     const status = production.status || ''
-    // {{youtube_link}} pulls from the most recently linked video on the production.
-    // If no video is linked yet, the placeholder becomes blank.
-    const ytLink = linkedVideos.length > 0 ? (linkedVideos[0].youtube_url || (linkedVideos[0].youtube_id ? `https://youtube.com/watch?v=${linkedVideos[0].youtube_id}` : '')) : ''
+    // {{youtube_link}} priority:
+    //   1. production.livestream_url — the YouTube link set on the production itself
+    //      (this is the "upcoming livestream" link for sharing BEFORE the event)
+    //   2. Most recently linked video — fallback for "deliverable ready" emails AFTER the event
+    //   3. Empty string if neither exists
+    const ytLink = production.livestream_url
+      || (linkedVideos.length > 0 ? (linkedVideos[0].youtube_url || (linkedVideos[0].youtube_id ? `https://youtube.com/watch?v=${linkedVideos[0].youtube_id}` : '')) : '')
     return str
       .replace(/\{\{name\}\}/g, name)
       .replace(/\{\{title\}\}/g, title)
