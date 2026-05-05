@@ -76,6 +76,7 @@ export default function VideosPage() {
   const [reviewQueue, setReviewQueue] = useState<Video[] | null>(null)
   const [reviewIdx, setReviewIdx] = useState(0)
   const [reviewSearchQuery, setReviewSearchQuery] = useState('')
+  const [missingFromYoutube, setMissingFromYoutube] = useState<Video[]>([])
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -133,6 +134,12 @@ export default function VideosPage() {
         matchedProd: null,
       }))
 
+      // Detect videos in our DB with a youtube_id that are no longer on the channel.
+      // Could be deleted, made private, or unlisted — user reviews before removing.
+      const ytIdSet = new Set<string>(data.videos.map((v: any) => v.youtube_id).filter(Boolean))
+      const missing = videos.filter(v => v.youtube_id && !ytIdSet.has(v.youtube_id))
+      setMissingFromYoutube(missing)
+
       // Auto-fix dates on existing videos (UTC→Mountain)
       let dateFixed = 0
       for (const v of results.filter((r: any) => r.existing)) {
@@ -147,7 +154,8 @@ export default function VideosPage() {
 
       setSyncResults(results)
       const newCount = results.filter((r: any) => !r.existing).length
-      toast(`Found ${data.total} videos. ${newCount} new.${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
+      const missingNote = missing.length > 0 ? ` ${missing.length} no longer on YouTube.` : ''
+      toast(`Found ${data.total} videos. ${newCount} new.${missingNote}${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
       if (dateFixed > 0) await loadData()
     } catch { toast('Channel sync failed', 'error') }
     setSyncing(false)
@@ -258,9 +266,17 @@ export default function VideosPage() {
     for (const t of ta) if (tb.has(t)) inter++
     return inter / Math.max(ta.size, tb.size)
   }
+  // Convert any date input ("YYYY-MM-DD" or full ISO timestamp) to local-midnight ms.
+  // Avoids the timezone drift that caused "May 5 vs May 5" to score as 1 day apart:
+  // the video's date_published is date-only (interpreted as local midnight) but the
+  // production's start_datetime is a UTC instant, so subtracting them mixes timezones.
+  const reviewLocalMidnightMs = (input: string): number => {
+    const d = new Date(input.length === 10 ? input + 'T00:00:00' : input)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
   const reviewDateProx = (videoDate: string | null, prodDate: string | null | undefined): number => {
     if (!videoDate || !prodDate) return 0.5
-    const days = Math.abs((new Date(videoDate + 'T00:00:00').getTime() - new Date(prodDate).getTime()) / 86400000)
+    const days = Math.abs(reviewLocalMidnightMs(videoDate) - reviewLocalMidnightMs(prodDate)) / 86400000
     if (days > 14) return 0
     return 1 - (days / 14)
   }
@@ -272,7 +288,7 @@ export default function VideosPage() {
       const ts = reviewTitleSim(video.title, p.title)
       const score = 0.7 * ts + 0.3 * ds
       const days = video.date_published && p.start_datetime
-        ? Math.round(Math.abs((new Date(video.date_published + 'T00:00:00').getTime() - new Date(p.start_datetime).getTime()) / 86400000))
+        ? Math.round(Math.abs(reviewLocalMidnightMs(video.date_published) - reviewLocalMidnightMs(p.start_datetime)) / 86400000)
         : null
       return { prod: p, score, titlePct: Math.round(ts * 100), daysApart: days }
     }).filter((c): c is { prod: Production; score: number; titlePct: number; daysApart: number | null } => c !== null && c.score >= 0.20)
@@ -320,6 +336,24 @@ export default function VideosPage() {
     } else {
       setReviewIdx(reviewIdx + 1)
     }
+  }
+
+  const removeMissingVideo = async (videoId: string) => {
+    if (!confirm('Remove this video permanently? It will be deleted from the Hub.')) return
+    await supabase.from('videos').delete().eq('id', videoId)
+    setVideos(prev => prev.filter(v => v.id !== videoId))
+    setMissingFromYoutube(prev => prev.filter(v => v.id !== videoId))
+    toast('Removed', 'success')
+  }
+
+  const removeAllMissing = async () => {
+    if (missingFromYoutube.length === 0) return
+    if (!confirm(`Remove all ${missingFromYoutube.length} videos that are no longer on YouTube?`)) return
+    const ids = missingFromYoutube.map(v => v.id)
+    await supabase.from('videos').delete().in('id', ids)
+    setVideos(prev => prev.filter(v => !ids.includes(v.id)))
+    setMissingFromYoutube([])
+    toast(`Removed ${ids.length} videos`, 'success')
   }
 
   const createVideo = async () => {
@@ -459,12 +493,37 @@ export default function VideosPage() {
               <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{syncResults.length} total · {syncResults.filter(r => !r.existing).length} new · {syncResults.filter(r => !r.existing && r.matchedProd).length} matched to productions · {syncResults.filter(r => r.existing).length} already imported</p>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={() => setSyncResults(null)} style={{ padding: '8px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px' }}>Cancel</button>
+              <button onClick={() => { setSyncResults(null); setMissingFromYoutube([]) }} style={{ padding: '8px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px' }}>Cancel</button>
               <button onClick={importSyncResults} disabled={syncImporting || syncResults.filter(r => !r.existing).length === 0} style={{ padding: '8px 14px', borderRadius: '8px', background: syncResults.filter(r => !r.existing).length > 0 ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), color: syncResults.filter(r => !r.existing).length > 0 ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500 }}>
                 {syncImporting ? 'Importing...' : `Import ${syncResults.filter(r => !r.existing).length} new videos`}
               </button>
             </div>
           </div>
+          {missingFromYoutube.length > 0 && (
+            <div style={{ marginBottom: '14px', padding: '12px 14px', borderRadius: '10px', background: 'rgba(239,68,68,0.06)', border: '0.5px solid rgba(239,68,68,0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: '#ef4444', margin: 0 }}>⚠ {missingFromYoutube.length} no longer on YouTube</p>
+                  <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Could be deleted, made private, or unlisted. Review before removing.</p>
+                </div>
+                <button onClick={removeAllMissing} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Remove all</button>
+              </div>
+              <div style={{ maxHeight: '180px', overflowY: 'auto' as const }}>
+                {missingFromYoutube.map(v => (
+                  <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '6px' }}>
+                    {v.youtube_thumbnail ? (
+                      <img src={v.youtube_thumbnail} alt="" style={{ width: '48px', height: '27px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0, opacity: 0.5 }} />
+                    ) : <div style={{ width: '48px', height: '27px', borderRadius: '4px', background: dark ? '#1a2540' : '#e2e8f0', flexShrink: 0 }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '12px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
+                      <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.date_published || 'No date'}{v.youtube_views != null ? ` · ${v.youtube_views.toLocaleString()} views` : ''}</p>
+                    </div>
+                    <button onClick={() => removeMissingVideo(v.id)} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ maxHeight: '400px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
             {syncResults.slice(0, 50).map(v => (
               <div key={v.youtube_id} style={{ display: 'flex', gap: '10px', padding: '8px', borderRadius: '8px', border: `0.5px solid ${border}`, opacity: v.existing ? 0.4 : 1 }}>
@@ -479,86 +538,6 @@ export default function VideosPage() {
           </div>
         </div>
       )}
-
-      {/* Review unlinked queue */}
-      {reviewQueue && reviewQueue.length > 0 && reviewQueue[reviewIdx] && (() => {
-        const video = reviewQueue[reviewIdx]
-        const candidates = findCandidates(video)
-        const filteredOther = reviewSearchQuery.length >= 2 ? productions.filter(p => {
-          const q = reviewSearchQuery.toLowerCase()
-          return p.title.toLowerCase().includes(q) || (p.organizer_name || '').toLowerCase().includes(q) || String(p.production_number).includes(q)
-        }).slice(0, 8) : []
-        return (
-          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>🔍 Review unlinked videos</h3>
-                <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{reviewIdx + 1} of {reviewQueue.length} · keyboard: <strong>1</strong>/<strong>2</strong>/<strong>3</strong> = match · <strong>s</strong> = skip · <strong>esc</strong> = close</p>
-              </div>
-              <button onClick={closeReviewQueue} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px 8px' }}>×</button>
-            </div>
-
-            <div style={{ display: 'flex', gap: '14px', padding: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '10px', marginBottom: '14px' }}>
-              {video.youtube_thumbnail && <img src={video.youtube_thumbnail} alt="" style={{ width: '120px', height: '68px', objectFit: 'cover' as const, borderRadius: '6px', flexShrink: 0 }} />}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{video.title}</p>
-                <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
-                  {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
-                  {video.youtube_views !== null ? ` · ${video.youtube_views.toLocaleString()} views` : ''}
-                  {video.youtube_duration ? ` · ${video.youtube_duration}` : ''}
-                </p>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '14px' }}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>
-                {candidates.length > 0 ? 'Suggested matches' : 'No good matches found'}
-              </p>
-              {candidates.length === 0 ? (
-                <p style={{ fontSize: '13px', color: muted, margin: 0, padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px' }}>
-                  No production within 14 days has a similar title. Search for one below or skip this video.
-                </p>
-              ) : candidates.map((c, i) => (
-                <div key={c.prod.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', marginBottom: '6px', border: `0.5px solid ${border}` }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: dark ? 'rgba(91,163,224,0.15)' : '#dbeafe', color: '#5ba3e0', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 2px' }}>#{c.prod.production_number} {c.prod.title}</p>
-                    <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
-                      Title {c.titlePct}% match
-                      {c.daysApart !== null ? ` · ${c.daysApart} day${c.daysApart !== 1 ? 's' : ''} apart` : ''}
-                      {c.prod.start_datetime ? ` · ${new Date(c.prod.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
-                    </p>
-                  </div>
-                  <button onClick={() => linkReviewVideo(c.prod.id, `#${c.prod.production_number} ${c.prod.title}`)} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>Match</button>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginBottom: '14px', position: 'relative' as const }}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 6px' }}>Search other productions</p>
-              <input value={reviewSearchQuery} onChange={e => setReviewSearchQuery(e.target.value)} placeholder="Type a title, number, or organizer..." style={inputStyle} />
-              {filteredOther.length > 0 && (
-                <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, maxHeight: '240px', overflowY: 'auto' as const, background: dark ? '#0d1526' : '#fff', border: `1px solid ${border}`, borderRadius: '8px', zIndex: 20, marginTop: '4px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
-                  {filteredOther.map(p => (
-                    <div key={p.id} onClick={() => linkReviewVideo(p.id, `#${p.production_number} ${p.title}`)} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', borderBottom: `0.5px solid ${border}` }}
-                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
-                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
-                    >
-                      <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>
-                      <span style={{ display: 'block', fontSize: '11px', color: muted }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}{p.organizer_name ? ` · ${p.organizer_name}` : ''}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: `0.5px solid ${border}` }}>
-              <button onClick={skipReviewVideo} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Skip (s)</button>
-              <span style={{ fontSize: '12px', color: muted }}>{reviewQueue.length - reviewIdx - 1} more after this</span>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* Review unlinked queue */}
       {reviewQueue && reviewQueue.length > 0 && reviewQueue[reviewIdx] && (() => {

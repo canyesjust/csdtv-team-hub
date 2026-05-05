@@ -57,25 +57,16 @@ export async function GET(request: Request) {
         // 1. liveStreamingDetails.actualStartTime (for livestreams)
         // 2. Date extracted from video title (e.g. "Board Meeting 3/31/2026")
         // 3. publishedAt adjusted to Mountain Time
+        // Date priority: livestream's broadcaster-set scheduledStartTime, then
+        // the video's publishedAt for non-livestream uploads. actualStartTime and
+        // title-regex parsing are intentionally not used — the former is missing for
+        // upcoming livestreams and the latter only catches "M/D/YYYY" not "May 7, 2026".
         let bestDate: string
-        const liveStart = item.liveStreamingDetails?.actualStartTime
-        if (liveStart) {
-          const d = new Date(liveStart)
-          const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
-          bestDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
-        } else {
-          // Try to extract date from title: M/D/YYYY or M/DD/YYYY or MM/DD/YYYY
-          const titleDateMatch = item.snippet.title.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
-          if (titleDateMatch) {
-            const [, mo, day, yr] = titleDateMatch
-            bestDate = `${yr}-${mo.padStart(2, '0')}-${day.padStart(2, '0')}`
-          } else {
-            // Fallback: publishedAt adjusted to Mountain Time
-            const pubDate = new Date(item.snippet.publishedAt)
-            const mt = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000)
-            bestDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
-          }
-        }
+        const scheduled = item.liveStreamingDetails?.scheduledStartTime
+        const dateSource = scheduled || item.snippet.publishedAt
+        const d = new Date(dateSource)
+        const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
+        bestDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
 
         videos.push({
           youtube_id: item.id,
