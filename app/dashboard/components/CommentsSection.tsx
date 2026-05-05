@@ -12,10 +12,10 @@ export default function CommentsSection({ entityType, entityId, currentUserId, t
   const dark = theme === 'dark'
   const supabase = createClient()
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const inputBg = 'var(--surface-2)'
 
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState('')
@@ -164,10 +164,10 @@ export default function CommentsSection({ entityType, entityId, currentUserId, t
       {/* New comment input */}
       <div style={{ position: 'relative' }}>
         {showSuggestions && filteredTeam.length > 0 && (
-          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: dark ? '#0d1525' : '#fff', border: `1px solid ${border}`, borderRadius: '8px', marginBottom: '4px', overflow: 'hidden', zIndex: 5 }}>
+          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: 'var(--surface-1)', border: `1px solid ${border}`, borderRadius: '8px', marginBottom: '4px', overflow: 'hidden', zIndex: 5 }}>
             {filteredTeam.map(m => (
               <button key={m.id} onClick={() => insertMention(m)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', color: text, textAlign: 'left' as const }}
-                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f8f9fc'}
+                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-2)'}
                 onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'none'}
               >
                 <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: m.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e' }}>{m.name.slice(0, 2).toUpperCase()}</div>
@@ -186,7 +186,7 @@ export default function CommentsSection({ entityType, entityId, currentUserId, t
             style={{ flex: 1, background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: text, fontFamily: 'inherit', outline: 'none', resize: 'none' as const, minHeight: '38px', maxHeight: '120px', boxSizing: 'border-box' as const }}
             rows={1}
           />
-          <button onClick={postComment} disabled={!newComment.trim() || posting} style={{ padding: '9px 14px', borderRadius: '8px', background: newComment.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newComment.trim() ? '#fff' : muted, border: 'none', cursor: newComment.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500, flexShrink: 0, minHeight: '38px' }}>
+          <button onClick={postComment} disabled={!newComment.trim() || posting} style={{ padding: '9px 14px', borderRadius: '8px', background: newComment.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newComment.trim() ? '#fff' : muted, border: 'none', cursor: newComment.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500, flexShrink: 0, minHeight: '38px' }}>
             {posting ? '...' : 'Post'}
           </button>
         </div>

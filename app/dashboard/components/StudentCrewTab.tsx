@@ -110,11 +110,11 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null)
   const [slotForm, setSlotForm] = useState({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' })
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
 
   const inputStyle: React.CSSProperties = {
     background: inputBg,
@@ -455,7 +455,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
           {isManager && (
             <div style={{ display: 'flex', gap: '6px' }}>
               <input value={newReq} onChange={e => setNewReq(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRequirement() } }} placeholder="Add a requirement (e.g. Bring a water bottle)" style={{ ...inputStyle, flex: 1, fontSize: '13px' }} />
-              <button onClick={addRequirement} disabled={!newReq.trim()} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: newReq.trim() ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: newReq.trim() ? '#fff' : muted, border: 'none', cursor: newReq.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+              <button onClick={addRequirement} disabled={!newReq.trim()} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: newReq.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newReq.trim() ? '#fff' : muted, border: 'none', cursor: newReq.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
             </div>
           )}
         </div>
@@ -533,7 +533,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
           <div style={{ border: `0.5px solid ${border}`, borderRadius: '8px', overflow: 'hidden' }}>
             {signupsBySlot.map(({ slot, role, filled }, i) => (
               <div key={slot.id} style={{ borderBottom: i < slots.length - 1 ? `0.5px solid ${border}` : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surface-2)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: '14px', fontWeight: 600, color: text, margin: 0 }}>
                       {role?.name || 'Unknown role'} <span style={{ fontSize: '12px', color: muted, fontWeight: 400 }}>× {slot.capacity}</span>

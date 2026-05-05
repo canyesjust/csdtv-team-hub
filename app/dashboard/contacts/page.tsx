@@ -19,11 +19,11 @@ export default function ContactsPage() {
   const supabase = createClient()
   const { theme } = useTheme()
   const dark = theme === 'dark'
-  const text = dark ? '#e8edf5' : '#1a1f36'
-  const muted = dark ? '#6b7a94' : '#64748b'
-  const border = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? 'rgba(255,255,255,0.03)' : '#f8fafc'
-  const inputBg = dark ? '#1a2540' : '#f1f5f9'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
   const inputStyle: React.CSSProperties = { width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '15px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
 
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -165,7 +165,7 @@ export default function ContactsPage() {
             </select>
             <div style={{ flex: 1 }} />
             <button onClick={() => { setShowAdd(false); setEditingId(null) }} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-            <button onClick={saveContact} disabled={!form.name || saving} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: form.name ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: form.name ? '#fff' : muted, border: 'none', cursor: form.name ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : editingId ? 'Update' : 'Save contact'}</button>
+            <button onClick={saveContact} disabled={!form.name || saving} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: form.name ? '#1e6cb5' : 'var(--surface-2)', color: form.name ? '#fff' : muted, border: 'none', cursor: form.name ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : editingId ? 'Update' : 'Save contact'}</button>
           </div>
         </div>
       )}

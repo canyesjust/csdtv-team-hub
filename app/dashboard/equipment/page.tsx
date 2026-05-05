@@ -69,11 +69,11 @@ export default function EquipmentPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
 
   const [tab, setTab] = useState<'items' | 'kits' | 'loans'>('items')
   const [equipment, setEquipment] = useState<Equipment[]>([])
@@ -272,7 +272,7 @@ export default function EquipmentPage() {
           <button
             onClick={() => router.push('/dashboard/equipment/scan')}
             style={{
-              background: dark ? '#1a2540' : '#f0f4ff', border: `1px solid ${border}`, borderRadius: '10px',
+              background: 'var(--surface-2)', border: `1px solid ${border}`, borderRadius: '10px',
               padding: '10px 16px', fontSize: '14px', color: '#5ba3e0', cursor: 'pointer',
               fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px',
             }}
@@ -371,7 +371,7 @@ export default function EquipmentPage() {
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button onClick={saveNewItem} disabled={!addForm.asset_tag || !addForm.name || addSaving}
-              style={{ padding: '10px 20px', borderRadius: '8px', background: addForm.asset_tag && addForm.name ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: addForm.asset_tag && addForm.name ? '#fff' : muted, border: 'none', cursor: addForm.asset_tag && addForm.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+              style={{ padding: '10px 20px', borderRadius: '8px', background: addForm.asset_tag && addForm.name ? '#1e6cb5' : 'var(--surface-2)', color: addForm.asset_tag && addForm.name ? '#fff' : muted, border: 'none', cursor: addForm.asset_tag && addForm.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
               {addSaving ? 'Saving...' : 'Save item'}
             </button>
             <button onClick={() => setShowAddForm(false)}

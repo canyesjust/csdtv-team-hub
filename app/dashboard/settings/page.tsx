@@ -96,11 +96,11 @@ export default function SettingsPage() {
   const [tierForm, setTierForm] = useState({ cooldown_hours: '0', monthly_event_cap: '', description: '' })
   const [savingTier, setSavingTier] = useState(false)
 
-  const text    = dark ? '#f0f4ff' : '#1a1f36'
-  const muted   = dark ? '#8899bb' : '#6b7280'
-  const border  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg  = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text    = 'var(--text-primary)'
+  const muted   = 'var(--text-muted)'
+  const border  = 'var(--border-subtle)'
+  const cardBg  = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -504,7 +504,7 @@ export default function SettingsPage() {
             if (error) setChangePwMsg(error.message)
             else { setChangePwMsg('Password updated!'); setChangePw(''); setChangePw2('') }
             setChangePwSaving(false)
-          }} disabled={changePwSaving || !changePw || changePw !== changePw2} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: changePw && changePw === changePw2 ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: changePw && changePw === changePw2 ? '#fff' : muted, border: 'none', cursor: changePw && changePw === changePw2 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+          }} disabled={changePwSaving || !changePw || changePw !== changePw2} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: changePw && changePw === changePw2 ? '#1e6cb5' : 'var(--surface-2)', color: changePw && changePw === changePw2 ? '#fff' : muted, border: 'none', cursor: changePw && changePw === changePw2 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
             {changePwSaving ? 'Saving...' : 'Update password'}
           </button>
         </div>
@@ -572,14 +572,14 @@ export default function SettingsPage() {
                   )}
                 </p>
               </div>
-              <span style={{ fontSize: '14px', padding: '3px 10px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{member.role}</span>
+              <span style={{ fontSize: '14px', padding: '3px 10px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{member.role}</span>
               {member.id !== currentUser?.id && (
                 <button onClick={() => deactivateMember(member.id, member.name)} style={{ fontSize: '14px', padding: '5px 10px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>Remove</button>
               )}
             </div>
           ))}
 
-          <div style={{ marginTop: '20px', padding: '16px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc', borderRadius: '12px', border: `0.5px solid ${border}` }}>
+          <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface-2)', borderRadius: '12px', border: `0.5px solid ${border}` }}>
             <h3 style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 4px' }}>Invite team member</h3>
             <p style={{ fontSize: '14px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
               They&apos;ll receive an email with a one-click sign-in link to <strong>csdtvstaff.org</strong>. Their auth account is created automatically — no signup needed.
@@ -602,7 +602,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            <button onClick={inviteUser} disabled={inviting || !inviteEmail} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: inviteEmail ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: inviteEmail ? '#fff' : muted, border: 'none', cursor: inviteEmail ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            <button onClick={inviteUser} disabled={inviting || !inviteEmail} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: inviteEmail ? '#1e6cb5' : 'var(--surface-2)', color: inviteEmail ? '#fff' : muted, border: 'none', cursor: inviteEmail ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
               {inviting ? 'Sending invite...' : 'Invite to team'}
             </button>
             {inviteResult && (
@@ -639,7 +639,7 @@ export default function SettingsPage() {
             <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Email templates</h2>
               <p style={{ fontSize: '13px', color: muted, margin: 0, lineHeight: 1.5 }}>
-                Templates for emailing organizers from production pages. Use <code style={{ fontSize: '12px', padding: '1px 5px', background: dark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', borderRadius: '4px', color: text }}>{'{{variable}}'}</code> placeholders to auto-fill production details.
+                Templates for emailing organizers from production pages. Use <code style={{ fontSize: '12px', padding: '1px 5px', background: 'var(--surface-2)', borderRadius: '4px', color: text }}>{'{{variable}}'}</code> placeholders to auto-fill production details.
               </p>
             </div>
             {!showNewTpl && !editingTplId && (
@@ -650,7 +650,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Variables reference */}
-          <div style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 14px', marginBottom: '14px' }}>
+          <div style={{ background: 'var(--surface-2)', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 14px', marginBottom: '14px' }}>
             <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>Available variables</p>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {TEMPLATE_VARIABLES.map(v => (
@@ -795,7 +795,7 @@ export default function SettingsPage() {
                 <option value="department">Department</option>
               </select>
             </div>
-            <button onClick={addSchool} disabled={!newSchoolCode.trim() || !newSchoolName.trim()} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: newSchoolCode && newSchoolName ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: newSchoolCode && newSchoolName ? '#fff' : muted, border: 'none', cursor: newSchoolCode && newSchoolName ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            <button onClick={addSchool} disabled={!newSchoolCode.trim() || !newSchoolName.trim()} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: newSchoolCode && newSchoolName ? '#1e6cb5' : 'var(--surface-2)', color: newSchoolCode && newSchoolName ? '#fff' : muted, border: 'none', cursor: newSchoolCode && newSchoolName ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
               Add
             </button>
           </div>
@@ -810,7 +810,7 @@ export default function SettingsPage() {
 
         {/* Table */}
         <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 100px', padding: '10px 14px', borderBottom: `0.5px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 100px', padding: '10px 14px', borderBottom: `0.5px solid ${border}`, background: 'var(--surface-2)' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Code</span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Name</span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Type</span>

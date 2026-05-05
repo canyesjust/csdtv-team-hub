@@ -63,12 +63,12 @@ function ProductionsPageContent() {
   const [panelLoading, setPanelLoading] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const text    = dark ? '#f0f4ff' : '#1a1f36'
-  const muted   = dark ? '#94a3b8' : '#6b7280'
-  const border  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg  = dark ? '#0d1525' : '#ffffff'
+  const text    = 'var(--text-primary)'
+  const muted   = 'var(--text-muted)'
+  const border  = 'var(--border-subtle)'
+  const cardBg  = 'var(--surface-1)'
   const colBg   = dark ? 'rgba(255,255,255,0.02)' : '#f8fafc'
-  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
+  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
 
   const isOverdue = (p: Production) => !!p.start_datetime && new Date(p.start_datetime) < new Date() && p.status !== 'Complete' && p.status !== 'Abandoned'
   const isPast = (p: Production) => !!p.start_datetime && new Date(p.start_datetime) < new Date()
@@ -232,7 +232,7 @@ function ProductionsPageContent() {
               <p style={{ fontSize: '11px', color: muted, margin: '0 0 3px' }}>
                 #{prod.production_number}
                 {overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: '#ef4444', background: 'rgba(239,68,68,0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>Overdue</span>}
-                {past && !overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
+                {past && !overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: 'var(--surface-2)', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
                 {healthColor && !past && <span title={healthTip || ''} style={{ marginLeft: '6px', display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: healthColor, verticalAlign: 'middle' }} />}
               </p>
               <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, lineHeight: 1.3 }}>{prod.title}</p>
@@ -258,7 +258,7 @@ function ProductionsPageContent() {
 
           {progress && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ flex: 1, height: '4px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ flex: 1, height: '4px', background: 'var(--surface-2)', borderRadius: '2px', overflow: 'hidden' }}>
                 <div style={{ width: `${progress.pct}%`, height: '100%', background: progress.pct === 100 ? '#22c55e' : typeColor, borderRadius: '2px' }} />
               </div>
               <span style={{ fontSize: '11px', color: muted, flexShrink: 0 }}>{progress.done}/{progress.total}</span>
@@ -292,7 +292,7 @@ function ProductionsPageContent() {
         <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', background: `${typeColor}18`, color: typeColor, whiteSpace: 'nowrap' as const, flexShrink: 0 }}>{typeLabel}</span>
         {progress && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0, minWidth: '80px' }}>
-            <div style={{ flex: 1, height: '4px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: '4px', background: 'var(--surface-2)', borderRadius: '2px', overflow: 'hidden' }}>
               <div style={{ width: `${progress.pct}%`, height: '100%', background: progress.pct === 100 ? '#22c55e' : typeColor, borderRadius: '2px' }} />
             </div>
             <span style={{ fontSize: '11px', color: muted }}>{progress.pct}%</span>
@@ -302,7 +302,7 @@ function ProductionsPageContent() {
           <span style={{ fontSize: '12px', color: overdue ? '#ef4444' : past ? muted : text, flexShrink: 0 }}>
             {formatDate(prod.start_datetime)}
             {overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: '#ef4444', background: 'rgba(239,68,68,0.12)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>Overdue</span>}
-            {past && !overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
+            {past && !overdue && <span style={{ marginLeft: '6px', fontSize: '10px', color: muted, background: 'var(--surface-2)', padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
           </span>
         )}
         {members.length > 0 && (
@@ -325,7 +325,7 @@ function ProductionsPageContent() {
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', padding: '0 2px' }}>
       <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, flexShrink: 0 }} />
       <span style={{ fontSize: '13px', fontWeight: 700, color: text, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{label}</span>
-      <span style={{ fontSize: '12px', color: muted, background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', padding: '1px 8px', borderRadius: '20px' }}>{count}</span>
+      <span style={{ fontSize: '12px', color: muted, background: 'var(--surface-2)', padding: '1px 8px', borderRadius: '20px' }}>{count}</span>
     </div>
   )
 
@@ -652,7 +652,7 @@ function ProductionsPageContent() {
                     ))}
                   </div>
                   {/* Progress bar */}
-                  <div style={{ marginTop: '8px', height: '4px', background: dark ? 'rgba(255,255,255,0.06)' : '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ marginTop: '8px', height: '4px', background: 'var(--surface-2)', borderRadius: '2px', overflow: 'hidden' }}>
                     <div style={{ width: `${(panelChecklist.filter(c => c.completed).length / panelChecklist.length) * 100}%`, height: '100%', background: panelChecklist.every(c => c.completed) ? '#22c55e' : '#5ba3e0', borderRadius: '2px', transition: 'width 0.3s' }} />
                   </div>
                 </div>

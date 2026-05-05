@@ -95,11 +95,11 @@ export default function OnboardingPage() {
   // Intern state
   const [myTasks, setMyTasks] = useState<OnboardingTask[]>([])
 
-  const text    = dark ? '#f0f4ff' : '#1a1f36'
-  const muted   = dark ? '#8899bb' : '#6b7280'
-  const border  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg  = dark ? '#0d1525' : '#ffffff'
-  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : '#f8fafc'
+  const text    = 'var(--text-primary)'
+  const muted   = 'var(--text-muted)'
+  const border  = 'var(--border-subtle)'
+  const cardBg  = 'var(--surface-1)'
+  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
 
   // ─── Load data based on role ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -210,7 +210,7 @@ export default function OnboardingPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0 }}>Week {weekNum}</h2>
           <span style={{ fontSize: '13px', color: muted }}>{done} of {weekTasks.length} complete</span>
-          <div style={{ flex: 1, height: '4px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '2px', overflow: 'hidden', maxWidth: '120px' }}>
+          <div style={{ flex: 1, height: '4px', background: 'var(--surface-2)', borderRadius: '2px', overflow: 'hidden', maxWidth: '120px' }}>
             <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '2px', transition: 'width 0.3s' }} />
           </div>
         </div>
@@ -273,7 +273,7 @@ export default function OnboardingPage() {
             <p style={{ fontSize: '14px', color: muted, margin: '3px 0 0' }}>Your two-week checklist</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '100px', height: '6px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ width: '100px', height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
               <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
             </div>
             <span style={{ fontSize: '14px', color: muted }}>{totalDone} / {myTasks.length}</span>
@@ -321,7 +321,7 @@ export default function OnboardingPage() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '100px', height: '6px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ width: '100px', height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
               <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
             </div>
             <span style={{ fontSize: '14px', color: muted }}>{totalDone} / {internTasks.length}</span>
@@ -398,7 +398,7 @@ export default function OnboardingPage() {
                       <span style={{ fontSize: '13px', color: muted }}>Progress</span>
                       <span style={{ fontSize: '13px', fontWeight: 500, color: pct === 100 ? '#22c55e' : text }}>{done} / {total}</span>
                     </div>
-                    <div style={{ height: '6px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
                     </div>
                     <p style={{ fontSize: '12px', color: muted, margin: '8px 0 0', textAlign: 'right' as const }}>
@@ -409,7 +409,7 @@ export default function OnboardingPage() {
                   <button
                     onClick={e => { e.stopPropagation(); seedTasks(intern) }}
                     disabled={isSeeding}
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: isSeeding ? (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0') : '#1e6cb5', color: isSeeding ? muted : '#fff', border: 'none', cursor: isSeeding ? 'wait' : 'pointer', fontSize: '14px', fontWeight: 500, fontFamily: 'inherit' }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: isSeeding ? 'var(--surface-2)' : '#1e6cb5', color: isSeeding ? muted : '#fff', border: 'none', cursor: isSeeding ? 'wait' : 'pointer', fontSize: '14px', fontWeight: 500, fontFamily: 'inherit' }}
                   >
                     {isSeeding ? 'Setting up...' : 'Initialize onboarding'}
                   </button>

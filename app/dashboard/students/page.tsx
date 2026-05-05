@@ -123,11 +123,11 @@ export default function StudentsPage() {
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [importing, setImporting] = useState(false)
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -416,7 +416,7 @@ export default function StudentsPage() {
             <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' as const }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: '14px', minWidth: '900px' }}>
-                  <thead style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc' }}>
+                  <thead style={{ background: 'var(--surface-2)' }}>
                     <tr>
                       <th style={{ textAlign: 'left' as const, padding: '12px 14px', fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', borderBottom: `0.5px solid ${border}` }}>Name</th>
                       <th style={{ textAlign: 'left' as const, padding: '12px 14px', fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', borderBottom: `0.5px solid ${border}` }}>Student #</th>
@@ -466,7 +466,7 @@ export default function StudentsPage() {
 
       {(showAdd || editingId) && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={e => { if (e.target === e.currentTarget) closeForm() }}>
-          <div style={{ background: dark ? '#0d1525' : '#fff', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' as const, padding: '24px' }}>
+          <div style={{ background: 'var(--surface-1)', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' as const, padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: 0 }}>{editingId ? 'Edit student' : 'Add student'}</h2>
               <button onClick={closeForm} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
@@ -544,7 +544,7 @@ export default function StudentsPage() {
 
       {showImport && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={e => { if (e.target === e.currentTarget) { setShowImport(false); setCsvInput(''); setParsedRows([]) } }}>
-          <div style={{ background: dark ? '#0d1525' : '#fff', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '720px', maxHeight: '90vh', overflowY: 'auto' as const, padding: '24px' }}>
+          <div style={{ background: 'var(--surface-1)', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '720px', maxHeight: '90vh', overflowY: 'auto' as const, padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: 0 }}>Import CSV</h2>
               <button onClick={() => { setShowImport(false); setCsvInput(''); setParsedRows([]) }} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
@@ -566,7 +566,7 @@ export default function StudentsPage() {
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Or paste CSV here</label>
               <textarea value={csvInput} onChange={e => setCsvInput(e.target.value)} placeholder="Name,Student Number,Email,Parent Name,Parent Email,Parent Phone,Grade" style={{ ...inputStyle, minHeight: '120px', fontFamily: 'monospace', fontSize: '12px' }} />
-              <button onClick={previewCSV} disabled={!csvInput.trim()} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: csvInput.trim() ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: csvInput.trim() ? '#fff' : muted, border: 'none', cursor: csvInput.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', marginTop: '8px' }}>Preview</button>
+              <button onClick={previewCSV} disabled={!csvInput.trim()} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: csvInput.trim() ? '#1e6cb5' : 'var(--surface-2)', color: csvInput.trim() ? '#fff' : muted, border: 'none', cursor: csvInput.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', marginTop: '8px' }}>Preview</button>
             </div>
 
             {parsedRows.length > 0 && (
@@ -586,7 +586,7 @@ export default function StudentsPage() {
             )}
 
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={importCSV} disabled={importing || parsedRows.filter(r => !r.error).length === 0} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: parsedRows.filter(r => !r.error).length > 0 ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: parsedRows.filter(r => !r.error).length > 0 ? '#fff' : muted, border: 'none', cursor: parsedRows.filter(r => !r.error).length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+              <button onClick={importCSV} disabled={importing || parsedRows.filter(r => !r.error).length === 0} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: parsedRows.filter(r => !r.error).length > 0 ? '#1e6cb5' : 'var(--surface-2)', color: parsedRows.filter(r => !r.error).length > 0 ? '#fff' : muted, border: 'none', cursor: parsedRows.filter(r => !r.error).length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
                 {importing ? 'Importing...' : `Import ${parsedRows.filter(r => !r.error).length} students`}
               </button>
               <button onClick={() => { setShowImport(false); setCsvInput(''); setParsedRows([]) }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>

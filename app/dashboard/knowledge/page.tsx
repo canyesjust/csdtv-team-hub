@@ -110,12 +110,12 @@ export default function KnowledgePage() {
   const [showMobileDetail, setShowMobileDetail] = useState(false)
   const [saveError, setSaveError] = useState('')
 
-  const text    = dark ? '#f0f4ff' : '#1a1f36'
-  const muted   = dark ? '#8899bb' : '#6b7280'
-  const border  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg  = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
-  const hoverBg = dark ? 'rgba(255,255,255,0.03)' : '#f8fafc'
+  const text    = 'var(--text-primary)'
+  const muted   = 'var(--text-muted)'
+  const border  = 'var(--border-subtle)'
+  const cardBg  = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
+  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
 
   const editor = useEditor({
     extensions: [
@@ -341,7 +341,7 @@ export default function KnowledgePage() {
                   <p style={{ fontSize: '15px', color: muted, margin: '0 0 16px' }}>Start documenting your team's processes</p>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                     {STARTER_ARTICLES.map(s => (
-                      <button key={s.title} onClick={() => { setForm({ title: s.title, category: s.category }); setShowNew(true); setShowMobileDetail(true); editor?.commands.setContent(s.content) }} style={{ fontSize: '14px', padding: '8px 14px', borderRadius: '8px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <button key={s.title} onClick={() => { setForm({ title: s.title, category: s.category }); setShowNew(true); setShowMobileDetail(true); editor?.commands.setContent(s.content) }} style={{ fontSize: '14px', padding: '8px 14px', borderRadius: '8px', background: 'var(--surface-2)', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
                         + {s.title}
                       </button>
                     ))}

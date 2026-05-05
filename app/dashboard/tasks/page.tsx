@@ -93,13 +93,13 @@ export default function TasksPage() {
   const [subtaskCounts, setSubtaskCounts] = useState<Record<string, { total: number; done: number }>>({})
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  const text    = dark ? '#f0f4ff' : '#1a1f36'
-  const muted   = dark ? '#8899bb' : '#6b7280'
-  const border  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg  = dark ? '#0d1525' : '#ffffff'
-  const panelBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
-  const hoverBg = dark ? 'rgba(255,255,255,0.03)' : '#f8fafc'
+  const text    = 'var(--text-primary)'
+  const muted   = 'var(--text-muted)'
+  const border  = 'var(--border-subtle)'
+  const cardBg  = 'var(--surface-1)'
+  const panelBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
+  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -499,7 +499,7 @@ export default function TasksPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: '13px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{p.production_number} {p.title}</p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                      <div style={{ flex: 1, height: '3px', background: dark ? 'rgba(255,255,255,0.06)' : '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ flex: 1, height: '3px', background: 'var(--surface-2)', borderRadius: '2px', overflow: 'hidden' }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '2px' }} />
                       </div>
                       <span style={{ fontSize: '11px', color: pct === 100 ? '#22c55e' : muted, fontWeight: 500, flexShrink: 0 }}>{p.done}/{p.total}</span>
@@ -523,10 +523,10 @@ export default function TasksPage() {
           </div>
           {activeTab === 'open' && (
             <div style={{ display: 'flex', gap: '2px', alignItems: 'center' }}>
-              <button onClick={() => setViewMode('list')} style={{ padding: '6px 10px', background: viewMode === 'list' ? (dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0') : 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: viewMode === 'list' ? text : muted }}>
+              <button onClick={() => setViewMode('list')} style={{ padding: '6px 10px', background: viewMode === 'list' ? 'var(--surface-2)' : 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: viewMode === 'list' ? text : muted }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
               </button>
-              <button onClick={() => setViewMode('kanban')} style={{ padding: '6px 10px', background: viewMode === 'kanban' ? (dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0') : 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: viewMode === 'kanban' ? text : muted }}>
+              <button onClick={() => setViewMode('kanban')} style={{ padding: '6px 10px', background: viewMode === 'kanban' ? 'var(--surface-2)' : 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', color: viewMode === 'kanban' ? text : muted }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="12"/><rect x="17" y="3" width="4" height="15"/></svg>
               </button>
             </div>
@@ -555,7 +555,7 @@ export default function TasksPage() {
             )}
             <div style={{ display: 'flex', gap: '8px' }}>
               <input value={newTemplateName} onChange={e => setNewTemplateName(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveAsTemplate()} placeholder="Template name..." style={{ ...inputStyle, flex: 1, fontSize: '14px' }} />
-              <button onClick={saveAsTemplate} disabled={!newTemplateName.trim() || tasks.length === 0} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: newTemplateName.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newTemplateName.trim() ? '#fff' : muted, border: 'none', cursor: newTemplateName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Save current tasks as template</button>
+              <button onClick={saveAsTemplate} disabled={!newTemplateName.trim() || tasks.length === 0} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: newTemplateName.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newTemplateName.trim() ? '#fff' : muted, border: 'none', cursor: newTemplateName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Save current tasks as template</button>
             </div>
             <p style={{ fontSize: '12px', color: muted, margin: '8px 0 0' }}>Saving captures all {tasks.length} open tasks as a reusable template.</p>
           </div>
@@ -1002,7 +1002,7 @@ export default function TasksPage() {
                 )}
                 <div style={{ display: 'flex', gap: '6px', marginTop: '14px' }}>
                   <input value={newSubtask} onChange={e => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSubtask()} placeholder="Add a subtask..." style={{ ...inputStyle, flex: 1, fontSize: '13px', padding: '8px 10px' }} />
-                  <button onClick={addSubtask} disabled={!newSubtask.trim()} style={{ padding: '8px 14px', borderRadius: '8px', background: newSubtask.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newSubtask.trim() ? '#fff' : muted, border: 'none', cursor: newSubtask.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500 }}>Add</button>
+                  <button onClick={addSubtask} disabled={!newSubtask.trim()} style={{ padding: '8px 14px', borderRadius: '8px', background: newSubtask.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newSubtask.trim() ? '#fff' : muted, border: 'none', cursor: newSubtask.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500 }}>Add</button>
                 </div>
               </div>
             )}
@@ -1019,7 +1019,7 @@ export default function TasksPage() {
                     <p style={{ fontSize: '11px', color: muted, margin: '0 0 4px' }}>What did you work on?</p>
                     <input value={newTimeDesc} onChange={e => setNewTimeDesc(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTimeEntry()} placeholder="Description (optional)" style={{ ...inputStyle, fontSize: '13px', padding: '8px 10px' }} />
                   </div>
-                  <button onClick={addTimeEntry} disabled={!newTimeHours} style={{ padding: '8px 14px', borderRadius: '8px', background: newTimeHours ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newTimeHours ? '#fff' : muted, border: 'none', cursor: newTimeHours ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500, minHeight: '38px' }}>Log</button>
+                  <button onClick={addTimeEntry} disabled={!newTimeHours} style={{ padding: '8px 14px', borderRadius: '8px', background: newTimeHours ? '#1e6cb5' : 'var(--surface-2)', color: newTimeHours ? '#fff' : muted, border: 'none', cursor: newTimeHours ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500, minHeight: '38px' }}>Log</button>
                 </div>
                 {timeEntries.length === 0 ? (
                   <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0' }}>No time logged yet</p>

@@ -45,11 +45,11 @@ export default function VideosPage() {
   const dark = theme === 'dark'
   const supabase = createClient()
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
 
   const [videos, setVideos] = useState<Video[]>([])
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
@@ -486,7 +486,7 @@ export default function VideosPage() {
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setAiSuggestions(prev => prev ? prev.map(s => ({ ...s, approved: true })) : null)} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Select all</button>
               <button onClick={() => setAiSuggestions(null)} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button onClick={applyApprovedSuggestions} disabled={aiSuggestions.filter(s => s.approved).length === 0} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: aiSuggestions.some(s => s.approved) ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), color: aiSuggestions.some(s => s.approved) ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+              <button onClick={applyApprovedSuggestions} disabled={aiSuggestions.filter(s => s.approved).length === 0} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: aiSuggestions.some(s => s.approved) ? '#22c55e' : 'var(--surface-2)', color: aiSuggestions.some(s => s.approved) ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                 Apply {aiSuggestions.filter(s => s.approved).length} approved
               </button>
             </div>
@@ -522,7 +522,7 @@ export default function VideosPage() {
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => { setSyncResults(null); setMissingFromYoutube([]) }} style={{ padding: '8px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px' }}>Cancel</button>
-              <button onClick={importSyncResults} disabled={syncImporting || syncResults.filter(r => !r.existing).length === 0} style={{ padding: '8px 14px', borderRadius: '8px', background: syncResults.filter(r => !r.existing).length > 0 ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), color: syncResults.filter(r => !r.existing).length > 0 ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500 }}>
+              <button onClick={importSyncResults} disabled={syncImporting || syncResults.filter(r => !r.existing).length === 0} style={{ padding: '8px 14px', borderRadius: '8px', background: syncResults.filter(r => !r.existing).length > 0 ? '#22c55e' : 'var(--surface-2)', color: syncResults.filter(r => !r.existing).length > 0 ? '#fff' : muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500 }}>
                 {syncImporting ? 'Importing...' : `Import ${syncResults.filter(r => !r.existing).length} new videos`}
               </button>
             </div>
@@ -541,7 +541,7 @@ export default function VideosPage() {
                   <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '6px' }}>
                     {v.youtube_thumbnail ? (
                       <img src={v.youtube_thumbnail} alt="" style={{ width: '48px', height: '27px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0, opacity: 0.5 }} />
-                    ) : <div style={{ width: '48px', height: '27px', borderRadius: '4px', background: dark ? '#1a2540' : '#e2e8f0', flexShrink: 0 }} />}
+                    ) : <div style={{ width: '48px', height: '27px', borderRadius: '4px', background: 'var(--surface-2)', flexShrink: 0 }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: '12px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
                       <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.date_published || 'No date'}{v.youtube_views != null ? ` · ${v.youtube_views.toLocaleString()} views` : ''}</p>
@@ -628,7 +628,7 @@ export default function VideosPage() {
                 <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, maxHeight: '240px', overflowY: 'auto' as const, background: dark ? '#0d1526' : '#fff', border: `1px solid ${border}`, borderRadius: '8px', zIndex: 20, marginTop: '4px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
                   {filteredOther.map(p => (
                     <div key={p.id} onClick={() => linkReviewVideo(p.id, `#${p.production_number} ${p.title}`)} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '13px', borderBottom: `0.5px solid ${border}` }}
-                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--surface-2)'}
                       onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
                     >
                       <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>
@@ -680,7 +680,7 @@ export default function VideosPage() {
               setBulkCSV('')
               setBulkImporting(false)
               setShowBulkImport(false)
-            }} disabled={bulkImporting || !bulkCSV.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: bulkCSV.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: bulkCSV.trim() ? '#fff' : muted, border: 'none', cursor: bulkCSV.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
+            }} disabled={bulkImporting || !bulkCSV.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: bulkCSV.trim() ? '#1e6cb5' : 'var(--surface-2)', color: bulkCSV.trim() ? '#fff' : muted, border: 'none', cursor: bulkCSV.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
               {bulkImporting ? 'Importing...' : `Import ${bulkCSV.trim() ? bulkCSV.trim().split('\n').filter(l => l.trim()).length : 0} videos`}
             </button>
             <button onClick={() => setShowBulkImport(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
@@ -740,7 +740,7 @@ export default function VideosPage() {
             <input value={newVideo.tags} onChange={e => setNewVideo(f => ({ ...f, tags: e.target.value }))} placeholder="e.g. board meeting, athletics, drone" style={inputStyle} />
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={createVideo} disabled={!newVideo.title || saving} style={{ padding: '10px 20px', borderRadius: '8px', background: newVideo.title ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newVideo.title ? '#fff' : muted, border: 'none', cursor: newVideo.title ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+            <button onClick={createVideo} disabled={!newVideo.title || saving} style={{ padding: '10px 20px', borderRadius: '8px', background: newVideo.title ? '#1e6cb5' : 'var(--surface-2)', color: newVideo.title ? '#fff' : muted, border: 'none', cursor: newVideo.title ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
               {saving ? 'Creating...' : 'Create video'}
             </button>
             <button onClick={() => setShowNew(false)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>Cancel</button>
@@ -812,7 +812,7 @@ export default function VideosPage() {
                             <a href={video.youtube_url || `https://youtube.com/watch?v=${video.youtube_id}`} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0 }}>
                               <img src={video.youtube_thumbnail} alt="" style={{ width: '64px', height: '36px', objectFit: 'cover' as const, borderRadius: '4px' }} />
                             </a>
-                          ) : <div style={{ width: '64px', height: '36px', borderRadius: '4px', background: dark ? '#1a2540' : '#e2e8f0', flexShrink: 0 }} />}
+                          ) : <div style={{ width: '64px', height: '36px', borderRadius: '4px', background: 'var(--surface-2)', flexShrink: 0 }} />}
                           <div style={{ minWidth: 0 }}>
                             <Link href={`/dashboard/videos/${video.id}`} style={{ fontSize: '13px', fontWeight: 500, color: text, textDecoration: 'none', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '280px' }}>{video.title}</Link>
                             {video.youtube_duration && <span style={{ fontSize: '11px', color: muted }}>{video.youtube_duration}</span>}
@@ -846,7 +846,7 @@ export default function VideosPage() {
                                     setLinkingVideoId(null); setLinkSearch('')
                                     toast(`Linked to #${p.production_number}`, 'success')
                                   }} style={{ padding: '5px 8px', cursor: 'pointer', fontSize: '11px', borderBottom: `0.5px solid ${border}` }}
-                                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9'}
+                                    onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--surface-2)'}
                                     onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
                                   >
                                     <span style={{ fontWeight: 500, color: text }}>#{p.production_number} {p.title}</span>

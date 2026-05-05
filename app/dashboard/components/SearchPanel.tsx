@@ -28,11 +28,11 @@ export default function SearchPanel({ onClose }: Props) {
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
 
-  const text   = dark ? '#f0f4ff' : '#1a1f36'
-  const muted  = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const bg     = dark ? '#0d1525' : '#ffffff'
-  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : '#f8fafc'
+  const text   = 'var(--text-primary)'
+  const muted  = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const bg     = 'var(--surface-1)'
+  const hoverBg = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50)

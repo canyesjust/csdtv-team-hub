@@ -164,11 +164,11 @@ export default function SchedulePage() {
   const [showOutlook, setShowOutlook] = useState(true)
   const [dismissedOutlook, setDismissedOutlook] = useState<Set<string>>(new Set())
 
-  const text    = dark ? '#f0f4ff' : '#1a1f36'
-  const muted   = dark ? '#8899bb' : '#6b7280'
-  const border  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg  = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text    = 'var(--text-primary)'
+  const muted   = 'var(--text-muted)'
+  const border  = 'var(--border-subtle)'
+  const cardBg  = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
   const gridBg  = dark ? '#060d1a' : '#f8fafc'
   const wkendBg = dark ? 'rgba(255,255,255,0.015)' : 'rgba(0,0,0,0.025)'
 
@@ -608,7 +608,7 @@ export default function SchedulePage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onClick={() => setShowAddEvent(true)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: '#22c55e', border: 'none', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Event</button>
-          <button onClick={() => setShowOutlook(p => !p)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: showOutlook ? '#0891b2' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), border: 'none', color: showOutlook ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{showOutlook ? '📅 Outlook' : '📅 Outlook off'}</button>
+          <button onClick={() => setShowOutlook(p => !p)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: showOutlook ? '#0891b2' : 'var(--surface-2)', border: 'none', color: showOutlook ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{showOutlook ? '📅 Outlook' : '📅 Outlook off'}</button>
           {isManager && <button onClick={remindTeam} disabled={sendingReminder} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit', opacity: sendingReminder ? 0.6 : 1 }}>{sendingReminder ? 'Sending...' : '📧 Remind team'}</button>}
         </div>
       </div>
@@ -641,7 +641,7 @@ export default function SchedulePage() {
               <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Color</label>
               <input type="color" value={newEvent.color} onChange={e => setNewEvent(p => ({ ...p, color: e.target.value }))} style={{ width: '100%', height: '36px', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', background: 'transparent' }} />
             </div>
-            <button onClick={saveEvent} disabled={!newEvent.title || !newEvent.date} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: newEvent.title && newEvent.date ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: newEvent.title && newEvent.date ? '#fff' : muted, border: 'none', cursor: newEvent.title && newEvent.date ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+            <button onClick={saveEvent} disabled={!newEvent.title || !newEvent.date} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: newEvent.title && newEvent.date ? '#1e6cb5' : 'var(--surface-2)', color: newEvent.title && newEvent.date ? '#fff' : muted, border: 'none', cursor: newEvent.title && newEvent.date ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
           </div>
         </div>
       )}
@@ -683,7 +683,7 @@ export default function SchedulePage() {
             lines.push('', `Total: ${ppTotalHours}h`)
             navigator.clipboard.writeText(lines.join('\n'))
             toast('Hours copied to clipboard!', 'success')
-          }} style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto' }}>
+          }} style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '6px', background: 'var(--surface-2)', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto' }}>
             Copy hours
           </button>
           {payPeriodsInView.length > 1 && (

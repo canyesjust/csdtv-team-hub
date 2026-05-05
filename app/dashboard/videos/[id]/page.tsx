@@ -53,11 +53,11 @@ export default function VideoDetailPage() {
   const videoId = params.id as string
   const supabase = createClient()
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
 
   const [video, setVideo] = useState<Video | null>(null)
   const [talent, setTalent] = useState<Talent[]>([])
@@ -237,8 +237,8 @@ export default function VideoDetailPage() {
           <select value={video.status} onChange={e => updateVideo({ status: e.target.value })} style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '6px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{video.video_type}</span>
-          <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{video.visibility}</span>
+          <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{video.video_type}</span>
+          <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{video.visibility}</span>
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: 600, color: text, margin: '0 0 6px' }}>{video.title}</h1>
         {video.productions && (
@@ -249,7 +249,7 @@ export default function VideoDetailPage() {
         {/* Tags */}
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '12px', alignItems: 'center' }}>
           {tags.map(t => (
-            <span key={t.id} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted, display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span key={t.id} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', background: 'var(--surface-2)', color: muted, display: 'flex', alignItems: 'center', gap: '4px' }}>
               {t.tag}
               <button onClick={() => removeTag(t.id)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0, opacity: 0.5 }}>×</button>
             </span>
@@ -276,7 +276,7 @@ export default function VideoDetailPage() {
           {/* Progress bar */}
           {checklistItems.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <div style={{ flex: 1, height: '6px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ flex: 1, height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
                 <div style={{ width: `${(checklistItems.filter(c => c.completed).length / checklistItems.length) * 100}%`, height: '100%', background: '#22c55e', borderRadius: '3px', transition: 'width 0.3s' }}></div>
               </div>
               <span style={{ fontSize: '13px', color: muted, flexShrink: 0 }}>{checklistItems.filter(c => c.completed).length}/{checklistItems.length}</span>
@@ -328,7 +328,7 @@ export default function VideoDetailPage() {
               if (!newCheckItem.trim()) return
               const { data } = await supabase.from('video_checklist_items').insert({ video_id: videoId, title: newCheckItem.trim(), sort_order: checklistItems.length }).select('*').single()
               if (data) { setChecklistItems(prev => [...prev, data]); setNewCheckItem('') }
-            }} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: newCheckItem.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newCheckItem.trim() ? '#fff' : muted, border: 'none', cursor: newCheckItem.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+            }} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: newCheckItem.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newCheckItem.trim() ? '#fff' : muted, border: 'none', cursor: newCheckItem.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
           </div>
         </div>
       )}
@@ -338,7 +338,7 @@ export default function VideoDetailPage() {
           {!editing ? (
             <div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
-                <button onClick={() => { setEditing(true); setEditForm({ title: video.title, description: video.description, video_type: video.video_type, visibility: video.visibility, production_id: video.production_id, school_department: video.school_department, school_year: video.school_year, date_filmed: video.date_filmed, date_published: video.date_published, thumbnail_url: video.thumbnail_url, project_file_location: video.project_file_location, raw_footage_location: video.raw_footage_location, script: video.script, notes: video.notes }) }} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <button onClick={() => { setEditing(true); setEditForm({ title: video.title, description: video.description, video_type: video.video_type, visibility: video.visibility, production_id: video.production_id, school_department: video.school_department, school_year: video.school_year, date_filmed: video.date_filmed, date_published: video.date_published, thumbnail_url: video.thumbnail_url, project_file_location: video.project_file_location, raw_footage_location: video.raw_footage_location, script: video.script, notes: video.notes }) }} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: 'var(--surface-2)', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
                   Edit details
                 </button>
               </div>
@@ -425,7 +425,7 @@ export default function VideoDetailPage() {
                 <p style={{ fontSize: '12px', color: muted, margin: '0 0 8px' }}>Paste a list — one person per line. Format: Name, Role, School, Student/Employee # (comma or tab separated). Header row is auto-skipped.</p>
                 <textarea value={csvPaste} onChange={e => setCsvPaste(e.target.value)} placeholder={"Jane Smith, Teacher, Hillcrest Elementary, E12345\nJohn Doe, Student, Midvale Middle, S67890\nSarah Johnson, Principal, Corner Canyon High"} style={{ ...inputStyle, minHeight: '100px', resize: 'vertical' as const, fontFamily: 'monospace', fontSize: '13px', marginBottom: '10px' }} />
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button onClick={importCsv} disabled={!csvPaste.trim()} style={{ padding: '10px 16px', borderRadius: '8px', background: csvPaste.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: csvPaste.trim() ? '#fff' : muted, border: 'none', cursor: csvPaste.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+                  <button onClick={importCsv} disabled={!csvPaste.trim()} style={{ padding: '10px 16px', borderRadius: '8px', background: csvPaste.trim() ? '#1e6cb5' : 'var(--surface-2)', color: csvPaste.trim() ? '#fff' : muted, border: 'none', cursor: csvPaste.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
                     Import {csvPaste.trim() ? `(${csvPaste.trim().split('\n').filter(l => l.trim() && l.trim().toLowerCase().split(/[,\t]/)[0] !== 'name').length} people)` : ''}
                   </button>
                   <span style={{ fontSize: '12px', color: muted }}>All imported as "Pending" release — update individually after</span>
@@ -438,7 +438,7 @@ export default function VideoDetailPage() {
                 <div style={{ flex: 1, minWidth: '120px' }}><label style={labelStyle}>School</label><input value={newTalent.school} onChange={e => setNewTalent(f => ({ ...f, school: e.target.value }))} style={inputStyle} /></div>
                 <div style={{ minWidth: '120px' }}><label style={labelStyle}>Student/Emp #</label><input value={newTalent.student_employee_number} onChange={e => setNewTalent(f => ({ ...f, student_employee_number: e.target.value }))} placeholder="Optional" style={inputStyle} /></div>
                 <div style={{ minWidth: '120px' }}><label style={labelStyle}>Release</label><select value={newTalent.release_status} onChange={e => setNewTalent(f => ({ ...f, release_status: e.target.value }))} style={inputStyle}>{RELEASE_STATUSES.map(s => <option key={s} value={s}>{RELEASE_LABELS[s].label}</option>)}</select></div>
-                <button onClick={addTalent} disabled={!newTalent.name} style={{ padding: '10px 16px', borderRadius: '8px', background: newTalent.name ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newTalent.name ? '#fff' : muted, border: 'none', cursor: newTalent.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
+                <button onClick={addTalent} disabled={!newTalent.name} style={{ padding: '10px 16px', borderRadius: '8px', background: newTalent.name ? '#1e6cb5' : 'var(--surface-2)', color: newTalent.name ? '#fff' : muted, border: 'none', cursor: newTalent.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
               </div>
             )}
           </div>
@@ -486,7 +486,7 @@ export default function VideoDetailPage() {
               <div style={{ minWidth: '120px' }}><label style={labelStyle}>Type</label><select value={newFile.file_type} onChange={e => setNewFile(f => ({ ...f, file_type: e.target.value }))} style={inputStyle}>{FILE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}</select></div>
               <div style={{ flex: 1, minWidth: '140px' }}><label style={labelStyle}>Name *</label><input value={newFile.file_name} onChange={e => setNewFile(f => ({ ...f, file_name: e.target.value }))} placeholder="e.g. Final script v2" style={inputStyle} /></div>
               <div style={{ flex: 2, minWidth: '200px' }}><label style={labelStyle}>URL *</label><input value={newFile.file_url} onChange={e => setNewFile(f => ({ ...f, file_url: e.target.value }))} placeholder="Google Drive link or URL" style={inputStyle} /></div>
-              <button onClick={addFile} disabled={!newFile.file_name || !newFile.file_url} style={{ padding: '10px 16px', borderRadius: '8px', background: newFile.file_name && newFile.file_url ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: newFile.file_name && newFile.file_url ? '#fff' : muted, border: 'none', cursor: newFile.file_name && newFile.file_url ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
+              <button onClick={addFile} disabled={!newFile.file_name || !newFile.file_url} style={{ padding: '10px 16px', borderRadius: '8px', background: newFile.file_name && newFile.file_url ? '#1e6cb5' : 'var(--surface-2)', color: newFile.file_name && newFile.file_url ? '#fff' : muted, border: 'none', cursor: newFile.file_name && newFile.file_url ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
             </div>
           </div>
           {files.length === 0 ? (
@@ -495,7 +495,7 @@ export default function VideoDetailPage() {
             <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden' }}>
               {files.map((file, i) => (
                 <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: i < files.length - 1 ? `0.5px solid ${border}` : 'none' }}>
-                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted, fontWeight: 500, textTransform: 'capitalize' as const }}>{file.file_type.replace('_', ' ')}</span>
+                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--surface-2)', color: muted, fontWeight: 500, textTransform: 'capitalize' as const }}>{file.file_type.replace('_', ' ')}</span>
                   <a href={file.file_url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, fontSize: '14px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{file.file_name}</a>
                   <span style={{ fontSize: '12px', color: muted }}>{new Date(file.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                   <button onClick={() => removeFile(file.id)} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: 0.7 }}>Remove</button>

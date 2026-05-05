@@ -125,11 +125,11 @@ export default function ProductionDetailPage() {
   const [emailSubject, setEmailSubject] = useState('')
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
 
-  const text    = dark ? '#f0f4ff' : '#1a1f36'
-  const muted   = dark ? '#8899bb' : '#6b7280'
-  const border  = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg  = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text    = 'var(--text-primary)'
+  const muted   = 'var(--text-muted)'
+  const border  = 'var(--border-subtle)'
+  const cardBg  = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -714,7 +714,7 @@ export default function ProductionDetailPage() {
               <span style={{ fontSize: '12px', color: muted }}>#{production.production_number}</span>
               <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(30,108,181,0.12)', color: '#5ba3e0' }}>{typeLabel}</span>
               {production.internal_type_label && production.internal_type_label !== typeLabel && (
-                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: muted }}>{production.internal_type_label}</span>
+                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{production.internal_type_label}</span>
               )}
               <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>{production.status}</span>
             </div>
@@ -854,7 +854,7 @@ export default function ProductionDetailPage() {
                   <option value="">Select a production...</option>
                   {allProductions.map(p => <option key={p.id} value={p.id}>#{p.production_number} {p.title}</option>)}
                 </select>
-                <button onClick={copySetupTo} disabled={!copyTargetId} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: copyTargetId ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: copyTargetId ? '#fff' : muted, border: 'none', cursor: copyTargetId ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Copy</button>
+                <button onClick={copySetupTo} disabled={!copyTargetId} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: copyTargetId ? '#1e6cb5' : 'var(--surface-2)', color: copyTargetId ? '#fff' : muted, border: 'none', cursor: copyTargetId ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Copy</button>
               </div>
             </div>
           )}
@@ -879,7 +879,7 @@ export default function ProductionDetailPage() {
                 <button
                   onClick={createTaskForProduction}
                   disabled={!newTaskTitle}
-                  style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: newTaskTitle ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: newTaskTitle ? '#fff' : muted, border: 'none', cursor: newTaskTitle ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
+                  style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: newTaskTitle ? '#1e6cb5' : 'var(--surface-2)', color: newTaskTitle ? '#fff' : muted, border: 'none', cursor: newTaskTitle ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
                 >
                   Create task
                 </button>
@@ -906,7 +906,7 @@ export default function ProductionDetailPage() {
           ) : (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                <div style={{ flex: 1, height: '6px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ flex: 1, height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
                   <div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
                 </div>
                 <span style={{ fontSize: '12px', color: muted, flexShrink: 0 }}>{completedCount} of {checklist.length}</span>
@@ -932,7 +932,7 @@ export default function ProductionDetailPage() {
                 <button
                   onClick={massAssign}
                   disabled={!selectedMember}
-                  style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: selectedMember ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: selectedMember ? '#fff' : muted, cursor: selectedMember ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}
+                  style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: selectedMember ? '#1e6cb5' : 'var(--surface-2)', color: selectedMember ? '#fff' : muted, cursor: selectedMember ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}
                 >
                   {assignSuccess ? '✓ Assigned' : 'Assign all'}
                 </button>
@@ -1051,7 +1051,7 @@ export default function ProductionDetailPage() {
                 return steps.map((step, i) => (
                   <div key={step.label} style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', position: 'relative' as const }}>
                     {i > 0 && <div style={{ position: 'absolute' as const, top: '10px', right: '50%', width: '100%', height: '2px', background: step.done ? '#22c55e' : border, zIndex: 0 }} />}
-                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: step.done ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), border: step.done ? 'none' : `2px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative' as const }}>
+                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: step.done ? '#22c55e' : 'var(--surface-2)', border: step.done ? 'none' : `2px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative' as const }}>
                       {step.done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
                     </div>
                     <p style={{ fontSize: '11px', fontWeight: 600, color: step.done ? text : muted, margin: '6px 0 0', textAlign: 'center' as const }}>{step.label}</p>
@@ -1130,7 +1130,7 @@ export default function ProductionDetailPage() {
             <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Link YouTube Video</h3>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} placeholder="Paste YouTube URL..." style={{ ...inputStyle, flex: 1, padding: '7px 10px' }} onKeyDown={e => e.key === 'Enter' && linkYoutubeVideo()} />
-              <button onClick={linkYoutubeVideo} disabled={fetchingYt || !youtubeUrl} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: youtubeUrl ? '#ef4444' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: youtubeUrl ? '#fff' : muted, border: 'none', cursor: youtubeUrl ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
+              <button onClick={linkYoutubeVideo} disabled={fetchingYt || !youtubeUrl} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: youtubeUrl ? '#ef4444' : 'var(--surface-2)', color: youtubeUrl ? '#fff' : muted, border: 'none', cursor: youtubeUrl ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
                 {fetchingYt ? 'Fetching...' : '▶ Link'}
               </button>
             </div>
@@ -1177,7 +1177,7 @@ export default function ProductionDetailPage() {
                 <button
                   onClick={addMember}
                   disabled={!memberToAdd}
-                  style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: memberToAdd ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: memberToAdd ? '#fff' : muted, border: 'none', cursor: memberToAdd ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
+                  style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: memberToAdd ? '#1e6cb5' : 'var(--surface-2)', color: memberToAdd ? '#fff' : muted, border: 'none', cursor: memberToAdd ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
                 >
                   Add
                 </button>
@@ -1254,7 +1254,7 @@ export default function ProductionDetailPage() {
                     <button
                       onClick={addKBLink}
                       disabled={!selectedKB}
-                      style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: selectedKB ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: selectedKB ? '#fff' : muted, border: 'none', cursor: selectedKB ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '40px' }}
+                      style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: selectedKB ? '#1e6cb5' : 'var(--surface-2)', color: selectedKB ? '#fff' : muted, border: 'none', cursor: selectedKB ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '40px' }}
                     >
                       Link
                     </button>
@@ -1291,7 +1291,7 @@ export default function ProductionDetailPage() {
             <div>
               {activity.map((item, i) => (
                 <div key={item.id} style={{ display: 'flex', gap: '12px', padding: '10px 0', borderBottom: i < activity.length - 1 ? `0.5px solid ${border}` : 'none' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: dark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2">
                       <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                     </svg>
@@ -1491,7 +1491,7 @@ export default function ProductionDetailPage() {
       {showEmailModal && production && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
           onClick={e => { if (e.target === e.currentTarget) setShowEmailModal(false) }}>
-          <div style={{ background: dark ? '#0d1525' : '#fff', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' as const, padding: '24px' }}>
+          <div style={{ background: 'var(--surface-1)', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' as const, padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
               <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: 0 }}>Email organizer</h2>
               <button onClick={() => setShowEmailModal(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
@@ -1526,7 +1526,7 @@ export default function ProductionDetailPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button onClick={openOrganizerEmail} disabled={!emailBody} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: emailBody ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.05)' : '#e2e8f0'), color: emailBody ? '#fff' : muted, border: 'none', cursor: emailBody ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>
+              <button onClick={openOrganizerEmail} disabled={!emailBody} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: emailBody ? '#1e6cb5' : 'var(--surface-2)', color: emailBody ? '#fff' : muted, border: 'none', cursor: emailBody ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>
                 ✉ Open in Outlook
               </button>
               <button onClick={() => setShowEmailModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1542,7 +1542,7 @@ export default function ProductionDetailPage() {
       {showCompleteModal && production && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
           onClick={e => { if (e.target === e.currentTarget) setShowCompleteModal(false) }}>
-          <div style={{ background: dark ? '#0d1525' : '#fff', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '480px', padding: '24px' }}>
+          <div style={{ background: 'var(--surface-1)', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '480px', padding: '24px' }}>
             <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Mark production complete</h2>
             <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px' }}>#{production.production_number} {production.title}</p>
 
@@ -1564,7 +1564,7 @@ export default function ProductionDetailPage() {
             <p style={{ fontSize: '12px', color: muted, margin: '14px 0 12px' }}>An email will be sent to you and the admin assistant to mark this complete in the district system.</p>
 
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={markProductionComplete} disabled={sendingComplete || !Object.values(completeChecks).every(Boolean)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: Object.values(completeChecks).every(Boolean) ? '#22c55e' : (dark ? '#1a2540' : '#e2e8f0'), color: Object.values(completeChecks).every(Boolean) ? '#fff' : muted, border: 'none', cursor: Object.values(completeChecks).every(Boolean) ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
+              <button onClick={markProductionComplete} disabled={sendingComplete || !Object.values(completeChecks).every(Boolean)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: Object.values(completeChecks).every(Boolean) ? '#22c55e' : 'var(--surface-2)', color: Object.values(completeChecks).every(Boolean) ? '#fff' : muted, border: 'none', cursor: Object.values(completeChecks).every(Boolean) ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
                 {sendingComplete ? 'Sending...' : 'Confirm & notify'}
               </button>
               <button onClick={() => setShowCompleteModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>

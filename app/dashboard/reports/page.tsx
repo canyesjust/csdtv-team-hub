@@ -33,10 +33,10 @@ export default function ReportsPage() {
   const dark = theme === 'dark'
   const supabase = createClient()
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
 
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'overview' | 'productions' | 'team' | 'videos' | 'equipment' | 'value'>('overview')
@@ -122,7 +122,7 @@ export default function ReportsPage() {
   const pctBar = (value: number, max: number, color: string) => {
     const pct = max ? (value / max) * 100 : 0
     return (
-      <div style={{ flex: 1, height: '8px', background: dark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: '8px', background: 'var(--surface-2)', borderRadius: '4px', overflow: 'hidden' }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: '4px' }} />
       </div>
     )

@@ -40,11 +40,11 @@ export default function EquipmentDetailPage() {
   const tag = params.tag as string
   const supabase = createClient()
 
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#8899bb' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
+  const inputBg = 'var(--surface-2)'
   const inputStyle = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '9px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' as const, outline: 'none', width: '100%', boxSizing: 'border-box' as const }
 
   const [item, setItem] = useState<Equipment | null>(null)
@@ -224,7 +224,7 @@ export default function EquipmentDetailPage() {
             <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Note</p><input value={checkoutNote} onChange={e => setCheckoutNote(e.target.value)} placeholder="Optional" style={inputStyle} /></div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleCheckout} disabled={!borrowerName.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: borrowerName.trim() ? '#1e6cb5' : (dark ? '#1a2540' : '#e2e8f0'), color: borrowerName.trim() ? '#fff' : muted, border: 'none', cursor: borrowerName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Confirm checkout</button>
+            <button onClick={handleCheckout} disabled={!borrowerName.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: borrowerName.trim() ? '#1e6cb5' : 'var(--surface-2)', color: borrowerName.trim() ? '#fff' : muted, border: 'none', cursor: borrowerName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Confirm checkout</button>
             <button onClick={() => setShowCheckout(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
           </div>
         </div>
