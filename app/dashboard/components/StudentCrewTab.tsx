@@ -43,9 +43,8 @@ interface CrewSignup {
   id: string
   crew_role_slot_id: string
   student_id: string
-  signed_up_by_self: boolean
+  signed_up_by: string | null
   signed_up_at: string
-  cancelled: boolean | null
   students?: { name: string; student_number: string; grade: number | null } | null
 }
 
@@ -168,7 +167,6 @@ export default function StudentCrewTab({ productionId, productionNumber, product
             .from('crew_signups')
             .select('*, students(name, student_number, grade)')
             .in('crew_role_slot_id', slotIds)
-            .eq('cancelled', false)
             .order('signed_up_at')
           setSignups(signupData || [])
         }
@@ -310,7 +308,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
 
   const cancelSignup = async (signupId: string, studentName: string) => {
     if (!confirm(`Remove ${studentName} from this slot? They can still sign up again unless you adjust their tier.`)) return
-    const { error } = await supabase.from('crew_signups').update({ cancelled: true, cancelled_at: new Date().toISOString() }).eq('id', signupId)
+    const { error } = await supabase.from('crew_signups').delete().eq('id', signupId)
     if (error) { toast('Failed: ' + error.message, 'error'); return }
     setSignups(prev => prev.filter(s => s.id !== signupId))
     toast(`${studentName} removed`, 'success')
@@ -559,8 +557,8 @@ export default function StudentCrewTab({ productionId, productionNumber, product
                   <div style={{ padding: '8px 14px' }}>
                     {filled.map(su => (
                       <div key={su.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', fontSize: '13px' }}>
-                        <span style={{ fontSize: '12px' }} title={su.signed_up_by_self ? 'Student signed themselves up' : 'Parent signed up on their behalf'}>
-                          {su.signed_up_by_self ? '🎓' : '👪'}
+                        <span style={{ fontSize: '12px' }} title={(su.signed_up_by || '').toLowerCase() === 'self' ? 'Student signed themselves up' : 'Parent/staff signed up on their behalf'}>
+                          {(su.signed_up_by || '').toLowerCase() === 'self' ? '🎓' : '👪'}
                         </span>
                         <span style={{ flex: 1, color: text }}>{su.students?.name || 'Unknown student'}{su.students?.grade && <span style={{ color: muted, fontSize: '12px' }}> · Grade {su.students.grade}</span>}</span>
                         <span style={{ fontSize: '11px', color: muted }}>{new Date(su.signed_up_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>

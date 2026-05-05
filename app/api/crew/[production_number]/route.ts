@@ -65,11 +65,10 @@ export async function GET(
     const slotIds = slotsRaw.map(s => s.id)
     const { data: signupsRaw } = await supabase
       .from('crew_signups')
-      .select('crew_role_slot_id, signed_up_by_self, students(name)')
+      .select('crew_role_slot_id, signed_up_by, students(name)')
       .in('crew_role_slot_id', slotIds)
-      .eq('cancelled', false)
 
-    type SignupRow = { crew_role_slot_id: string; signed_up_by_self: boolean | null; students: { name: string } | { name: string }[] | null }
+    type SignupRow = { crew_role_slot_id: string; signed_up_by: string | null; students: { name: string } | { name: string }[] | null }
     type SlotRow = { id: string; capacity: number; call_time: string | null; end_time: string | null; notes: string | null; crew_roles: { name: string } | { name: string }[] | null }
 
     for (const slot of slotsRaw as unknown as SlotRow[]) {
@@ -79,7 +78,7 @@ export async function GET(
           const studentObj = Array.isArray(s.students) ? s.students[0] : s.students
           return {
             student_name: crew.hide_names_on_public ? null : (studentObj?.name || null),
-            signed_up_by_self: !!s.signed_up_by_self,
+            signed_up_by_self: (s.signed_up_by || '').toLowerCase() === 'self',
           }
         })
 
