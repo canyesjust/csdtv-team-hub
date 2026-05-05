@@ -175,6 +175,32 @@ export default function DashboardPage() {
 
   const overdueCount = myTasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length
   const urgentCount = myTasks.filter(t => t.priority === 'high' || t.priority === 'day of').length
+  const dueSoonCount = myTasks.filter(t => {
+    if (!t.due_date) return false
+    const due = new Date(t.due_date)
+    const days = Math.ceil((due.getTime() - Date.now()) / 86400000)
+    return days >= 0 && days <= 2
+  }).length
+  const blockedCount = myTasks.filter(t => t.status.toLowerCase() === 'in review').length
+  const focusQueue = [...myTasks].sort((a, b) => {
+    const priorityWeight = (p: string) => p === 'day of' ? 3 : p === 'high' ? 2 : p === 'normal' ? 1 : 0
+    const pa = priorityWeight(a.priority)
+    const pb = priorityWeight(b.priority)
+    if (pa !== pb) return pb - pa
+    if (!a.due_date && !b.due_date) return 0
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+  }).slice(0, 5)
+  const atRiskProductions = myProductions.filter(prod => {
+    const progress = getProgress(prod)
+    const startsSoon = prod.start_datetime
+      ? Math.ceil((new Date(prod.start_datetime).getTime() - Date.now()) / 86400000) <= 2
+      : false
+    const checklistMissing = !progress || progress.total === 0
+    const lowProgress = !!progress && progress.pct < 60
+    return startsSoon && (checklistMissing || lowProgress)
+  }).slice(0, 4)
 
   const completeTask = async (taskId: string) => {
     setCompleting(prev => new Set(prev).add(taskId))
@@ -241,6 +267,60 @@ export default function DashboardPage() {
             <span style={{ fontSize: '14px', color: '#5ba3e0', fontWeight: 500 }}>{todayProductions.length} production{todayProductions.length > 1 ? 's' : ''} today</span>
           </div>
         )}
+      </div>
+
+      {/* Ops today */}
+      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', marginBottom: '20px', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Ops today</h2>
+            <p style={{ fontSize: '13px', color: muted, margin: '2px 0 0' }}>Priority queue and risk flags</p>
+          </div>
+          <Link href="/dashboard/tasks" style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 600 }}>Open task center →</Link>
+        </div>
+        <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', borderBottom: `1px solid ${border}` }}>
+          {[
+            { label: 'At risk tasks', value: overdueCount + blockedCount, sub: `${overdueCount} overdue · ${blockedCount} blocked`, color: '#ef4444' },
+            { label: 'Due in 48h', value: dueSoonCount, sub: 'needs scheduling attention', color: '#f59e0b' },
+            { label: 'At risk productions', value: atRiskProductions.length, sub: 'event soon with low checklist progress', color: '#a855f7' },
+          ].map(card => (
+            <div key={card.label} style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, color: card.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{card.label}</p>
+              <p style={{ fontSize: '26px', fontWeight: 800, color: text, margin: 0, lineHeight: 1 }}>{card.value}</p>
+              <p style={{ fontSize: '12px', color: muted, margin: '6px 0 0' }}>{card.sub}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
+          <div>
+            <p style={{ fontSize: '12px', fontWeight: 700, color: muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Focus queue</p>
+            {focusQueue.length === 0 ? (
+              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No active tasks in your queue.</p>
+            ) : focusQueue.map(task => {
+              const dateInfo = formatDate(task.due_date)
+              return (
+                <Link key={task.id} href="/dashboard/tasks" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
+                  <span style={{ fontSize: '13px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</span>
+                  <span style={{ fontSize: '12px', color: dateInfo?.color || muted, flexShrink: 0 }}>{dateInfo?.label || task.priority}</span>
+                </Link>
+              )
+            })}
+          </div>
+          <div>
+            <p style={{ fontSize: '12px', fontWeight: 700, color: muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>At-risk productions</p>
+            {atRiskProductions.length === 0 ? (
+              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No immediate production risks detected.</p>
+            ) : atRiskProductions.map(prod => {
+              const progress = getProgress(prod)
+              return (
+                <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
+                  <span style={{ fontSize: '13px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{prod.production_number} {prod.title}</span>
+                  <span style={{ fontSize: '12px', color: '#a855f7', flexShrink: 0 }}>{progress ? `${progress.pct}%` : 'No checklist'}</span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Today's productions — prominent + expandable */}
