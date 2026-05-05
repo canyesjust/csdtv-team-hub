@@ -18,6 +18,8 @@ interface Production {
   is_on_behalf: boolean | null
   submitter_name: string | null
   submitter_email: string | null
+  livestream_url: string | null
+  youtube_link_email_sent_at: string | null
   start_datetime: string | null; end_datetime: string | null; filming_location: string | null
   school_year: string | null; synced_at: string | null
   additional_notes: string | null; video_description: string | null
@@ -441,6 +443,8 @@ function ProductionsPageContent() {
     return { today, thisWeek, overdue, unstaffed, upcoming, all: scopedProductions.length }
   }, [scopedProductions])
 
+  const ytPendingOnly = searchParams.get('ytPending') === '1'
+
   const briefingText = useMemo(() => {
     const parts: string[] = []
     if (counts.thisWeek > 0) parts.push(`${counts.thisWeek} this week`)
@@ -452,6 +456,11 @@ function ProductionsPageContent() {
 
   // Filter pipeline: focus → status → type → search (scope is already applied via scopedProductions)
   const filtered = useMemo(() => scopedProductions.filter(p => {
+    if (ytPendingOnly) {
+      if (p.status !== 'Complete') return false
+      if (p.youtube_link_email_sent_at) return false
+      if (!(p.livestream_url && String(p.livestream_url).trim())) return false
+    }
     if (focusFilter === 'today' && daysFromToday(p.start_datetime) !== 0) return false
     if (focusFilter === 'this-week') {
       const d = daysFromToday(p.start_datetime)
@@ -481,7 +490,7 @@ function ProductionsPageContent() {
       if (!hit) return false
     }
     return true
-  }), [scopedProductions, focusFilter, typeFilter, statusFilter, search])
+  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search])
 
   const overdueProds = useMemo(() => filtered.filter(isOverdueProd), [filtered])
 
@@ -778,6 +787,17 @@ function ProductionsPageContent() {
               </div>
             </div>
           </header>
+
+          {ytPendingOnly && (
+            <div style={{ marginBottom: '16px', padding: '12px 14px', borderRadius: '12px', border: `1px solid ${info}`, background: dark ? 'rgba(91,163,224,0.08)' : 'rgba(91,163,224,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
+              <p style={{ margin: 0, fontSize: '13px', color: text }}>
+                Showing completed productions that have a synced livestream/video link and no logged organizer link email yet.
+              </p>
+              <Link href="/dashboard/productions" style={{ fontSize: '13px', fontWeight: 600, color: info, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
+                Clear filter
+              </Link>
+            </div>
+          )}
 
           {/* FOCUS ZONE */}
           <section style={uiStyles.zoneSection}>

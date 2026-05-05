@@ -30,6 +30,9 @@ interface Production {
   livestream_url: string | null; thumbnail_url: string | null
   project_lead: string | null; synced_at: string | null; team_notes: string | null
   deliverables_count: number; deliverables_notes: string | null
+  youtube_link_email_sent_at: string | null
+  youtube_link_email_first_click_at: string | null
+  youtube_link_email_click_count: number | null
 }
 
 interface ChecklistItem {
@@ -76,6 +79,13 @@ interface EmailTemplate {
   body: string
   sort_order: number
   active: boolean
+}
+
+function templateUsesYoutubeLink(t: EmailTemplate | undefined): boolean {
+  if (!t) return false
+  const key = (t.template_key || '').toLowerCase()
+  if (key.includes('youtube')) return true
+  return t.body.includes('{{youtube_link}}') || t.subject.includes('{{youtube_link}}')
 }
 
 const CHECKLIST_TEMPLATES: Record<string, string[]> = {
@@ -549,7 +559,14 @@ export default function ProductionDetailPage() {
   // Templates are loaded from email_templates table via loadData.
   // Variable substitution supports: {{name}}, {{title}}, {{type}}, {{date}},
   // {{date_short}}, {{venue}}, {{youtube_link}}, {{status}}.
-  const substituteVariables = (str: string): string => {
+  // {{youtube_link}} uses only the URL synced onto the production from the district system (e.g. livestream_url).
+  // We do not use Team Hub–linked videos or any YouTube API for this.
+  const getSyncedYoutubeLink = useCallback((): string => {
+    if (!production) return ''
+    return (production.livestream_url?.trim() || '').trim()
+  }, [production])
+
+  const substituteVariables = useCallback((str: string): string => {
     if (!production) return str
     const name = production.organizer_name?.split(' ')[0] || 'there'
     const title = production.title
@@ -558,13 +575,10 @@ export default function ProductionDetailPage() {
     const dateShort = production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBD'
     const venue = production.event_location || getSchoolName(production.filming_location) || 'TBD'
     const status = production.status || ''
-    // {{youtube_link}} priority:
-    //   1. production.livestream_url — the YouTube link set on the production itself
-    //      (this is the "upcoming livestream" link for sharing BEFORE the event)
-    //   2. Most recently linked video — fallback for "deliverable ready" emails AFTER the event
-    //   3. Empty string if neither exists
-    const ytLink = production.livestream_url
-      || (linkedVideos.length > 0 ? (linkedVideos[0].youtube_url || (linkedVideos[0].youtube_id ? `https://youtube.com/watch?v=${linkedVideos[0].youtube_id}` : '')) : '')
+    const rawYt = getSyncedYoutubeLink()
+    const ytLink = rawYt && uuid && typeof window !== 'undefined'
+      ? `${window.location.origin}/api/track/youtube-click?productionId=${encodeURIComponent(uuid)}&u=${encodeURIComponent(rawYt)}`
+      : rawYt
     return str
       .replace(/\{\{name\}\}/g, name)
       .replace(/\{\{title\}\}/g, title)
@@ -574,11 +588,23 @@ export default function ProductionDetailPage() {
       .replace(/\{\{venue\}\}/g, venue)
       .replace(/\{\{youtube_link\}\}/g, ytLink)
       .replace(/\{\{status\}\}/g, status)
-  }
+  }, [production, getSyncedYoutubeLink, uuid])
+
+  useEffect(() => {
+    if (!emailTemplate || !production) return
+    const t = templates.find(x => x.id === emailTemplate)
+    if (!t) return
+    setEmailBody(substituteVariables(t.body))
+    setEmailSubject(substituteVariables(t.subject))
+  }, [production?.livestream_url, emailTemplate, production, templates, substituteVariables])
 
   const selectTemplate = (templateId: string) => {
     const t = templates.find(x => x.id === templateId)
     if (!t) return
+    if (templateUsesYoutubeLink(t) && !getSyncedYoutubeLink()) {
+      toast('This production does not have a video/livestream link from sync yet. Sync from the productions site first, or pick another template.', 'error')
+      return
+    }
     setEmailTemplate(templateId)
     setEmailBody(substituteVariables(t.body))
     setEmailSubject(substituteVariables(t.subject))
@@ -653,12 +679,25 @@ export default function ProductionDetailPage() {
   // and edit before sending. Activity is logged when the button is clicked.
   const openOrganizerEmail = useCallback(async () => {
     if (!production?.organizer_email || !emailBody) return
-    const tplLabel = templates.find(t => t.id === emailTemplate)?.label
+    const tpl = templates.find(t => t.id === emailTemplate)
+    if (templateUsesYoutubeLink(tpl) && !getSyncedYoutubeLink()) {
+      toast('No synced video/livestream link on this production yet. Run sync from the productions site before sending this template.', 'error')
+      return
+    }
+    const tplLabel = tpl?.label
     await logActivity('Emailed organizer', tplLabel ? `Template: ${tplLabel}` : 'Custom message')
+    if (templateUsesYoutubeLink(tpl) && getSyncedYoutubeLink() && uuid) {
+      const sentAt = new Date().toISOString()
+      const { error } = await supabase.from('productions').update({ youtube_link_email_sent_at: sentAt }).eq('id', uuid)
+      if (!error) {
+        setProduction(prev => prev ? { ...prev, youtube_link_email_sent_at: sentAt } : null)
+        await logActivity('YouTube link email', 'Logged send (mail client opened with tracked link)')
+      }
+    }
     const mailto = `mailto:${production.organizer_email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`
     window.location.href = mailto
     setTimeout(() => { setShowEmailModal(false); setEmailTemplate(''); setEmailBody(''); setEmailSubject('') }, 500)
-  }, [production, emailBody, emailSubject, emailTemplate, templates, logActivity])
+  }, [production, emailBody, emailSubject, emailTemplate, templates, logActivity, getSyncedYoutubeLink, uuid, supabase])
 
   // ─── Team notes ──────────────────────────────────────────────────────────
   const saveTeamNotes = useCallback(async () => {
@@ -1573,6 +1612,25 @@ export default function ProductionDetailPage() {
               </div>
             )}
           </div>
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Organizer YouTube link</h3>
+            <div style={{ fontSize: '13px', color: text, lineHeight: 1.5 }}>
+              <p style={{ margin: '0 0 6px' }}>
+                <span style={{ color: muted }}>Send logged: </span>
+                {production.youtube_link_email_sent_at
+                  ? new Date(production.youtube_link_email_sent_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                  : 'Not yet'}
+              </p>
+              <p style={{ margin: 0 }}>
+                <span style={{ color: muted }}>Tracked opens: </span>
+                {production.youtube_link_email_click_count ?? 0}
+                {production.youtube_link_email_first_click_at && (
+                  <span style={{ color: muted }}>{' '}· first {new Date(production.youtube_link_email_first_click_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                )}
+              </p>
+              <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0' }}>Tracked opens use the redirect URL built from the production’s synced livestream/video link (district sync), not Team Hub or YouTube API data.</p>
+            </div>
+          </div>
           {production.additional_notes && (
             <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
               <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Organizer notes</h3>
@@ -2155,15 +2213,41 @@ export default function ProductionDetailPage() {
 
             {templates.length > 0 ? (
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                {templates.map(t => (
-                  <button key={t.id} onClick={() => selectTemplate(t.id)} style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '6px', border: `0.5px solid ${emailTemplate === t.id ? '#1e6cb5' : border}`, background: emailTemplate === t.id ? 'rgba(30,108,181,0.12)' : cardBg, color: emailTemplate === t.id ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>
-                    {t.label}
-                  </button>
-                ))}
+                {templates.map(t => {
+                  const ytTemplateLocked = templateUsesYoutubeLink(t) && !getSyncedYoutubeLink()
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      title={ytTemplateLocked ? 'Requires a synced livestream/video link on this production (from productions site sync)' : undefined}
+                      disabled={ytTemplateLocked}
+                      onClick={() => selectTemplate(t.id)}
+                      style={{
+                        fontSize: '12px',
+                        padding: '5px 12px',
+                        borderRadius: '6px',
+                        border: `0.5px solid ${emailTemplate === t.id ? '#1e6cb5' : border}`,
+                        background: emailTemplate === t.id ? 'rgba(30,108,181,0.12)' : cardBg,
+                        color: emailTemplate === t.id ? '#5ba3e0' : muted,
+                        cursor: ytTemplateLocked ? 'not-allowed' : 'pointer',
+                        opacity: ytTemplateLocked ? 0.45 : 1,
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  )
+                })}
               </div>
             ) : (
               <p style={{ fontSize: '12px', color: muted, margin: '0 0 14px', padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px', border: `0.5px solid ${border}` }}>
                 No templates configured. <Link href="/dashboard/settings" style={{ color: '#5ba3e0' }}>Add templates in Settings</Link>.
+              </p>
+            )}
+
+            {emailTemplate && templateUsesYoutubeLink(templates.find(t => t.id === emailTemplate)) && !getSyncedYoutubeLink() && (
+              <p style={{ fontSize: '12px', color: warningTone, margin: '0 0 12px', padding: '10px 12px', background: statusTone.warning.background, borderRadius: '8px', border: `0.5px solid ${border}` }}>
+                This template needs a video/livestream link from the district sync (livestream URL on this production). Sync from the productions site first.
               </p>
             )}
 

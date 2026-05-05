@@ -44,7 +44,7 @@ const TEMPLATE_VARIABLES: { key: string; desc: string }[] = [
   { key: '{{date}}', desc: 'full date and time' },
   { key: '{{date_short}}', desc: 'short date (no time)' },
   { key: '{{venue}}', desc: 'filming location' },
-  { key: '{{youtube_link}}', desc: 'YouTube link from production' },
+  { key: '{{youtube_link}}', desc: 'Synced livestream/video URL on the production (district sync)' },
   { key: '{{status}}', desc: 'current production status' },
 ]
 
@@ -657,7 +657,7 @@ export default function SettingsPage() {
                 <span key={v.key} title={v.desc} style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '5px', background: dark ? 'rgba(91,163,224,0.1)' : 'rgba(91,163,224,0.08)', color: '#5ba3e0', fontFamily: 'monospace', cursor: 'help' }}>{v.key}</span>
               ))}
             </div>
-            <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0', lineHeight: 1.4 }}>Hover for description. Variables auto-fill from the production when you send. <code style={{ fontSize: '11px', padding: '1px 4px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', borderRadius: '3px' }}>{'{{youtube_link}}'}</code> pulls from the most recently linked video on the production.</p>
+            <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0', lineHeight: 1.4 }}>Hover for description. Variables auto-fill from the production when you send. <code style={{ fontSize: '11px', padding: '1px 4px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', borderRadius: '3px' }}>{'{{youtube_link}}'}</code> uses the livestream/video URL synced from the productions site (not Team Hub links or YouTube API).</p>
           </div>
 
           {/* New / Edit form */}

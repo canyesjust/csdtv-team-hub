@@ -36,7 +36,7 @@ interface QueueItem {
 
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
 interface CurrentUser { id: string; name: string; role: string }
-interface Activity { id: string; action: string; detail: string | null; created_at: string; production_id: string; team?: { name: string } | null }
+interface Activity { id: string; action: string; detail: string | null; created_at: string; production_id: string; user_id?: string | null; team?: { name: string } | null }
 interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
 interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
 
@@ -57,6 +57,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [todayHours, setTodayHours] = useState<string | null>(null)
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
+  const [ytEmailPendingCount, setYtEmailPendingCount] = useState(0)
   const [completing, setCompleting] = useState<Set<string>>(new Set())
   const [weekStats, setWeekStats] = useState({ prodsCompleted: 0, tasksCompleted: 0, videosPublished: 0 })
   const [expandedTodayProd, setExpandedTodayProd] = useState<string | null>(null)
@@ -113,14 +114,39 @@ export default function DashboardPage() {
         supabase.from('productions').select('id', { count: 'exact', head: true }),
         supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
         supabase.from('schedule_defaults').select('*').eq('user_id', user.id).single(),
-        supabase.from('production_activity').select('*, team:team(name)').order('created_at', { ascending: false }).limit(10),
+        supabase.from('production_activity').select('id, action, detail, created_at, production_id, user_id').order('created_at', { ascending: false }).limit(10),
       ])
 
       setMyTasks(tasksRes.data || [])
       setTeamMembers(teamRes.data || [])
       setTotalProductions(countRes.count || 0)
       setTodayProductions((todayProdsRes.data as any) || [])
-      setRecentActivity(activityRes.data || [])
+
+      const activityRows = activityRes.error ? [] : (activityRes.data || [])
+      const actUserIds = [...new Set(activityRows.map((a: { user_id: string | null }) => a.user_id).filter(Boolean))] as string[]
+      let enrichedActivity: Activity[] = activityRows.map((a: Activity) => ({ ...a, team: null }))
+      if (actUserIds.length > 0) {
+        const { data: nameRows } = await supabase.from('team').select('id, name').in('id', actUserIds)
+        const nameById = Object.fromEntries((nameRows || []).map((t: { id: string; name: string }) => [t.id, t.name]))
+        enrichedActivity = activityRows.map((a: Activity & { user_id?: string | null }) => ({
+          ...a,
+          team: a.user_id && nameById[a.user_id] ? { name: nameById[a.user_id] } : null,
+        }))
+      }
+      setRecentActivity(enrichedActivity)
+
+      const { data: pendingCandidates, error: pendingErr } = await supabase
+        .from('productions')
+        .select('id, livestream_url')
+        .eq('status', 'Complete')
+        .is('youtube_link_email_sent_at', null)
+      let pending = 0
+      if (!pendingErr) {
+        for (const p of pendingCandidates || []) {
+          if (p.livestream_url && String(p.livestream_url).trim()) pending += 1
+        }
+      }
+      setYtEmailPendingCount(pending)
 
       const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
       const todayDayName = dayNames[new Date().getDay()]
@@ -761,6 +787,20 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+
+            {ytEmailPendingCount > 0 && (
+              <div style={{ ...uiStyles.card, padding: '12px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: text }}>YouTube link emails</p>
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: muted }}>
+                    {ytEmailPendingCount} completed production{ytEmailPendingCount !== 1 ? 's' : ''} have a synced livestream/video link but no logged send yet.
+                  </p>
+                </div>
+                <Link href="/dashboard/productions?ytPending=1" style={{ fontSize: '13px', fontWeight: 600, color: info, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
+                  View list →
+                </Link>
+              </div>
+            )}
 
             <div style={{ ...uiStyles.card, overflow: 'hidden' as const }}>
               <div style={{ padding: '12px 18px', borderBottom: `1px solid ${border}` }}>
