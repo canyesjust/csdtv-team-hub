@@ -923,13 +923,13 @@ export default function ProductionDetailPage() {
             )}
             {production.organizer_email && (
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                <button onClick={() => setShowEmailModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.info.background, color: infoTone, border: `0.5px solid ${statusTone.info.border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                <button onClick={() => setShowEmailModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.info.background, color: infoTone, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ✉ Email organizer
                 </button>
-                <button onClick={requestInProgress} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.warning.background, color: warningTone, border: `0.5px solid ${statusTone.warning.border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                <button onClick={requestInProgress} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.warning.background, color: warningTone, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ◴ Request In Progress
                 </button>
-                <button onClick={() => setShowCompleteModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.success.background, color: successTone, border: `0.5px solid ${statusTone.success.border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                <button onClick={() => setShowCompleteModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.success.background, color: successTone, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ✓ Mark complete
                 </button>
               </div>
