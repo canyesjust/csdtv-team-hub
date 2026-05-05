@@ -76,9 +76,6 @@ export default function VideosPage() {
   const [reviewQueue, setReviewQueue] = useState<Video[] | null>(null)
   const [reviewIdx, setReviewIdx] = useState(0)
   const [reviewSearchQuery, setReviewSearchQuery] = useState('')
-  const [reviewQueue, setReviewQueue] = useState<Video[] | null>(null)
-  const [reviewIdx, setReviewIdx] = useState(0)
-  const [reviewSearchQuery, setReviewSearchQuery] = useState('')
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -97,26 +94,6 @@ export default function VideosPage() {
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
-
-  // Keyboard shortcuts for the review queue
-  useEffect(() => {
-    if (!reviewQueue) return
-    const handler = (e: KeyboardEvent) => {
-      const tag = (document.activeElement?.tagName || '').toUpperCase()
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-      const video = reviewQueue[reviewIdx]
-      if (!video) return
-      const candidates = findCandidates(video)
-      if (e.key === '1' && candidates[0]) { linkReviewVideo(candidates[0].prod.id, `#${candidates[0].prod.production_number} ${candidates[0].prod.title}`) }
-      else if (e.key === '2' && candidates[1]) { linkReviewVideo(candidates[1].prod.id, `#${candidates[1].prod.production_number} ${candidates[1].prod.title}`) }
-      else if (e.key === '3' && candidates[2]) { linkReviewVideo(candidates[2].prod.id, `#${candidates[2].prod.production_number} ${candidates[2].prod.title}`) }
-      else if (e.key === 's' || e.key === 'S') { skipReviewVideo() }
-      else if (e.key === 'Escape') { closeReviewQueue() }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewQueue, reviewIdx, productions])
 
   // Keyboard shortcuts for the review queue
   useEffect(() => {
