@@ -15,6 +15,9 @@ interface Production {
   id: string; production_number: number; title: string
   type: string | null; request_type_label: string | null; status: string | null
   organizer_name: string | null; organizer_email: string | null; school_department: string | null
+  is_on_behalf: boolean | null
+  submitter_name: string | null
+  submitter_email: string | null
   start_datetime: string | null; end_datetime: string | null; filming_location: string | null
   school_year: string | null; synced_at: string | null
   additional_notes: string | null; video_description: string | null
@@ -96,6 +99,10 @@ function relativeTime(d: string | null): string {
   const days = Math.floor(h / 24)
   if (days < 30) return `${days}d ago`
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function primaryContactLabel(prod: Production): string | null {
+  return prod.organizer_name || prod.organizer_email || prod.submitter_name || null
 }
 
 function ProductionsPageContent() {
@@ -463,6 +470,9 @@ function ProductionsPageContent() {
       const q = search.toLowerCase()
       const hit = p.title.toLowerCase().includes(q)
         || (p.organizer_name || '').toLowerCase().includes(q)
+        || (p.organizer_email || '').toLowerCase().includes(q)
+        || (p.submitter_name || '').toLowerCase().includes(q)
+        || (p.submitter_email || '').toLowerCase().includes(q)
         || getTypeLabel(p).toLowerCase().includes(q)
         || String(p.production_number).includes(search)
       if (!hit) return false
@@ -618,7 +628,7 @@ function ProductionsPageContent() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: progress ? '8px' : '0' }}>
             {renderTypePill(prod)}
-            {prod.organizer_name && <span style={{ fontSize: '12px', color: muted }}>{prod.organizer_name}</span>}
+            {primaryContactLabel(prod) && <span style={{ fontSize: '12px', color: muted }}>{primaryContactLabel(prod)}</span>}
             {prod.start_datetime && <span style={{ fontSize: '12px', color: muted }}>· {formatDate(prod.start_datetime)}</span>}
           </div>
 
@@ -654,7 +664,7 @@ function ProductionsPageContent() {
         <span style={{ fontSize: '13px', color: muted, minWidth: '40px' }}>#{prod.production_number}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{prod.title}</p>
-          {prod.organizer_name && <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{prod.organizer_name}</p>}
+          {primaryContactLabel(prod) && <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{primaryContactLabel(prod)}</p>}
         </div>
         {renderTypePill(prod)}
         {progress && (
@@ -965,17 +975,22 @@ function ProductionsPageContent() {
                       </div>
                     )}
                     {(selectedProd.filming_location || selectedProd.school_department) && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: selectedProd.organizer_name ? '6px' : 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: primaryContactLabel(selectedProd) ? '6px' : 0 }}>
                         <span style={{ color: muted }}>Location</span>
                         <span style={{ color: text, fontWeight: 500, textAlign: 'right' as const }}>{getSchoolName(selectedProd.filming_location) || getSchoolName(selectedProd.school_department) || selectedProd.filming_location || ''}</span>
                       </div>
                     )}
-                    {selectedProd.organizer_name && (
+                    {primaryContactLabel(selectedProd) && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', alignItems: 'flex-start', gap: '12px' }}>
                         <span style={{ color: muted }}>Organizer</span>
                         <span style={{ textAlign: 'right' as const, minWidth: 0 }}>
-                          <span style={{ display: 'block', color: text, fontWeight: 500 }}>{selectedProd.organizer_name}</span>
+                          <span style={{ display: 'block', color: text, fontWeight: 500 }}>{primaryContactLabel(selectedProd)}</span>
                           {selectedProd.organizer_email && <a href={`mailto:${selectedProd.organizer_email}`} style={{ display: 'block', fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{selectedProd.organizer_email}</a>}
+                          {selectedProd.is_on_behalf && selectedProd.submitter_name && (
+                            <span style={{ display: 'block', fontSize: '11px', color: muted, marginTop: '2px' }}>
+                              Submitted by {selectedProd.submitter_name}
+                            </span>
+                          )}
                         </span>
                       </div>
                     )}

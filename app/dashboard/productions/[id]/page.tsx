@@ -16,12 +16,17 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 interface Production {
   id: string; production_number: number; title: string
   type: string | null; request_type_label: string | null; request_type_number: number | null
-  internal_type_label: string | null; status: string | null
+  internal_type_label: string | null; status: string | null; status_code: number | null
+  created_on: string | null; is_on_behalf: boolean | null; sent_approved_email: boolean | null
   organizer_name: string | null; organizer_email: string | null
-  school_department: string | null; school_year: string | null; focus_area: string | null
+  school_department: string | null; school_year: string | null; focus_area: string | null; focus_area_code: string | null
   start_datetime: string | null; end_datetime: string | null
-  filming_location: string | null; event_location: string | null
-  additional_notes: string | null; video_description: string | null
+  filming_location: string | null; filming_location_details: string | null; event_location: string | null
+  start_datetime_label: string | null; end_datetime_label: string | null
+  additional_notes: string | null; video_description: string | null; video_addons_array: string[] | null; audio_options_array: string[] | null
+  submitter_user_id: number | null; submitter_site_user_id: string | null; submitter_username: string | null
+  submitter_name: string | null; submitter_email: string | null; submitter_building_code: string | null; submitter_employee_number: string | null
+  production_staff: Array<Record<string, unknown>> | null
   livestream_url: string | null; thumbnail_url: string | null
   project_lead: string | null; synced_at: string | null; team_notes: string | null
   deliverables_count: number; deliverables_notes: string | null
@@ -769,6 +774,14 @@ export default function ProductionDetailPage() {
     return new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
   }
 
+  const formatRawCreatedOn = (value: string | null) => {
+    if (!value) return null
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+    const parsed = new Date(normalized)
+    if (Number.isNaN(parsed.getTime())) return value
+    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  }
+
   useEffect(() => {
     if (thumbDraftRestored) return
     if (!production) return
@@ -878,6 +891,13 @@ export default function ProductionDetailPage() {
     !normalizedThumbSchool ? 'School' : null,
     !normalizedThumbEventName ? 'Event Name' : null,
   ].filter(Boolean) as string[]
+
+  const organizerName = production?.organizer_name || null
+  const organizerEmail = production?.organizer_email || null
+  const submitterName = production?.submitter_name || null
+  const submitterEmail = production?.submitter_email || null
+  const isOnBehalf = Boolean(production?.is_on_behalf)
+  const showSubmitterCard = isOnBehalf && (submitterName || submitterEmail)
 
   useEffect(() => {
     if (!productionNum || typeof window === 'undefined') return
@@ -1483,8 +1503,35 @@ export default function ProductionDetailPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Organizer</h3>
-            {([['Name', production.organizer_name], ['Email', production.organizer_email], ['School', getSchoolName(production.school_department)], ['Year', production.school_year], ['Focus', production.focus_area]] as [string, string | null][]).map(([l, v]) => v ? (
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 6px' }}>
+              {isOnBehalf ? 'Organizer (request made on behalf)' : 'Organizer'}
+            </h3>
+            {isOnBehalf && (
+              <p style={{ margin: '0 0 10px', fontSize: '11px', color: muted }}>
+                This request was submitted by a staff member on behalf of the organizer.
+              </p>
+            )}
+            {([['Name', organizerName], ['Email', organizerEmail], ['School', getSchoolName(production.school_department)], ['Year', production.school_year], ['Focus', production.focus_area]] as [string, string | null][]).map(([l, v]) => v ? (
+              <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
+                <span style={{ color: muted, minWidth: '60px', flexShrink: 0 }}>{l}</span>
+                <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
+              </div>
+            ) : null)}
+          </div>
+          {showSubmitterCard && (
+            <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Submitted by</h3>
+              {([['Name', submitterName], ['Email', submitterEmail], ['Username', production.submitter_username], ['Building', getSchoolName(production.submitter_building_code) || production.submitter_building_code], ['Employee #', production.submitter_employee_number]] as [string, string | null][]).map(([l, v]) => v ? (
+                <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
+                  <span style={{ color: muted, minWidth: '80px', flexShrink: 0 }}>{l}</span>
+                  <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
+                </div>
+              ) : null)}
+            </div>
+          )}
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Schedule & location</h3>
+            {([['Start', formatDateTime(production.start_datetime)], ['Start label', production.start_datetime_label], ['End', formatDateTime(production.end_datetime)], ['End label', production.end_datetime_label], ['Location', getSchoolName(production.filming_location) || production.filming_location || getSchoolName(production.school_department)], ['Location detail', production.filming_location_details], ['Venue', production.event_location]] as [string, string | null][]).map(([l, v]) => v ? (
               <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
                 <span style={{ color: muted, minWidth: '60px', flexShrink: 0 }}>{l}</span>
                 <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
@@ -1492,13 +1539,39 @@ export default function ProductionDetailPage() {
             ) : null)}
           </div>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Schedule & location</h3>
-            {([['Start', formatDateTime(production.start_datetime)], ['End', formatDateTime(production.end_datetime)], ['Location', getSchoolName(production.filming_location) || production.filming_location || getSchoolName(production.school_department)], ['Venue', production.event_location]] as [string, string | null][]).map(([l, v]) => v ? (
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Source metadata</h3>
+            {([
+              ['Status code', production.status_code ? String(production.status_code) : null],
+              ['Created on', formatRawCreatedOn(production.created_on)],
+              ['On behalf', production.is_on_behalf === null ? null : (production.is_on_behalf ? 'Yes' : 'No')],
+              ['Approved email sent', production.sent_approved_email === null ? null : (production.sent_approved_email ? 'Yes' : 'No')],
+              ['Focus code', production.focus_area_code],
+              ['Submitter user ID', production.submitter_user_id ? String(production.submitter_user_id) : null],
+              ['Submitter site ID', production.submitter_site_user_id],
+            ] as [string, string | null][]).map(([l, v]) => v ? (
               <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
-                <span style={{ color: muted, minWidth: '60px', flexShrink: 0 }}>{l}</span>
+                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>{l}</span>
                 <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
               </div>
             ) : null)}
+            {production.video_addons_array && production.video_addons_array.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
+                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>Video addons</span>
+                <span style={{ color: text }}>{production.video_addons_array.join(', ')}</span>
+              </div>
+            )}
+            {production.audio_options_array && production.audio_options_array.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
+                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>Audio options</span>
+                <span style={{ color: text }}>{production.audio_options_array.join(', ')}</span>
+              </div>
+            )}
+            {production.production_staff && production.production_staff.length > 0 && (
+              <div style={{ display: 'flex', gap: '10px', padding: '6px 0', fontSize: '13px' }}>
+                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>Production staff</span>
+                <span style={{ color: text }}>{production.production_staff.length} from source system</span>
+              </div>
+            )}
           </div>
           {production.additional_notes && (
             <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
