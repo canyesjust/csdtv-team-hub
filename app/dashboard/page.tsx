@@ -22,10 +22,21 @@ interface Production {
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
 }
 
+interface QueueItem {
+  id: string
+  type: 'task' | 'production_risk'
+  title: string
+  subtitle: string
+  reason: string
+  href: string
+  score: number
+}
+
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
 interface CurrentUser { id: string; name: string; role: string }
 interface Activity { id: string; action: string; detail: string | null; created_at: string; production_id: string; team?: { name: string } | null }
 interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
+interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
 
 export default function DashboardPage() {
   const { theme } = useTheme()
@@ -35,11 +46,10 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [myTasks, setMyTasks] = useState<Task[]>([])
   const [myProductions, setMyProductions] = useState<Production[]>([])
+  const [managerProductions, setManagerProductions] = useState<Production[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
-  const [allTasks, setAllTasks] = useState<Task[]>([])
   const [totalProductions, setTotalProductions] = useState(0)
   const [todayProductions, setTodayProductions] = useState<Production[]>([])
-  const [view, setView] = useState<'my' | 'team'>('my')
   const [showDetails, setShowDetails] = useState(true)
   const [loading, setLoading] = useState(true)
   const [todayHours, setTodayHours] = useState<string | null>(null)
@@ -51,6 +61,13 @@ export default function DashboardPage() {
   const [yearProdCount, setYearProdCount] = useState(0)
   const [totalVidsProduced, setTotalVidsProduced] = useState(0)
   const [totalYtViews, setTotalYtViews] = useState(0)
+  const [dashboardUpdatedAt, setDashboardUpdatedAt] = useState<string | null>(null)
+  const [clockTickMs, setClockTickMs] = useState(Date.now())
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [crewSlotsTotal, setCrewSlotsTotal] = useState(0)
+  const [crewSlotsFilled, setCrewSlotsFilled] = useState(0)
+  const [managerRiskCounts, setManagerRiskCounts] = useState({ unassigned: 0, blocked: 0, overdue: 0 })
+  const [overdueOwnerRows, setOverdueOwnerRows] = useState<OverdueOwnerRow[]>([])
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -69,83 +86,151 @@ export default function DashboardPage() {
   const successBg = statusTone.success.background
 
   const loadData = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const { data: user } = await supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single()
-    if (!user) return
-    setCurrentUser(user)
+    setLoadError(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data: user } = await supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single()
+      if (!user) return
+      setCurrentUser(user)
 
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
-    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
 
-    const [tasksRes, prodMembersRes, teamRes, allTasksRes, countRes, todayProdsRes, schedDefaultRes, activityRes] = await Promise.all([
-      supabase.from('tasks').select('*, productions(title)').eq('assigned_to', user.id).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(12),
-      supabase.from('production_members').select('production_id').eq('user_id', user.id),
-      supabase.from('team').select('*').eq('active', true),
-      supabase.from('tasks').select('*, productions(title)').neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(12),
-      supabase.from('productions').select('id', { count: 'exact', head: true }),
-      supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).limit(10),
-      supabase.from('schedule_defaults').select('*').eq('user_id', user.id).single(),
-      supabase.from('production_activity').select('*, team:team(name)').order('created_at', { ascending: false }).limit(10),
-    ])
+      const [tasksRes, prodMembersRes, teamRes, countRes, todayProdsRes, schedDefaultRes, activityRes] = await Promise.all([
+        supabase.from('tasks').select('*, productions(title)').eq('assigned_to', user.id).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(20),
+        supabase.from('production_members').select('production_id').eq('user_id', user.id),
+        supabase.from('team').select('*').eq('active', true),
+        supabase.from('productions').select('id', { count: 'exact', head: true }),
+        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).limit(10),
+        supabase.from('schedule_defaults').select('*').eq('user_id', user.id).single(),
+        supabase.from('production_activity').select('*, team:team(name)').order('created_at', { ascending: false }).limit(10),
+      ])
 
-    setMyTasks(tasksRes.data || [])
-    setTeamMembers(teamRes.data || [])
-    setAllTasks(allTasksRes.data || [])
-    setTotalProductions(countRes.count || 0)
-    setTodayProductions((todayProdsRes.data as any) || [])
-    setRecentActivity(activityRes.data || [])
+      setMyTasks(tasksRes.data || [])
+      setTeamMembers(teamRes.data || [])
+      setTotalProductions(countRes.count || 0)
+      setTodayProductions((todayProdsRes.data as any) || [])
+      setRecentActivity(activityRes.data || [])
 
-    // Figure out today's scheduled hours
-    const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
-    const todayDayName = dayNames[new Date().getDay()]
-    const isWeekday = todayDayName !== 'sunday' && todayDayName !== 'saturday'; if (isWeekday) { const dayKey = todayDayName as keyof ScheduleDay
-      // Check for override this week first
-      const monday = new Date()
-      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
-      const weekStart = monday.toISOString().split('T')[0]
-      const { data: override } = await supabase.from('schedule_overrides').select('*').eq('user_id', user.id).eq('week_start', weekStart).single()
-      if (override && override[dayKey]) {
-        setTodayHours(override[dayKey])
-      } else if (schedDefaultRes.data && schedDefaultRes.data[dayKey]) {
-        setTodayHours(schedDefaultRes.data[dayKey])
-      } else {
-        setTodayHours(null)
+      // Figure out today's scheduled hours
+      const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
+      const todayDayName = dayNames[new Date().getDay()]
+      const isWeekday = todayDayName !== 'sunday' && todayDayName !== 'saturday'; if (isWeekday) { const dayKey = todayDayName as keyof ScheduleDay
+        // Check for override this week first
+        const monday = new Date()
+        monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+        const weekStart = monday.toISOString().split('T')[0]
+        const { data: override } = await supabase.from('schedule_overrides').select('*').eq('user_id', user.id).eq('week_start', weekStart).single()
+        if (override && override[dayKey]) {
+          setTodayHours(override[dayKey])
+        } else if (schedDefaultRes.data && schedDefaultRes.data[dayKey]) {
+          setTodayHours(schedDefaultRes.data[dayKey])
+        } else {
+          setTodayHours(null)
+        }
       }
-    }
 
-    // Weekly/monthly stats pulse
-    const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
-    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
-    const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds] = await Promise.all([
-      supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monday.toISOString()),
-      supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monthStart.toISOString()),
-      supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monday.toISOString()),
-      supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monthStart.toISOString()),
-      supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monday.toISOString().split('T')[0]),
-      supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
-      supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
-    ])
-    // Total videos produced and YouTube views
-    const { data: delivData } = await supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0)
-    const delivSum = (delivData || []).reduce((s: number, p: any) => s + (p.deliverables_count || 0), 0)
-    const { data: ytData } = await supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null)
-    const viewsSum = (ytData || []).reduce((s: number, v: any) => s + (v.youtube_views || 0), 0)
-    setWeekStats({ prodsCompleted: weekProds.count || 0, tasksCompleted: weekTasks.count || 0, videosPublished: weekVids.count || 0 })
-    setMonthStats({ prodsCompleted: monthProds.count || 0, tasksCompleted: monthTasks.count || 0, videosPublished: monthVids.count || 0 })
-    setYearProdCount(yearProds.count || 0)
-    setTotalVidsProduced(delivSum)
-    setTotalYtViews(viewsSum)
+      // Weekly/monthly stats pulse
+      const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
+      const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
+      const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds] = await Promise.all([
+        supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monday.toISOString()),
+        supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monthStart.toISOString()),
+        supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monday.toISOString()),
+        supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monthStart.toISOString()),
+        supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monday.toISOString().split('T')[0]),
+        supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
+        supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
+      ])
+      // Total videos produced and YouTube views
+      const { data: delivData } = await supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0)
+      const delivSum = (delivData || []).reduce((s: number, p: any) => s + (p.deliverables_count || 0), 0)
+      const { data: ytData } = await supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null)
+      const viewsSum = (ytData || []).reduce((s: number, v: any) => s + (v.youtube_views || 0), 0)
+      setWeekStats({ prodsCompleted: weekProds.count || 0, tasksCompleted: weekTasks.count || 0, videosPublished: weekVids.count || 0 })
+      setMonthStats({ prodsCompleted: monthProds.count || 0, tasksCompleted: monthTasks.count || 0, videosPublished: monthVids.count || 0 })
+      setYearProdCount(yearProds.count || 0)
+      setTotalVidsProduced(delivSum)
+      setTotalYtViews(viewsSum)
 
-    if (prodMembersRes.data && prodMembersRes.data.length > 0) {
-      const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
-      const { data: prods } = await supabase.from('productions').select('*, checklist_items(completed)').in('id', ids).neq('status', 'Complete').order('start_datetime', { ascending: true, nullsFirst: false }).limit(8)
-      setMyProductions(prods || [])
+      if (prodMembersRes.data && prodMembersRes.data.length > 0) {
+        const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
+        const { data: prods } = await supabase.from('productions').select('*, checklist_items(completed)').in('id', ids).neq('status', 'Complete').order('start_datetime', { ascending: true, nullsFirst: false }).limit(8)
+        setMyProductions(prods || [])
+      } else {
+        setMyProductions([])
+      }
+      if ((user.role || '').toLowerCase() === 'manager') {
+        const { data: allManagerProds } = await supabase
+          .from('productions')
+          .select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)')
+          .not('status', 'in', '("Complete","Abandoned")')
+          .order('start_datetime', { ascending: true, nullsFirst: false })
+          .limit(200)
+        const managerProds = (allManagerProds as any) || []
+        setManagerProductions(managerProds)
+
+        const soonProdIds = managerProds
+          .filter((p: Production) => p.start_datetime && Math.ceil((new Date(p.start_datetime).getTime() - Date.now()) / 86400000) <= 7)
+          .map((p: Production) => p.id)
+
+        const todayIso = new Date().toISOString().split('T')[0]
+        const [unassignedRes, blockedRes, overdueRes, overdueOwnerRes] = await Promise.all([
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'complete').is('assigned_to', null),
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'complete').not('blocked_by', 'is', null),
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'complete').lt('due_date', todayIso),
+          supabase.from('tasks').select('assigned_to,due_date').neq('status', 'complete').not('assigned_to', 'is', null).lt('due_date', todayIso).limit(3000),
+        ])
+        setManagerRiskCounts({
+          unassigned: unassignedRes.count || 0,
+          blocked: blockedRes.count || 0,
+          overdue: overdueRes.count || 0,
+        })
+        setOverdueOwnerRows((overdueOwnerRes.data as OverdueOwnerRow[]) || [])
+
+        // Student crew coverage, scoped to near-term productions when possible.
+        if (soonProdIds.length > 0) {
+          const [slotsRes, filledRes] = await Promise.all([
+            (supabase as any).from('crew_role_slots').select('id', { count: 'exact', head: true }).in('production_id', soonProdIds),
+            (supabase as any).from('crew_signups').select('id', { count: 'exact', head: true }).in('production_id', soonProdIds),
+          ])
+          if (!slotsRes.error && !filledRes.error) {
+            setCrewSlotsTotal(slotsRes.count || 0)
+            setCrewSlotsFilled(filledRes.count || 0)
+          } else {
+            const [fallbackSlots, fallbackFilled] = await Promise.all([
+              supabase.from('crew_role_slots').select('id', { count: 'exact', head: true }),
+              supabase.from('crew_signups').select('id', { count: 'exact', head: true }),
+            ])
+            setCrewSlotsTotal(fallbackSlots.count || 0)
+            setCrewSlotsFilled(fallbackFilled.count || 0)
+          }
+        } else {
+          setCrewSlotsTotal(0)
+          setCrewSlotsFilled(0)
+        }
+      } else {
+        setManagerProductions([])
+        setCrewSlotsTotal(0)
+        setCrewSlotsFilled(0)
+        setManagerRiskCounts({ unassigned: 0, blocked: 0, overdue: 0 })
+        setOverdueOwnerRows([])
+      }
+      setDashboardUpdatedAt(new Date().toISOString())
+    } catch (err) {
+      console.error('Failed to load dashboard', err)
+      setLoadError('Failed to load dashboard data. Please refresh.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    const timer = setInterval(() => setClockTickMs(Date.now()), 60000)
+    return () => clearInterval(timer)
+  }, [])
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -194,16 +279,6 @@ export default function DashboardPage() {
     return days >= 0 && days <= 2
   }).length
   const blockedCount = myTasks.filter(t => Boolean(t.blocked_by)).length
-  const focusQueue = [...myTasks].sort((a, b) => {
-    const priorityWeight = (p: string) => p === 'day of' ? 3 : p === 'high' ? 2 : p === 'normal' ? 1 : 0
-    const pa = priorityWeight(a.priority)
-    const pb = priorityWeight(b.priority)
-    if (pa !== pb) return pb - pa
-    if (!a.due_date && !b.due_date) return 0
-    if (!a.due_date) return 1
-    if (!b.due_date) return -1
-    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
-  }).slice(0, 5)
   const atRiskProductions = myProductions.filter(prod => {
     const progress = getProgress(prod)
     const startsSoon = prod.start_datetime
@@ -213,6 +288,74 @@ export default function DashboardPage() {
     const lowProgress = !!progress && progress.pct < 60
     return startsSoon && (checklistMissing || lowProgress)
   }).slice(0, 4)
+  const isManager = (currentUser?.role || '').toLowerCase() === 'manager'
+  const startsSoonManager = managerProductions.filter(p => p.start_datetime && Math.ceil((new Date(p.start_datetime).getTime() - Date.now()) / 86400000) <= 2)
+  const unstaffedProductions = startsSoonManager.filter(p => (p.production_members || []).length === 0)
+  const understaffedProductions = startsSoonManager.filter(p => {
+    const members = p.production_members || []
+    return members.length > 0 && members.length < 2
+  })
+  const missingProdMetadata = managerProductions.filter(p => !p.start_datetime || !(p.filming_location || p.school_department))
+  const crewFillPct = crewSlotsTotal > 0 ? Math.round((crewSlotsFilled / crewSlotsTotal) * 100) : 0
+
+  const queueItems: QueueItem[] = [
+    ...myTasks.map(task => {
+      const dueDays = task.due_date ? Math.ceil((new Date(task.due_date).getTime() - Date.now()) / 86400000) : null
+      const overdue = dueDays !== null && dueDays < 0
+      const due48h = dueDays !== null && dueDays <= 2
+      const score =
+        (overdue ? 40 : 0) +
+        (due48h ? 25 : 0) +
+        (task.blocked_by ? 30 : 0) +
+        ((task.priority === 'high' || task.priority === 'day of') ? 20 : 0) +
+        (!task.assigned_to ? 10 : 0)
+      return {
+        id: task.id,
+        type: 'task' as const,
+        title: task.title,
+        subtitle: task.productions?.title || 'Task',
+        reason: [overdue ? 'Overdue' : null, task.blocked_by ? 'Blocked' : null, due48h ? 'Due soon' : null].filter(Boolean).join(' + ') || 'Open task',
+        href: '/dashboard/tasks',
+        score,
+      }
+    }),
+    ...atRiskProductions.map(prod => {
+      const progress = getProgress(prod)
+      const dueDays = prod.start_datetime ? Math.ceil((new Date(prod.start_datetime).getTime() - Date.now()) / 86400000) : 999
+      const score =
+        (dueDays <= 2 ? 35 : 0) +
+        ((!progress || progress.pct < 60) ? 20 : 0) +
+        (((prod.production_members || []).length === 0) ? 10 : 0)
+      return {
+        id: prod.id,
+        type: 'production_risk' as const,
+        title: `#${prod.production_number} ${prod.title}`,
+        subtitle: 'Production risk',
+        reason: dueDays <= 0 ? 'Starts today' : `Starts in ${dueDays}d`,
+        href: `/dashboard/productions/${prod.production_number}`,
+        score,
+      }
+    }),
+  ].sort((a, b) => b.score - a.score).slice(0, 8)
+
+  const overdueByOwner = teamMembers
+    .map(member => {
+      const mine = overdueOwnerRows.filter(t => t.assigned_to === member.id)
+      if (mine.length === 0) return null
+      const now = Date.now()
+      const aging = mine.reduce((acc, t) => {
+        if (!t.due_date) return acc
+        const days = Math.max(1, Math.ceil((now - new Date(t.due_date).getTime()) / 86400000))
+        if (days <= 2) acc.a += 1
+        else if (days <= 7) acc.b += 1
+        else acc.c += 1
+        return acc
+      }, { a: 0, b: 0, c: 0 })
+      return { member, total: mine.length, aging }
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b!.total - a!.total))
+    .slice(0, 6) as { member: TeamMember; total: number; aging: { a: number; b: number; c: number } }[]
 
   const completeTask = async (taskId: string) => {
     setCompleting(prev => new Set(prev).add(taskId))
@@ -225,6 +368,9 @@ export default function DashboardPage() {
   }
   const nextDue = myTasks.find(t => t.due_date) || null
   const nextDueInfo = nextDue ? formatDate(nextDue.due_date) : null
+  const lastUpdatedLabel = dashboardUpdatedAt
+    ? `${Math.max(0, Math.floor((clockTickMs - new Date(dashboardUpdatedAt).getTime()) / 60000))}m ago`
+    : 'just now'
 
   const taskStatusBadge = (status: string) => {
     const s = status?.toLowerCase()
@@ -249,6 +395,7 @@ export default function DashboardPage() {
         <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px' }}>{greeting()}, {currentUser?.name?.split(' ')[0]}</h1>
         <p style={{ fontSize: '14px', color: muted, margin: '0 0 6px' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
         <p style={{ fontSize: '14px', color: urgentCount > 0 || overdueCount > 0 ? warning : muted, margin: 0 }}>{getMorningBriefing()}</p>
+        {loadError && <p style={{ margin: '8px 0 0', fontSize: '13px', color: danger }}>{loadError}</p>}
       </div>
 
       {/* Your day at a glance */}
@@ -306,14 +453,13 @@ export default function DashboardPage() {
         <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
           <div>
             <p style={{ fontSize: '12px', fontWeight: 700, color: muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Focus queue</p>
-            {focusQueue.length === 0 ? (
+            {queueItems.length === 0 ? (
               <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No active tasks in your queue.</p>
-            ) : focusQueue.map(task => {
-              const dateInfo = formatDate(task.due_date)
+            ) : queueItems.slice(0, 5).map(item => {
               return (
-                <Link key={task.id} href="/dashboard/tasks" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
-                  <span style={{ fontSize: '13px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</span>
-                  <span style={{ fontSize: '12px', color: dateInfo?.color || muted, flexShrink: 0 }}>{dateInfo?.label || task.priority}</span>
+                <Link key={`${item.type}-${item.id}`} href={item.href} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 10px', borderRadius: '8px' }}>
+                  <span style={{ fontSize: '13px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.title}</span>
+                  <span style={{ ...statusBadge(item.type === 'task' ? 'warning' : 'review', true), fontSize: '11px', flexShrink: 0 }}>{item.reason}</span>
                 </Link>
               )
             })}
@@ -426,16 +572,31 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* View toggle */}
-      <div style={{ display: 'flex', gap: '4px', background: 'var(--surface-2)', borderRadius: '12px', padding: '4px', width: 'fit-content', marginBottom: '20px', border: `1px solid ${border}` }}>
-        {(['my', 'team'] as const).map(v => (
-          <button key={v} onClick={() => setView(v)} style={{ fontSize: '14px', padding: '8px 24px', borderRadius: '10px', border: 'none', background: view === v ? 'var(--brand-primary)' : 'transparent', color: view === v ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: view === v ? 600 : 400, minHeight: '40px', transition: 'all 0.15s' }}>
-            {v === 'my' ? 'My day' : 'Team view'}
-          </button>
-        ))}
+      <div style={{ marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+        <p style={{ margin: 0, fontSize: '13px', color: muted }}>Focus queue ranked by operational risk · updated {lastUpdatedLabel}</p>
       </div>
 
-      {view === 'my' && (
+      <div>
+        <div style={{ ...uiStyles.card, marginBottom: '18px', overflow: 'hidden' }}>
+          <div style={{ ...uiStyles.panelHeader, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Focus queue</h2>
+            <Link href="/dashboard/tasks" style={uiStyles.panelLink}>Open task center →</Link>
+          </div>
+          <div style={{ padding: '8px 10px' }}>
+            {queueItems.length === 0 ? (
+              <p style={{ margin: '10px 8px', fontSize: '13px', color: muted }}>No critical queue items right now.</p>
+            ) : queueItems.map(item => (
+              <Link key={`${item.type}-${item.id}`} href={item.href} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 12px', borderRadius: '10px' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.title}</p>
+                  <p style={{ margin: '3px 0 0', fontSize: '12px', color: muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.subtitle}</p>
+                </div>
+                <span style={{ ...statusBadge(item.type === 'task' ? 'warning' : 'review', true), fontSize: '11px', flexShrink: 0 }}>{item.reason}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
         <div>
           {/* Metric cards */}
           <div className="metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
@@ -554,57 +715,65 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {view === 'team' && (
-        <div>
-          <div className="metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
+      {isManager && (
+        <div style={{ marginTop: '18px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px', color: text }}>Manager ops</h2>
+            <span style={{ fontSize: '12px', color: muted }}>Exceptions and intervention queues</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px', marginBottom: '12px' }}>
             {[
-              { label: 'Team members', value: String(teamMembers.length), sub: 'active', href: '/dashboard/settings' },
-              { label: 'Open tasks', value: String(allTasks.length), sub: 'across team', href: '/dashboard/tasks' },
-              { label: 'High priority', value: String(allTasks.filter(t => t.priority === 'high' || t.priority === 'day of').length), sub: 'team wide', href: '/dashboard/tasks' },
-              { label: 'Total productions', value: String(totalProductions), sub: 'in system', href: '/dashboard/productions' },
-            ].map(({ label, value, sub, href }) => (
-              <Link key={label} href={href} style={{ textDecoration: 'none' }}>
-              <div style={{ background: metricBg, borderRadius: '16px', padding: '20px 24px', border: `1px solid ${border}`, cursor: 'pointer', transition: 'transform 0.15s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'}
-                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'}
-              >
-                <p style={{ fontSize: '13px', fontWeight: 700, color: muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '1px' }}>{label}</p>
-                <p style={{ fontSize: '38px', fontWeight: 800, color: text, margin: '0 0 4px', lineHeight: 1 }}>{value}</p>
-                <p style={{ fontSize: '15px', color: muted, margin: 0 }}>{sub}</p>
+              { label: 'Unstaffed productions', value: String(unstaffedProductions.length), sub: 'start within 48h', tone: 'danger' as const },
+              { label: 'Understaffed productions', value: String(understaffedProductions.length), sub: 'need added coverage', tone: 'warning' as const },
+              { label: 'Unassigned tasks', value: String(managerRiskCounts.unassigned), sub: 'owner missing', tone: 'review' as const },
+              { label: 'Blocked tasks', value: String(managerRiskCounts.blocked), sub: 'dependency blocked', tone: 'review' as const },
+              { label: 'Student crew fill', value: `${crewFillPct}%`, sub: `${crewSlotsFilled}/${crewSlotsTotal} spots filled`, tone: crewFillPct < 70 ? 'danger' as const : crewFillPct < 90 ? 'warning' as const : 'success' as const },
+              { label: 'Production data exceptions', value: String(missingProdMetadata.length), sub: 'missing time/location', tone: 'warning' as const },
+            ].map(kpi => (
+              <div key={kpi.label} style={{ ...uiStyles.cardSoft, padding: '12px 14px' }}>
+                <p style={{ margin: 0, fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase' as const, color: statusTone[kpi.tone].color, fontWeight: 700 }}>{kpi.label}</p>
+                <p style={{ margin: '6px 0 0', fontSize: '26px', color: text, fontWeight: 800, lineHeight: 1 }}>{kpi.value}</p>
+                <p style={{ margin: '6px 0 0', fontSize: '12px', color: muted }}>{kpi.sub}</p>
               </div>
-              </Link>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '16px' }}>
-            <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden' }}>
-              <div style={{ padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Team</h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: '12px' }}>
+            <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+              <div style={uiStyles.panelHeader}>
+                <h3 style={{ margin: 0, fontSize: '16px', color: text }}>Overdue by owner · {managerRiskCounts.overdue}</h3>
               </div>
-              {teamMembers.map((member, i) => (
-                <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', borderBottom: i < teamMembers.length - 1 ? `1px solid ${border}` : 'none' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: member.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>{member.name.slice(0, 2).toUpperCase()}</div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '15px', fontWeight: 500, color: text, margin: 0 }}>{member.name}</p>
-                    <p style={{ fontSize: '15px', color: muted, margin: 0, textTransform: 'capitalize' as const }}>{member.role}</p>
+              <div style={{ padding: '10px 14px' }}>
+                {overdueByOwner.length === 0 ? (
+                  <p style={{ margin: 0, fontSize: '13px', color: muted }}>No overdue tasks across team.</p>
+                ) : overdueByOwner.map(row => (
+                  <div key={row.member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                    <span style={{ fontSize: '13px', color: text }}>{row.member.name}</span>
+                    <span style={{ fontSize: '12px', color: muted }}>{row.total} total · {row.aging.a}/{row.aging.b}/{row.aging.c} (1-2d/3-7d/8+d)</span>
                   </div>
-                  <span style={{ fontSize: '14px', ...statusBadge('success') }}>Active</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>All open tasks</h2>
-                <Link href="/dashboard/tasks" style={uiStyles.panelLink}>View all →</Link>
+                ))}
               </div>
-              {allTasks.map((task, i) => (
-                <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', borderBottom: i < allTasks.length - 1 ? `1px solid ${border}` : 'none' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${border}`, flexShrink: 0 }} />
-                  <p style={{ fontSize: '14px', color: text, margin: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</p>
-                  {taskStatusBadge(task.status)}
-                </div>
-              ))}
+            </div>
+
+            <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+              <div style={uiStyles.panelHeader}>
+                <h3 style={{ margin: 0, fontSize: '16px', color: text }}>Coverage and staffing exceptions</h3>
+              </div>
+              <div style={{ padding: '10px 14px' }}>
+                {[...unstaffedProductions, ...understaffedProductions].slice(0, 6).map(prod => (
+                  <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+                    <span style={{ fontSize: '13px', color: text }}>#{prod.production_number} {prod.title}</span>
+                    <span style={{ ...statusBadge((prod.production_members || []).length === 0 ? 'danger' : 'warning', true), fontSize: '11px' }}>
+                      {(prod.production_members || []).length === 0 ? 'Unstaffed' : 'Understaffed'}
+                    </span>
+                  </Link>
+                ))}
+                {unstaffedProductions.length + understaffedProductions.length === 0 && (
+                  <p style={{ margin: 0, fontSize: '13px', color: muted }}>No immediate staffing exceptions in next 48h.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
