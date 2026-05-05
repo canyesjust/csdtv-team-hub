@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from '../components/Loader'
 import CommentsSection from '../components/CommentsSection'
+import { toast } from '@/lib/toast'
 
 interface Production {
   id: string; title: string; production_number: number
