@@ -310,11 +310,37 @@ export default function VideosPage() {
     setReviewSearchQuery('')
   }
 
+  const parseCsvLine = (line: string): string[] => {
+    const out: string[] = []
+    let current = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') {
+        // RFC4180 escape: "" inside a quoted value.
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"'
+          i++
+        } else {
+          inQuotes = !inQuotes
+        }
+      } else if (ch === ',' && !inQuotes) {
+        out.push(current.trim())
+        current = ''
+      } else {
+        current += ch
+      }
+    }
+    out.push(current.trim())
+    return out
+  }
+
   const linkReviewVideo = async (productionId: string, productionLabel: string) => {
     if (!reviewQueue) return
     const video = reviewQueue[reviewIdx]
     if (!video) return
-    await supabase.from('videos').update({ production_id: productionId, needs_review: false }).eq('id', video.id)
+    const { error } = await supabase.from('videos').update({ production_id: productionId, needs_review: false }).eq('id', video.id)
+    if (error) { toast('Could not link video', 'error'); return }
     const prod = productions.find(p => p.id === productionId)
     setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: productionId, needs_review: false, productions: prod ? { title: prod.title, production_number: prod.production_number } : null } : v))
     toast(`Linked to ${productionLabel}`, 'success')
@@ -340,7 +366,8 @@ export default function VideosPage() {
 
   const removeMissingVideo = async (videoId: string) => {
     if (!confirm('Remove this video permanently? It will be deleted from the Hub.')) return
-    await supabase.from('videos').delete().eq('id', videoId)
+    const { error } = await supabase.from('videos').delete().eq('id', videoId)
+    if (error) { toast('Could not remove video', 'error'); return }
     setVideos(prev => prev.filter(v => v.id !== videoId))
     setMissingFromYoutube(prev => prev.filter(v => v.id !== videoId))
     toast('Removed', 'success')
@@ -350,7 +377,8 @@ export default function VideosPage() {
     if (missingFromYoutube.length === 0) return
     if (!confirm(`Remove all ${missingFromYoutube.length} videos that are no longer on YouTube?`)) return
     const ids = missingFromYoutube.map(v => v.id)
-    await supabase.from('videos').delete().in('id', ids)
+    const { error } = await supabase.from('videos').delete().in('id', ids)
+    if (error) { toast('Could not remove all missing videos', 'error'); return }
     setVideos(prev => prev.filter(v => !ids.includes(v.id)))
     setMissingFromYoutube([])
     toast(`Removed ${ids.length} videos`, 'success')
@@ -634,7 +662,7 @@ export default function VideosPage() {
               const start = lines[0]?.toLowerCase().includes('title') ? 1 : 0
               const inserts = []
               for (let i = start; i < lines.length; i++) {
-                const parts = lines[i].split(',').map(p => p.trim())
+                const parts = parseCsvLine(lines[i])
                 if (parts.length < 1 || !parts[0]) continue
                 inserts.push({
                   title: parts[0],
@@ -645,7 +673,8 @@ export default function VideosPage() {
                 })
               }
               if (inserts.length > 0) {
-                const { data } = await supabase.from('videos').insert(inserts).select('*')
+                const { data, error } = await supabase.from('videos').insert(inserts).select('*')
+                if (error) { toast('Bulk import failed', 'error'); setBulkImporting(false); return }
                 if (data) setVideos(prev => [...data, ...prev])
               }
               setBulkCSV('')
@@ -792,7 +821,7 @@ export default function VideosPage() {
                       </td>
                       {/* Type - inline editable */}
                       <td style={{ padding: '8px' }}>
-                        <select value={video.video_type} onChange={async e => { const val = e.target.value; await supabase.from('videos').update({ video_type: val }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, video_type: val } : v)) }} style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: `0.5px solid ${border}`, background: 'transparent', color: text, fontFamily: 'inherit', cursor: 'pointer', maxWidth: '100px' }}>
+                        <select value={video.video_type} onChange={async e => { const val = e.target.value; const { error } = await supabase.from('videos').update({ video_type: val }).eq('id', video.id); if (error) { toast('Could not update type', 'error'); return }; setVideos(prev => prev.map(v => v.id === video.id ? { ...v, video_type: val } : v)) }} style={{ fontSize: '11px', padding: '2px 4px', borderRadius: '4px', border: `0.5px solid ${border}`, background: 'transparent', color: text, fontFamily: 'inherit', cursor: 'pointer', maxWidth: '100px' }}>
                           {VIDEO_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </td>
@@ -801,7 +830,7 @@ export default function VideosPage() {
                         {video.productions ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <Link href={`/dashboard/productions/${video.productions.production_number}`} style={{ fontSize: '11px', color: '#5ba3e0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '120px', display: 'block' }}>#{video.productions.production_number} {video.productions.title}</Link>
-                            <button onClick={async () => { await supabase.from('videos').update({ production_id: null }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: null, productions: null } : v)); toast('Unlinked', 'success') }} style={{ fontSize: '9px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                            <button onClick={async () => { const { error } = await supabase.from('videos').update({ production_id: null }).eq('id', video.id); if (error) { toast('Could not unlink video', 'error'); return }; setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: null, productions: null } : v)); toast('Unlinked', 'success') }} style={{ fontSize: '9px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
                           </div>
                         ) : linkingVideoId === video.id ? (
                           <div style={{ position: 'relative' }}>
@@ -811,7 +840,8 @@ export default function VideosPage() {
                                 {productions.filter(p => { const q = linkSearch.toLowerCase(); return p.title.toLowerCase().includes(q) || (p.organizer_name || '').toLowerCase().includes(q) || (p.start_datetime && new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase().includes(q)) || String(p.production_number).includes(q) }).slice(0, 8).map(p => (
                                   <div key={p.id} onMouseDown={async e => {
                                     e.preventDefault()
-                                    await supabase.from('videos').update({ production_id: p.id, needs_review: false }).eq('id', video.id)
+                                    const { error } = await supabase.from('videos').update({ production_id: p.id, needs_review: false }).eq('id', video.id)
+                                    if (error) { toast('Could not link video', 'error'); return }
                                     setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: p.id, needs_review: false, productions: { title: p.title, production_number: p.production_number } } : v))
                                     setLinkingVideoId(null); setLinkSearch('')
                                     toast(`Linked to #${p.production_number}`, 'success')
@@ -842,7 +872,7 @@ export default function VideosPage() {
                       <td style={{ padding: '8px' }}>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           {video.needs_review && (
-                            <button onClick={async () => { await supabase.from('videos').update({ needs_review: false }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, needs_review: false } : v)); toast('Approved', 'success') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>✓</button>
+                            <button onClick={async () => { const { error } = await supabase.from('videos').update({ needs_review: false }).eq('id', video.id); if (error) { toast('Could not approve video', 'error'); return }; setVideos(prev => prev.map(v => v.id === video.id ? { ...v, needs_review: false } : v)); toast('Approved', 'success') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>✓</button>
                           )}
                           {!video.production_id && (
                             <button onClick={async () => {
@@ -855,7 +885,7 @@ export default function VideosPage() {
                               toast('Email sent', 'success')
                             }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(30,108,181,0.08)', color: '#5ba3e0', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
                           )}
-                          <button onClick={async () => { await supabase.from('videos').update({ status: 'Hidden' }).eq('id', video.id); setVideos(prev => prev.map(v => v.id === video.id ? { ...v, status: 'Hidden' } : v)); toast('Hidden', 'success') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', color: muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>👁‍🗨</button>
+                          <button onClick={async () => { const { error } = await supabase.from('videos').update({ status: 'Hidden' }).eq('id', video.id); if (error) { toast('Could not hide video', 'error'); return }; setVideos(prev => prev.map(v => v.id === video.id ? { ...v, status: 'Hidden' } : v)); toast('Hidden', 'success') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', color: muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>👁‍🗨</button>
                         </div>
                       </td>
                     </tr>
