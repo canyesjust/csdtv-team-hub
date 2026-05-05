@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Loader from '../../components/Loader'
 import CommentsSection from '../../components/CommentsSection'
+import StudentCrewTab from '../../components/StudentCrewTab'
 import { toast } from '@/lib/toast'
 
 interface Production {
@@ -89,7 +90,7 @@ export default function ProductionDetailPage() {
   const [generatingSheet, setGeneratingSheet] = useState(false)
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'callsheet'>('checklist')
+  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'callsheet'|'studentcrew'>('checklist')
   const [selectedMember, setSelectedMember] = useState<string|null>(null)
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
@@ -793,6 +794,7 @@ export default function ProductionDetailPage() {
         {tabBtn('comments', 'Comments')}
         {tabBtn('videos', 'Videos', linkedVideos.length)}
         {tabBtn('callsheet', 'Call sheet', callSheet ? 1 : 0)}
+        {tabBtn('studentcrew', 'Student Crew')}
       </div>
 
       {/* CHECKLIST TAB */}
@@ -1464,6 +1466,16 @@ export default function ProductionDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* STUDENT CREW TAB */}
+      {activeTab === 'studentcrew' && uuid && production && (
+        <StudentCrewTab
+          productionId={uuid}
+          productionNumber={production.production_number}
+          productionTitle={production.title}
+          isManager={currentUser?.role === 'Manager'}
+        />
       )}
 
       {/* EMAIL ORGANIZER MODAL */}
