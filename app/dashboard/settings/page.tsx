@@ -12,6 +12,15 @@ interface NotificationPrefs {
   notify_completed_email: boolean; notify_completed_inapp: boolean
   notify_new_production_email: boolean; notify_new_production_inapp: boolean
 }
+interface EmailTemplate {
+  id: string
+  template_key: string
+  label: string
+  subject: string
+  body: string
+  sort_order: number
+  active: boolean
+}
 
 const NOTIF_SETTINGS: { label: string; desc: string; emailKey: keyof NotificationPrefs; inappKey: keyof NotificationPrefs }[] = [
   { label: 'Task assigned to me', desc: 'When someone assigns you a task', emailKey: 'notify_assigned_email', inappKey: 'notify_assigned_inapp' },
@@ -20,6 +29,17 @@ const NOTIF_SETTINGS: { label: string; desc: string; emailKey: keyof Notificatio
 ]
 
 const AVATAR_COLORS = ['#e8a020', '#5ba3e0', '#22c55e', '#9b85e0', '#ef4444', '#f97316', '#06b6d4', '#ec4899']
+
+const TEMPLATE_VARIABLES: { key: string; desc: string }[] = [
+  { key: '{{name}}', desc: "organizer's first name" },
+  { key: '{{title}}', desc: 'production title' },
+  { key: '{{type}}', desc: 'production type' },
+  { key: '{{date}}', desc: 'full date and time' },
+  { key: '{{date_short}}', desc: 'short date (no time)' },
+  { key: '{{venue}}', desc: 'filming location' },
+  { key: '{{youtube_link}}', desc: 'YouTube link from production' },
+  { key: '{{status}}', desc: 'current production status' },
+]
 
 export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme()
@@ -57,6 +77,12 @@ export default function SettingsPage() {
   const [changePw2, setChangePw2] = useState('')
   const [changePwSaving, setChangePwSaving] = useState(false)
   const [changePwMsg, setChangePwMsg] = useState('')
+  // Email templates
+  const [templates, setTemplates] = useState<EmailTemplate[]>([])
+  const [editingTplId, setEditingTplId] = useState<string | null>(null)
+  const [showNewTpl, setShowNewTpl] = useState(false)
+  const [tplForm, setTplForm] = useState({ label: '', subject: '', body: '' })
+  const [savingTpl, setSavingTpl] = useState(false)
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
   const muted   = dark ? '#8899bb' : '#6b7280'
@@ -67,15 +93,17 @@ export default function SettingsPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [userRes, teamRes, schoolsRes, settingsRes] = await Promise.all([
+    const [userRes, teamRes, schoolsRes, settingsRes, tplRes] = await Promise.all([
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
       supabase.from('team').select('*').eq('active', true).order('name'),
       supabase.from('schools').select('*').order('name'),
       supabase.from('app_settings').select('*'),
+      supabase.from('email_templates').select('*').order('sort_order'),
     ])
     setCurrentUser(userRes.data)
     setTeam(teamRes.data || [])
     setSchools(schoolsRes.data || [])
+    setTemplates(tplRes.data || [])
     const settings = settingsRes.data || []
     const adminSetting = settings.find((s: any) => s.key === 'admin_assistant_email')
     if (adminSetting) setAdminEmail(adminSetting.value || '')
@@ -161,6 +189,92 @@ export default function SettingsPage() {
     setTimeout(() => setSavedMsg(''), 2000)
   }
 
+  // ─── Email Templates CRUD ────────────────────────────────────────────────
+  const startEditTpl = (t: EmailTemplate) => {
+    setEditingTplId(t.id)
+    setShowNewTpl(false)
+    setTplForm({ label: t.label, subject: t.subject, body: t.body })
+  }
+
+  const startNewTpl = () => {
+    setShowNewTpl(true)
+    setEditingTplId(null)
+    setTplForm({ label: '', subject: '', body: '' })
+  }
+
+  const cancelTplEdit = () => {
+    setEditingTplId(null)
+    setShowNewTpl(false)
+    setTplForm({ label: '', subject: '', body: '' })
+  }
+
+  const saveTpl = async () => {
+    if (!tplForm.label.trim() || !tplForm.subject.trim() || !tplForm.body.trim()) {
+      toast('Label, subject, and body are required', 'error'); return
+    }
+    setSavingTpl(true)
+    if (editingTplId) {
+      const { error } = await supabase.from('email_templates').update({
+        label: tplForm.label.trim(),
+        subject: tplForm.subject.trim(),
+        body: tplForm.body,
+        updated_at: new Date().toISOString(),
+      }).eq('id', editingTplId)
+      if (error) { toast('Failed to save: ' + error.message, 'error'); setSavingTpl(false); return }
+      setTemplates(prev => prev.map(t => t.id === editingTplId ? { ...t, label: tplForm.label.trim(), subject: tplForm.subject.trim(), body: tplForm.body } : t))
+      toast('Template saved', 'success')
+    } else {
+      // Generate template_key from label
+      const baseKey = tplForm.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || `template_${Date.now()}`
+      // Ensure uniqueness
+      const existingKeys = new Set(templates.map(t => t.template_key))
+      let key = baseKey
+      let n = 2
+      while (existingKeys.has(key)) { key = `${baseKey}_${n}`; n++ }
+      const maxOrder = templates.reduce((m, t) => Math.max(m, t.sort_order), 0)
+      const { data, error } = await supabase.from('email_templates').insert({
+        template_key: key,
+        label: tplForm.label.trim(),
+        subject: tplForm.subject.trim(),
+        body: tplForm.body,
+        sort_order: maxOrder + 1,
+        active: true,
+      }).select().single()
+      if (error) { toast('Failed to create: ' + error.message, 'error'); setSavingTpl(false); return }
+      if (data) setTemplates(prev => [...prev, data])
+      toast('Template created', 'success')
+    }
+    setSavingTpl(false)
+    cancelTplEdit()
+  }
+
+  const deleteTpl = async (id: string, label: string) => {
+    if (!confirm(`Delete template "${label}"? This cannot be undone.`)) return
+    const { error } = await supabase.from('email_templates').delete().eq('id', id)
+    if (error) { toast('Failed to delete: ' + error.message, 'error'); return }
+    setTemplates(prev => prev.filter(t => t.id !== id))
+    toast('Template deleted', 'success')
+  }
+
+  const moveTpl = async (id: string, dir: 'up' | 'down') => {
+    const sorted = [...templates].sort((a, b) => a.sort_order - b.sort_order)
+    const idx = sorted.findIndex(t => t.id === id)
+    if (idx === -1) return
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= sorted.length) return
+    const a = sorted[idx]
+    const b = sorted[swapIdx]
+    await Promise.all([
+      supabase.from('email_templates').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('email_templates').update({ sort_order: a.sort_order }).eq('id', b.id),
+    ])
+    setTemplates(prev => prev.map(t => {
+      if (t.id === a.id) return { ...t, sort_order: b.sort_order }
+      if (t.id === b.id) return { ...t, sort_order: a.sort_order }
+      return t
+    }))
+  }
+
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
     <button onClick={() => onChange(!checked)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: checked ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'), border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
       <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: checked ? '21px' : '3px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
@@ -200,6 +314,9 @@ export default function SettingsPage() {
   }
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}><Loader /></div>
+
+  // Sorted templates for display
+  const sortedTemplates = [...templates].sort((a, b) => a.sort_order - b.sort_order)
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
@@ -406,6 +523,85 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Email Templates ── */}
+      {isManager && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', gap: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Email templates</h2>
+              <p style={{ fontSize: '13px', color: muted, margin: 0, lineHeight: 1.5 }}>
+                Templates for emailing organizers from production pages. Use <code style={{ fontSize: '12px', padding: '1px 5px', background: dark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', borderRadius: '4px', color: text }}>{'{{variable}}'}</code> placeholders to auto-fill production details.
+              </p>
+            </div>
+            {!showNewTpl && !editingTplId && (
+              <button onClick={startNewTpl} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
+                + New template
+              </button>
+            )}
+          </div>
+
+          {/* Variables reference */}
+          <div style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 14px', marginBottom: '14px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>Available variables</p>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {TEMPLATE_VARIABLES.map(v => (
+                <span key={v.key} title={v.desc} style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '5px', background: dark ? 'rgba(91,163,224,0.1)' : 'rgba(91,163,224,0.08)', color: '#5ba3e0', fontFamily: 'monospace', cursor: 'help' }}>{v.key}</span>
+              ))}
+            </div>
+            <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0', lineHeight: 1.4 }}>Hover for description. Variables auto-fill from the production when you send. <code style={{ fontSize: '11px', padding: '1px 4px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', borderRadius: '3px' }}>{'{{youtube_link}}'}</code> pulls from the most recently linked video on the production.</p>
+          </div>
+
+          {/* New / Edit form */}
+          {(showNewTpl || editingTplId) && (
+            <div style={{ background: dark ? 'rgba(91,163,224,0.06)' : 'rgba(91,163,224,0.04)', border: '0.5px solid rgba(91,163,224,0.25)', borderRadius: '10px', padding: '14px', marginBottom: '12px' }}>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: text, margin: '0 0 10px' }}>{showNewTpl ? 'New template' : 'Edit template'}</p>
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Label</label>
+                <input value={tplForm.label} onChange={e => setTplForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. YouTube Livestream Link" style={{ ...inputStyle, fontSize: '14px' }} />
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Subject</label>
+                <input value={tplForm.subject} onChange={e => setTplForm(f => ({ ...f, subject: e.target.value }))} placeholder="e.g. Livestream link for {{title}}" style={{ ...inputStyle, fontSize: '14px' }} />
+              </div>
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Body</label>
+                <textarea value={tplForm.body} onChange={e => setTplForm(f => ({ ...f, body: e.target.value }))} placeholder="Hi {{name}}, here's the link..." style={{ ...inputStyle, minHeight: '180px', resize: 'vertical' as const, lineHeight: 1.5, fontSize: '13px', whiteSpace: 'pre-wrap' as const, fontFamily: 'inherit' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={saveTpl} disabled={savingTpl} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: savingTpl ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                  {savingTpl ? 'Saving...' : (showNewTpl ? 'Create template' : 'Save changes')}
+                </button>
+                <button onClick={cancelTplEdit} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Template list */}
+          {sortedTemplates.length === 0 ? (
+            <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 0', margin: 0 }}>No templates yet. Click "+ New template" to create one.</p>
+          ) : (
+            <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
+              {sortedTemplates.map((t, i) => (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderBottom: i < sortedTemplates.length - 1 ? `0.5px solid ${border}` : 'none', background: editingTplId === t.id ? (dark ? 'rgba(91,163,224,0.06)' : 'rgba(91,163,224,0.04)') : 'transparent' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '1px', flexShrink: 0 }}>
+                    <button onClick={() => moveTpl(t.id, 'up')} disabled={i === 0} title="Move up" style={{ background: 'none', border: 'none', cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? 'transparent' : muted, fontSize: '11px', padding: '0 4px', lineHeight: 1, opacity: i === 0 ? 0.3 : 0.7 }}>▲</button>
+                    <button onClick={() => moveTpl(t.id, 'down')} disabled={i === sortedTemplates.length - 1} title="Move down" style={{ background: 'none', border: 'none', cursor: i === sortedTemplates.length - 1 ? 'default' : 'pointer', color: i === sortedTemplates.length - 1 ? 'transparent' : muted, fontSize: '11px', padding: '0 4px', lineHeight: 1, opacity: i === sortedTemplates.length - 1 ? 0.3 : 0.7 }}>▼</button>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0 }}>{t.label}</p>
+                    <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{t.subject}</p>
+                  </div>
+                  <button onClick={() => startEditTpl(t)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#5ba3e0', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Edit</button>
+                  <button onClick={() => deleteTpl(t.id, t.label)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
