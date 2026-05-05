@@ -104,3 +104,6 @@ $$;
 
 COMMENT ON FUNCTION public.kit_checkout_atomic(uuid, text, text, date, uuid) IS
   'Checks out all equipment in a kit in one transaction; rolls back on any failure.';
+
+-- Match permissions to your other SECURITY DEFINER RPCs (adjust if you use a custom DB role).
+GRANT EXECUTE ON FUNCTION public.kit_checkout_atomic(uuid, text, text, date, uuid) TO service_role;

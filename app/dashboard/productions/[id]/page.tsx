@@ -12,7 +12,7 @@ import StudentCrewTab from '../../components/StudentCrewTab'
 import { toast } from '@/lib/toast'
 import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
-import { escapeHtml } from '@/lib/escape-html'
+import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -372,6 +372,7 @@ export default function ProductionDetailPage() {
     if (!el) return
     const w = window.open('', '_blank')
     if (!w) return
+    w.document.open()
     w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Call Sheet — ${escapeHtml(production?.title)}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;padding:24px;font-size:13px;line-height:1.5}
 .cs-header{border-bottom:3px solid #1a1a1a;padding-bottom:14px;margin-bottom:16px;display:flex;justify-content:space-between}
@@ -399,8 +400,9 @@ export default function ProductionDetailPage() {
 .cs-footer{margin-top:16px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:10px;color:#6b7280}
 .cs-check{display:flex;align-items:center;gap:6px;padding:3px 0}.cs-check input{width:14px;height:14px}
 @media print{body{padding:16px}}
-</style></head><body>${el.innerHTML}</body></html>`)
+</style></head><body></body></html>`)
     w.document.close()
+    w.document.body.appendChild(el.cloneNode(true))
     setTimeout(() => w.print(), 300)
   }
 
@@ -469,7 +471,13 @@ export default function ProductionDetailPage() {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ type: 'call_sheet', recipientEmail: email, subject: `Call Sheet: #${p.production_number} ${p.title} — ${dateStr}`, body: '', html }),
+          body: JSON.stringify({
+            type: 'call_sheet',
+            recipientEmail: email,
+            subject: sanitizeEmailSubject(`Call Sheet: #${p.production_number} ${p.title} — ${dateStr}`),
+            body: '',
+            html,
+          }),
         })
       }
       toast('Call sheet emailed to crew!')

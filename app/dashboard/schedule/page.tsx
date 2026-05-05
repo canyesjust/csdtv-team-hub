@@ -119,11 +119,11 @@ const countWeekdays = (start: Date, end: Date): number => {
 }
 
 const getPayPeriodsForMonth = (year: number, month: number) => {
-  const monthStart = new Date(year, month, 1)
-  const monthEnd   = new Date(year, month + 1, 0)
+  const monthStart = new Date(year, month, 1, 12, 0, 0, 0)
+  const monthEnd = new Date(year, month + 1, 0, 12, 0, 0, 0)
   return PAY_PERIODS.filter(pp => {
-    const s = new Date(pp.start)
-    const e = new Date(pp.end)
+    const s = new Date(pp.start + 'T12:00:00')
+    const e = new Date(pp.end + 'T12:00:00')
     return s <= monthEnd && e >= monthStart
   })
 }
