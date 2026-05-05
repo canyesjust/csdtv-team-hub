@@ -363,7 +363,6 @@ export default function DashboardPage() {
     await supabase.from('tasks').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', taskId)
     setTimeout(() => {
       setMyTasks(prev => prev.filter(t => t.id !== taskId))
-      setAllTasks(prev => prev.filter(t => t.id !== taskId))
       setCompleting(prev => { const n = new Set(prev); n.delete(taskId); return n })
     }, 400)
   }
