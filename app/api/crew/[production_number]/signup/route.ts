@@ -40,13 +40,14 @@ async function isRateLimitedPersistent(
   supabase: ReturnType<typeof createClient>,
   key: string
 ): Promise<boolean> {
+  const db: any = supabase
   const windowStart = new Date(Date.now() - SIGNUP_WINDOW_MS).toISOString()
-  const { error: insertError } = await supabase
+  const { error: insertError } = await db
     .from('api_rate_limits')
     .insert({ scope: 'crew_signup', rate_key: key })
   if (insertError) return false
 
-  const { count, error: countError } = await supabase
+  const { count, error: countError } = await db
     .from('api_rate_limits')
     .select('id', { count: 'exact', head: true })
     .eq('scope', 'crew_signup')
