@@ -900,7 +900,7 @@ export default function ProductionDetailPage() {
 
       {/* Header */}
       <section style={{ ...uiStyles.zoneSection, marginBottom: '20px' }}>
-        <ZoneHeader title="Production Brief" />
+        <ZoneHeader label="Production Brief" />
         <div style={{ ...uiStyles.card, padding: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '200px' }}>
