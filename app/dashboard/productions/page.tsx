@@ -130,8 +130,8 @@ function ProductionsPageContent() {
   const [scope, setScope] = useState<Scope>(initialScope)
   const [focusFilter, setFocusFilter] = useState<FocusFilter>('all')
   const [dismissedConflicts, setDismissedConflicts] = useState<Set<string>>(new Set())
-  const [conflictsExpanded, setConflictsExpanded] = useState(true)
-  const [overdueExpanded, setOverdueExpanded] = useState(true)
+  const [conflictsExpanded, setConflictsExpanded] = useState(false)
+  const [overdueExpanded, setOverdueExpanded] = useState(false)
   const [selectedProdId, setSelectedProdId] = useState<string | null>(null)
   const [panelChecklist, setPanelChecklist] = useState<PanelChecklist[]>([])
   const [panelActivity, setPanelActivity] = useState<PanelActivity[]>([])
@@ -843,60 +843,80 @@ function ProductionsPageContent() {
             )}
           </section>
 
-          {/* ALERTS — slim, click-through */}
+          {/* ALERTS — compact by default; side-by-side on wide screens */}
           {(overdueProds.length > 0 || conflicts.length > 0) && (
-            <section style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column' as const, gap: '8px' }}>
-              {overdueProds.length > 0 && focusFilter !== 'overdue' && (
-                <div style={{ background: dangerBg, border: `1px solid ${danger}40`, borderRadius: '10px', overflow: 'hidden' }}>
-                  <button onClick={() => setOverdueExpanded(v => !v)} aria-expanded={overdueExpanded} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: danger }}>
-                      {overdueProds.length} overdue production{overdueProds.length !== 1 ? 's' : ''}
-                    </span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span onClick={e => { e.stopPropagation(); setFocusFilter('overdue'); setOverdueExpanded(false) }} style={{ fontSize: '12px', color: danger, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Show only overdue</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2.5" style={{ transform: overdueExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}><polyline points="9 18 15 12 9 6"/></svg>
-                    </span>
-                  </button>
-                  {overdueExpanded && (
-                    <div style={{ borderTop: `1px solid ${danger}30`, padding: '8px 14px' }}>
-                      {overdueProds.slice(0, 8).map(p => (
-                        <div key={p.id} onClick={() => selectProduction(p.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', cursor: 'pointer', gap: '10px' }}>
-                          <span style={{ fontSize: '12px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{p.production_number} {p.title}</span>
-                          <span style={{ fontSize: '11px', color: danger, fontWeight: 600, flexShrink: 0 }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
-                        </div>
-                      ))}
-                      {overdueProds.length > 8 && <p style={{ fontSize: '11px', color: muted, margin: '6px 0 0', textAlign: 'center' as const }}>+{overdueProds.length - 8} more</p>}
-                    </div>
-                  )}
-                </div>
-              )}
-              {conflicts.length > 0 && (
-                <div style={{ background: dangerBg, border: `1px solid ${danger}40`, borderRadius: '10px', overflow: 'hidden' }}>
-                  <button onClick={() => setConflictsExpanded(v => !v)} aria-expanded={conflictsExpanded} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: danger }}>
-                      {conflicts.length} scheduling conflict{conflicts.length !== 1 ? 's' : ''}
-                    </span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2.5" style={{ transform: conflictsExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}><polyline points="9 18 15 12 9 6"/></svg>
-                  </button>
-                  {conflictsExpanded && (
-                    <div style={{ borderTop: `1px solid ${danger}30`, padding: '8px 14px' }}>
-                      {conflicts.slice(0, 5).map((c, i) => {
-                        const d = new Date(c.a.start_datetime!)
-                        return (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0' }}>
-                            <p style={{ fontSize: '12px', color: muted, margin: 0, flex: 1 }}>
-                              <span style={{ color: text, fontWeight: 500 }}>{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-                              {' '}— <strong style={{ color: text }}>#{c.a.production_number}</strong> &amp; <strong style={{ color: text }}>#{c.b.production_number}</strong>
-                            </p>
-                            <button onClick={() => dismissConflict(c.a.id, c.b.id)} style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '6px', background: cardBg, border: `1px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Dismiss</button>
+            <section style={{ marginBottom: '14px' }}>
+              <div
+                className="production-alerts-row"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  flexWrap: 'wrap' as const,
+                  gap: '8px',
+                  alignItems: 'stretch',
+                }}
+              >
+                {overdueProds.length > 0 && focusFilter !== 'overdue' && (
+                  <div style={{ flex: '1 1 280px', minWidth: 0, maxWidth: '100%', background: dangerBg, border: `1px solid ${danger}40`, borderRadius: '8px', overflow: 'hidden' }}>
+                    <button onClick={() => setOverdueExpanded(v => !v)} aria-expanded={overdueExpanded} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '7px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: danger }}>
+                        {overdueProds.length} overdue production{overdueProds.length !== 1 ? 's' : ''}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                        <span onClick={e => { e.stopPropagation(); setFocusFilter('overdue'); setOverdueExpanded(false) }} style={{ fontSize: '11px', color: danger, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Show only</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2.5" style={{ transform: overdueExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} aria-hidden><polyline points="9 18 15 12 9 6"/></svg>
+                      </span>
+                    </button>
+                    {overdueExpanded && (
+                      <div style={{ borderTop: `1px solid ${danger}30`, padding: '4px 10px 6px' }}>
+                        {overdueProds.slice(0, 8).map(p => (
+                          <div key={p.id} onClick={() => selectProduction(p.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '3px 0', cursor: 'pointer', gap: '8px' }}>
+                            <span style={{ fontSize: '11px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, minWidth: 0 }}><span style={{ fontWeight: 600, color: danger }}>#{p.production_number}</span>{' '}{p.title}</span>
+                            <span style={{ fontSize: '10px', color: danger, fontWeight: 600, flexShrink: 0 }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
                           </div>
-                        )
-                      })}
-                      {conflicts.length > 5 && <p style={{ fontSize: '11px', color: muted, margin: '6px 0 0', textAlign: 'center' as const }}>+{conflicts.length - 5} more</p>}
-                    </div>
-                  )}
-                </div>
-              )}
+                        ))}
+                        {overdueProds.length > 8 && <p style={{ fontSize: '10px', color: muted, margin: '4px 0 0', textAlign: 'center' as const }}>+{overdueProds.length - 8} more</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {conflicts.length > 0 && (
+                  <div style={{ flex: '1 1 280px', minWidth: 0, maxWidth: '100%', background: dangerBg, border: `1px solid ${danger}40`, borderRadius: '8px', overflow: 'hidden' }}>
+                    <button onClick={() => setConflictsExpanded(v => !v)} aria-expanded={conflictsExpanded} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '7px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: danger }}>
+                        {conflicts.length} scheduling conflict{conflicts.length !== 1 ? 's' : ''}
+                      </span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2.5" style={{ transform: conflictsExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} aria-hidden><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    {conflictsExpanded && (
+                      <div style={{ borderTop: `1px solid ${danger}30`, padding: '4px 10px 6px' }}>
+                        {conflicts.slice(0, 5).map((c, i) => {
+                          const d = new Date(c.a.start_datetime!)
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '4px 0', borderBottom: i < Math.min(conflicts.length, 5) - 1 ? `1px solid ${danger}22` : 'none' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '10px', fontWeight: 700, color: danger, textTransform: 'uppercase' as const, letterSpacing: '0.04em', marginBottom: '3px' }}>
+                                  {d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                </div>
+                                <div style={{ fontSize: '11px', color: text, lineHeight: 1.35 }}>
+                                  <div>
+                                    <span style={{ fontWeight: 600 }}>#{c.a.production_number}</span>{' '}{c.a.title}
+                                  </div>
+                                  <div style={{ marginTop: '2px' }}>
+                                    <span style={{ fontWeight: 600 }}>#{c.b.production_number}</span>{' '}{c.b.title}
+                                  </div>
+                                </div>
+                              </div>
+                              <button type="button" onClick={() => dismissConflict(c.a.id, c.b.id)} style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '5px', background: cardBg, border: `1px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, alignSelf: 'center' }}>Dismiss</button>
+                            </div>
+                          )
+                        })}
+                        {conflicts.length > 5 && <p style={{ fontSize: '10px', color: muted, margin: '4px 0 0', textAlign: 'center' as const }}>+{conflicts.length - 5} more</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
