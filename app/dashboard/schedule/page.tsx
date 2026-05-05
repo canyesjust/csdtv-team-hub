@@ -7,8 +7,13 @@ import Link from 'next/link'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 
-// ─── Pay periods from PDF ────────────────────────────────────────────────────
-const PAY_PERIODS: { num: number; start: string; end: string; cutoff: string; payday: string }[] = [
+// ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
+const toLocalDateStr = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+type PayPeriodRow = { num: number; start: string; end: string; cutoff: string; payday: string }
+
+const PAY_PERIODS_CORE: PayPeriodRow[] = [
   { num: 1,  start: '2025-06-16', end: '2025-06-29', cutoff: '2025-07-07',  payday: '2025-07-15' },
   { num: 2,  start: '2025-06-30', end: '2025-07-13', cutoff: '2025-07-23',  payday: '2025-07-31' },
   { num: 3,  start: '2025-07-14', end: '2025-07-27', cutoff: '2025-08-08',  payday: '2025-08-15' },
@@ -37,6 +42,39 @@ const PAY_PERIODS: { num: number; start: string; end: string; cutoff: string; pa
   { num: 2,  start: '2026-06-29', end: '2026-07-12', cutoff: '2026-07-23',  payday: '2026-07-31' },
   { num: 3,  start: '2026-07-13', end: '2026-07-26', cutoff: '2026-08-07',  payday: '2026-08-14' },
   { num: 4,  start: '2026-07-27', end: '2026-08-09', cutoff: '2026-08-24',  payday: '2026-08-31' },
+]
+
+/** Approximate future periods (biweekly + simple cutoff/payday offsets). Replace with PDF values when published. */
+function extendPayPeriodsFromLast(last: PayPeriodRow, count: number, startNum: number): PayPeriodRow[] {
+  const out: PayPeriodRow[] = []
+  let num = startNum
+  const start = new Date(last.end + 'T12:00:00')
+  start.setDate(start.getDate() + 1)
+  let curStart = start
+  for (let i = 0; i < count; i++) {
+    const end = new Date(curStart)
+    end.setDate(end.getDate() + 13)
+    const cutoff = new Date(end)
+    cutoff.setDate(cutoff.getDate() + 5)
+    const payday = new Date(cutoff)
+    payday.setDate(payday.getDate() + 7)
+    out.push({
+      num,
+      start: toLocalDateStr(curStart),
+      end: toLocalDateStr(end),
+      cutoff: toLocalDateStr(cutoff),
+      payday: toLocalDateStr(payday),
+    })
+    num = num >= 24 ? 1 : num + 1
+    curStart = new Date(end)
+    curStart.setDate(curStart.getDate() + 1)
+  }
+  return out
+}
+
+const PAY_PERIODS: PayPeriodRow[] = [
+  ...PAY_PERIODS_CORE,
+  ...extendPayPeriodsFromLast(PAY_PERIODS_CORE[PAY_PERIODS_CORE.length - 1], 52, 5),
 ]
 
 // ─── Production type colors ───────────────────────────────────────────────────
@@ -68,9 +106,6 @@ const parseHours = (s: string | null | undefined): number => {
   if (parts.length !== 2) return 8
   return Math.max(0, to24(parts[1]) - to24(parts[0]))
 }
-
-const toLocalDateStr = (d: Date): string =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 const countWeekdays = (start: Date, end: Date): number => {
   let count = 0
@@ -199,11 +234,15 @@ export default function SchedulePage() {
 
   // ─── Pay period info for viewed month ───────────────────────────────────────
   const payPeriodsInView = getPayPeriodsForMonth(viewYear, viewMonth)
-  // Show the primary pay period (the one that starts in this month, or first overlap)
-  const primaryPP = payPeriodsInView.find(pp => {
-    const s = new Date(pp.start)
-    return s.getMonth() === viewMonth && s.getFullYear() === viewYear
-  }) || payPeriodsInView[0]
+  // Prefer the period containing today, then one that starts in the viewed month, then any overlap
+  const todayStr = toLocalDateStr(new Date())
+  const primaryPP =
+    payPeriodsInView.find(pp => todayStr >= pp.start && todayStr <= pp.end) ??
+    payPeriodsInView.find(pp => {
+      const s = new Date(pp.start + 'T12:00:00')
+      return s.getMonth() === viewMonth && s.getFullYear() === viewYear
+    }) ??
+    payPeriodsInView[0]
 
   const ppWeekdays = primaryPP
     ? countWeekdays(new Date(primaryPP.start), new Date(primaryPP.end))

@@ -103,20 +103,24 @@ export default function KitDetailPage() {
 
   async function handleKitCheckout() {
     if (!kit || !user || !borrowerName.trim()) return
-    // Create a loan for the kit
-    await supabase.from('equipment_loans').insert({
-      kit_id: kit.id, borrower_name: borrowerName.trim(),
-      borrower_info: borrowerInfo.trim() || null, checked_out_by: user.id, due_date: dueDate || null,
+    const res = await fetch('/api/equipment/kit-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        kitId: kit.id,
+        borrowerName: borrowerName.trim(),
+        borrowerInfo: borrowerInfo.trim() || null,
+        dueDate: dueDate || null,
+      }),
     })
-    // Mark all items as checked out
-    for (const ki of items) {
-      await supabase.from('equipment').update({ status: 'checked_out' }).eq('id', ki.equipment_id)
-      await supabase.from('equipment_activity').insert({
-        equipment_id: ki.equipment_id, action: 'checked_out',
-        detail: `Checked out as part of kit "${kit.name}" to ${borrowerName.trim()}`, user_id: user.id,
-      })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast(typeof data.error === 'string' ? data.error : 'Kit checkout failed', 'error')
+      return
     }
     setShowCheckout(false); setBorrowerName(''); setBorrowerInfo(''); setDueDate('')
+    toast('Kit checked out')
     loadData()
   }
 
@@ -165,7 +169,7 @@ export default function KitDetailPage() {
           <p style={{ fontSize: '13px', color: muted, margin: '4px 0 0' }}>{items.length} item{items.length !== 1 ? 's' : ''}</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {items.length > 0 && allAvailable && (
+          {items.length > 0 && allAvailable && isManager && (
             <button onClick={() => setShowCheckout(true)} style={{
               background: '#1e6cb5', border: 'none', borderRadius: '10px', color: '#fff',
               padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px',

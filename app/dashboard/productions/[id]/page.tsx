@@ -12,6 +12,7 @@ import StudentCrewTab from '../../components/StudentCrewTab'
 import { toast } from '@/lib/toast'
 import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
+import { escapeHtml } from '@/lib/escape-html'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -371,7 +372,7 @@ export default function ProductionDetailPage() {
     if (!el) return
     const w = window.open('', '_blank')
     if (!w) return
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Call Sheet — ${production?.title}</title>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Call Sheet — ${escapeHtml(production?.title)}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;padding:24px;font-size:13px;line-height:1.5}
 .cs-header{border-bottom:3px solid #1a1a1a;padding-bottom:14px;margin-bottom:16px;display:flex;justify-content:space-between}
 .cs-title{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:4px}
@@ -418,25 +419,25 @@ export default function ProductionDetailPage() {
       const timeStr = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'TBD'
       const venue = getSchoolName(p.filming_location) || getSchoolName(p.school_department) || p.filming_location || 'TBD'
       const address = cs.content?.production_snapshot?.school_address || ''
-      const timelineHtml = (cs.schedule || []).map((t: any) => `<tr><td style="padding:6px 12px;color:#6b7280;font-weight:500;white-space:nowrap">${t.time}</td><td style="padding:6px 12px;font-weight:600">${t.activity}</td></tr>`).join('')
-      const equipHtml = (cs.equipment || []).map((e: any) => `<tr><td style="padding:4px 12px">☐ ${e.item}</td></tr>`).join('')
-      const notesHtml = (cs.producer_notes || []).map((n: string) => `<li style="padding:3px 0">${n}</li>`).join('')
-      const crewHtml = (cs.crew || []).map((c: any) => `<tr><td style="padding:4px 12px;color:#6b7280">${c.role}</td><td style="padding:4px 12px;font-weight:600;text-align:right">${c.name || '<em style="color:#9ca3af">Unassigned</em>'}</td></tr>`).join('')
+      const timelineHtml = (cs.schedule || []).map((t: any) => `<tr><td style="padding:6px 12px;color:#6b7280;font-weight:500;white-space:nowrap">${escapeHtml(t.time)}</td><td style="padding:6px 12px;font-weight:600">${escapeHtml(t.activity)}</td></tr>`).join('')
+      const equipHtml = (cs.equipment || []).map((e: any) => `<tr><td style="padding:4px 12px">☐ ${escapeHtml(e.item)}</td></tr>`).join('')
+      const notesHtml = (cs.producer_notes || []).map((n: string) => `<li style="padding:3px 0">${escapeHtml(n)}</li>`).join('')
+      const crewHtml = (cs.crew || []).map((c: any) => `<tr><td style="padding:4px 12px;color:#6b7280">${escapeHtml(c.role)}</td><td style="padding:4px 12px;font-weight:600;text-align:right">${c.name ? escapeHtml(c.name) : '<em style="color:#9ca3af">Unassigned</em>'}</td></tr>`).join('')
 
       const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;margin:0 auto;color:#1a1a1a">
         <div style="border-bottom:3px solid #1a1a1a;padding-bottom:14px;margin-bottom:16px">
           <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:4px">CSDtv Call Sheet</div>
-          <div style="font-size:22px;font-weight:700">#${p.production_number} ${p.title}</div>
+          <div style="font-size:22px;font-weight:700">#${escapeHtml(p.production_number)} ${escapeHtml(p.title)}</div>
         </div>
         <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;margin-bottom:16px;font-size:13px">
           <tr>
-            <td style="padding:10px 14px;border-right:1px solid #e0e0e0;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Date</div><div style="font-weight:600">${dateStr}</div></td>
-            <td style="padding:10px 14px;border-right:1px solid #e0e0e0;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Time</div><div style="font-weight:600">${timeStr}</div></td>
-            <td style="padding:10px 14px;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Type</div><div style="font-weight:600">${p.request_type_label || 'Production'}</div></td>
+            <td style="padding:10px 14px;border-right:1px solid #e0e0e0;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Date</div><div style="font-weight:600">${escapeHtml(dateStr)}</div></td>
+            <td style="padding:10px 14px;border-right:1px solid #e0e0e0;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Time</div><div style="font-weight:600">${escapeHtml(timeStr)}</div></td>
+            <td style="padding:10px 14px;background:#f9fafb"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#6b7280">Type</div><div style="font-weight:600">${escapeHtml(p.request_type_label || 'Production')}</div></td>
           </tr>
         </table>
         <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;margin-bottom:16px;font-size:13px">
-          <tr><td style="padding:10px 14px" colspan="2"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:4px">Location</div><div style="font-weight:600;font-size:15px">${venue}</div>${address ? `<div style="color:#6b7280;margin-top:2px">${address}</div>` : ''}${address ? `<div style="margin-top:6px"><a href="https://maps.google.com/?q=${encodeURIComponent(address)}" style="color:#1e6cb5;text-decoration:none;font-size:12px">📍 Open in Google Maps</a></div>` : ''}</td></tr>
+          <tr><td style="padding:10px 14px" colspan="2"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:4px">Location</div><div style="font-weight:600;font-size:15px">${escapeHtml(venue)}</div>${address ? `<div style="color:#6b7280;margin-top:2px">${escapeHtml(address)}</div>` : ''}${address ? `<div style="margin-top:6px"><a href="https://maps.google.com/?q=${encodeURIComponent(address)}" style="color:#1e6cb5;text-decoration:none;font-size:12px">📍 Open in Google Maps</a></div>` : ''}</td></tr>
         </table>
         <table style="width:100%;margin-bottom:16px"><tr><td style="vertical-align:top;width:50%;padding-right:8px">
           <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;font-size:13px">
@@ -457,9 +458,9 @@ export default function ProductionDetailPage() {
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1e3a5f;margin-bottom:6px">Producer Notes</div>
           <ul style="list-style:none;padding:0;margin:0;font-size:13px">${notesHtml}</ul>
         </div>` : ''}
-        ${cs.parking_access ? `<div style="background:#f9fafb;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">🅿️ <strong>Parking:</strong> ${cs.parking_access}</div>` : ''}
+        ${cs.parking_access ? `<div style="background:#f9fafb;padding:10px 14px;border-radius:4px;margin-bottom:16px;font-size:13px">🅿️ <strong>Parking:</strong> ${escapeHtml(cs.parking_access)}</div>` : ''}
         <div style="border-top:2px solid #1a1a1a;padding-top:12px;font-size:12px;display:flex;justify-content:space-between">
-          <div><strong>Organizer:</strong> ${p.organizer_name || 'N/A'} · <span style="color:#6b7280">${p.organizer_email || ''}</span></div>
+          <div><strong>Organizer:</strong> ${escapeHtml(p.organizer_name || 'N/A')} · <span style="color:#6b7280">${escapeHtml(p.organizer_email || '')}</span></div>
         </div>
         <div style="margin-top:16px;padding-top:10px;border-top:1px solid #e0e0e0;font-size:10px;color:#9ca3af">CSDtv Production Services · Canyons School District</div>
       </div>`
