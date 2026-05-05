@@ -315,7 +315,7 @@ export default function ProductionDetailPage() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
             body: JSON.stringify({
               type: 'task_assigned', recipientEmail: assignee.email, recipientName: assignee.name.split(' ')[0],
-              subject: `Task assigned: ${newTaskTitle}`,
+              subject: sanitizeEmailSubject(`Task assigned: ${newTaskTitle}`),
               body: `You've been assigned a task on #${production.production_number} ${production.title}:\n\n"${newTaskTitle}"${newTaskDue ? `\nDue: ${new Date(newTaskDue).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}\nPriority: ${newTaskPriority}`,
               actionUrl: `/dashboard/productions/${production.production_number}`, actionLabel: 'View Production',
             }),
@@ -544,7 +544,7 @@ export default function ProductionDetailPage() {
               type: 'production_assignment',
               recipientEmail: member.email,
               recipientName: member.name.split(' ')[0],
-              subject: `You've been added to #${production.production_number} ${production.title}`,
+              subject: sanitizeEmailSubject(`You've been added to #${production.production_number} ${production.title}`),
               body: `You've been assigned to production #${production.production_number} — ${production.title}.\n\nDate: ${dateStr}${timeStr ? ` at ${timeStr}` : ''}\nLocation: ${venue}\nType: ${production.request_type_label || 'Production'}\n\nView the production details and checklist in the Team Hub.`,
               actionUrl: `/dashboard/productions/${production.production_number}`,
               actionLabel: 'View Production',
@@ -604,7 +604,7 @@ export default function ProductionDetailPage() {
     const t = templates.find(x => x.id === emailTemplate)
     if (!t) return
     setEmailBody(substituteVariables(t.body))
-    setEmailSubject(substituteVariables(t.subject))
+    setEmailSubject(sanitizeEmailSubject(substituteVariables(t.subject)))
   }, [production?.livestream_url, emailTemplate, production, templates, substituteVariables])
 
   const selectTemplate = (templateId: string) => {
@@ -616,7 +616,7 @@ export default function ProductionDetailPage() {
     }
     setEmailTemplate(templateId)
     setEmailBody(substituteVariables(t.body))
-    setEmailSubject(substituteVariables(t.subject))
+    setEmailSubject(sanitizeEmailSubject(substituteVariables(t.subject)))
   }
 
   const copySetupTo = useCallback(async () => {
@@ -650,7 +650,7 @@ export default function ProductionDetailPage() {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ type: 'production_complete', recipientEmail: email, subject: `Production complete: ${prodTitle}`, body }),
+          body: JSON.stringify({ type: 'production_complete', recipientEmail: email, subject: sanitizeEmailSubject(`Production complete: ${prodTitle}`), body }),
         })
       }
       await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin' })
@@ -675,7 +675,7 @@ export default function ProductionDetailPage() {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ type: 'production_in_progress', recipientEmail: email, subject: `Production in progress: ${prodTitle}`, body }),
+          body: JSON.stringify({ type: 'production_in_progress', recipientEmail: email, subject: sanitizeEmailSubject(`Production in progress: ${prodTitle}`), body }),
         })
       }
       await logActivity('requested_in_progress', 'Requested status change to In Progress — email sent to admin')
@@ -703,7 +703,7 @@ export default function ProductionDetailPage() {
         await logActivity('YouTube link email', 'Logged send (mail client opened with tracked link)')
       }
     }
-    const mailto = `mailto:${production.organizer_email}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`
+    const mailto = `mailto:${production.organizer_email}?subject=${encodeURIComponent(sanitizeEmailSubject(emailSubject))}&body=${encodeURIComponent(emailBody)}`
     window.location.href = mailto
     setTimeout(() => { setShowEmailModal(false); setEmailTemplate(''); setEmailBody(''); setEmailSubject('') }, 500)
   }, [production, emailBody, emailSubject, emailTemplate, templates, logActivity, getSyncedYoutubeLink, uuid, supabase])

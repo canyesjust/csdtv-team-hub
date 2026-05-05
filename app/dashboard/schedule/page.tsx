@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
+import { sanitizeEmailSubject } from '@/lib/escape-html'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
 const toLocalDateStr = (d: Date): string =>
@@ -440,7 +441,7 @@ export default function SchedulePage() {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ type: 'calendar_reminder', recipientEmail: member.email, recipientName: member.name.split(' ')[0], subject: `Reminder: Fill in your schedule for ${weekStr}`, body: `Hey ${member.name.split(' ')[0]},\n\nPlease fill in your hours for the week of ${weekStr} in the Team Hub.\n\nThanks!`, actionUrl: '/dashboard/schedule', actionLabel: 'Open Schedule' }),
+          body: JSON.stringify({ type: 'calendar_reminder', recipientEmail: member.email, recipientName: member.name.split(' ')[0], subject: sanitizeEmailSubject(`Reminder: Fill in your schedule for ${weekStr}`), body: `Hey ${member.name.split(' ')[0]},\n\nPlease fill in your hours for the week of ${weekStr} in the Team Hub.\n\nThanks!`, actionUrl: '/dashboard/schedule', actionLabel: 'Open Schedule' }),
         })
       }
       toast(`Reminder sent to ${activeTeam.length} team member${activeTeam.length !== 1 ? 's' : ''}!`)

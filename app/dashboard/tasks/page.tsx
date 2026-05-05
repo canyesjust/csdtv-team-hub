@@ -9,6 +9,7 @@ import CommentsSection from '../components/CommentsSection'
 import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
+import { sanitizeEmailSubject } from '@/lib/escape-html'
 
 interface Production {
   id: string; title: string; production_number: number
@@ -276,7 +277,7 @@ export default function TasksPage() {
           type: 'task_assigned',
           recipientEmail: assignee.email,
           recipientName: assignee.name.split(' ')[0],
-          subject: `New task assigned: ${taskTitle}`,
+          subject: sanitizeEmailSubject(`New task assigned: ${taskTitle}`),
           body: `${currentUser.name} assigned you a task: "${taskTitle}". Log in to see the details and get started.`,
           actionUrl: '/dashboard/tasks',
           actionLabel: 'View task',

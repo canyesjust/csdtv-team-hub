@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
+import { sanitizeEmailSubject } from '@/lib/escape-html'
 
 interface Video {
   id: string; title: string; description: string | null; video_type: string; status: string
@@ -881,7 +882,7 @@ export default function VideosPage() {
                               const { data: sd } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
                               if (!sd?.value) { toast('Admin email not configured', 'error'); return }
                               const pubDate = video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'
-                              await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, body: JSON.stringify({ type: 'create_production_request', recipientEmail: sd.value, subject: `Please create production: ${video.title}`, body: `Create a production and mark complete:\n\nTitle: ${video.title}\nDate: ${pubDate}\nYouTube: ${video.youtube_url || ''}\n\n— CSDtv` }) })
+                              await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, body: JSON.stringify({ type: 'create_production_request', recipientEmail: sd.value, subject: sanitizeEmailSubject(`Please create production: ${video.title}`), body: `Create a production and mark complete:\n\nTitle: ${video.title}\nDate: ${pubDate}\nYouTube: ${video.youtube_url || ''}\n\n— CSDtv` }) })
                               toast('Email sent', 'success')
                             }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(30,108,181,0.08)', color: '#5ba3e0', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
                           )}

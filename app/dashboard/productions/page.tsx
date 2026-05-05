@@ -10,6 +10,7 @@ import Loader from '../components/Loader'
 import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
+import { sanitizeEmailSubject } from '@/lib/escape-html'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -381,7 +382,7 @@ function ProductionsPageContent() {
               type: 'production_assignment',
               recipientEmail: member.email,
               recipientName: member.name.split(' ')[0],
-              subject: `You've been added to #${prod.production_number} ${prod.title}`,
+              subject: sanitizeEmailSubject(`You've been added to #${prod.production_number} ${prod.title}`),
               body: `You've been assigned to production #${prod.production_number} — ${prod.title}.\n\nDate: ${dateStr}${timeStr ? ` at ${timeStr}` : ''}\nLocation: ${venue}\nType: ${prod.request_type_label || 'Production'}\n\nView the production details and checklist in the Team Hub.`,
               actionUrl: `/dashboard/productions/${prod.production_number}`,
               actionLabel: 'View Production',

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sanitizeEmailSubject } from '@/lib/escape-html'
 
 const SIGNUP_WINDOW_MS = 60 * 1000
 const SIGNUP_MAX_PER_WINDOW = 8
@@ -129,7 +130,7 @@ export async function POST(
           type: 'crew_signup_confirmation',
           recipientEmail: result.student_email,
           recipientName: firstName,
-          subject: `You're signed up: ${productionTitle}`,
+          subject: sanitizeEmailSubject(`You're signed up: ${productionTitle}`),
           body: `Hi ${firstName},\n\nYou're signed up as ${roleName} for "${productionTitle}" on ${eventDate}.\n\nWe'll send a reminder closer to the event with all the details.\n\n— CSDtv`,
         }),
       }).catch(() => { /* email failures don't block signup */ })
@@ -146,7 +147,7 @@ export async function POST(
           type: 'crew_signup_parent',
           recipientEmail: result.parent_email,
           recipientName: result.parent_name?.split(' ')[0] || 'there',
-          subject: `${studentName} signed up: ${productionTitle}`,
+          subject: sanitizeEmailSubject(`${studentName} signed up: ${productionTitle}`),
           body: `Hi,\n\n${studentName} ${signedUpBySelf ? 'signed up' : 'has been signed up'} for a CSDtv crew position:\n\nEvent: ${productionTitle}\nDate: ${eventDate}\nRole: ${roleName}\n\nIf you have questions or your student needs to cancel, please reach out to the CSDtv office.\n\n— CSDtv`,
         }),
       }).catch(() => { /* email failures don't block signup */ })
