@@ -21,6 +21,13 @@ interface EmailTemplate {
   sort_order: number
   active: boolean
 }
+interface SignupTier {
+  id: string
+  name: string
+  cooldown_hours: number
+  monthly_event_cap: number | null
+  description: string | null
+}
 
 const NOTIF_SETTINGS: { label: string; desc: string; emailKey: keyof NotificationPrefs; inappKey: keyof NotificationPrefs }[] = [
   { label: 'Task assigned to me', desc: 'When someone assigns you a task', emailKey: 'notify_assigned_email', inappKey: 'notify_assigned_inapp' },
@@ -83,6 +90,11 @@ export default function SettingsPage() {
   const [showNewTpl, setShowNewTpl] = useState(false)
   const [tplForm, setTplForm] = useState({ label: '', subject: '', body: '' })
   const [savingTpl, setSavingTpl] = useState(false)
+  // Sign-up tiers
+  const [tiers, setTiers] = useState<SignupTier[]>([])
+  const [editingTierId, setEditingTierId] = useState<string | null>(null)
+  const [tierForm, setTierForm] = useState({ cooldown_hours: '0', monthly_event_cap: '', description: '' })
+  const [savingTier, setSavingTier] = useState(false)
 
   const text    = dark ? '#f0f4ff' : '#1a1f36'
   const muted   = dark ? '#8899bb' : '#6b7280'
@@ -93,19 +105,21 @@ export default function SettingsPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [userRes, teamRes, schoolsRes, settingsRes, tplRes] = await Promise.all([
+    const [userRes, teamRes, schoolsRes, settingsRes, tplRes, tiersRes] = await Promise.all([
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
       supabase.from('team').select('*').eq('active', true).order('name'),
       supabase.from('schools').select('*').order('name'),
       supabase.from('app_settings').select('*'),
       supabase.from('email_templates').select('*').order('sort_order'),
+      supabase.from('signup_tiers').select('*').order('name'),
     ])
     setCurrentUser(userRes.data)
     setTeam(teamRes.data || [])
     setSchools(schoolsRes.data || [])
     setTemplates(tplRes.data || [])
+    setTiers(tiersRes.data || [])
     const settings = settingsRes.data || []
-    const adminSetting = settings.find((s: any) => s.key === 'admin_assistant_email')
+    const adminSetting = settings.find((s: { key: string; value: string }) => s.key === 'admin_assistant_email')
     if (adminSetting) setAdminEmail(adminSetting.value || '')
     if (userRes.data) {
       setProfileForm({ name: userRes.data.name, email: userRes.data.email })
@@ -273,6 +287,40 @@ export default function SettingsPage() {
       if (t.id === b.id) return { ...t, sort_order: a.sort_order }
       return t
     }))
+  }
+
+  // ─── Sign-up tier rules CRUD ─────────────────────────────────────────────
+  const startEditTier = (t: SignupTier) => {
+    setEditingTierId(t.id)
+    setTierForm({
+      cooldown_hours: String(t.cooldown_hours),
+      monthly_event_cap: t.monthly_event_cap !== null ? String(t.monthly_event_cap) : '',
+      description: t.description || '',
+    })
+  }
+
+  const cancelTierEdit = () => {
+    setEditingTierId(null)
+    setTierForm({ cooldown_hours: '0', monthly_event_cap: '', description: '' })
+  }
+
+  const saveTier = async () => {
+    if (!editingTierId) return
+    const cooldown = parseInt(tierForm.cooldown_hours) || 0
+    if (cooldown < 0) { toast('Cooldown cannot be negative', 'error'); return }
+    const cap = tierForm.monthly_event_cap.trim() ? parseInt(tierForm.monthly_event_cap) : null
+    if (cap !== null && cap < 0) { toast('Cap cannot be negative', 'error'); return }
+    setSavingTier(true)
+    const { error } = await supabase.from('signup_tiers').update({
+      cooldown_hours: cooldown,
+      monthly_event_cap: cap,
+      description: tierForm.description.trim() || null,
+    }).eq('id', editingTierId)
+    if (error) { toast('Failed to save: ' + error.message, 'error'); setSavingTier(false); return }
+    setTiers(prev => prev.map(t => t.id === editingTierId ? { ...t, cooldown_hours: cooldown, monthly_event_cap: cap, description: tierForm.description.trim() || null } : t))
+    toast('Tier rules saved', 'success')
+    setSavingTier(false)
+    setEditingTierId(null)
   }
 
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
@@ -476,7 +524,7 @@ export default function SettingsPage() {
           <div style={{ marginTop: '20px', padding: '16px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8f9fc', borderRadius: '12px', border: `0.5px solid ${border}` }}>
             <h3 style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 4px' }}>Invite team member</h3>
             <p style={{ fontSize: '14px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
-              They'll receive an email with a one-click sign-in link to <strong>csdtvstaff.org</strong>. Their auth account is created automatically — no signup needed.
+              They&apos;ll receive an email with a one-click sign-in link to <strong>csdtvstaff.org</strong>. Their auth account is created automatically — no signup needed.
             </p>
             <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
               <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="District email address" type="email" style={inputStyle} />
@@ -583,7 +631,7 @@ export default function SettingsPage() {
 
           {/* Template list */}
           {sortedTemplates.length === 0 ? (
-            <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 0', margin: 0 }}>No templates yet. Click "+ New template" to create one.</p>
+            <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 0', margin: 0 }}>No templates yet. Click &quot;+ New template&quot; to create one.</p>
           ) : (
             <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
               {sortedTemplates.map((t, i) => (
@@ -598,6 +646,63 @@ export default function SettingsPage() {
                   </div>
                   <button onClick={() => startEditTpl(t)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#5ba3e0', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Edit</button>
                   <button onClick={() => deleteTpl(t.id, t.label)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Sign-up tiers ── */}
+      {isManager && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Student sign-up tiers</h2>
+          <p style={{ fontSize: '13px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
+            Rules for how often students in each tier can sign up for crew events. Manager override is always available regardless of these rules.
+            Cooldown is the minimum hours between sign-ups. Monthly cap limits how many events a student can sign up for in a calendar month (leave blank for unlimited).
+          </p>
+
+          {tiers.length === 0 ? (
+            <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 0', margin: 0 }}>No tiers configured yet.</p>
+          ) : (
+            <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
+              {tiers.map((t, i) => editingTierId === t.id ? (
+                <div key={t.id} style={{ padding: '14px', borderBottom: i < tiers.length - 1 ? `0.5px solid ${border}` : 'none', background: dark ? 'rgba(91,163,224,0.06)' : 'rgba(91,163,224,0.04)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: text, textTransform: 'capitalize' as const }}>{t.name}</span>
+                    <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: t.name === 'restricted' ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.1)', color: t.name === 'restricted' ? '#f59e0b' : '#22c55e' }}>tier</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Cooldown (hours)</label>
+                      <input type="number" min={0} value={tierForm.cooldown_hours} onChange={e => setTierForm(f => ({ ...f, cooldown_hours: e.target.value }))} style={{ ...inputStyle, fontSize: '14px' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Monthly event cap</label>
+                      <input type="number" min={0} value={tierForm.monthly_event_cap} onChange={e => setTierForm(f => ({ ...f, monthly_event_cap: e.target.value }))} placeholder="Leave blank = unlimited" style={{ ...inputStyle, fontSize: '14px' }} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Description (optional)</label>
+                    <input value={tierForm.description} onChange={e => setTierForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. For students with attendance issues" style={{ ...inputStyle, fontSize: '14px' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={saveTier} disabled={savingTier} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: savingTier ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                      {savingTier ? 'Saving...' : 'Save changes'}
+                    </button>
+                    <button onClick={cancelTierEdit} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderBottom: i < tiers.length - 1 ? `0.5px solid ${border}` : 'none' }}>
+                  <span style={{ fontSize: '13px', padding: '4px 10px', borderRadius: '12px', background: t.name === 'restricted' ? 'rgba(245,158,11,0.12)' : 'rgba(34,197,94,0.1)', color: t.name === 'restricted' ? '#f59e0b' : '#22c55e', textTransform: 'capitalize' as const, fontWeight: 500, flexShrink: 0 }}>{t.name}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '13px', color: text, margin: 0 }}>
+                      Cooldown <strong>{t.cooldown_hours}h</strong> · Cap <strong>{t.monthly_event_cap !== null ? `${t.monthly_event_cap}/mo` : 'unlimited'}</strong>
+                    </p>
+                    {t.description && <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{t.description}</p>}
+                  </div>
+                  <button onClick={() => startEditTier(t)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#5ba3e0', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Edit</button>
                 </div>
               ))}
             </div>
