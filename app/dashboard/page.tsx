@@ -10,6 +10,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
+  assigned_to?: string | null
   blocked_by?: string | null
   productions?: { title: string } | null
 }
