@@ -602,35 +602,36 @@ export default function DashboardPage() {
       )}
 
       {/* Recent activity */}
-      {showDetails && <div style={{ marginTop: '20px' }}>
-        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden' as const }}>
-          <div style={{ padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
-            <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Recent activity</h2>
-          </div>
-          {recentActivity.length === 0 ? (
-            <p style={{ padding: '24px 20px', color: muted, fontSize: '14px', margin: 0, textAlign: 'center' as const }}>No recent activity — actions on productions will appear here</p>
-          ) : recentActivity.map((a, i) => {
-              const time = new Date(a.created_at)
-              const diff = Date.now() - time.getTime()
-              const mins = Math.floor(diff / 60000)
-              const hrs = Math.floor(mins / 60)
-              const days = Math.floor(hrs / 24)
-              const ago = days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : mins > 0 ? `${mins}m ago` : 'just now'
-              return (
-                <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 20px', borderBottom: i < recentActivity.length - 1 ? `1px solid ${border}` : 'none', fontSize: '13px' }}>
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#5ba3e0', marginTop: '6px', flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ color: text, fontWeight: 500 }}>{a.team?.name || 'System'}</span>
-                    <span style={{ color: muted }}> {a.action}</span>
-                    {a.detail && <span style={{ color: muted }}> — {a.detail}</span>}
+      {showDetails ? (
+        <div style={{ marginTop: '20px' }}>
+          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflow: 'hidden' as const }}>
+            <div style={{ padding: '18px 20px', borderBottom: `1px solid ${border}` }}>
+              <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0 }}>Recent activity</h2>
+            </div>
+            {recentActivity.length === 0 ? (
+              <p style={{ padding: '24px 20px', color: muted, fontSize: '14px', margin: 0, textAlign: 'center' as const }}>No recent activity — actions on productions will appear here</p>
+            ) : recentActivity.map((a, i) => {
+                const time = new Date(a.created_at)
+                const diff = Date.now() - time.getTime()
+                const mins = Math.floor(diff / 60000)
+                const hrs = Math.floor(mins / 60)
+                const days = Math.floor(hrs / 24)
+                const ago = days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : mins > 0 ? `${mins}m ago` : 'just now'
+                return (
+                  <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 20px', borderBottom: i < recentActivity.length - 1 ? `1px solid ${border}` : 'none', fontSize: '13px' }}>
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#5ba3e0', marginTop: '6px', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ color: text, fontWeight: 500 }}>{a.team?.name || 'System'}</span>
+                      <span style={{ color: muted }}> {a.action}</span>
+                      {a.detail && <span style={{ color: muted }}> — {a.detail}</span>}
+                    </div>
+                    <span style={{ color: muted, flexShrink: 0, fontSize: '12px' }}>{ago}</span>
                   </div>
-                  <span style={{ color: muted, flexShrink: 0, fontSize: '12px' }}>{ago}</span>
-                </div>
-              )
-            })}
+                )
+              })}
           </div>
         </div>
-      </div>}
+      ) : null}
 
       <style>{`
         @media (min-width: 640px) {
