@@ -147,6 +147,17 @@ export default function StudentsPage() {
 
   const isManager = currentUser?.role === 'Manager'
 
+  const callAdminStudents = async (action: string, payload: Record<string, any>) => {
+    const res = await fetch('/api/admin/students', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, payload }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body.success) throw new Error(body.error || 'Request failed')
+    return body
+  }
+
   const filteredStudents = students.filter(s => {
     if (filterActive === 'active' && !s.active) return false
     if (filterActive === 'inactive' && s.active) return false
@@ -212,13 +223,21 @@ export default function StudentsPage() {
       active: form.active,
     }
     if (editingId) {
-      const { error } = await supabase.from('students').update(payload).eq('id', editingId)
-      if (error) { toast('Failed to save: ' + error.message, 'error'); setSaving(false); return }
+      try {
+        await callAdminStudents('save_student', { id: editingId, student: payload })
+      } catch (e: any) {
+        toast('Failed to save: ' + (e.message || 'Unknown error'), 'error'); setSaving(false); return
+      }
       setStudents(prev => prev.map(s => s.id === editingId ? { ...s, ...payload } : s))
       toast('Student updated', 'success')
     } else {
-      const { data, error } = await supabase.from('students').insert(payload).select().single()
-      if (error) { toast('Failed to add: ' + error.message, 'error'); setSaving(false); return }
+      let data: Student | null = null
+      try {
+        const res = await callAdminStudents('save_student', { id: null, student: payload })
+        data = res.data
+      } catch (e: any) {
+        toast('Failed to add: ' + (e.message || 'Unknown error'), 'error'); setSaving(false); return
+      }
       if (data) setStudents(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
       toast('Student added', 'success')
     }
@@ -227,12 +246,12 @@ export default function StudentsPage() {
   }
 
   const toggleActive = async (s: Student) => {
-    const { error } = await supabase.from('students').update({ active: !s.active }).eq('id', s.id)
-    if (!error) {
+    try {
+      await callAdminStudents('toggle_active', { id: s.id, active: !s.active })
       setStudents(prev => prev.map(x => x.id === s.id ? { ...x, active: !s.active } : x))
       toast(s.active ? 'Student deactivated' : 'Student activated', 'success')
-    } else {
-      toast('Failed: ' + error.message, 'error')
+    } catch (e: any) {
+      toast('Failed: ' + (e.message || 'Unknown error'), 'error')
     }
   }
 
@@ -257,9 +276,16 @@ export default function StudentsPage() {
       csdtv_101_completed: false,
       active: true,
     }))
-    const { data, error } = await supabase.from('students').upsert(payloads, { onConflict: 'student_number' }).select()
+    let data: Student[] | null = null
+    try {
+      const res = await callAdminStudents('import_csv', { rows: payloads })
+      data = res.data
+    } catch (e: any) {
+      setImporting(false)
+      toast('Import failed: ' + (e.message || 'Unknown error'), 'error')
+      return
+    }
     setImporting(false)
-    if (error) { toast('Import failed: ' + error.message, 'error'); return }
     toast(`Imported ${data?.length || 0} students`, 'success')
     setShowImport(false)
     setCsvInput('')

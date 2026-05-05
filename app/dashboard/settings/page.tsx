@@ -132,6 +132,17 @@ export default function SettingsPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const callAdminSettings = async (action: string, payload: Record<string, any>) => {
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, payload }),
+    })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !body.success) throw new Error(body.error || 'Request failed')
+    return body
+  }
+
   const saveProfile = async () => {
     if (!currentUser) return
     await supabase.from('team').update({ name: profileForm.name, email: profileForm.email, avatar_color: selectedColor }).eq('id', currentUser.id)
@@ -197,7 +208,12 @@ export default function SettingsPage() {
 
   const deactivateMember = async (memberId: string, memberName: string) => {
     if (!confirm(`Remove ${memberName} from the team?`)) return
-    await supabase.from('team').update({ active: false }).eq('id', memberId)
+    try {
+      await callAdminSettings('deactivate_member', { memberId })
+    } catch (e: any) {
+      toast(e.message || 'Failed to remove member', 'error')
+      return
+    }
     setTeam(prev => prev.filter(m => m.id !== memberId))
     setSavedMsg(`${memberName} removed`)
     setTimeout(() => setSavedMsg(''), 2000)
@@ -228,13 +244,16 @@ export default function SettingsPage() {
     }
     setSavingTpl(true)
     if (editingTplId) {
-      const { error } = await supabase.from('email_templates').update({
-        label: tplForm.label.trim(),
-        subject: tplForm.subject.trim(),
-        body: tplForm.body,
-        updated_at: new Date().toISOString(),
-      }).eq('id', editingTplId)
-      if (error) { toast('Failed to save: ' + error.message, 'error'); setSavingTpl(false); return }
+      try {
+        await callAdminSettings('save_template', {
+          id: editingTplId,
+          label: tplForm.label.trim(),
+          subject: tplForm.subject.trim(),
+          body: tplForm.body,
+        })
+      } catch (e: any) {
+        toast('Failed to save: ' + (e.message || 'Unknown error'), 'error'); setSavingTpl(false); return
+      }
       setTemplates(prev => prev.map(t => t.id === editingTplId ? { ...t, label: tplForm.label.trim(), subject: tplForm.subject.trim(), body: tplForm.body } : t))
       toast('Template saved', 'success')
     } else {
@@ -246,15 +265,19 @@ export default function SettingsPage() {
       let n = 2
       while (existingKeys.has(key)) { key = `${baseKey}_${n}`; n++ }
       const maxOrder = templates.reduce((m, t) => Math.max(m, t.sort_order), 0)
-      const { data, error } = await supabase.from('email_templates').insert({
-        template_key: key,
-        label: tplForm.label.trim(),
-        subject: tplForm.subject.trim(),
-        body: tplForm.body,
-        sort_order: maxOrder + 1,
-        active: true,
-      }).select().single()
-      if (error) { toast('Failed to create: ' + error.message, 'error'); setSavingTpl(false); return }
+      let data: EmailTemplate | null = null
+      try {
+        const res = await callAdminSettings('create_template', {
+          template_key: key,
+          label: tplForm.label.trim(),
+          subject: tplForm.subject.trim(),
+          body: tplForm.body,
+          sort_order: maxOrder + 1,
+        })
+        data = res.data
+      } catch (e: any) {
+        toast('Failed to create: ' + (e.message || 'Unknown error'), 'error'); setSavingTpl(false); return
+      }
       if (data) setTemplates(prev => [...prev, data])
       toast('Template created', 'success')
     }
@@ -264,8 +287,11 @@ export default function SettingsPage() {
 
   const deleteTpl = async (id: string, label: string) => {
     if (!confirm(`Delete template "${label}"? This cannot be undone.`)) return
-    const { error } = await supabase.from('email_templates').delete().eq('id', id)
-    if (error) { toast('Failed to delete: ' + error.message, 'error'); return }
+    try {
+      await callAdminSettings('delete_template', { id })
+    } catch (e: any) {
+      toast('Failed to delete: ' + (e.message || 'Unknown error'), 'error'); return
+    }
     setTemplates(prev => prev.filter(t => t.id !== id))
     toast('Template deleted', 'success')
   }
@@ -278,10 +304,11 @@ export default function SettingsPage() {
     if (swapIdx < 0 || swapIdx >= sorted.length) return
     const a = sorted[idx]
     const b = sorted[swapIdx]
-    await Promise.all([
-      supabase.from('email_templates').update({ sort_order: b.sort_order }).eq('id', a.id),
-      supabase.from('email_templates').update({ sort_order: a.sort_order }).eq('id', b.id),
-    ])
+    try {
+      await callAdminSettings('swap_template_order', { aId: a.id, aSort: a.sort_order, bId: b.id, bSort: b.sort_order })
+    } catch (e: any) {
+      toast(e.message || 'Failed to reorder templates', 'error'); return
+    }
     setTemplates(prev => prev.map(t => {
       if (t.id === a.id) return { ...t, sort_order: b.sort_order }
       if (t.id === b.id) return { ...t, sort_order: a.sort_order }
@@ -311,12 +338,16 @@ export default function SettingsPage() {
     const cap = tierForm.monthly_event_cap.trim() ? parseInt(tierForm.monthly_event_cap) : null
     if (cap !== null && cap < 0) { toast('Cap cannot be negative', 'error'); return }
     setSavingTier(true)
-    const { error } = await supabase.from('signup_tiers').update({
-      cooldown_hours: cooldown,
-      monthly_event_cap: cap,
-      description: tierForm.description.trim() || null,
-    }).eq('id', editingTierId)
-    if (error) { toast('Failed to save: ' + error.message, 'error'); setSavingTier(false); return }
+    try {
+      await callAdminSettings('save_tier', {
+        id: editingTierId,
+        cooldown_hours: cooldown,
+        monthly_event_cap: cap,
+        description: tierForm.description.trim() || null,
+      })
+    } catch (e: any) {
+      toast('Failed to save: ' + (e.message || 'Unknown error'), 'error'); setSavingTier(false); return
+    }
     setTiers(prev => prev.map(t => t.id === editingTierId ? { ...t, cooldown_hours: cooldown, monthly_event_cap: cap, description: tierForm.description.trim() || null } : t))
     toast('Tier rules saved', 'success')
     setSavingTier(false)
@@ -334,30 +365,57 @@ export default function SettingsPage() {
 
   const addSchool = async () => {
     if (!newSchoolCode.trim() || !newSchoolName.trim()) return
-    const { data } = await supabase.from('schools').insert({ code: newSchoolCode.trim(), name: newSchoolName.trim(), type: newSchoolType }).select('*').single()
+    let data: { id: string; code: string; name: string; type: string } | null = null
+    try {
+      const res = await callAdminSettings('add_school', { code: newSchoolCode.trim(), name: newSchoolName.trim(), type: newSchoolType })
+      data = res.data
+    } catch (e: any) {
+      toast(e.message || 'Failed to add school', 'error')
+      return
+    }
     if (data) { setSchools(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))); setNewSchoolCode(''); setNewSchoolName(''); setNewSchoolType('school') }
   }
   const updateSchool = async (id: string) => {
     if (!editSchoolName.trim()) return
-    await supabase.from('schools').update({ name: editSchoolName.trim() }).eq('id', id)
+    try {
+      await callAdminSettings('update_school', { id, name: editSchoolName.trim() })
+    } catch (e: any) {
+      toast(e.message || 'Failed to update school', 'error')
+      return
+    }
     setSchools(prev => prev.map(s => s.id === id ? { ...s, name: editSchoolName.trim() } : s))
     setEditingSchool(null)
   }
   const deleteSchool = async (id: string) => {
-    await supabase.from('schools').delete().eq('id', id)
+    try {
+      await callAdminSettings('delete_school', { id })
+    } catch (e: any) {
+      toast(e.message || 'Failed to remove school', 'error')
+      return
+    }
     setSchools(prev => prev.filter(s => s.id !== id))
   }
   const filteredSchools = schools.filter(s => !schoolSearch || s.name.toLowerCase().includes(schoolSearch.toLowerCase()) || s.code.includes(schoolSearch))
 
   const saveAdminEmail = async () => {
-    await supabase.from('app_settings').upsert({ key: 'admin_assistant_email', value: adminEmail.trim(), updated_at: new Date().toISOString() })
+    try {
+      await callAdminSettings('save_admin_email', { adminEmail: adminEmail.trim() })
+    } catch (e: any) {
+      toast(e.message || 'Failed to save admin email', 'error')
+      return
+    }
     setAdminEmailSaved(true)
     setTimeout(() => setAdminEmailSaved(false), 2000)
   }
 
   const toggleSchoolType = async (school: { id: string; type: string }) => {
     const newType = school.type === 'school' ? 'department' : 'school'
-    await supabase.from('schools').update({ type: newType }).eq('id', school.id)
+    try {
+      await callAdminSettings('toggle_school_type', { id: school.id, type: newType })
+    } catch (e: any) {
+      toast(e.message || 'Failed to update school type', 'error')
+      return
+    }
     setSchools(prev => prev.map(s => s.id === school.id ? { ...s, type: newType } : s))
   }
 
