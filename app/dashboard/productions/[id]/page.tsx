@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
@@ -10,6 +10,8 @@ import Loader from '../../components/Loader'
 import CommentsSection from '../../components/CommentsSection'
 import StudentCrewTab from '../../components/StudentCrewTab'
 import { toast } from '@/lib/toast'
+import { ZoneHeader } from '../../components/ZoneHeader'
+import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -657,18 +659,23 @@ export default function ProductionDetailPage() {
   const completedCount = checklist.filter(c => c.completed).length
   const progress = checklist.length > 0 ? Math.round((completedCount / checklist.length) * 100) : 0
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px',
     padding: '8px 12px', fontSize: '13px', color: text, fontFamily: 'inherit',
     outline: 'none', width: '100%', boxSizing: 'border-box', minHeight: '40px',
   }
 
+  const infoTone = statusTone.info.color
+  const warningTone = statusTone.warning.color
+  const successTone = statusTone.success.color
+  const brandTone = 'var(--brand-primary)'
+
   const tabBtn = (tab: typeof activeTab, label: string, count?: number) => (
     <button key={tab} onClick={() => setActiveTab(tab)} style={{
       fontSize: '13px', padding: '10px 14px', border: 'none', background: 'transparent',
       cursor: 'pointer', fontFamily: 'inherit',
-      color: activeTab === tab ? '#5ba3e0' : muted,
-      borderBottom: activeTab === tab ? '2px solid #1e6cb5' : '2px solid transparent',
+      color: activeTab === tab ? infoTone : muted,
+      borderBottom: activeTab === tab ? `2px solid ${brandTone}` : '2px solid transparent',
       fontWeight: activeTab === tab ? 500 : 400, whiteSpace: 'nowrap' as const,
     }}>
       {label}{count !== undefined && count > 0 ? ` (${count})` : ''}
@@ -697,7 +704,7 @@ export default function ProductionDetailPage() {
   const nonMembers = allTeam.filter(m => !members.find(pm => pm.user_id === m.id))
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
 
       <Link href="/dashboard/productions" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: muted, fontSize: '13px', textDecoration: 'none', marginBottom: '16px', minHeight: '40px' }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -707,16 +714,18 @@ export default function ProductionDetailPage() {
       </Link>
 
       {/* Header */}
-      <div style={{ marginBottom: '20px' }}>
+      <section style={{ ...uiStyles.zoneSection, marginBottom: '20px' }}>
+        <ZoneHeader title="Production Brief" />
+        <div style={{ ...uiStyles.card, padding: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '12px', color: muted }}>#{production.production_number}</span>
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(30,108,181,0.12)', color: '#5ba3e0' }}>{typeLabel}</span>
+              <span style={{ ...statusBadge('info', true), fontSize: '11px' }}>{typeLabel}</span>
               {production.internal_type_label && production.internal_type_label !== typeLabel && (
                 <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{production.internal_type_label}</span>
               )}
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e' }}>{production.status}</span>
+              <span style={{ ...statusBadge('success', true), fontSize: '11px' }}>{production.status}</span>
             </div>
             <h1 style={{ fontSize: '22px', fontWeight: 500, color: text, margin: '0 0 6px' }}>{production.title}</h1>
             {production.organizer_name && (
@@ -729,13 +738,13 @@ export default function ProductionDetailPage() {
             )}
             {production.organizer_email && (
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                <button onClick={() => setShowEmailModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                <button onClick={() => setShowEmailModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.info.background, color: infoTone, border: `0.5px solid ${statusTone.info.border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ✉ Email organizer
                 </button>
-                <button onClick={requestInProgress} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '0.5px solid rgba(245,158,11,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                <button onClick={requestInProgress} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.warning.background, color: warningTone, border: `0.5px solid ${statusTone.warning.border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ◴ Request In Progress
                 </button>
-                <button onClick={() => setShowCompleteModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '0.5px solid rgba(34,197,94,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                <button onClick={() => setShowCompleteModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.success.background, color: successTone, border: `0.5px solid ${statusTone.success.border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ✓ Mark complete
                 </button>
               </div>
@@ -749,7 +758,7 @@ export default function ProductionDetailPage() {
         </div>
 
         {/* Info strip */}
-        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '12px', padding: '10px 14px', background: cardBg, borderRadius: '10px', border: `0.5px solid ${border}` }}>
+        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '12px', padding: '10px 14px', background: inputBg, borderRadius: '10px', border: `0.5px solid ${border}` }}>
           {production.start_datetime && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: muted }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -767,7 +776,7 @@ export default function ProductionDetailPage() {
             </div>
           )}
           {production.livestream_url && (
-            <a href={production.livestream_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#5ba3e0', textDecoration: 'none' }}>
+            <a href={production.livestream_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: infoTone, textDecoration: 'none' }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
               </svg>
@@ -791,10 +800,11 @@ export default function ProductionDetailPage() {
             </span>
           )}
         </div>
-      </div>
+        </div>
+      </section>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: `0.5px solid ${border}`, marginBottom: '20px', overflowX: 'auto' as const }}>
+      <div style={{ display: 'flex', borderBottom: `0.5px solid ${border}`, marginBottom: '20px', overflowX: 'auto' as const, background: cardBg, borderRadius: '10px 10px 0 0', padding: '0 6px' }}>
         {tabBtn('checklist', 'Checklist', checklist.length > 0 ? completedCount : undefined)}
         {tabBtn('info', 'Production info')}
         {tabBtn('team', 'Team', members.length)}
@@ -809,7 +819,7 @@ export default function ProductionDetailPage() {
       {/* CHECKLIST TAB */}
       {activeTab === 'checklist' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' as const }}>
             <button onClick={async () => {
               if (!production || !uuid) return
               const typeLabel = production.request_type_label || production.type
@@ -829,15 +839,15 @@ export default function ProductionDetailPage() {
                 await supabase.from('production_members').insert(tmRes.data.map((m: any) => ({ production_id: uuid, user_id: m.user_id })))
               }
               loadData()
-            }} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+            }} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px' }}>
               Apply last {production.request_type_label?.split('(')[0]?.trim() || 'type'} setup
             </button>
-            <button onClick={() => setShowCopySetup(!showCopySetup)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => setShowCopySetup(!showCopySetup)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px' }}>
               Copy setup to...
             </button>
             <button
               onClick={() => setShowCreateTask(!showCreateTask)}
-              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}
+              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px' }}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -862,7 +872,7 @@ export default function ProductionDetailPage() {
           {showCreateTask && (
             <div style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
               <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Task title" style={{ ...inputStyle, marginBottom: '8px' }} />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', marginBottom: '10px' }}>
                 <select value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)} style={inputStyle}>
                   <option value="">Unassigned</option>
                   {allTeam.map(m => <option key={m.id} value={m.id}>{m.name.split(' ')[0]}</option>)}
@@ -942,7 +952,7 @@ export default function ProductionDetailPage() {
                 {checklist.map((item, i) => {
                   const assignee = allTeam.find(m => m.id === item.assigned_to)
                   return (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: i < checklist.length - 1 ? `0.5px solid ${border}` : 'none', background: item.completed ? (dark ? 'rgba(34,197,94,0.04)' : 'rgba(34,197,94,0.03)') : 'transparent' }}>
+                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, padding: '12px 16px', borderBottom: i < checklist.length - 1 ? `0.5px solid ${border}` : 'none', background: item.completed ? (dark ? 'rgba(34,197,94,0.04)' : 'rgba(34,197,94,0.03)') : 'transparent' }}>
                       <button
                         onClick={() => toggleItem(item)}
                         style={{ width: '18px', height: '18px', borderRadius: '4px', flexShrink: 0, border: `1.5px solid ${item.completed ? '#22c55e' : border}`, background: item.completed ? '#22c55e' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -953,7 +963,7 @@ export default function ProductionDetailPage() {
                           </svg>
                         )}
                       </button>
-                      <span style={{ flex: 1, fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>
+                      <span style={{ flex: '1 1 260px', minWidth: 0, fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>
                         {item.title}
                         {item.kb_article_id && (() => {
                           const kb = kbArticles.find(a => a.id === item.kb_article_id)
@@ -964,7 +974,7 @@ export default function ProductionDetailPage() {
                         const val = e.target.value || null
                         supabase.from('checklist_items').update({ kb_article_id: val }).eq('id', item.id)
                         setChecklist(prev => prev.map(c => c.id === item.id ? { ...c, kb_article_id: val } : c))
-                      }} style={{ fontSize: '10px', padding: '2px 4px', borderRadius: '4px', border: `0.5px solid ${border}`, background: inputBg, color: item.kb_article_id ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit', maxWidth: '32px', opacity: 0.6 }} title="Link KB article">
+                      }} style={{ fontSize: '11px', padding: '3px 6px', borderRadius: '6px', border: `0.5px solid ${border}`, background: inputBg, color: item.kb_article_id ? infoTone : muted, cursor: 'pointer', fontFamily: 'inherit', maxWidth: '60px', opacity: 0.8 }} title="Link KB article">
                         <option value="">📖</option>
                         {kbArticles.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
                       </select>
@@ -978,7 +988,7 @@ export default function ProductionDetailPage() {
                           supabase.from('checklist_items').update({ assigned_to: e.target.value || null }).eq('id', item.id)
                           setChecklist(prev => prev.map(c => c.id === item.id ? { ...c, assigned_to: e.target.value || null } : c))
                         }}
-                        style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', border: `0.5px solid ${border}`, background: inputBg, color: item.assigned_to ? text : muted, cursor: 'pointer', fontFamily: 'inherit', maxWidth: '110px' }}
+                        style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', border: `0.5px solid ${border}`, background: inputBg, color: item.assigned_to ? text : muted, cursor: 'pointer', fontFamily: 'inherit', maxWidth: '130px' }}
                       >
                         <option value="">Unassigned</option>
                         {allTeam.map(m => <option key={m.id} value={m.id}>{m.name.split(' ')[0]}</option>)}
@@ -1142,8 +1152,18 @@ export default function ProductionDetailPage() {
       {/* TEAM TAB */}
       {activeTab === 'team' && (
         <div>
+          <div style={{ ...uiStyles.card, padding: '12px 14px', marginBottom: '12px' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: muted }}>
+              Team assigned: <span style={{ color: text, fontWeight: 600 }}>{members.length}</span>
+              {nonMembers.length > 0 ? (
+                <> · Available to add: <span style={{ color: text, fontWeight: 600 }}>{nonMembers.length}</span></>
+              ) : null}
+            </p>
+          </div>
           {members.length === 0 ? (
-            <p style={{ color: muted, fontSize: '13px', marginBottom: '12px' }}>No team members assigned to this production yet</p>
+            <div style={{ ...uiStyles.card, padding: '14px', marginBottom: '12px' }}>
+              <p style={{ color: muted, fontSize: '13px', margin: 0 }}>No team members assigned to this production yet.</p>
+            </div>
           ) : (
             <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden', marginBottom: '14px' }}>
               {members.map((m, i) => m.team && (
@@ -1177,7 +1197,7 @@ export default function ProductionDetailPage() {
                 <button
                   onClick={addMember}
                   disabled={!memberToAdd}
-                  style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: memberToAdd ? '#1e6cb5' : 'var(--surface-2)', color: memberToAdd ? '#fff' : muted, border: 'none', cursor: memberToAdd ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
+                  style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: memberToAdd ? 'var(--brand-primary)' : 'var(--surface-2)', color: memberToAdd ? '#fff' : muted, border: 'none', cursor: memberToAdd ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
                 >
                   Add
                 </button>
@@ -1192,7 +1212,7 @@ export default function ProductionDetailPage() {
           ) : nonMembers.length > 0 ? (
             <button
               onClick={() => setAddingMember(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#5ba3e0', background: 'none', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', padding: '8px 14px', fontFamily: 'inherit', minHeight: '40px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: infoTone, background: 'none', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', padding: '8px 14px', fontFamily: 'inherit', minHeight: '40px' }}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
