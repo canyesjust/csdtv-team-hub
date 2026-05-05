@@ -371,7 +371,8 @@ export default function SchedulePage() {
 
   const saveEvent = async () => {
     if (!currentUser || !newEvent.title || !newEvent.date) return
-    const { data } = await supabase.from('calendar_events').insert({ title: newEvent.title, date: newEvent.date, start_time: newEvent.start_time || null, end_time: newEvent.end_time || null, color: newEvent.color, created_by: currentUser.id }).select().single()
+    const { data, error } = await supabase.from('calendar_events').insert({ title: newEvent.title, date: newEvent.date, start_time: newEvent.start_time || null, end_time: newEvent.end_time || null, color: newEvent.color, created_by: currentUser.id }).select().single()
+    if (error) { toast('Failed to save event', 'error'); return }
     if (data) setCalEvents(prev => [...prev, data])
     setNewEvent({ title: '', date: '', start_time: '', end_time: '', color: '#22c55e' })
     setShowAddEvent(false)
@@ -379,7 +380,8 @@ export default function SchedulePage() {
 
   const deleteEvent = async (id: string) => {
     if (!confirm('Delete this event?')) return
-    await supabase.from('calendar_events').delete().eq('id', id)
+    const { error } = await supabase.from('calendar_events').delete().eq('id', id)
+    if (error) { toast('Failed to delete event', 'error'); return }
     setCalEvents(prev => prev.filter(e => e.id !== id))
   }
 
@@ -453,10 +455,12 @@ export default function SchedulePage() {
     if (!currentUser || !viewingId) return
     const existing = defaults.find(d => d.user_id === viewingId)
     if (existing) {
-      await supabase.from('schedule_defaults').update({ ...myDefault }).eq('id', existing.id)
+      const { error } = await supabase.from('schedule_defaults').update({ ...myDefault }).eq('id', existing.id)
+      if (error) { toast('Failed to save default schedule', 'error'); return }
       setDefaults(prev => prev.map(d => d.id === existing.id ? { ...d, ...myDefault } : d))
     } else {
-      const { data } = await supabase.from('schedule_defaults').insert({ user_id: viewingId, ...myDefault }).select().single()
+      const { data, error } = await supabase.from('schedule_defaults').insert({ user_id: viewingId, ...myDefault }).select().single()
+      if (error) { toast('Failed to save default schedule', 'error'); return }
       if (data) setDefaults(prev => [...prev, data])
     }
     setEditingDefault(false)
@@ -468,10 +472,12 @@ export default function SchedulePage() {
     const { notes, ...days } = myOverride
     const existing = overrides.find(o => o.user_id === viewingId && o.week_start === overrideWeek)
     if (existing) {
-      await supabase.from('schedule_overrides').update({ ...days, notes: notes || null }).eq('id', existing.id)
+      const { error } = await supabase.from('schedule_overrides').update({ ...days, notes: notes || null }).eq('id', existing.id)
+      if (error) { toast('Failed to save override', 'error'); return }
       setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, ...days, notes: notes || null } : o))
     } else {
-      const { data } = await supabase.from('schedule_overrides').insert({ user_id: viewingId, week_start: overrideWeek, ...days, notes: notes || null }).select().single()
+      const { data, error } = await supabase.from('schedule_overrides').insert({ user_id: viewingId, week_start: overrideWeek, ...days, notes: notes || null }).select().single()
+      if (error) { toast('Failed to save override', 'error'); return }
       if (data) setOverrides(prev => [...prev, data])
     }
     setEditingOverride(false)
@@ -487,7 +493,8 @@ export default function SchedulePage() {
     const existing = overrides.find(o => o.user_id === viewingId && o.week_start === weekStart)
     const trimmed = value.trim()
     if (existing) {
-      await supabase.from('schedule_overrides').update({ [dayKey]: trimmed || '' }).eq('id', existing.id)
+      const { error } = await supabase.from('schedule_overrides').update({ [dayKey]: trimmed || '' }).eq('id', existing.id)
+      if (error) { toast('Failed to save day', 'error'); return }
       setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, [dayKey]: trimmed || '' } : o))
     } else {
       const insertRow: Record<string, string | null> = {
@@ -495,7 +502,8 @@ export default function SchedulePage() {
         monday: null, tuesday: null, wednesday: null, thursday: null, friday: null, notes: null,
         [dayKey]: trimmed || '',
       }
-      const { data } = await supabase.from('schedule_overrides').insert(insertRow).select().single()
+      const { data, error } = await supabase.from('schedule_overrides').insert(insertRow).select().single()
+      if (error) { toast('Failed to save day', 'error'); return }
       if (data) setOverrides(prev => [...prev, data])
     }
     setEditingCell(null)
@@ -524,7 +532,8 @@ export default function SchedulePage() {
       days.forEach(d => { updates[d] = val })
 
       if (existing) {
-        await supabase.from('schedule_overrides').update(updates).eq('id', existing.id)
+        const { error } = await supabase.from('schedule_overrides').update(updates).eq('id', existing.id)
+        if (error) { toast('Failed to apply mass fill', 'error'); setMassFilling(false); return }
         setOverrides(prev => prev.map(o => o.id === existing.id ? { ...o, ...updates } : o))
       } else {
         const insertRow = {
@@ -534,7 +543,8 @@ export default function SchedulePage() {
           friday: null as string | null, notes: null as string | null,
           ...updates,
         }
-        const { data } = await supabase.from('schedule_overrides').insert(insertRow).select().single()
+        const { data, error } = await supabase.from('schedule_overrides').insert(insertRow).select().single()
+        if (error) { toast('Failed to apply mass fill', 'error'); setMassFilling(false); return }
         if (data) setOverrides(prev => {
           const without = prev.filter(o => !(o.user_id === viewingId && o.week_start === weekStart))
           return [...without, data]

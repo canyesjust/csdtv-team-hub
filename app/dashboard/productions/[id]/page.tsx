@@ -576,8 +576,9 @@ export default function ProductionDetailPage() {
   const saveTeamNotes = useCallback(async () => {
     if (!uuid) return
     setSavingNotes(true)
-    await supabase.from('productions').update({ team_notes: teamNotes }).eq('id', uuid)
+    const { error } = await supabase.from('productions').update({ team_notes: teamNotes }).eq('id', uuid)
     setSavingNotes(false)
+    if (error) { toast('Failed to save notes', 'error'); return }
     setNotesSaved(true)
     setTimeout(() => setNotesSaved(false), 3000)
   }, [uuid, teamNotes, supabase])
@@ -585,8 +586,9 @@ export default function ProductionDetailPage() {
   const saveVideosProduced = useCallback(async () => {
     if (!uuid) return
     setSavingDeliv(true)
-    await supabase.from('productions').update({ deliverables_count: delivCount, deliverables_notes: delivNotes || null }).eq('id', uuid)
+    const { error } = await supabase.from('productions').update({ deliverables_count: delivCount, deliverables_notes: delivNotes || null }).eq('id', uuid)
     setSavingDeliv(false)
+    if (error) { toast('Failed to save videos produced', 'error'); return }
     toast('Videos Produced saved', 'success')
     await logActivity('Updated videos produced', `${delivCount} items${delivNotes ? ' — ' + delivNotes : ''}`)
   }, [uuid, delivCount, delivNotes, supabase, logActivity])
@@ -596,7 +598,8 @@ export default function ProductionDetailPage() {
       const res = await fetch(`/api/youtube?url=${encodeURIComponent(ytId)}`)
       if (!res.ok) { toast('Failed to refresh stats', 'error'); return }
       const yt = await res.json()
-      await supabase.from('videos').update({ youtube_views: yt.views, youtube_likes: yt.likes, youtube_synced_at: new Date().toISOString() }).eq('id', videoId)
+      const { error } = await supabase.from('videos').update({ youtube_views: yt.views, youtube_likes: yt.likes, youtube_synced_at: new Date().toISOString() }).eq('id', videoId)
+      if (error) { toast('Failed to save refreshed stats', 'error'); return }
       setLinkedVideos(prev => prev.map(v => v.id === videoId ? { ...v, youtube_views: yt.views, youtube_likes: yt.likes } : v))
       toast(`Updated: ${yt.views.toLocaleString()} views`, 'success')
     } catch { toast('Refresh failed', 'error') }
@@ -636,7 +639,8 @@ export default function ProductionDetailPage() {
   const addLink = useCallback(async () => {
     if (!newLinkTitle || !newLinkUrl || !currentUser || !uuid) return
     const url = newLinkUrl.startsWith('http') ? newLinkUrl : `https://${newLinkUrl}`
-    const { data } = await supabase.from('production_links').insert({ production_id: uuid, title: newLinkTitle, url, added_by: currentUser.id }).select().single()
+    const { data, error } = await supabase.from('production_links').insert({ production_id: uuid, title: newLinkTitle, url, added_by: currentUser.id }).select().single()
+    if (error) { toast('Failed to add link', 'error'); return }
     if (data) { setLinks(prev => [...prev, data]); setNewLinkTitle(''); setNewLinkUrl(''); setShowLinkForm(false) }
   }, [newLinkTitle, newLinkUrl, currentUser, uuid, supabase])
 
@@ -645,7 +649,8 @@ export default function ProductionDetailPage() {
     const article = kbArticles.find(a => a.id === selectedKB)
     if (!article) return
     const url = `${window.location.origin}/dashboard/knowledge?article=${selectedKB}`
-    const { data } = await supabase.from('production_links').insert({ production_id: uuid, title: `KB: ${article.title}`, url, added_by: currentUser?.id }).select().single()
+    const { data, error } = await supabase.from('production_links').insert({ production_id: uuid, title: `KB: ${article.title}`, url, added_by: currentUser?.id }).select().single()
+    if (error) { toast('Failed to add KB link', 'error'); return }
     if (data) { setLinks(prev => [...prev, data]); setSelectedKB(''); setShowKBLink(false) }
   }, [selectedKB, kbArticles, uuid, supabase, currentUser])
 

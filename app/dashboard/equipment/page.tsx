@@ -211,13 +211,15 @@ export default function EquipmentPage() {
     })
     if (loanError) { toast('Error: ' + loanError.message); return }
 
-    await supabase.from('equipment').update({ status: 'checked_out' }).eq('id', checkoutItem.id)
-    await supabase.from('equipment_activity').insert({
+    const { error: statusError } = await supabase.from('equipment').update({ status: 'checked_out' }).eq('id', checkoutItem.id)
+    if (statusError) { toast('Error: ' + statusError.message); return }
+    const { error: activityError } = await supabase.from('equipment_activity').insert({
       equipment_id: checkoutItem.id,
       action: 'checked_out',
       detail: `Checked out to ${borrowerName.trim()}${dueDate ? ` — due ${dueDate}` : ''}`,
       user_id: user.id,
     })
+    if (activityError) { toast('Error: ' + activityError.message); return }
 
     setCheckoutItem(null)
     setBorrowerName('')
@@ -242,7 +244,8 @@ export default function EquipmentPage() {
 
   const handleDeleteKit = useCallback(async (kitId: string) => {
     if (!confirm('Delete this kit? Items won\'t be deleted, just ungrouped.')) return
-    await supabase.from('equipment_kits').delete().eq('id', kitId)
+    const { error } = await supabase.from('equipment_kits').delete().eq('id', kitId)
+    if (error) { toast('Error: ' + error.message); return }
     loadData()
   }, [supabase, loadData])
 

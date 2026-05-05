@@ -215,7 +215,8 @@ export default function TasksPage() {
   }, [team, currentUser, supabase])
 
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
-    await supabase.from('tasks').update(updates).eq('id', id)
+    const { error } = await supabase.from('tasks').update(updates).eq('id', id)
+    if (error) { toast('Failed to update task', 'error'); return }
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t))
     setSelectedTask(prev => prev?.id === id ? { ...prev, ...updates } : prev)
     if (updates.assigned_to && updates.assigned_to !== selectedTask?.assigned_to) {
@@ -233,7 +234,8 @@ export default function TasksPage() {
 
   const deleteTask = useCallback(async (id: string) => {
     if (!confirm('Delete this task? This cannot be undone.')) return
-    await supabase.from('tasks').delete().eq('id', id)
+    const { error } = await supabase.from('tasks').delete().eq('id', id)
+    if (error) { toast('Failed to delete task', 'error'); return }
     setTasks(prev => prev.filter(t => t.id !== id))
     setCompletedTasks(prev => prev.filter(t => t.id !== id))
     if (selectedTask?.id === id) closePanel()
@@ -242,20 +244,22 @@ export default function TasksPage() {
   const clearCompleted = useCallback(async () => {
     if (!confirm(`Delete all ${completedTasks.length} completed tasks? This cannot be undone.`)) return
     const ids = completedTasks.map(t => t.id)
-    await supabase.from('tasks').delete().in('id', ids)
+    const { error } = await supabase.from('tasks').delete().in('id', ids)
+    if (error) { toast('Failed to clear completed tasks', 'error'); return }
     setCompletedTasks([])
   }, [supabase, completedTasks])
 
   // FIX: insert without FK join to avoid 400 error, then attach production from local list
   const createTask = useCallback(async () => {
     if (!newTask.title || !currentUser) return
-    const { data } = await supabase.from('tasks').insert({
+    const { data, error } = await supabase.from('tasks').insert({
       title: newTask.title, description: newTask.description || null,
       priority: newTask.priority, assigned_to: newTask.assigned_to || null,
       due_date: newTask.due_date || null, production_id: newTask.production_id || null,
       needs_equipment: newTask.needs_equipment, recurring: newTask.recurring || null,
       recurring_interval: newTask.recurring ? 1 : null, status: 'pending', created_by: currentUser.id,
     }).select('*').single()
+    if (error) { toast('Failed to create task', 'error'); return }
     if (data) {
       const linkedProd = newTask.production_id ? allProductions.find(p => p.id === newTask.production_id) || null : null
       setTasks(prev => [{ ...data, productions: linkedProd }, ...prev])
@@ -268,12 +272,14 @@ export default function TasksPage() {
   const cycleStatus = useCallback(async (task: Task, e: React.MouseEvent) => {
     e.stopPropagation()
     const next = task.status === 'pending' ? 'in progress' : task.status === 'in progress' ? 'in review' : task.status === 'in review' ? 'complete' : 'pending'
-    await supabase.from('tasks').update({ status: next, completed_at: next === 'complete' ? new Date().toISOString() : null }).eq('id', task.id)
+    const { error: statusError } = await supabase.from('tasks').update({ status: next, completed_at: next === 'complete' ? new Date().toISOString() : null }).eq('id', task.id)
+    if (statusError) { toast('Failed to update task status', 'error'); return }
     if (next === 'complete') {
       // Auto-unblock tasks blocked by this one
       const blockedTasks = tasks.filter(t => t.blocked_by === task.id)
       if (blockedTasks.length > 0) {
-        await supabase.from('tasks').update({ blocked_by: null }).eq('blocked_by', task.id)
+        const { error: unblockError } = await supabase.from('tasks').update({ blocked_by: null }).eq('blocked_by', task.id)
+        if (unblockError) { toast('Failed to unblock related tasks', 'error') }
         setTasks(prev => prev.map(t => t.blocked_by === task.id ? { ...t, blocked_by: null } : t))
       }
       // Auto-create next recurring task
@@ -283,13 +289,14 @@ export default function TasksPage() {
         if (task.recurring === 'daily') nextDate.setDate(nextDate.getDate() + interval)
         else if (task.recurring === 'weekly') nextDate.setDate(nextDate.getDate() + (7 * interval))
         else if (task.recurring === 'monthly') nextDate.setMonth(nextDate.getMonth() + interval)
-        const { data: newTask } = await supabase.from('tasks').insert({
+        const { data: newTask, error: recurringError } = await supabase.from('tasks').insert({
           title: task.title, description: task.description, priority: task.priority,
           assigned_to: task.assigned_to, production_id: task.production_id,
           needs_equipment: task.needs_equipment, recurring: task.recurring,
           recurring_interval: task.recurring_interval, status: 'pending',
           due_date: nextDate.toISOString().split('T')[0], created_by: task.created_by,
         }).select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').single()
+        if (recurringError) toast('Failed to create next recurring task', 'error')
         if (newTask) setTasks(prev => [newTask, ...prev.filter(t => t.id !== task.id)])
         else setTasks(prev => prev.filter(t => t.id !== task.id))
       } else {
@@ -310,7 +317,8 @@ export default function TasksPage() {
   }, [supabase, selectedTask])
 
   const reopenTask = useCallback(async (task: Task) => {
-    await supabase.from('tasks').update({ status: 'pending', completed_at: null }).eq('id', task.id)
+    const { error } = await supabase.from('tasks').update({ status: 'pending', completed_at: null }).eq('id', task.id)
+    if (error) { toast('Failed to reopen task', 'error'); return }
     setCompletedTasks(prev => prev.filter(t => t.id !== task.id))
     setTasks(prev => [{ ...task, status: 'pending', completed_at: null }, ...prev])
   }, [supabase])
@@ -318,29 +326,34 @@ export default function TasksPage() {
   // Subtask management
   const addSubtask = async () => {
     if (!newSubtask.trim() || !selectedTask) return
-    const { data } = await supabase.from('subtasks').insert({ task_id: selectedTask.id, title: newSubtask.trim(), sort_order: subtasks.length }).select('*').single()
+    const { data, error } = await supabase.from('subtasks').insert({ task_id: selectedTask.id, title: newSubtask.trim(), sort_order: subtasks.length }).select('*').single()
+    if (error) { toast('Failed to add subtask', 'error'); return }
     if (data) setSubtasks(prev => [...prev, data])
     setNewSubtask('')
   }
   const toggleSubtask = async (sub: Subtask) => {
     const updates = { completed: !sub.completed, completed_at: !sub.completed ? new Date().toISOString() : null }
-    await supabase.from('subtasks').update(updates).eq('id', sub.id)
+    const { error } = await supabase.from('subtasks').update(updates).eq('id', sub.id)
+    if (error) { toast('Failed to update subtask', 'error'); return }
     setSubtasks(prev => prev.map(s => s.id === sub.id ? { ...s, ...updates } : s))
   }
   const removeSubtask = async (id: string) => {
-    await supabase.from('subtasks').delete().eq('id', id)
+    const { error } = await supabase.from('subtasks').delete().eq('id', id)
+    if (error) { toast('Failed to remove subtask', 'error'); return }
     setSubtasks(prev => prev.filter(s => s.id !== id))
   }
 
   // Time entry management
   const addTimeEntry = async () => {
     if (!newTimeHours || !selectedTask || !currentUser) return
-    const { data } = await supabase.from('time_entries').insert({ task_id: selectedTask.id, user_id: currentUser.id, hours: parseFloat(newTimeHours), description: newTimeDesc || null }).select('*, user:team!time_entries_user_id_fkey(name)').single()
+    const { data, error } = await supabase.from('time_entries').insert({ task_id: selectedTask.id, user_id: currentUser.id, hours: parseFloat(newTimeHours), description: newTimeDesc || null }).select('*, user:team!time_entries_user_id_fkey(name)').single()
+    if (error) { toast('Failed to add time entry', 'error'); return }
     if (data) setTimeEntries(prev => [data as any, ...prev])
     setNewTimeHours(''); setNewTimeDesc('')
   }
   const removeTimeEntry = async (id: string) => {
-    await supabase.from('time_entries').delete().eq('id', id)
+    const { error } = await supabase.from('time_entries').delete().eq('id', id)
+    if (error) { toast('Failed to remove time entry', 'error'); return }
     setTimeEntries(prev => prev.filter(e => e.id !== id))
   }
 
