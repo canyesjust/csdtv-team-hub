@@ -39,6 +39,19 @@ interface ProductionMember {
 }
 
 interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string }
+interface SchoolBrand {
+  id: string
+  code: string | null
+  name: string
+  short_name?: string | null
+  mascot?: string | null
+  primary_color?: string | null
+  secondary_color?: string | null
+  accent_color?: string | null
+  type?: string | null
+  school_type?: string | null
+  active?: boolean | null
+}
 
 interface ProductionLink { id: string; title: string; url: string; created_at: string }
 
@@ -71,6 +84,8 @@ const CHECKLIST_TEMPLATES: Record<string, string[]> = {
   'Other, Unsure, Or Consultation': ['Initial consultation','Define scope and deliverables','Execute','Review and deliver'],
 }
 
+const THUMB_MOOD_OPTIONS = ['Celebratory', 'Elegant', 'Bold', 'Dramatic', 'Playful', 'Formal', 'Energetic', 'Cinematic'] as const
+
 export default function ProductionDetailPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
@@ -92,7 +107,7 @@ export default function ProductionDetailPage() {
   const [generatingSheet, setGeneratingSheet] = useState(false)
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'callsheet'|'studentcrew'>('checklist')
+  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'thumbnail'|'callsheet'|'studentcrew'>('checklist')
   const [selectedMember, setSelectedMember] = useState<string|null>(null)
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
@@ -126,6 +141,20 @@ export default function ProductionDetailPage() {
   const [emailBody, setEmailBody] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
+  const [schools, setSchools] = useState<SchoolBrand[]>([])
+  const [thumbSchoolCode, setThumbSchoolCode] = useState('')
+  const [thumbEventName, setThumbEventName] = useState('')
+  const [thumbDate, setThumbDate] = useState('')
+  const [thumbTime, setThumbTime] = useState('')
+  const [thumbSchoolOverride, setThumbSchoolOverride] = useState('')
+  const [thumbDetail, setThumbDetail] = useState('')
+  const [thumbMoods, setThumbMoods] = useState<string[]>(['Bold'])
+  const [thumbNotes, setThumbNotes] = useState('')
+  const [thumbPrompt, setThumbPrompt] = useState('')
+  const [thumbSvgInput, setThumbSvgInput] = useState('')
+  const [thumbSanitizedSvg, setThumbSanitizedSvg] = useState('')
+  const [thumbSvgError, setThumbSvgError] = useState<string | null>(null)
+  const [thumbCopied, setThumbCopied] = useState(false)
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -154,7 +183,7 @@ export default function ProductionDetailPage() {
     setDelivNotes(prodRes.data.deliverables_notes || '')
 
     // All related queries use the UUID as FK
-    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes] = await Promise.all([
+    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes] = await Promise.all([
       supabase.from('checklist_items').select('*').eq('production_id', prodUUID).order('sort_order'),
       supabase.from('production_members').select('*, team:team(id, name, role, avatar_color)').eq('production_id', prodUUID),
       supabase.from('team').select('*').eq('active', true),
@@ -163,6 +192,7 @@ export default function ProductionDetailPage() {
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
       supabase.from('knowledge_base').select('id, title, category').order('title'),
       supabase.from('email_templates').select('*').order('sort_order'),
+      supabase.from('schools').select('*').order('name'),
     ])
 
     setChecklist(checkRes.data || [])
@@ -174,6 +204,7 @@ export default function ProductionDetailPage() {
     setCurrentUser(userRes.data)
     setKbArticles(kbRes.data || [])
     setTemplates(tplRes.data || [])
+    setSchools((schoolsRes.data as SchoolBrand[]) || [])
     // Load linked videos
     const { data: vidData } = await supabase.from('videos').select('id, title, video_type, status, date_published, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail').eq('production_id', prodUUID).order('created_at', { ascending: false })
     setLinkedVideos(vidData || [])
@@ -189,6 +220,25 @@ export default function ProductionDetailPage() {
   useEffect(() => { loadData() }, [loadData])
 
   const getTypeLabel = (prod: Production) => prod.request_type_label || prod.type || 'Unknown'
+
+  const sanitizeSvgMarkup = useCallback((raw: string): string => {
+    return raw
+      .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+      .replace(/<foreignObject[\s\S]*?>[\s\S]*?<\/foreignObject>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
+      .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '')
+      .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, '')
+      .replace(/javascript:/gi, '')
+      .trim()
+  }, [])
+
+  const fmtPromptDate = (value: string): string => {
+    if (!value) return ''
+    const d = new Date(`${value}T00:00:00`)
+    return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  }
+
+  const slug = (v: string) => v.replace(/[^a-z0-9]+/gi, '').trim() || 'Event'
 
   const logActivity = useCallback(async (action: string, detail?: string) => {
     if (!currentUser || !uuid) return
@@ -688,6 +738,140 @@ export default function ProductionDetailPage() {
     return new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
   }
 
+  useEffect(() => {
+    if (!production) return
+    const eventDate = production.start_datetime ? new Date(production.start_datetime) : null
+    const dateVal = eventDate ? `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}` : ''
+    const timeVal = eventDate ? eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+    const defaultSchool = getSchoolName(production.school_department) || production.school_department || 'Canyons School District'
+    const matchingSchool = schools.find(s => s.code === production.school_department || s.name === defaultSchool)
+
+    setThumbSchoolCode(matchingSchool?.code || matchingSchool?.name || 'district')
+    setThumbSchoolOverride(defaultSchool)
+    setThumbEventName(production.title || getTypeLabel(production))
+    setThumbDate(dateVal)
+    setThumbTime(timeVal)
+    setThumbDetail(production.request_type_label || production.type || '')
+    setThumbNotes(production.additional_notes || '')
+  }, [production, schools])
+
+  const selectedThumbSchool = (() => {
+    if (thumbSchoolCode === 'district') {
+      return {
+        name: 'Canyons School District',
+        short_name: 'Canyons',
+        mascot: '',
+        primary_color: '#003087',
+        secondary_color: '#e8a020',
+        accent_color: '#ffffff',
+      } as SchoolBrand
+    }
+    return schools.find(s => s.code === thumbSchoolCode || s.name === thumbSchoolCode) || null
+  })()
+
+  useEffect(() => {
+    if (!thumbSchoolOverride && selectedThumbSchool?.name) {
+      setThumbSchoolOverride(selectedThumbSchool.name)
+    }
+  }, [selectedThumbSchool, thumbSchoolOverride])
+
+  useEffect(() => {
+    const lines = [
+      'Create a unique YouTube thumbnail as a complete, self-contained SVG at exactly 1280×720px.',
+      '',
+      'EVENT INFORMATION:',
+      `- Event: ${thumbEventName || 'Event Name'}`,
+      `- School: ${thumbSchoolOverride || selectedThumbSchool?.name || 'School Name'}`,
+      selectedThumbSchool?.mascot ? `- Mascot: ${selectedThumbSchool.mascot} (reference but do not attempt to render a logo - use typography or abstract shapes instead)` : '- Mascot: (unknown) (reference but do not attempt to render a logo - use typography or abstract shapes instead)',
+      thumbDate ? `- Date: ${fmtPromptDate(thumbDate)}` : '',
+      thumbTime ? `- Time: ${thumbTime}` : '',
+      thumbDetail ? `- Detail: ${thumbDetail}` : '',
+      '',
+      'SCHOOL COLORS:',
+      `- Primary: ${selectedThumbSchool?.primary_color || '#003087'}`,
+      `- Secondary: ${selectedThumbSchool?.secondary_color || '#e8a020'}`,
+      selectedThumbSchool?.accent_color ? `- Accent: ${selectedThumbSchool.accent_color}` : '',
+      '',
+      `MOOD / FEEL: ${thumbMoods.length > 0 ? thumbMoods.join(', ') : 'Bold'}`,
+      '',
+      `CREATIVE NOTES: ${thumbNotes || 'None provided'}`,
+      '',
+      'DESIGN REQUIREMENTS:',
+      '- Size: exactly 1280x720px viewBox',
+      '- Must include "CSDtv" branding in the bottom left corner with the Canyons School District chevron mark (a right-pointing chevron/arrow shape in the secondary color) followed by "CSDtv" in bold and "CANYONS SCHOOL DISTRICT" in small caps',
+      '- Use the school\'s primary and secondary colors as the dominant palette',
+      '- Typography should be bold and broadcast-quality - this is a YouTube thumbnail that needs to read at small sizes',
+      '- Do NOT use placeholder rectangles or generic layouts - design something genuinely unique and visually interesting',
+      '- Do NOT include any external image references or URLs - everything must be inline SVG',
+      '- Do NOT attempt to render a photographic mascot - use the mascot name as text, or suggest the mascot through abstract shapes, silhouettes, or graphic elements',
+      '- Diagonal design elements, bold color blocks, and dynamic composition are encouraged',
+      '- Vary the layout - do not default to a left-text / right-logo split every time',
+      '',
+      'OUTPUT: Return only the raw SVG code. No explanation, no markdown code fences, no preamble. Start with <svg and end with </svg>.',
+    ].filter(Boolean)
+    setThumbPrompt(lines.join('\n'))
+  }, [thumbEventName, thumbSchoolOverride, selectedThumbSchool, thumbDate, thumbTime, thumbDetail, thumbMoods, thumbNotes])
+
+  useEffect(() => {
+    if (!thumbSvgInput.trim()) {
+      setThumbSvgError(null)
+      setThumbSanitizedSvg('')
+      return
+    }
+    const clean = sanitizeSvgMarkup(thumbSvgInput)
+    if (!clean.toLowerCase().includes('<svg') || !clean.toLowerCase().includes('</svg>')) {
+      setThumbSvgError('Paste a complete SVG that starts with <svg and ends with </svg>.')
+      setThumbSanitizedSvg('')
+      return
+    }
+    setThumbSvgError(null)
+    setThumbSanitizedSvg(clean)
+  }, [thumbSvgInput, sanitizeSvgMarkup])
+
+  const toggleMood = (mood: string) => {
+    setThumbMoods(prev => prev.includes(mood) ? prev.filter(m => m !== mood) : [...prev, mood])
+  }
+
+  const copyThumbPrompt = async () => {
+    if (!thumbPrompt.trim()) return
+    try {
+      await navigator.clipboard.writeText(thumbPrompt)
+      setThumbCopied(true)
+      setTimeout(() => setThumbCopied(false), 1600)
+    } catch {
+      toast('Failed to copy prompt', 'error')
+    }
+  }
+
+  const downloadThumbnailPng = async () => {
+    if (!thumbSanitizedSvg) return
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1280
+      canvas.height = 720
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      const img = new Image()
+      const blob = new Blob([thumbSanitizedSvg], { type: 'image/svg+xml;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => { ctx.drawImage(img, 0, 0, 1280, 720); resolve() }
+        img.onerror = () => reject(new Error('Unable to render SVG'))
+        img.src = url
+      })
+      URL.revokeObjectURL(url)
+      const link = document.createElement('a')
+      const datePart = thumbDate || new Date().toISOString().slice(0, 10)
+      const schoolPart = slug((selectedThumbSchool?.short_name || thumbSchoolOverride || 'School'))
+      const eventPart = slug(thumbEventName || 'Event')
+      link.download = `CSDtv_${schoolPart}_${eventPart}_${datePart}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } catch {
+      toast('Failed to convert SVG to PNG', 'error')
+    }
+  }
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
       <Loader />
@@ -813,6 +997,7 @@ export default function ProductionDetailPage() {
         {tabBtn('activity', 'Activity')}
         {tabBtn('comments', 'Comments')}
         {tabBtn('videos', 'Videos', linkedVideos.length)}
+        {tabBtn('thumbnail', 'Thumbnail')}
         {tabBtn('callsheet', 'Call sheet', callSheet ? 1 : 0)}
         {tabBtn('studentcrew', 'Student Crew')}
       </div>
@@ -1392,6 +1577,128 @@ export default function ProductionDetailPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* THUMBNAIL TAB */}
+      {activeTab === 'thumbnail' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '14px' }}>
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Thumbnail prompt inputs</h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '8px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>School</label>
+                <select
+                  value={thumbSchoolCode}
+                  onChange={e => {
+                    const v = e.target.value
+                    setThumbSchoolCode(v)
+                    const s = v === 'district' ? null : schools.find(x => x.code === v || x.name === v)
+                    if (v === 'district') setThumbSchoolOverride('Canyons School District')
+                    else if (s?.name) setThumbSchoolOverride(s.name)
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="district">Other / District</option>
+                  {schools.map(s => (
+                    <option key={s.id} value={s.code || s.name}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Event name</label>
+                <input value={thumbEventName} onChange={e => setThumbEventName(e.target.value)} placeholder="Instrumental Concert" style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Date</label>
+                <input type="date" value={thumbDate} onChange={e => setThumbDate(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Time</label>
+                <input value={thumbTime} onChange={e => setThumbTime(e.target.value)} placeholder="6:00 PM" style={inputStyle} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>School override</label>
+                <input value={thumbSchoolOverride} onChange={e => setThumbSchoolOverride(e.target.value)} placeholder="Mount Jordan Middle School" style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Additional detail</label>
+                <input value={thumbDetail} onChange={e => setThumbDetail(e.target.value)} placeholder="Band & Orchestra" style={inputStyle} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '6px' }}>Mood</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px' }}>
+                {THUMB_MOOD_OPTIONS.map(m => (
+                  <button
+                    key={m}
+                    onClick={() => toggleMood(m)}
+                    style={{
+                      fontSize: '12px',
+                      padding: '5px 10px',
+                      borderRadius: '999px',
+                      border: `0.5px solid ${thumbMoods.includes(m) ? infoTone : border}`,
+                      background: thumbMoods.includes(m) ? statusTone.info.background : 'transparent',
+                      color: thumbMoods.includes(m) ? infoTone : muted,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '8px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Creative notes</label>
+              <textarea value={thumbNotes} onChange={e => setThumbNotes(e.target.value)} rows={3} placeholder="Include musical notes, make it feel like a championship..." style={{ ...inputStyle, minHeight: '78px', resize: 'vertical' as const }} />
+            </div>
+
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={{ fontSize: '11px', color: muted, display: 'block' }}>Generated prompt (editable)</label>
+                <button onClick={copyThumbPrompt} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: thumbCopied ? successTone : brandTone, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>{thumbCopied ? 'Copied' : 'Copy'}</button>
+              </div>
+              <textarea value={thumbPrompt} onChange={e => setThumbPrompt(e.target.value)} rows={16} style={{ ...inputStyle, minHeight: '280px', resize: 'vertical' as const, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px', lineHeight: 1.4 }} />
+            </div>
+
+            <div style={{ padding: '10px 12px', background: inputBg, borderRadius: '10px', border: `0.5px solid ${border}` }}>
+              <p style={{ fontSize: '11px', color: muted, margin: 0 }}>
+                Tip: Be specific in Creative Notes. Mood pills + specific visual language usually produce better first results.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>SVG preview & download</h3>
+            <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Paste Claude SVG output</label>
+            <textarea value={thumbSvgInput} onChange={e => setThumbSvgInput(e.target.value)} rows={8} placeholder="<svg ...>...</svg>" style={{ ...inputStyle, minHeight: '180px', resize: 'vertical' as const, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px' }} />
+            {thumbSvgError && <p style={{ margin: '6px 0 0', color: dangerTone, fontSize: '12px' }}>{thumbSvgError}</p>}
+
+            <div style={{ marginTop: '10px', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', aspectRatio: '16 / 9', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {thumbSanitizedSvg ? (
+                <iframe title="Thumbnail SVG preview" sandbox="" srcDoc={thumbSanitizedSvg} style={{ width: '100%', height: '100%', border: 'none' }} />
+              ) : (
+                <p style={{ fontSize: '12px', color: muted, margin: 0 }}>Paste SVG to preview</p>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button
+                onClick={downloadThumbnailPng}
+                disabled={!thumbSanitizedSvg}
+                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: thumbSanitizedSvg ? brandTone : inputBg, color: thumbSanitizedSvg ? '#fff' : muted, border: 'none', cursor: thumbSanitizedSvg ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+              >
+                Download PNG
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
