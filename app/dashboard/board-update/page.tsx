@@ -115,13 +115,15 @@ function formatDateRangeSubtitle(startIso: string, endIso: string): string {
   return `${formatSinceDate(startIso)} – ${formatSinceDate(endIso)}`
 }
 
-const EMAIL_BODY_WIDTH = 720
-const EMAIL_PAD = 32
+const EMAIL_BODY_WIDTH = 680
+const EMAIL_PAD = 28
+/** Fixed thumbnail column — keeps cards short; text uses the rest of the row. */
+const CARD_THUMB_PX = 200
 
-const TEXT_BODY = `font-family:Arial,Helvetica,sans-serif;font-size:17px;line-height:1.65;color:#2C3E50;word-wrap:break-word;overflow-wrap:break-word;`
-const TITLE_SERIF = `font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.35;font-weight:bold;color:#0A2342;word-wrap:break-word;overflow-wrap:break-word;`
-const META_ORANGE = `font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:1.45;color:#FBB040;text-transform:uppercase;letter-spacing:0.08em;`
-const LINK_STYLE = `font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#14315E;font-weight:600;text-decoration:underline;`
+const TEXT_BODY = `font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#2C3E50;word-wrap:break-word;overflow-wrap:break-word;`
+const TITLE_SERIF = `font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.35;font-weight:bold;color:#0A2342;word-wrap:break-word;overflow-wrap:break-word;`
+const META_ORANGE = `font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;line-height:1.4;color:#FBB040;text-transform:uppercase;letter-spacing:0.06em;`
+const LINK_STYLE = `font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#14315E;font-weight:600;text-decoration:underline;`
 
 function renderIntroParagraphs(note: string): string {
   const paras = note
@@ -138,18 +140,17 @@ function renderIntroParagraphs(note: string): string {
 
 function buildEventCard(evt: UpcomingEvent): string {
   const href = evt.link?.trim() || 'https://csdtv.org'
-  const image = escapeHtml(evt.image || 'https://via.placeholder.com/1200x675?text=CSDtv')
+  const image = escapeHtml(evt.image || `https://via.placeholder.com/${CARD_THUMB_PX}x${Math.round(CARD_THUMB_PX * 9 / 16)}?text=CSDtv`)
+  const tw = CARD_THUMB_PX
   return `<a href="${escapeHtml(href)}" style="text-decoration:none;color:inherit;display:block;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;border:1px solid #D8D8CE;background:#FAFAF8;">
   <tr>
-    <td style="padding:0;">
-      <img src="${image}" width="${EMAIL_BODY_WIDTH}" alt="${escapeHtml(evt.title)}" style="display:block;width:100%;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+    <td class="bu-thumb" width="${tw}" valign="top" style="width:${tw}px;max-width:${tw}px;padding:12px 0 12px 12px;vertical-align:top;">
+      <img src="${image}" width="${tw}" alt="${escapeHtml(evt.title)}" style="display:block;width:${tw}px;max-width:${tw}px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
     </td>
-  </tr>
-  <tr>
-    <td style="padding:20px ${EMAIL_PAD}px 22px ${EMAIL_PAD}px;">
-      <div style="${TITLE_SERIF}margin:0 0 10px 0;">${escapeHtml(evt.title)}</div>
-      <div style="${META_ORANGE}margin:0 0 14px 0;">${escapeHtml(formatEventLine(evt.date, evt.time))}</div>
+    <td class="bu-copy" valign="top" style="padding:12px 14px 12px 8px;vertical-align:top;">
+      <div style="${TITLE_SERIF}margin:0 0 6px 0;">${escapeHtml(evt.title)}</div>
+      <div style="${META_ORANGE}margin:0 0 8px 0;">${escapeHtml(formatEventLine(evt.date, evt.time))}</div>
       ${evt.link?.trim() ? `<div style="margin:0;"><span style="${LINK_STYLE}">Watch live →</span></div>` : ''}
     </td>
   </tr>
@@ -158,25 +159,24 @@ function buildEventCard(evt: UpcomingEvent): string {
 }
 
 function buildVideoCard(v: RecentVideo): string {
-  const thumb = escapeHtml(v.youtubeThumbnail || 'https://via.placeholder.com/1200x675?text=YouTube')
+  const thumb = escapeHtml(v.youtubeThumbnail || `https://via.placeholder.com/${CARD_THUMB_PX}x${Math.round(CARD_THUMB_PX * 9 / 16)}?text=YouTube`)
   const url = escapeHtml(v.youtubeUrl)
   const dur = formatVideoDuration(v.youtubeDuration)
   const durBlock = dur
-    ? `<span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;color:#5C6370;border:1px solid #D8D8CE;border-radius:999px;padding:5px 12px;margin:0 0 14px 0;">${escapeHtml(dur)}</span>`
+    ? `<span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.3;color:#5C6370;border:1px solid #D8D8CE;border-radius:999px;padding:3px 8px;margin:0 0 8px 0;">${escapeHtml(dur)}</span>`
     : ''
+  const tw = CARD_THUMB_PX
   return `<a href="${url}" style="text-decoration:none;color:inherit;display:block;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;border:1px solid #D8D8CE;background:#FAFAF8;">
   <tr>
-    <td style="padding:0;">
-      <img src="${thumb}" width="${EMAIL_BODY_WIDTH}" alt="${escapeHtml(v.title)}" style="display:block;width:100%;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+    <td class="bu-thumb" width="${tw}" valign="top" style="width:${tw}px;max-width:${tw}px;padding:12px 0 12px 12px;vertical-align:top;">
+      <img src="${thumb}" width="${tw}" alt="${escapeHtml(v.title)}" style="display:block;width:${tw}px;max-width:${tw}px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
     </td>
-  </tr>
-  <tr>
-    <td style="padding:20px ${EMAIL_PAD}px 22px ${EMAIL_PAD}px;">
-      <div style="${TITLE_SERIF}margin:0 0 10px 0;">${escapeHtml(v.title)}</div>
-      <div style="${META_ORANGE}margin:0 0 10px 0;">${escapeHtml(formatVideoPostedLine(v.datePublished))}</div>
-      ${durBlock ? `<div style="margin:0 0 14px 0;">${durBlock}</div>` : ''}
-      <div style="margin:0;"><span style="${LINK_STYLE}">Watch on YouTube →</span></div>
+    <td class="bu-copy" valign="top" style="padding:12px 14px 12px 8px;vertical-align:top;">
+      <div style="${TITLE_SERIF}margin:0 0 6px 0;">${escapeHtml(v.title)}</div>
+      <div style="${META_ORANGE}margin:0 0 6px 0;">${escapeHtml(formatVideoPostedLine(v.datePublished))}</div>
+      ${durBlock ? `<div style="margin:0;">${durBlock}</div>` : ''}
+      <div style="margin:${durBlock ? '6px' : '0'} 0 0 0;"><span style="${LINK_STYLE}">Watch on YouTube →</span></div>
     </td>
   </tr>
 </table>
@@ -190,7 +190,7 @@ function buildFullWidthItemRows<T>(items: T[], renderCard: (item: T) => string, 
   return items
     .map(
       item => `<tr>
-  <td class="bu-item" style="padding:0 ${EMAIL_PAD}px 20px ${EMAIL_PAD}px;vertical-align:top;">${renderCard(item)}</td>
+  <td class="bu-item" style="padding:0 ${EMAIL_PAD}px 12px ${EMAIL_PAD}px;vertical-align:top;">${renderCard(item)}</td>
 </tr>`
     )
     .join('')
@@ -236,8 +236,11 @@ img { border: 0; height: auto; line-height: 100%; outline: none; text-decoration
 a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
 @media only screen and (max-width: 640px) {
   .bu-shell { width: 100% !important; max-width: 100% !important; }
-  .bu-item { padding-left: 20px !important; padding-right: 20px !important; }
+  .bu-item { padding-left: 16px !important; padding-right: 16px !important; }
   .bu-pad { padding-left: 20px !important; padding-right: 20px !important; }
+  .bu-thumb, .bu-thumb img { display: block !important; width: 100% !important; max-width: 240px !important; margin-left: auto !important; margin-right: auto !important; }
+  .bu-thumb { padding: 10px 12px 0 12px !important; text-align: center !important; }
+  .bu-copy { display: block !important; width: 100% !important; padding: 10px 14px 14px 14px !important; box-sizing: border-box !important; }
 }
 </style>
 </head>
@@ -248,9 +251,9 @@ a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !im
       <td align="center" style="padding:28px 12px;">
         <table class="bu-shell" role="presentation" width="${w}" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:${w}px;max-width:100%;background:#FFFFFF;border:1px solid #D0D0C8;box-shadow:0 1px 3px rgba(10,35,66,0.06);">
           <tr>
-            <td class="bu-pad" style="background:linear-gradient(180deg,#0D2D52 0%,#0A2342 100%);background-color:#0A2342;padding:36px ${EMAIL_PAD}px 32px ${EMAIL_PAD}px;">
+            <td class="bu-pad" style="background:linear-gradient(180deg,#0D2D52 0%,#0A2342 100%);background-color:#0A2342;padding:28px ${EMAIL_PAD}px 26px ${EMAIL_PAD}px;">
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:0.28em;text-transform:uppercase;color:#FBB040;margin:0 0 16px 0;">CSDTV · BOARD UPDATE</div>
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.2;color:#FFFFFF;margin:0 0 12px 0;word-wrap:break-word;">Coming Up &amp; Recently Posted</div>
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.25;color:#FFFFFF;margin:0 0 10px 0;word-wrap:break-word;">Coming Up &amp; Recently Posted</div>
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#E8D5B0;font-weight:500;">${escapeHtml(headerDate)}</div>
             </td>
           </tr>
@@ -263,7 +266,7 @@ a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !im
 
           <tr>
             <td class="bu-pad" style="padding:32px ${EMAIL_PAD}px 8px ${EMAIL_PAD}px;background:#FFFFFF;">
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:21px;line-height:1.25;font-weight:bold;color:#0A2342;margin:0;">Coming up on CSDtv</div>
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.25;font-weight:bold;color:#0A2342;margin:0;">Coming up on CSDtv</div>
               <div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;color:#C47A1A;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;">${escapeHtml(upcomingMeta)}</div>
               <div style="margin-top:14px;width:48px;height:3px;background:#FBB040;font-size:0;line-height:0;border-radius:1px;">&nbsp;</div>
             </td>
@@ -272,7 +275,7 @@ a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !im
 
           <tr>
             <td class="bu-pad" style="padding:36px ${EMAIL_PAD}px 8px ${EMAIL_PAD}px;background:#FFFFFF;border-top:8px solid #F5F5F0;">
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:21px;line-height:1.25;font-weight:bold;color:#0A2342;margin:0;">Recently posted</div>
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.25;font-weight:bold;color:#0A2342;margin:0;">Recently posted</div>
               <div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;color:#C47A1A;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;">${escapeHtml(recentMeta)}</div>
               <div style="margin-top:14px;width:48px;height:3px;background:#FBB040;font-size:0;line-height:0;border-radius:1px;">&nbsp;</div>
             </td>
