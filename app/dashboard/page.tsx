@@ -169,7 +169,7 @@ export default function DashboardPage() {
         const monday = new Date()
         monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
         const weekStart = monday.toISOString().split('T')[0]
-        const { data: override } = await supabase.from('schedule_overrides').select('*').eq('user_id', user.id).eq('week_start', weekStart).single()
+        const { data: override } = await supabase.from('schedule_overrides').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle()
         if (override && override[dayKey]) {
           setTodayHours(override[dayKey])
         } else if (schedDefaultRes.data && schedDefaultRes.data[dayKey]) {
@@ -239,20 +239,39 @@ export default function DashboardPage() {
         setOverdueOwnerRows((overdueOwnerRes.data as OverdueOwnerRow[]) || [])
 
         if (soonProdIds.length > 0) {
-          const [slotsRes, filledRes] = await Promise.all([
-            (supabase as any).from('crew_role_slots').select('id', { count: 'exact', head: true }).in('production_id', soonProdIds),
-            (supabase as any).from('crew_signups').select('id', { count: 'exact', head: true }).in('production_id', soonProdIds),
-          ])
-          if (!slotsRes.error && !filledRes.error) {
-            setCrewSlotsTotal(slotsRes.count || 0)
-            setCrewSlotsFilled(filledRes.count || 0)
+          const { data: crewRows, error: crewErr } = await supabase
+            .from('production_crew')
+            .select('id')
+            .in('production_id', soonProdIds)
+          const crewIds = (crewRows || []).map(c => c.id)
+          if (crewErr || crewIds.length === 0) {
+            setCrewSlotsTotal(0)
+            setCrewSlotsFilled(0)
           } else {
-            const [fallbackSlots, fallbackFilled] = await Promise.all([
-              supabase.from('crew_role_slots').select('id', { count: 'exact', head: true }),
-              supabase.from('crew_signups').select('id', { count: 'exact', head: true }),
-            ])
-            setCrewSlotsTotal(fallbackSlots.count || 0)
-            setCrewSlotsFilled(fallbackFilled.count || 0)
+            const { data: slotRows, error: slotErr } = await supabase
+              .from('crew_role_slots')
+              .select('id, capacity')
+              .in('production_crew_id', crewIds)
+            if (slotErr) {
+              setCrewSlotsTotal(0)
+              setCrewSlotsFilled(0)
+            } else {
+              const slots = slotRows || []
+              const totalSpots = slots.reduce((s, r) => s + (Number((r as { capacity?: number }).capacity) || 0), 0)
+              const slotIds = slots.map(s => (s as { id: string }).id)
+              let filled = 0
+              const CHUNK = 120
+              for (let i = 0; i < slotIds.length; i += CHUNK) {
+                const chunk = slotIds.slice(i, i + CHUNK)
+                const { count } = await supabase
+                  .from('crew_signups')
+                  .select('id', { count: 'exact', head: true })
+                  .in('crew_role_slot_id', chunk)
+                filled += count || 0
+              }
+              setCrewSlotsTotal(totalSpots)
+              setCrewSlotsFilled(filled)
+            }
           }
         } else {
           setCrewSlotsTotal(0)
