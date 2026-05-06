@@ -30,7 +30,7 @@ function parseSendHour(): number {
  *
  * Sends once per **weekday** (Mon–Fri) at DAILY_DIGEST_LOCAL_HOUR (default 8) in DAILY_DIGEST_TIMEZONE.
  * Vercel cron is UTC-only, so vercel.json runs this route every hour; the handler no-ops until
- * the local hour matches (DST-safe) and the local day is Monday–Friday.
+ * the local hour is at/after the send hour (DST-safe) and the local day is Monday–Friday.
  *
  * Env:
  * - CRON_SECRET (required)
@@ -68,11 +68,11 @@ export async function GET(request: Request) {
     })
   }
   const localHour = localHourInTimeZone(now, tz)
-  if (localHour !== sendHour) {
+  if (localHour < sendHour) {
     return NextResponse.json({
       ok: true,
       skipped: true,
-      reason: 'not_send_hour',
+      reason: 'before_send_hour',
       timezone: tz,
       localHour,
       sendHour,

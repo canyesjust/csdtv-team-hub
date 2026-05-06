@@ -16,6 +16,7 @@ const NAV_ITEMS = [
     { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
     { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
     { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
+    { label: 'Board update', href: '/dashboard/board-update', icon: 'mail' },
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
     { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
     { label: 'Students', href: '/dashboard/students', icon: 'students' },
@@ -41,6 +42,7 @@ const BOTTOM_NAV = [
 ]
 
 const MORE_ITEMS = [
+  { label: 'Board update', href: '/dashboard/board-update', icon: 'mail' },
   { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
   { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
   { label: 'Students', href: '/dashboard/students', icon: 'students' },
@@ -67,6 +69,7 @@ const PATHS: Record<string, React.ReactNode> = {
   chart: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
   more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
   contact: <><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+  mail: <><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></>,
   notes: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></>,
   students: <><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.66 4 3 6 3s6-1.34 6-3v-5"/></>,
 }

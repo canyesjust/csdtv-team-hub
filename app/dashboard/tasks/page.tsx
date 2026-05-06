@@ -480,13 +480,9 @@ export default function TasksPage() {
   const filtered = useMemo(() => {
     const source = focusFilter === 'recent-done' ? scopedCompleted : scopedTasks
     return source.filter(t => {
-      if (focusFilter === 'today') {
-        if (daysFromToday(t.due_date) !== 0) return false
-      } else if (focusFilter === 'overdue') {
-        const d = daysFromToday(t.due_date); if (d === null || d >= 0) return false
-      } else if (focusFilter === 'this-week') {
-        const d = daysFromToday(t.due_date); if (d === null || d < 0 || d > 7) return false
-      } else if (focusFilter === 'recent-done') {
+      // Open-task views always show all tasks; focus chips are informational.
+      // Only "Recent done" is an explicit filtered view.
+      if (focusFilter === 'recent-done') {
         if (!t.completed_at) return false
         if ((Date.now() - new Date(t.completed_at).getTime()) / 86400000 > 7) return false
       }

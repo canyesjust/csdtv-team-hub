@@ -40,6 +40,18 @@ interface Activity { id: string; action: string; detail: string | null; created_
 interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
 interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
 
+const DAY_MS = 86400000
+
+function dayDiffFromToday(input: string | Date | null): number | null {
+  if (!input) return null
+  const target = new Date(input)
+  if (Number.isNaN(target.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  target.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / DAY_MS)
+}
+
 export default function DashboardPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
@@ -205,7 +217,10 @@ export default function DashboardPage() {
         setManagerProductions(managerProds)
 
         const soonProdIds = managerProds
-          .filter((p: Production) => p.start_datetime && Math.ceil((new Date(p.start_datetime).getTime() - Date.now()) / 86400000) <= 7)
+          .filter((p: Production) => {
+            const days = dayDiffFromToday(p.start_datetime)
+            return days !== null && days >= 0 && days <= 7
+          })
           .map((p: Production) => p.id)
 
         const todayIso = new Date().toISOString().split('T')[0]
@@ -286,8 +301,9 @@ export default function DashboardPage() {
 
   const formatDate = (d: string | null): { label: string; color: string } | null => {
     if (!d) return null
-    const date = new Date(d), today = new Date()
-    const diff = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const date = new Date(d)
+    const diff = dayDiffFromToday(d)
+    if (diff === null) return null
     if (diff < 0) return { label: 'Overdue', color: danger }
     if (diff === 0) return { label: 'Today', color: warning }
     if (diff === 1) return { label: 'Tomorrow', color: warning }
@@ -306,22 +322,25 @@ export default function DashboardPage() {
   const urgentCount = myTasks.filter(t => t.priority === 'high' || t.priority === 'day of').length
   const dueSoonCount = myTasks.filter(t => {
     if (!t.due_date) return false
-    const due = new Date(t.due_date)
-    const days = Math.ceil((due.getTime() - Date.now()) / 86400000)
-    return days >= 0 && days <= 2
+    const days = dayDiffFromToday(t.due_date)
+    return days !== null && days >= 0 && days <= 2
   }).length
   const blockedCount = myTasks.filter(t => Boolean(t.blocked_by)).length
   const atRiskProductions = myProductions.filter(prod => {
     const progress = getProgress(prod)
-    const startsSoon = prod.start_datetime
-      ? Math.ceil((new Date(prod.start_datetime).getTime() - Date.now()) / 86400000) <= 2
-      : false
+    const startsSoon = (() => {
+      const days = dayDiffFromToday(prod.start_datetime)
+      return days !== null && days >= 0 && days <= 2
+    })()
     const checklistMissing = !progress || progress.total === 0
     const lowProgress = !!progress && progress.pct < 60
     return startsSoon && (checklistMissing || lowProgress)
   }).slice(0, 4)
   const isManager = (currentUser?.role || '').toLowerCase() === 'manager'
-  const startsSoonManager = managerProductions.filter(p => p.start_datetime && Math.ceil((new Date(p.start_datetime).getTime() - Date.now()) / 86400000) <= 2)
+  const startsSoonManager = managerProductions.filter(p => {
+    const days = dayDiffFromToday(p.start_datetime)
+    return days !== null && days >= 0 && days <= 2
+  })
   const unstaffedProductions = startsSoonManager.filter(p => (p.production_members || []).length === 0)
   const understaffedProductions = startsSoonManager.filter(p => {
     const members = p.production_members || []
@@ -353,9 +372,9 @@ export default function DashboardPage() {
     }),
     ...atRiskProductions.map(prod => {
       const progress = getProgress(prod)
-      const dueDays = prod.start_datetime ? Math.ceil((new Date(prod.start_datetime).getTime() - Date.now()) / 86400000) : 999
+      const dueDays = dayDiffFromToday(prod.start_datetime) ?? 999
       const score =
-        (dueDays <= 2 ? 35 : 0) +
+        (dueDays >= 0 && dueDays <= 2 ? 35 : 0) +
         ((!progress || progress.pct < 60) ? 20 : 0) +
         (((prod.production_members || []).length === 0) ? 10 : 0)
       return {
@@ -363,7 +382,7 @@ export default function DashboardPage() {
         type: 'production_risk' as const,
         title: `#${prod.production_number} ${prod.title}`,
         subtitle: 'Production risk',
-        reason: dueDays <= 0 ? 'Starts today' : `Starts in ${dueDays}d`,
+        reason: dueDays < 0 ? 'Past due' : dueDays === 0 ? 'Starts today' : `Starts in ${dueDays}d`,
         href: `/dashboard/productions/${prod.production_number}`,
         score,
       }
@@ -377,7 +396,7 @@ export default function DashboardPage() {
       const now = Date.now()
       const aging = mine.reduce((acc, t) => {
         if (!t.due_date) return acc
-        const days = Math.max(1, Math.ceil((now - new Date(t.due_date).getTime()) / 86400000))
+        const days = Math.max(1, Math.ceil((now - new Date(t.due_date).getTime()) / DAY_MS))
         if (days <= 2) acc.a += 1
         else if (days <= 7) acc.b += 1
         else acc.c += 1
