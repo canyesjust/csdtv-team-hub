@@ -90,6 +90,14 @@ export async function loadDailyDigestContext(
   }
 
   const tasksByAssignee = new Map<string, DigestTask[]>()
+  type RawTaskRow = {
+    id: string
+    title: string
+    due_date: string | null
+    priority: string
+    assigned_to: string | null
+    productions?: { title: string; production_number: number } | { title: string; production_number: number }[] | null
+  }
   for (const part of chunk(taskUserIds, 80)) {
     const { data: taskRows, error: taskErr } = await supabase
       .from('tasks')
@@ -97,7 +105,16 @@ export async function loadDailyDigestContext(
       .neq('status', 'complete')
       .in('assigned_to', part)
     if (taskErr) return { ok: false, error: taskErr.message }
-    for (const t of (taskRows || []) as DigestTask[]) {
+    for (const row of (taskRows || []) as RawTaskRow[]) {
+      const prod = Array.isArray(row.productions) ? row.productions[0] || null : row.productions || null
+      const t: DigestTask = {
+        id: row.id,
+        title: row.title,
+        due_date: row.due_date,
+        priority: row.priority,
+        assigned_to: row.assigned_to,
+        productions: prod ? { title: prod.title, production_number: prod.production_number } : null,
+      }
       const aid = t.assigned_to
       if (!aid) continue
       if (!tasksByAssignee.has(aid)) tasksByAssignee.set(aid, [])
