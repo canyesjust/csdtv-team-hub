@@ -95,6 +95,17 @@ export default function SettingsPage() {
   const [editingTierId, setEditingTierId] = useState<string | null>(null)
   const [tierForm, setTierForm] = useState({ cooldown_hours: '0', monthly_event_cap: '', description: '' })
   const [savingTier, setSavingTier] = useState(false)
+  const [digestPreview, setDigestPreview] = useState<{
+    subject: string
+    body: string
+    html: string
+    longDateLabel: string
+    timezone: string
+    todayKey: string
+  } | null>(null)
+  const [digestPreviewMode, setDigestPreviewMode] = useState<'html' | 'text'>('html')
+  const [digestPreviewLoading, setDigestPreviewLoading] = useState(false)
+  const [digestPreviewError, setDigestPreviewError] = useState<string | null>(null)
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -150,6 +161,29 @@ export default function SettingsPage() {
     setEditingProfile(false)
     setSavedMsg('Profile saved')
     setTimeout(() => setSavedMsg(''), 2000)
+  }
+
+  const loadDigestPreview = async () => {
+    setDigestPreviewLoading(true)
+    setDigestPreviewError(null)
+    try {
+      const res = await fetch('/api/daily-digest/preview')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to load preview')
+      setDigestPreview({
+        subject: data.subject,
+        body: data.body,
+        html: data.html || '',
+        longDateLabel: data.longDateLabel,
+        timezone: data.timezone,
+        todayKey: data.todayKey,
+      })
+    } catch (e: unknown) {
+      setDigestPreviewError(e instanceof Error ? e.message : 'Failed to load preview')
+      setDigestPreview(null)
+    } finally {
+      setDigestPreviewLoading(false)
+    }
   }
 
   const saveNotifPrefs = async () => {
@@ -533,6 +567,139 @@ export default function SettingsPage() {
           </div>
         ))}
         <button onClick={saveNotifPrefs} style={{ marginTop: '14px', fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save preferences</button>
+      </div>
+
+      {/* Daily briefing email preview */}
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 8px' }}>Daily briefing email</h2>
+        <p style={{ fontSize: '14px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
+          Preview the automated morning email (your tasks first, then the full team calendar for the day). Sends Monday–Friday only, at the configured local time. This is what you would receive; other staff see their own version.
+        </p>
+        <button
+          type="button"
+          onClick={loadDigestPreview}
+          disabled={digestPreviewLoading}
+          style={{
+            fontSize: '14px',
+            padding: '10px 20px',
+            borderRadius: '10px',
+            background: digestPreviewLoading ? 'var(--surface-2)' : '#1e6cb5',
+            color: digestPreviewLoading ? muted : '#fff',
+            border: 'none',
+            cursor: digestPreviewLoading ? 'default' : 'pointer',
+            fontFamily: 'inherit',
+            fontWeight: 500,
+            minHeight: '44px',
+          }}
+        >
+          {digestPreviewLoading ? 'Loading preview…' : 'Preview my daily email'}
+        </button>
+        {digestPreviewError && (
+          <p style={{ fontSize: '14px', color: '#ef4444', margin: '12px 0 0' }}>{digestPreviewError}</p>
+        )}
+        {digestPreview && (
+          <div style={{ marginTop: '16px' }}>
+            <p style={{ fontSize: '12px', color: muted, margin: '0 0 6px' }}>
+              Date context: {digestPreview.longDateLabel} ({digestPreview.todayKey}, {digestPreview.timezone})
+            </p>
+            <p style={{ fontSize: '14px', fontWeight: 600, color: text, margin: '0 0 8px' }}>Subject</p>
+            <div
+              style={{
+                fontSize: '14px',
+                color: text,
+                padding: '12px 14px',
+                borderRadius: '10px',
+                background: inputBg,
+                border: `0.5px solid ${border}`,
+                marginBottom: '14px',
+                fontFamily: 'inherit',
+              }}
+            >
+              {digestPreview.subject}
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => setDigestPreviewMode('html')}
+                style={{
+                  fontSize: '13px',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: `0.5px solid ${border}`,
+                  background: digestPreviewMode === 'html' ? '#1e6cb5' : 'transparent',
+                  color: digestPreviewMode === 'html' ? '#fff' : muted,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                }}
+              >
+                HTML (what inboxes show)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDigestPreviewMode('text')}
+                style={{
+                  fontSize: '13px',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  border: `0.5px solid ${border}`,
+                  background: digestPreviewMode === 'text' ? '#1e6cb5' : 'transparent',
+                  color: digestPreviewMode === 'text' ? '#fff' : muted,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                }}
+              >
+                Plain text fallback
+              </button>
+            </div>
+            {digestPreviewMode === 'html' && digestPreview.html ? (
+              <div
+                style={{
+                  borderRadius: '10px',
+                  border: `0.5px solid ${border}`,
+                  overflow: 'hidden',
+                  maxHeight: '560px',
+                  overflowY: 'auto',
+                  background: dark ? '#0f172a' : '#f1f5f9',
+                }}
+              >
+                <iframe
+                  title="Daily digest preview"
+                  srcDoc={digestPreview.html}
+                  sandbox="allow-same-origin"
+                  style={{
+                    width: '100%',
+                    minHeight: '520px',
+                    border: 'none',
+                    display: 'block',
+                    background: '#fff',
+                  }}
+                />
+              </div>
+            ) : (
+              <pre
+                style={{
+                  fontSize: '13px',
+                  lineHeight: 1.45,
+                  color: text,
+                  padding: '14px 16px',
+                  borderRadius: '10px',
+                  background: inputBg,
+                  border: `0.5px solid ${border}`,
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  maxHeight: '480px',
+                  overflow: 'auto',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                }}
+              >
+                {digestPreview.body}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Team management — manager only */}
