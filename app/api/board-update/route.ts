@@ -177,16 +177,22 @@ export async function GET(request: Request) {
     .sort((a, b) => (b.dateObj as Date).getTime() - (a.dateObj as Date).getTime())
 
   const lastBoardMeetingIso = boardMeetingRows[0]?.dateIso || null
-  const windowStartDate = lastBoardMeetingIso ? fromIsoLocal(lastBoardMeetingIso) : addDays(referenceDate, -14)
-  const windowStartIso = toLocalIso(windowStartDate)
-  const windowEndIso = referenceDateIso
 
-  const upcomingEnd = addDays(referenceDate, 14)
+  /** 14 calendar days ending on the selected board date (inclusive). */
+  const recentWindowStartDate = addDays(referenceDate, -13)
+  const recentWindowStartIso = toLocalIso(recentWindowStartDate)
+  const recentWindowEndIso = referenceDateIso
+
+  /** 14 calendar days starting on the selected board date (inclusive). */
+  const upcomingWindowStartIso = referenceDateIso
+  const upcomingWindowEndDate = addDays(referenceDate, 13)
+  const upcomingWindowEndIso = toLocalIso(upcomingWindowEndDate)
+
   const upcomingEvents = sheetRows
     .filter(r => r.dateObj)
     .filter(r => {
       const d = r.dateObj as Date
-      return d.getTime() >= referenceDate.getTime() && d.getTime() <= upcomingEnd.getTime()
+      return d.getTime() >= referenceDate.getTime() && d.getTime() <= upcomingWindowEndDate.getTime()
     })
     .sort((a, b) => (a.dateObj as Date).getTime() - (b.dateObj as Date).getTime())
     .map(r => ({
@@ -209,8 +215,8 @@ export async function GET(request: Request) {
     .select('id, title, youtube_url, youtube_id, youtube_thumbnail, youtube_duration, date_published')
     .eq('status', 'Published')
     .not('youtube_id', 'is', null)
-    .gte('date_published', windowStartIso)
-    .lte('date_published', windowEndIso)
+    .gte('date_published', recentWindowStartIso)
+    .lte('date_published', recentWindowEndIso)
     .order('date_published', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -227,8 +233,10 @@ export async function GET(request: Request) {
   return NextResponse.json({
     referenceDate: referenceDateIso,
     lastBoardMeeting: lastBoardMeetingIso,
-    windowStart: windowStartIso,
-    windowEnd: windowEndIso,
+    recentWindowStart: recentWindowStartIso,
+    recentWindowEnd: recentWindowEndIso,
+    upcomingWindowStart: upcomingWindowStartIso,
+    upcomingWindowEnd: upcomingWindowEndIso,
     upcomingEvents,
     recentVideos,
   })

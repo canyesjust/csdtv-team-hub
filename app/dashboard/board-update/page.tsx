@@ -26,8 +26,10 @@ type RecentVideo = {
 type BoardUpdatePayload = {
   referenceDate: string
   lastBoardMeeting: string | null
-  windowStart: string
-  windowEnd: string
+  recentWindowStart: string
+  recentWindowEnd: string
+  upcomingWindowStart: string
+  upcomingWindowEnd: string
   upcomingEvents: UpcomingEvent[]
   recentVideos: RecentVideo[]
 }
@@ -83,6 +85,37 @@ function escapeHtml(raw: string): string {
     .replace(/'/g, '&#39;')
 }
 
+/** Human-readable length for email (handles YouTube ISO 8601 durations). */
+function formatVideoDuration(raw: string | null | undefined): string {
+  const s = (raw || '').trim()
+  if (!s || s === '0:00' || s === '0') return ''
+  if (/^PT/i.test(s)) {
+    const m = s.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i)
+    if (!m) return s
+    const h = parseInt(m[1] || '0', 10)
+    const min = parseInt(m[2] || '0', 10)
+    const sec = parseInt(m[3] || '0', 10)
+    if (h > 0) return `${h}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    return `${min}:${String(sec).padStart(2, '0')}`
+  }
+  return s
+}
+
+function formatDateRangeSubtitle(startIso: string, endIso: string): string {
+  return `${formatSinceDate(startIso)} – ${formatSinceDate(endIso)}`
+}
+
+function pairItems<T>(items: T[]): Array<{ a: T; b: T | null }> {
+  const rows: Array<{ a: T; b: T | null }> = []
+  for (let i = 0; i < items.length; i += 2) {
+    rows.push({ a: items[i], b: items[i + 1] ?? null })
+  }
+  return rows
+}
+
+const EMAIL_BODY_WIDTH = 680
+const EMAIL_PAD = 28
+
 function renderIntroParagraphs(note: string): string {
   return note
     .split(/\n{2,}/)
@@ -97,139 +130,142 @@ function renderIntroParagraphs(note: string): string {
     .join('')
 }
 
+function buildEventCard(evt: UpcomingEvent): string {
+  const href = evt.link?.trim() || 'https://csdtv.org'
+  const image = escapeHtml(evt.image || 'https://via.placeholder.com/300x169?text=CSDtv')
+  return `<a href="${escapeHtml(href)}" style="text-decoration:none;color:inherit;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #E5E5DC;background:#FFFFFF;">
+  <tr>
+    <td style="padding:14px;">
+      <img src="${image}" width="300" alt="${escapeHtml(evt.title)}" style="display:block;width:100%;max-width:300px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.35;font-weight:bold;color:#0A2342;margin:12px 0 8px 0;">${escapeHtml(evt.title)}</div>
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:1.4;color:#FBB040;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px 0;">${escapeHtml(formatEventLine(evt.date, evt.time))}</div>
+      ${evt.link?.trim() ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:#14315E;text-decoration:underline;">Watch live →</div>` : ''}
+    </td>
+  </tr>
+</table>
+</a>`
+}
+
+function buildVideoCard(v: RecentVideo): string {
+  const thumb = escapeHtml(v.youtubeThumbnail || 'https://via.placeholder.com/300x169?text=YouTube')
+  const url = escapeHtml(v.youtubeUrl)
+  const dur = formatVideoDuration(v.youtubeDuration)
+  const durBlock = dur
+    ? `<div style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.3;color:#6B7280;border:1px solid #E5E5DC;border-radius:999px;padding:3px 10px;margin:0 0 10px 0;">Length ${escapeHtml(dur)}</div>`
+    : ''
+  return `<a href="${url}" style="text-decoration:none;color:inherit;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #E5E5DC;background:#FFFFFF;">
+  <tr>
+    <td style="padding:14px;">
+      <img src="${thumb}" width="300" alt="${escapeHtml(v.title)}" style="display:block;width:100%;max-width:300px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.35;font-weight:bold;color:#0A2342;margin:12px 0 8px 0;">${escapeHtml(v.title)}</div>
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;line-height:1.4;color:#FBB040;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px 0;">${escapeHtml(formatVideoPostedLine(v.datePublished))}</div>
+      ${durBlock}
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:#14315E;text-decoration:underline;">Watch on YouTube →</div>
+    </td>
+  </tr>
+</table>
+</a>`
+}
+
+function buildTwoColumnGridRows<T>(items: T[], renderCard: (item: T) => string, emptyMessage: string): string {
+  if (items.length === 0) {
+    return `<tr><td colspan="2" style="padding:0 ${EMAIL_PAD}px 16px ${EMAIL_PAD}px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#6B7280;font-style:italic;">${emptyMessage}</td></tr>`
+  }
+  return pairItems(items)
+    .map(
+      ({ a, b }) => `<tr>
+  <td class="bu-col" width="50%" valign="top" style="width:50%;max-width:340px;padding:10px 8px 10px ${EMAIL_PAD}px;vertical-align:top;">${renderCard(a)}</td>
+  <td class="bu-col" width="50%" valign="top" style="width:50%;max-width:340px;padding:10px ${EMAIL_PAD}px 10px 8px;vertical-align:top;">${b ? renderCard(b) : '&nbsp;'}</td>
+</tr>`
+    )
+    .join('')
+}
+
 function buildBoardUpdateHtml(
   payload: BoardUpdatePayload | null,
   personalNote: string,
   now: Date
 ): string {
   const headerDate = formatLongDate(now)
-  const sectionSubtitle = payload?.lastBoardMeeting
-    ? `Since ${formatSinceDate(payload.lastBoardMeeting)}`
-    : 'In the last two weeks'
+  const upcomingMeta = payload
+    ? formatDateRangeSubtitle(payload.upcomingWindowStart, payload.upcomingWindowEnd)
+    : 'Next 14 days'
+  const recentMeta = payload
+    ? formatDateRangeSubtitle(payload.recentWindowStart, payload.recentWindowEnd)
+    : 'Previous 14 days'
 
-  const upcomingHtml =
-    !payload || payload.upcomingEvents.length === 0
-      ? `<tr><td style="padding:0 40px 16px 40px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#6B7280;font-style:italic;">No events scheduled in the next two weeks.</td></tr>`
-      : payload.upcomingEvents
-          .map(evt => {
-            const href = evt.link?.trim() || 'https://csdtv.org'
-            const image = escapeHtml(evt.image || 'https://via.placeholder.com/180x101?text=CSDtv')
-            return `<tr>
-  <td style="padding:16px 40px 16px 40px;">
-    <a href="${escapeHtml(href)}" style="text-decoration:none;color:inherit;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-        <tr>
-          <td width="180" valign="top" style="width:180px;">
-            <img src="${image}" width="180" height="101" alt="${escapeHtml(evt.title)}" style="display:block;border:0;border-radius:6px;outline:none;text-decoration:none;">
-          </td>
-          <td valign="middle" style="padding-left:20px;">
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.3;font-weight:bold;color:#0A2342;margin:0 0 8px 0;">${escapeHtml(
-              evt.title
-            )}</div>
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;line-height:1.4;color:#FBB040;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px 0;">${escapeHtml(
-              formatEventLine(evt.date, evt.time)
-            )}</div>
-            ${
-              evt.link?.trim()
-                ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:#14315E;text-decoration:underline;">Watch live →</div>`
-                : ''
-            }
-          </td>
-        </tr>
-      </table>
-    </a>
-  </td>
-</tr>`
-          })
-          .join('')
+  const upcomingHtml = buildTwoColumnGridRows(
+    payload?.upcomingEvents ?? [],
+    buildEventCard,
+    'No events scheduled in the next 14 days.'
+  )
+  const recentVideosHtml = buildTwoColumnGridRows(
+    payload?.recentVideos ?? [],
+    buildVideoCard,
+    'No new videos published in this 14-day window.'
+  )
 
-  const recentVideosHtml =
-    !payload || payload.recentVideos.length === 0
-      ? `<tr><td style="padding:0 40px 16px 40px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#6B7280;font-style:italic;">No new videos published since the last meeting.</td></tr>`
-      : payload.recentVideos
-          .map(v => {
-            const thumb = escapeHtml(v.youtubeThumbnail || 'https://via.placeholder.com/180x101?text=YouTube')
-            const url = escapeHtml(v.youtubeUrl)
-            return `<tr>
-  <td style="padding:16px 40px 16px 40px;">
-    <a href="${url}" style="text-decoration:none;color:inherit;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-        <tr>
-          <td width="180" valign="top" style="width:180px;">
-            <img src="${thumb}" width="180" height="101" alt="${escapeHtml(v.title)}" style="display:block;border:0;border-radius:6px;outline:none;text-decoration:none;">
-          </td>
-          <td valign="middle" style="padding-left:20px;">
-            <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.3;font-weight:bold;color:#0A2342;margin:0 0 8px 0;">${escapeHtml(
-              v.title
-            )}</div>
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;line-height:1.4;color:#FBB040;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px 0;">${escapeHtml(
-              formatVideoPostedLine(v.datePublished)
-            )}</div>
-            <div style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.3;color:#6B7280;border:1px solid #E5E5DC;border-radius:999px;padding:3px 10px;margin:0 0 10px 0;">Length ${escapeHtml(
-              v.youtubeDuration || ''
-            )}</div>
-            <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:#14315E;text-decoration:underline;">Watch on YouTube →</div>
-          </td>
-        </tr>
-      </table>
-    </a>
-  </td>
-</tr>`
-          })
-          .join('')
-
+  const w = EMAIL_BODY_WIDTH
   return `<!doctype html>
 <html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style type="text/css">
+@media only screen and (max-width: 520px) {
+  .bu-col { display: block !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; padding-left: ${EMAIL_PAD}px !important; padding-right: ${EMAIL_PAD}px !important; }
+  .bu-shell { width: 100% !important; max-width: 100% !important; }
+}
+</style>
+</head>
 <body style="margin:0;padding:0;background:#F5F5F0;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#F5F5F0;">
     <tr>
-      <td align="center" style="padding:24px 12px;">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:600px;max-width:600px;background:#FFFFFF;border:1px solid #E5E5DC;">
+      <td align="center" style="padding:24px 10px;">
+        <table class="bu-shell" role="presentation" width="${w}" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:${w}px;max-width:100%;background:#FFFFFF;border:1px solid #E5E5DC;">
           <tr>
-            <td style="background:#0A2342;padding:32px 40px;">
+            <td style="background:#0A2342;padding:28px ${EMAIL_PAD}px;">
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;letter-spacing:4px;text-transform:uppercase;color:#FBB040;margin:0 0 14px 0;">CSDTV BOARD UPDATE</div>
               <div style="font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.2;color:#FFFFFF;margin:0 0 10px 0;">Coming Up &amp; Recently Posted</div>
-              <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:#FBB040;font-style:italic;">${escapeHtml(
-                headerDate
-              )}</div>
+              <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4;color:#FBB040;font-style:italic;">${escapeHtml(headerDate)}</div>
             </td>
           </tr>
 
           <tr>
-            <td style="background:#FFFFFF;padding:28px 40px;">
+            <td style="background:#FFFFFF;padding:24px ${EMAIL_PAD}px;">
               ${renderIntroParagraphs(personalNote)}
             </td>
           </tr>
 
           <tr>
-            <td style="padding:24px 40px 12px 40px;background:#FFFFFF;">
+            <td style="padding:22px ${EMAIL_PAD}px 10px ${EMAIL_PAD}px;background:#FFFFFF;">
               <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.3;font-weight:bold;color:#0A2342;">Coming Up on CSDtv</div>
-              <div style="padding-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.3;color:#FBB040;text-transform:uppercase;letter-spacing:2px;">Next 14 days</div>
+              <div style="padding-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;color:#FBB040;text-transform:uppercase;letter-spacing:2px;">${escapeHtml(upcomingMeta)}</div>
               <div style="margin-top:10px;width:60px;height:2px;background:#FBB040;font-size:0;line-height:0;">&nbsp;</div>
             </td>
           </tr>
           ${upcomingHtml}
 
           <tr>
-            <td style="padding:24px 40px 12px 40px;background:#FFFFFF;">
+            <td style="padding:22px ${EMAIL_PAD}px 10px ${EMAIL_PAD}px;background:#FFFFFF;">
               <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.3;font-weight:bold;color:#0A2342;">Recently Posted</div>
-              <div style="padding-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.3;color:#FBB040;text-transform:uppercase;letter-spacing:2px;">${escapeHtml(
-                sectionSubtitle
-              )}</div>
+              <div style="padding-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;color:#FBB040;text-transform:uppercase;letter-spacing:2px;">${escapeHtml(recentMeta)}</div>
               <div style="margin-top:10px;width:60px;height:2px;background:#FBB040;font-size:0;line-height:0;">&nbsp;</div>
             </td>
           </tr>
           ${recentVideosHtml}
 
           <tr>
-            <td style="padding:24px 40px;background:#FBF8F0;border-top:2px solid #FBB040;">
+            <td style="padding:22px ${EMAIL_PAD}px;background:#FBF8F0;border-top:2px solid #FBB040;">
               <div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.3;font-weight:bold;color:#0A2342;margin:0 0 10px 0;">Want a reel for your school's social media?</div>
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#2C3E50;">If any of the livestreams above would help promote an event at your school, reply to this email and let me know which one. I'll cut a short reel you can share.</div>
             </td>
           </tr>
 
           <tr>
-            <td style="padding:24px 40px;background:#0A2342;">
+            <td style="padding:22px ${EMAIL_PAD}px;background:#0A2342;">
               <div style="margin:0 0 10px 0;"><a href="https://csdtv.org" style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.4;color:#FBB040;font-weight:bold;text-decoration:underline;">Watch live at csdtv.org</a></div>
               <div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4;color:#F4F1EA;letter-spacing:2px;text-transform:uppercase;opacity:0.7;">CSDtv · Canyons School District</div>
             </td>
@@ -288,27 +324,23 @@ export default function BoardUpdatePage() {
   )
   const emailHtml = useMemo(() => buildBoardUpdateHtml(payload, note, now), [payload, note, now])
   const emailText = useMemo(() => {
+    if (!payload) return note
     const lines = [
       note,
       '',
-      'Coming Up on CSDtv (Next 14 days)',
-      ...(payload?.upcomingEvents || []).map(e => `${e.title} — ${formatEventLine(e.date, e.time)}`),
+      `Coming Up on CSDtv (${formatDateRangeSubtitle(payload.upcomingWindowStart, payload.upcomingWindowEnd)})`,
+      ...(payload.upcomingEvents || []).map(e => `${e.title} — ${formatEventLine(e.date, e.time)}`),
       '',
-      payload?.lastBoardMeeting
-        ? `Recently Posted (Since ${formatSinceDate(payload.lastBoardMeeting)})`
-        : 'Recently Posted (In the last two weeks)',
-      ...(payload?.recentVideos || []).map(v => `${v.title} — ${v.youtubeUrl}`),
+      `Recently Posted (${formatDateRangeSubtitle(payload.recentWindowStart, payload.recentWindowEnd)})`,
+      ...(payload.recentVideos || []).map(v => `${v.title} — ${v.youtubeUrl}`),
     ]
     return lines.join('\n')
   }, [payload, note])
 
   const windowLabel = useMemo(() => {
     if (!payload) return 'Loading...'
-    if (payload.lastBoardMeeting) {
-      return `Showing content from ${formatSinceDate(payload.lastBoardMeeting)} to ${formatSinceDate(selectedDate)}`
-    }
-    return `Showing content from the last two weeks to ${formatSinceDate(selectedDate)}`
-  }, [payload, selectedDate])
+    return `Coming up: ${formatDateRangeSubtitle(payload.upcomingWindowStart, payload.upcomingWindowEnd)} · Recently posted: ${formatDateRangeSubtitle(payload.recentWindowStart, payload.recentWindowEnd)}`
+  }, [payload])
 
   async function copySubject() {
     try {
