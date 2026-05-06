@@ -5,6 +5,7 @@ import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
 import { getSchoolName } from '@/lib/schools'
+import { EXTERNAL_COST_DEFAULTS, getDefaultExternalCostForType } from '@/lib/external-production-costs'
 
 interface Production { id: string; title: string; production_number: number; status: string | null; request_type_label: string | null; school_department: string | null; start_datetime: string | null; school_year: string | null; synced_at: string | null; estimated_external_cost: number | null }
 interface Task { id: string; status: string; assigned_to: string | null; completed_at: string | null; created_at: string; priority: string }
@@ -16,12 +17,6 @@ interface Loan { id: string; equipment_id: string; checked_out_at: string; check
 interface Equipment { id: string; name: string; asset_tag: string; status: string; category_id: string | null }
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
 interface ProdMember { production_id: string; user_id: string }
-
-const EXTERNAL_COSTS: Record<string, number> = {
-  'LiveStream Meeting': 500, 'Record Meeting': 400, 'Create a Video(Film, Edit, Publish)': 2500,
-  'Board Meeting': 750, 'Photo Headshots': 300, 'Podcast': 600,
-  'Other, Unsure, Or Consultation': 400,
-}
 
 const TYPE_COLORS: Record<string, string> = {
   'Photo Headshots': '#e8a020', 'Create a Video(Film, Edit, Publish)': '#5ba3e0', 'LiveStream Meeting': '#22c55e',
@@ -238,13 +233,13 @@ export default function ReportsPage() {
 
   // Cost savings
   const costSavings = fp.reduce((sum, p) => {
-    if (p.estimated_external_cost) return sum + Number(p.estimated_external_cost)
+    if (p.estimated_external_cost != null) return sum + Number(p.estimated_external_cost)
     const type = p.request_type_label || 'Other, Unsure, Or Consultation'
-    return sum + (EXTERNAL_COSTS[type] || 400)
+    return sum + getDefaultExternalCostForType(type)
   }, 0)
   const costByType = Object.entries(fp.reduce((acc, p) => {
     const type = p.request_type_label || 'Other'
-    const cost = p.estimated_external_cost ? Number(p.estimated_external_cost) : (EXTERNAL_COSTS[type] || 400)
+    const cost = p.estimated_external_cost != null ? Number(p.estimated_external_cost) : getDefaultExternalCostForType(type)
     acc[type] = (acc[type] || 0) + cost
     return acc
   }, {} as Record<string, number>)).sort((a, b) => b[1] - a[1])
@@ -306,7 +301,7 @@ export default function ReportsPage() {
           } else if (tab === 'equipment') {
             exportCSV('csdtv-equipment', ['Asset Tag', 'Name', 'Status'], equipment.map(e => [e.asset_tag, e.name, e.status]))
           } else if (tab === 'value') {
-            exportCSV('csdtv-cost-savings', ['Type', 'Count', 'Rate', 'Total'], costByType.map(([type, cost]) => { const count = fp.filter(p => (p.request_type_label || 'Other') === type).length; return [type, String(count), String(EXTERNAL_COSTS[type] || 400), String(cost)] }))
+            exportCSV('csdtv-cost-savings', ['Type', 'Count', 'Rate', 'Total'], costByType.map(([type, cost]) => { const count = fp.filter(p => (p.request_type_label || 'Other') === type).length; return [type, String(count), String(getDefaultExternalCostForType(type)), String(cost)] }))
           }
         }} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', flexShrink: 0 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -595,7 +590,7 @@ export default function ReportsPage() {
             <div>
               {costByType.map(([type, cost]) => {
                 const count = fp.filter(p => (p.request_type_label || 'Other') === type).length
-                const perUnit = EXTERNAL_COSTS[type] || 400
+                const perUnit = getDefaultExternalCostForType(type)
                 return (
                   <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', borderBottom: `0.5px solid ${border}` }}>
                     <span style={{ fontSize: '13px', color: text, minWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{type}</span>
@@ -613,8 +608,8 @@ export default function ReportsPage() {
           ))}
           {sectionCard('Default external cost rates', (
             <div>
-              <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>These defaults are used when a production doesn&apos;t have a custom cost set. Adjust by setting estimated_external_cost on individual productions.</p>
-              {Object.entries(EXTERNAL_COSTS).map(([type, cost]) => (
+              <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>These defaults apply when a production has no override. Set a per-production amount under <strong>Production → Info</strong> (Estimated external cost).</p>
+              {Object.entries(EXTERNAL_COST_DEFAULTS).map(([type, cost]) => (
                 <div key={type} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
                   <span style={{ color: text }}>{type}</span>
                   <span style={{ color: muted, fontWeight: 500 }}>${cost}</span>

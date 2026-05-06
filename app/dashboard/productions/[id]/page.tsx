@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast'
 import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
+import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -31,6 +32,7 @@ interface Production {
   livestream_url: string | null; thumbnail_url: string | null
   project_lead: string | null; synced_at: string | null; team_notes: string | null
   deliverables_count: number; deliverables_notes: string | null
+  estimated_external_cost: number | null
   youtube_link_email_sent_at: string | null
   youtube_link_email_first_click_at: string | null
   youtube_link_email_click_count: number | null
@@ -167,6 +169,8 @@ export default function ProductionDetailPage() {
   const [delivCount, setDelivCount] = useState(0)
   const [delivNotes, setDelivNotes] = useState('')
   const [savingDeliv, setSavingDeliv] = useState(false)
+  const [externalCostUsd, setExternalCostUsd] = useState('')
+  const [savingExternalCost, setSavingExternalCost] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [fetchingYt, setFetchingYt] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
@@ -226,6 +230,12 @@ export default function ProductionDetailPage() {
     setTeamNotes(prodRes.data.team_notes || '')
     setDelivCount(prodRes.data.deliverables_count || 0)
     setDelivNotes(prodRes.data.deliverables_notes || '')
+    const rawExt = prodRes.data.estimated_external_cost
+    setExternalCostUsd(
+      rawExt !== null && rawExt !== undefined && String(rawExt).trim() !== ''
+        ? String(Number(rawExt))
+        : ''
+    )
 
     // All related queries use the UUID as FK
     const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes] = await Promise.all([
@@ -746,6 +756,32 @@ export default function ProductionDetailPage() {
     toast('Videos Produced saved', 'success')
     await logActivity('Updated videos produced', `${delivCount} items${delivNotes ? ' — ' + delivNotes : ''}`)
   }, [uuid, delivCount, delivNotes, supabase, logActivity])
+
+  const persistExternalCostFromInput = useCallback(async (rawInput: string) => {
+    if (!uuid) return
+    const trimmed = rawInput.trim()
+    let value: number | null = null
+    if (trimmed !== '') {
+      const n = Number(trimmed)
+      if (!Number.isFinite(n) || n < 0) {
+        toast('Enter a valid dollar amount (0 or more), or clear the field.', 'error')
+        return
+      }
+      value = Math.round(n * 100) / 100
+    }
+    setSavingExternalCost(true)
+    const { error } = await supabase.from('productions').update({ estimated_external_cost: value }).eq('id', uuid)
+    setSavingExternalCost(false)
+    if (error) { toast('Failed to save estimated cost', 'error'); return }
+    setProduction(prev => (prev ? { ...prev, estimated_external_cost: value } : null))
+    if (value === null) setExternalCostUsd('')
+    else setExternalCostUsd(String(value))
+    toast(value === null ? 'Using type default for Reports' : 'Estimated external cost saved', 'success')
+    await logActivity(
+      'Updated estimated external cost',
+      value === null ? 'Cleared override (Reports use request-type default)' : `$${value.toLocaleString()}`
+    )
+  }, [uuid, supabase, logActivity])
 
   const refreshYoutubeStats = useCallback(async (videoId: string, ytId: string) => {
     try {
@@ -1676,6 +1712,46 @@ export default function ProductionDetailPage() {
             <button onClick={saveTeamNotes} disabled={savingNotes} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: notesSaved ? successTone : brandTone, color: '#fff', border: 'none', cursor: savingNotes ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500, transition: 'background 0.2s' }}>
               {notesSaved ? '✓ Saved!' : savingNotes ? 'Saving...' : 'Save notes'}
             </button>
+          </div>
+
+          {/* Estimated external cost (Reports → Cost savings) */}
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 6px' }}>Estimated external cost</h3>
+            <p style={{ fontSize: '11px', color: muted, margin: '0 0 10px', lineHeight: 1.45 }}>
+              Used on <strong>Reports → Cost savings</strong> for this production. If you leave this blank, Reports use the default for request type{' '}
+              <strong>{getTypeLabel(production)}</strong>:{' '}
+              <strong style={{ color: text }}>${getDefaultExternalCostForType(production.request_type_label).toLocaleString()}</strong>.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' as const }}>
+              <div>
+                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Override (USD)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={externalCostUsd}
+                  onChange={e => setExternalCostUsd(e.target.value)}
+                  placeholder={`Default ${getDefaultExternalCostForType(production.request_type_label)}`}
+                  style={{ ...inputStyle, width: '140px', padding: '7px 10px' }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void persistExternalCostFromInput(externalCostUsd)}
+                disabled={savingExternalCost}
+                style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: brandTone, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}
+              >
+                {savingExternalCost ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void persistExternalCostFromInput('')}
+                disabled={savingExternalCost}
+                style={{ fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Clear override
+              </button>
+            </div>
           </div>
 
           {/* Videos Produced */}
