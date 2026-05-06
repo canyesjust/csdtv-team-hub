@@ -124,7 +124,7 @@ function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * DAY_MS)
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -162,26 +162,31 @@ export async function GET() {
     }
   })
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayIso = toLocalIso(today)
+  const requestedDate = new URL(request.url).searchParams.get('date')
+  let referenceDate = new Date()
+  if (requestedDate) {
+    const parsed = fromIsoLocal(requestedDate)
+    if (!Number.isNaN(parsed.getTime())) referenceDate = parsed
+  }
+  referenceDate.setHours(0, 0, 0, 0)
+  const referenceDateIso = toLocalIso(referenceDate)
 
   const boardMeetingRows = sheetRows
     .filter(r => /board\s*meeting/i.test(r.name) && r.dateObj)
-    .filter(r => (r.dateObj as Date).getTime() <= today.getTime())
+    .filter(r => (r.dateObj as Date).getTime() <= referenceDate.getTime())
     .sort((a, b) => (b.dateObj as Date).getTime() - (a.dateObj as Date).getTime())
 
   const lastBoardMeetingIso = boardMeetingRows[0]?.dateIso || null
-  const windowStartDate = lastBoardMeetingIso ? fromIsoLocal(lastBoardMeetingIso) : addDays(today, -14)
+  const windowStartDate = lastBoardMeetingIso ? fromIsoLocal(lastBoardMeetingIso) : addDays(referenceDate, -14)
   const windowStartIso = toLocalIso(windowStartDate)
-  const windowEndIso = todayIso
+  const windowEndIso = referenceDateIso
 
-  const upcomingEnd = addDays(today, 14)
+  const upcomingEnd = addDays(referenceDate, 14)
   const upcomingEvents = sheetRows
     .filter(r => r.dateObj)
     .filter(r => {
       const d = r.dateObj as Date
-      return d.getTime() >= today.getTime() && d.getTime() <= upcomingEnd.getTime()
+      return d.getTime() >= referenceDate.getTime() && d.getTime() <= upcomingEnd.getTime()
     })
     .sort((a, b) => (a.dateObj as Date).getTime() - (b.dateObj as Date).getTime())
     .map(r => ({
@@ -220,6 +225,7 @@ export async function GET() {
   }))
 
   return NextResponse.json({
+    referenceDate: referenceDateIso,
     lastBoardMeeting: lastBoardMeetingIso,
     windowStart: windowStartIso,
     windowEnd: windowEndIso,

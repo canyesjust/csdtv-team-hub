@@ -24,6 +24,7 @@ type RecentVideo = {
 }
 
 type BoardUpdatePayload = {
+  referenceDate: string
   lastBoardMeeting: string | null
   windowStart: string
   windowEnd: string
@@ -246,12 +247,19 @@ export default function BoardUpdatePage() {
   const [loading, setLoading] = useState(true)
   const [payload, setPayload] = useState<BoardUpdatePayload | null>(null)
   const [note, setNote] = useState(DEFAULT_NOTE)
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  })
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const res = await fetch('/api/board-update', { cache: 'no-store' })
+      const res = await fetch(`/api/board-update?date=${encodeURIComponent(selectedDate)}`, { cache: 'no-store' })
       if (res.status === 401) {
         router.push('/login')
         return
@@ -268,9 +276,12 @@ export default function BoardUpdatePage() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [router, selectedDate])
 
-  const now = useMemo(() => new Date(), [])
+  const now = useMemo(() => {
+    const [y, m, d] = selectedDate.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }, [selectedDate])
   const subject = useMemo(
     () => `CSDtv Update — Board Meeting ${formatSubjectDate(now)}`,
     [now]
@@ -294,10 +305,10 @@ export default function BoardUpdatePage() {
   const windowLabel = useMemo(() => {
     if (!payload) return 'Loading...'
     if (payload.lastBoardMeeting) {
-      return `Showing content from ${formatSinceDate(payload.lastBoardMeeting)} to today`
+      return `Showing content from ${formatSinceDate(payload.lastBoardMeeting)} to ${formatSinceDate(selectedDate)}`
     }
-    return 'Showing content from the last two weeks to today'
-  }, [payload])
+    return `Showing content from the last two weeks to ${formatSinceDate(selectedDate)}`
+  }, [payload, selectedDate])
 
   async function copySubject() {
     try {
@@ -343,6 +354,18 @@ export default function BoardUpdatePage() {
 
       <section style={{ background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
         <p style={{ margin: '0 0 10px', color: 'var(--text-muted)', fontSize: '12px' }}>{windowLabel}</p>
+        <div style={{ marginBottom: '10px' }}>
+          <label htmlFor="board-date" style={{ display: 'block', marginBottom: '6px', color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>
+            Board meeting date (override)
+          </label>
+          <input
+            id="board-date"
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            style={{ minHeight: '42px', borderRadius: '10px', border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: 'var(--text-primary)', padding: '0 12px', fontFamily: 'inherit', fontSize: '14px' }}
+          />
+        </div>
         <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '1fr auto', alignItems: 'center' }}>
           <input
             value={subject}
