@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/cron/daily-staff-digest",
-      "schedule": "5 * * * *"
+      "schedule": "0 15 * * 1-5"
     }
   ]
 }
