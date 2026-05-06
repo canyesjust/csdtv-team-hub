@@ -86,6 +86,12 @@ function isPastProd(p: Production): boolean {
   return new Date(p.start_datetime).getTime() < Date.now()
 }
 
+/** Rows that inflate Focus chip counts — exclude only Complete and Abandoned (incl. approved past-due). */
+function countsTowardFocusBubbles(p: Production): boolean {
+  const s = p.status || ''
+  return s !== 'Complete' && s !== 'Abandoned'
+}
+
 function relativeTime(d: string | null): string {
   if (!d) return ''
   const diffMs = Date.now() - new Date(d).getTime()
@@ -453,10 +459,12 @@ function ProductionsPageContent() {
 
   const allTypes = useMemo(() => Array.from(new Set(productions.map(p => getTypeLabel(p)))).filter(Boolean).sort(), [productions])
 
-  // Counts (scope-aware) for focus chips & briefing
+  // Counts (scope-aware) for focus chips & briefing — omit Complete/Abandoned only
   const counts = useMemo(() => {
-    let today = 0, thisWeek = 0, overdue = 0, unstaffed = 0, upcoming = 0, liveEmailPending = 0
+    let all = 0, today = 0, thisWeek = 0, overdue = 0, unstaffed = 0, upcoming = 0, liveEmailPending = 0
     scopedProductions.forEach(p => {
+      if (!countsTowardFocusBubbles(p)) return
+      all++
       const d = daysFromToday(p.start_datetime)
       const isFutureUpcoming = d !== null && d >= 0 && p.status !== 'Complete' && p.status !== 'Abandoned'
       if (d === 0) today++
@@ -471,7 +479,7 @@ function ProductionsPageContent() {
         && p.status !== 'Abandoned'
       ) liveEmailPending++
     })
-    return { today, thisWeek, overdue, unstaffed, upcoming, liveEmailPending, all: scopedProductions.length }
+    return { today, thisWeek, overdue, unstaffed, upcoming, liveEmailPending, all }
   }, [scopedProductions, isLivestreamType, youtubeOrganizerEmailLogged])
 
   const ytPendingOnly = searchParams.get('ytPending') === '1'
