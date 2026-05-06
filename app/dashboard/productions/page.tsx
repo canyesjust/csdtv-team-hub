@@ -35,10 +35,6 @@ interface CurrentUser { id: string; name: string; email: string }
 interface PanelChecklist { id: string; title: string; completed: boolean; sort_order: number }
 interface PanelActivity { id: string; action: string; detail: string | null; created_at: string; team: { name: string } | null }
 
-const PIPELINE_STATUSES = ['Idea/Request', 'In Progress'] as const
-const APPROVED_STATUSES = ['Approved/Scheduled'] as const
-const TERMINAL_STATUSES = ['Complete', 'Abandoned'] as const
-
 const STATUS_TONE_MAP: Record<string, keyof typeof statusTone | null> = {
   'In Progress': 'warning',
   'Approved/Scheduled': 'success',
@@ -66,7 +62,7 @@ const TYPE_COLORS: Record<string, string> = {
   'Other, Unsure, Or Consultation': '#64748b',
 }
 
-type FocusFilter = 'all' | 'today' | 'this-week' | 'overdue' | 'unstaffed' | 'upcoming'
+type FocusFilter = 'all' | 'today' | 'this-week' | 'overdue' | 'unstaffed' | 'upcoming' | 'live-email-pending'
 type Scope = 'all' | 'mine' | 'unassigned'
 type View = 'pipeline' | 'list'
 
@@ -132,6 +128,9 @@ function ProductionsPageContent() {
   const [dismissedConflicts, setDismissedConflicts] = useState<Set<string>>(new Set())
   const [conflictsExpanded, setConflictsExpanded] = useState(false)
   const [overdueExpanded, setOverdueExpanded] = useState(false)
+  const [ideaStripExpanded, setIdeaStripExpanded] = useState(false)
+  const [pastArchiveExpanded, setPastArchiveExpanded] = useState(false)
+  const [abandonedExpanded, setAbandonedExpanded] = useState(false)
   const [selectedProdId, setSelectedProdId] = useState<string | null>(null)
   const [panelChecklist, setPanelChecklist] = useState<PanelChecklist[]>([])
   const [panelActivity, setPanelActivity] = useState<PanelActivity[]>([])
@@ -411,6 +410,10 @@ function ProductionsPageContent() {
 
   const getTypeLabel = (p: Production) => p.request_type_label || p.type || 'Unknown'
   const getTypeColor = (p: Production) => TYPE_COLORS[getTypeLabel(p)] || '#64748b'
+  const isLivestreamType = useCallback((p: Production) => {
+    const t = (p.request_type_label || p.type || '').toLowerCase()
+    return t.includes('livestream') || t.includes('live stream')
+  }, [])
   const getProgress = (p: Production) => {
     const items = p.checklist_items || []
     if (items.length === 0) return null
@@ -431,7 +434,7 @@ function ProductionsPageContent() {
 
   // Counts (scope-aware) for focus chips & briefing
   const counts = useMemo(() => {
-    let today = 0, thisWeek = 0, overdue = 0, unstaffed = 0, upcoming = 0
+    let today = 0, thisWeek = 0, overdue = 0, unstaffed = 0, upcoming = 0, liveEmailPending = 0
     scopedProductions.forEach(p => {
       const d = daysFromToday(p.start_datetime)
       const isFutureUpcoming = d !== null && d >= 0 && p.status !== 'Complete' && p.status !== 'Abandoned'
@@ -440,9 +443,15 @@ function ProductionsPageContent() {
       if (isOverdueProd(p)) overdue++
       if ((p.production_members || []).length === 0 && isFutureUpcoming) unstaffed++
       if (isFutureUpcoming) upcoming++
+      if (
+        isLivestreamType(p)
+        && (p.livestream_url || '').trim()
+        && !p.youtube_link_email_sent_at
+        && p.status !== 'Abandoned'
+      ) liveEmailPending++
     })
-    return { today, thisWeek, overdue, unstaffed, upcoming, all: scopedProductions.length }
-  }, [scopedProductions])
+    return { today, thisWeek, overdue, unstaffed, upcoming, liveEmailPending, all: scopedProductions.length }
+  }, [scopedProductions, isLivestreamType])
 
   const ytPendingOnly = searchParams.get('ytPending') === '1'
 
@@ -477,6 +486,12 @@ function ProductionsPageContent() {
       if (d === null || d < 0) return false
       if (p.status === 'Complete' || p.status === 'Abandoned') return false
     }
+    if (focusFilter === 'live-email-pending') {
+      if (!isLivestreamType(p)) return false
+      if (!(p.livestream_url || '').trim()) return false
+      if (p.youtube_link_email_sent_at) return false
+      if (p.status === 'Abandoned') return false
+    }
     if (typeFilter !== 'all' && getTypeLabel(p) !== typeFilter) return false
     if (statusFilter !== 'all' && p.status !== statusFilter) return false
     if (search) {
@@ -491,7 +506,7 @@ function ProductionsPageContent() {
       if (!hit) return false
     }
     return true
-  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search])
+  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search, isLivestreamType])
 
   const overdueProds = useMemo(() => filtered.filter(isOverdueProd), [filtered])
 
@@ -510,13 +525,30 @@ function ProductionsPageContent() {
     return all.filter(c => !dismissedConflicts.has(`${c.a.id}-${c.b.id}`))
   }, [filtered, dismissedConflicts])
 
-  // Pipeline groups
-  const inProgress  = useMemo(() => filtered.filter(p => p.status === 'In Progress'), [filtered])
-  const ideaRequest = useMemo(() => filtered.filter(p => p.status === 'Idea/Request'), [filtered])
-  const approved    = useMemo(() => filtered.filter(p => APPROVED_STATUSES.includes(p.status as any)), [filtered])
-  const other       = useMemo(() => filtered.filter(p => {
+  // Pipeline groups — forward-looking columns; past / complete / abandoned pulled into expandables below
+  const inProgress = useMemo(() => filtered.filter(p => p.status === 'In Progress'), [filtered])
+  const ideaForward = useMemo(() => filtered.filter(p => {
+    if (p.status !== 'Idea/Request') return false
+    if (!p.start_datetime) return true
+    return !isPastProd(p)
+  }), [filtered])
+  const approvedForward = useMemo(() => filtered.filter(p => {
+    if (p.status !== 'Approved/Scheduled') return false
+    if (!p.start_datetime) return true
+    return !isPastProd(p)
+  }), [filtered])
+  const pastArchiveProds = useMemo(() => filtered.filter(p => {
+    if (p.status === 'Abandoned') return false
+    if (p.status === 'Complete') return true
+    if (p.status === 'In Progress') return false
+    if (p.status === 'Approved/Scheduled' && p.start_datetime && isPastProd(p)) return true
+    if (p.status === 'Idea/Request' && p.start_datetime && isPastProd(p)) return true
+    return false
+  }), [filtered])
+  const abandonedProds = useMemo(() => filtered.filter(p => p.status === 'Abandoned'), [filtered])
+  const miscPipelineProds = useMemo(() => filtered.filter(p => {
     const s = p.status || ''
-    return TERMINAL_STATUSES.includes(s as any) || (!PIPELINE_STATUSES.includes(s as any) && !APPROVED_STATUSES.includes(s as any) && !TERMINAL_STATUSES.includes(s as any))
+    return s !== '' && !['Idea/Request', 'In Progress', 'Approved/Scheduled', 'Complete', 'Abandoned'].includes(s)
   }), [filtered])
 
   // ---------- Render helpers ----------
@@ -799,6 +831,16 @@ function ProductionsPageContent() {
               </Link>
             </div>
           )}
+          {focusFilter === 'live-email-pending' && (
+            <div style={{ marginBottom: '14px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${info}`, background: dark ? 'rgba(91,163,224,0.08)' : 'rgba(91,163,224,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
+              <p style={{ margin: 0, fontSize: '13px', color: text }}>
+                Livestream-type productions with a synced link and no organizer link email logged yet (any status except Abandoned).
+              </p>
+              <button type="button" onClick={() => setFocusFilter('all')} style={{ fontSize: '13px', fontWeight: 600, color: info, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const }}>
+                Clear filter
+              </button>
+            </div>
+          )}
 
           {/* FOCUS ZONE */}
           <section style={uiStyles.zoneSection}>
@@ -810,6 +852,7 @@ function ProductionsPageContent() {
               {focusChip('this-week', 'This week', counts.thisWeek, 'warning')}
               {focusChip('overdue', 'Overdue', counts.overdue, 'danger')}
               {focusChip('unstaffed', 'Unstaffed', counts.unstaffed, 'danger')}
+              {focusChip('live-email-pending', 'Live email', counts.liveEmailPending, 'info')}
             </div>
           </section>
 
@@ -922,37 +965,108 @@ function ProductionsPageContent() {
 
           {/* PIPELINE VIEW */}
           {view === 'pipeline' && (
-            <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '16px', alignItems: 'start' }}>
-              {inProgress.length > 0 && (
-                <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
-                  {colHeader('In Progress', inProgress.length, 'warning')}
-                  {inProgress.map(p => <ProductionCard key={p.id} prod={p} />)}
-                </div>
+            <>
+              {ideaForward.length > 0 && (
+                <section style={{ marginBottom: '10px' }}>
+                  <div style={{ background: warningBg, border: `1px solid ${warning}45`, borderRadius: '8px', overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIdeaStripExpanded(v => !v)}
+                      aria-expanded={ideaStripExpanded}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '7px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}
+                    >
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: warning }}>
+                        {ideaForward.length} idea / request{ideaForward.length !== 1 ? 's' : ''} (upcoming or no date)
+                      </span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={warning} strokeWidth="2.5" style={{ transform: ideaStripExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} aria-hidden><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    {ideaStripExpanded && (
+                      <div style={{ borderTop: `1px solid ${warning}35`, padding: '6px 10px 8px' }}>
+                        {ideaForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                      </div>
+                    )}
+                  </div>
+                </section>
               )}
-              <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
-                {colHeader('Idea / Request', ideaRequest.length, null)}
-                {ideaRequest.length === 0 ? (
-                  <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 0', margin: 0 }}>No incoming requests</p>
-                ) : ideaRequest.map(p => <ProductionCard key={p.id} prod={p} />)}
-              </div>
-              <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
-                {colHeader('Approved / Scheduled', approved.length, 'success')}
-                {approved.length === 0 ? (
-                  <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 0', margin: 0 }}>No approved productions</p>
-                ) : approved.map(p => <ProductionCard key={p.id} prod={p} />)}
-              </div>
-              {other.length > 0 && (
-                <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
-                  {colHeader('Complete / Other', other.length, 'info')}
-                  {other.slice(0, 10).map(p => <ProductionCard key={p.id} prod={p} />)}
-                  {other.length > 10 && (
-                    <p style={{ fontSize: '12px', color: muted, textAlign: 'center' as const, padding: '6px 0 0', margin: 0 }}>
-                      +{other.length - 10} more — switch to List view
-                    </p>
+
+              {(inProgress.length > 0 || approvedForward.length > 0) ? (
+                <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '16px', alignItems: 'start' }}>
+                  {inProgress.length > 0 && (
+                    <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
+                      {colHeader('In Progress', inProgress.length, 'warning')}
+                      {inProgress.map(p => <ProductionCard key={p.id} prod={p} />)}
+                    </div>
                   )}
+                  <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
+                    {colHeader('Approved / Scheduled', approvedForward.length, 'success')}
+                    {approvedForward.length === 0 ? (
+                      <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No upcoming approved dates</p>
+                    ) : approvedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                  </div>
                 </div>
+              ) : (
+                <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 12px', margin: '0 0 8px', background: colBg, border: `1px solid ${border}`, borderRadius: '12px' }}>
+                  No items in the forward pipeline — expand Past &amp; archive or Abandoned below if you expect older rows.
+                </p>
               )}
-            </div>
+
+              {(pastArchiveProds.length > 0 || miscPipelineProds.length > 0) && (
+                <section style={{ marginTop: '12px' }}>
+                  <div style={{ background: surface2, border: `1px solid ${border}`, borderRadius: '8px', overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={() => setPastArchiveExpanded(v => !v)}
+                      aria-expanded={pastArchiveExpanded}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '7px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: text }}>
+                          Past &amp; archive ({pastArchiveProds.length + miscPipelineProds.length})
+                        </span>
+                        <span style={{ display: 'block', fontSize: '10px', color: muted, marginTop: '2px', lineHeight: 1.35 }}>
+                          Complete, past-dated rows, and non-standard statuses
+                        </span>
+                      </span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2.5" style={{ transform: pastArchiveExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }} aria-hidden><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    {pastArchiveExpanded && (
+                      <div style={{ borderTop: `1px solid ${border}`, padding: '8px 10px 10px', maxHeight: 'min(70vh, 520px)', overflowY: 'auto' as const }}>
+                        {miscPipelineProds.length > 0 && (
+                          <>
+                            <p style={{ fontSize: '10px', fontWeight: 700, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em', margin: '0 0 6px' }}>Non-standard status</p>
+                            {miscPipelineProds.map(p => <ProductionCard key={`misc-${p.id}`} prod={p} />)}
+                          </>
+                        )}
+                        {pastArchiveProds.map(p => <ProductionCard key={p.id} prod={p} />)}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {abandonedProds.length > 0 && (
+                <section style={{ marginTop: '8px' }}>
+                  <div style={{ background: dangerBg, border: `1px solid ${danger}40`, borderRadius: '8px', overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAbandonedExpanded(v => !v)}
+                      aria-expanded={abandonedExpanded}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '7px 10px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}
+                    >
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: danger }}>
+                        Abandoned ({abandonedProds.length})
+                      </span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2.5" style={{ transform: abandonedExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} aria-hidden><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    {abandonedExpanded && (
+                      <div style={{ borderTop: `1px solid ${danger}30`, padding: '8px 10px 10px', maxHeight: 'min(50vh, 400px)', overflowY: 'auto' as const }}>
+                        {abandonedProds.map(p => <ProductionCard key={p.id} prod={p} />)}
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </>
           )}
 
           {/* LIST VIEW */}
