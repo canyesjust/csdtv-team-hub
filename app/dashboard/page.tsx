@@ -288,9 +288,11 @@ export default function DashboardPage() {
 
   const getMorningBriefing = () => {
     const parts: string[] = []
-    const today = new Date()
-    const todayTasks = myTasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === today.toDateString())
-    const overdueTasks = myTasks.filter(t => t.due_date && new Date(t.due_date) < today)
+    const todayTasks = myTasks.filter(t => dayDiffFromToday(t.due_date) === 0)
+    const overdueTasks = myTasks.filter(t => {
+      const d = dayDiffFromToday(t.due_date)
+      return d !== null && d < 0
+    })
     if (todayProductions.length > 0) parts.push(`${todayProductions.length} production${todayProductions.length > 1 ? 's' : ''} happening today`)
     if (overdueTasks.length > 0) parts.push(`${overdueTasks.length} overdue task${overdueTasks.length > 1 ? 's' : ''} need attention`)
     else if (todayTasks.length > 0) parts.push(`${todayTasks.length} task${todayTasks.length > 1 ? 's' : ''} due today`)
@@ -351,9 +353,9 @@ export default function DashboardPage() {
 
   const queueItems: QueueItem[] = [
     ...myTasks.map(task => {
-      const dueDays = task.due_date ? Math.ceil((new Date(task.due_date).getTime() - Date.now()) / 86400000) : null
+      const dueDays = dayDiffFromToday(task.due_date)
       const overdue = dueDays !== null && dueDays < 0
-      const due48h = dueDays !== null && dueDays <= 2
+      const due48h = dueDays !== null && dueDays >= 0 && dueDays <= 2
       const score =
         (overdue ? 40 : 0) +
         (due48h ? 25 : 0) +

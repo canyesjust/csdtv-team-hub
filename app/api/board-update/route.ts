@@ -15,6 +15,13 @@ type SheetRow = {
   time: string
 }
 
+function toLocalIso(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function parseCsv(text: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
@@ -62,13 +69,13 @@ function toIsoDate(input: string): string | null {
     const y = Number(mmdd[3].length === 2 ? `20${mmdd[3]}` : mmdd[3])
     if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
       const dt = new Date(y, m - 1, d)
-      if (!Number.isNaN(dt.getTime())) return dt.toISOString().slice(0, 10)
+      if (!Number.isNaN(dt.getTime())) return toLocalIso(dt)
     }
   }
   const parsed = new Date(raw)
   if (Number.isNaN(parsed.getTime())) return null
   const local = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
-  return local.toISOString().slice(0, 10)
+  return toLocalIso(local)
 }
 
 function fromIsoLocal(iso: string): Date {
@@ -121,7 +128,8 @@ export async function GET() {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const csvRes = await fetch(BOARD_SHEET_CSV_URL, { cache: 'no-store' })
+  // Cache the public sheet briefly to reduce perceived slowness.
+  const csvRes = await fetch(BOARD_SHEET_CSV_URL, { next: { revalidate: 300 } })
   if (!csvRes.ok) {
     return NextResponse.json({ error: 'Failed to load board sheet' }, { status: 502 })
   }
@@ -156,7 +164,7 @@ export async function GET() {
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const todayIso = today.toISOString().slice(0, 10)
+  const todayIso = toLocalIso(today)
 
   const boardMeetingRows = sheetRows
     .filter(r => /board\s*meeting/i.test(r.name) && r.dateObj)
@@ -165,7 +173,7 @@ export async function GET() {
 
   const lastBoardMeetingIso = boardMeetingRows[0]?.dateIso || null
   const windowStartDate = lastBoardMeetingIso ? fromIsoLocal(lastBoardMeetingIso) : addDays(today, -14)
-  const windowStartIso = windowStartDate.toISOString().slice(0, 10)
+  const windowStartIso = toLocalIso(windowStartDate)
   const windowEndIso = todayIso
 
   const upcomingEnd = addDays(today, 14)

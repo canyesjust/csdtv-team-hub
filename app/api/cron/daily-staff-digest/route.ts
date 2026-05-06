@@ -150,7 +150,8 @@ export async function GET(request: Request) {
     }
   }
 
-  if (team.length > 0) {
+  // Only mark the digest as sent if at least one message actually succeeded.
+  if (sent > 0) {
     await supabase.from('app_settings').upsert({
       key: 'daily_digest_last_sent',
       value: todayKey,
