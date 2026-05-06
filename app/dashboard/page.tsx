@@ -152,6 +152,7 @@ export default function DashboardPage() {
         .select('id, livestream_url')
         .eq('status', 'Complete')
         .is('youtube_link_email_sent_at', null)
+        .not('livestream_url', 'is', null)
       let pending = 0
       if (!pendingErr) {
         for (const p of pendingCandidates || []) {
@@ -180,7 +181,7 @@ export default function DashboardPage() {
 
       const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
-      const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds] = await Promise.all([
+      const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds, delivRes, ytRes] = await Promise.all([
         supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monday.toISOString()),
         supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monthStart.toISOString()),
         supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monday.toISOString()),
@@ -188,11 +189,11 @@ export default function DashboardPage() {
         supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monday.toISOString().split('T')[0]),
         supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
         supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
+        supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0),
+        supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null),
       ])
-      const { data: delivData } = await supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0)
-      const delivSum = (delivData || []).reduce((s: number, p: any) => s + (p.deliverables_count || 0), 0)
-      const { data: ytData } = await supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null)
-      const viewsSum = (ytData || []).reduce((s: number, v: any) => s + (v.youtube_views || 0), 0)
+      const delivSum = (delivRes.data || []).reduce((s: number, p: { deliverables_count?: number | null }) => s + (p.deliverables_count || 0), 0)
+      const viewsSum = (ytRes.data || []).reduce((s: number, v: { youtube_views?: number | null }) => s + (v.youtube_views || 0), 0)
       setWeekStats({ prodsCompleted: weekProds.count || 0, tasksCompleted: weekTasks.count || 0, videosPublished: weekVids.count || 0 })
       setMonthStats({ prodsCompleted: monthProds.count || 0, tasksCompleted: monthTasks.count || 0, videosPublished: monthVids.count || 0 })
       setYearProdCount(yearProds.count || 0)

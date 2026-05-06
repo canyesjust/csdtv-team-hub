@@ -187,9 +187,19 @@ export default function TasksPage() {
     const { data: tplData } = await supabase.from('task_templates').select('*, items:task_template_items(*)').order('name')
     setTemplates((tplData || []).map((t: any) => ({ ...t, items: t.items?.sort((a: any, b: any) => a.sort_order - b.sort_order) })))
 
-    const { data: allSubs } = await supabase.from('subtasks').select('task_id, completed')
+    const taskIdsForSubs = [...new Set([
+      ...(tasksRes.data || []).map((t: { id: string }) => t.id),
+      ...(completedRes.data || []).map((t: { id: string }) => t.id),
+    ])]
+    const SUBTASK_ID_CHUNK = 120
+    const allSubs: { task_id: string; completed: boolean }[] = []
+    for (let i = 0; i < taskIdsForSubs.length; i += SUBTASK_ID_CHUNK) {
+      const chunk = taskIdsForSubs.slice(i, i + SUBTASK_ID_CHUNK)
+      const { data: subChunk } = await supabase.from('subtasks').select('task_id, completed').in('task_id', chunk)
+      if (subChunk) allSubs.push(...subChunk)
+    }
     const counts: Record<string, { total: number; done: number }> = {}
-    ;(allSubs || []).forEach((s: any) => {
+    allSubs.forEach((s: any) => {
       if (!counts[s.task_id]) counts[s.task_id] = { total: 0, done: 0 }
       counts[s.task_id].total++
       if (s.completed) counts[s.task_id].done++
