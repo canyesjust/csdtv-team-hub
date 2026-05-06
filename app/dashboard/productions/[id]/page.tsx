@@ -696,11 +696,29 @@ export default function ProductionDetailPage() {
     const tplLabel = tpl?.label
     await logActivity('Emailed organizer', tplLabel ? `Template: ${tplLabel}` : 'Custom message')
     if (templateUsesYoutubeLink(tpl) && getSyncedYoutubeLink() && uuid) {
-      const sentAt = new Date().toISOString()
-      const { error } = await supabase.from('productions').update({ youtube_link_email_sent_at: sentAt }).eq('id', uuid)
-      if (!error) {
-        setProduction(prev => prev ? { ...prev, youtube_link_email_sent_at: sentAt } : null)
-        await logActivity('YouTube link email', 'Logged send (mail client opened with tracked link)')
+      try {
+        const res = await fetch('/api/productions/youtube-link-email-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ productionId: uuid }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (res.ok && body.sentAt) {
+          setProduction(prev => prev ? { ...prev, youtube_link_email_sent_at: body.sentAt } : null)
+          await logActivity('YouTube link email', 'Logged send (mail client opened with tracked link)')
+        } else {
+          const fallbackAt = new Date().toISOString()
+          const { error } = await supabase.from('productions').update({ youtube_link_email_sent_at: fallbackAt }).eq('id', uuid)
+          if (!error) {
+            setProduction(prev => prev ? { ...prev, youtube_link_email_sent_at: fallbackAt } : null)
+            await logActivity('YouTube link email', 'Logged send (mail client opened with tracked link)')
+          } else {
+            toast('Could not save link-email timestamp on the production. The Live email filter uses Activity until fixed.', 'error')
+          }
+        }
+      } catch {
+        toast('Could not record link-email timestamp. Try again.', 'error')
       }
     }
     const mailto = `mailto:${production.organizer_email}?subject=${encodeURIComponent(sanitizeEmailSubject(emailSubject))}&body=${encodeURIComponent(emailBody)}`

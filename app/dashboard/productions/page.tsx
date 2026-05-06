@@ -142,6 +142,8 @@ function ProductionsPageContent() {
   const [newChecklistTitle, setNewChecklistTitle] = useState('')
   const [showOverflow, setShowOverflow] = useState(false)
   const overflowRef = useRef<HTMLDivElement | null>(null)
+  /** Production IDs with logged “Emailed organizer” activity that looks like a YouTube/livestream template (backfill when DB column did not update). */
+  const [organizerYoutubeEmailedIds, setOrganizerYoutubeEmailedIds] = useState<Set<string>>(() => new Set())
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -205,6 +207,19 @@ function ProductionsPageContent() {
     const dSet = new Set<string>()
     ;(dismissedData || []).forEach((d: any) => { dSet.add(`${d.production_a_id}-${d.production_b_id}`); dSet.add(`${d.production_b_id}-${d.production_a_id}`) })
     setDismissedConflicts(dSet)
+
+    const { data: organizerEmailActs } = await supabase
+      .from('production_activity')
+      .select('production_id, detail')
+      .eq('action', 'Emailed organizer')
+    const ytMailSet = new Set<string>()
+    for (const row of organizerEmailActs || []) {
+      const det = (row.detail || '').toLowerCase()
+      if (det.includes('youtube') || (det.includes('template:') && det.includes('livestream'))) {
+        ytMailSet.add(row.production_id as string)
+      }
+    }
+    setOrganizerYoutubeEmailedIds(ytMailSet)
 
     const latestSync = (prodsData || []).reduce<string | null>((max, p) =>
       p.synced_at && (!max || p.synced_at > max) ? p.synced_at : max, null)
@@ -414,6 +429,12 @@ function ProductionsPageContent() {
     const t = (p.request_type_label || p.type || '').toLowerCase()
     return t.includes('livestream') || t.includes('live stream')
   }, [])
+
+  /** True if staff logged sending the organizer link email (column or activity). */
+  const youtubeOrganizerEmailLogged = useCallback((p: Production) => {
+    if (p.youtube_link_email_sent_at) return true
+    return organizerYoutubeEmailedIds.has(p.id)
+  }, [organizerYoutubeEmailedIds])
   const getProgress = (p: Production) => {
     const items = p.checklist_items || []
     if (items.length === 0) return null
@@ -446,12 +467,12 @@ function ProductionsPageContent() {
       if (
         isLivestreamType(p)
         && (p.livestream_url || '').trim()
-        && !p.youtube_link_email_sent_at
+        && !youtubeOrganizerEmailLogged(p)
         && p.status !== 'Abandoned'
       ) liveEmailPending++
     })
     return { today, thisWeek, overdue, unstaffed, upcoming, liveEmailPending, all: scopedProductions.length }
-  }, [scopedProductions, isLivestreamType])
+  }, [scopedProductions, isLivestreamType, youtubeOrganizerEmailLogged])
 
   const ytPendingOnly = searchParams.get('ytPending') === '1'
 
@@ -468,7 +489,7 @@ function ProductionsPageContent() {
   const filtered = useMemo(() => scopedProductions.filter(p => {
     if (ytPendingOnly) {
       if (p.status !== 'Complete') return false
-      if (p.youtube_link_email_sent_at) return false
+      if (youtubeOrganizerEmailLogged(p)) return false
       if (!(p.livestream_url && String(p.livestream_url).trim())) return false
     }
     if (focusFilter === 'today' && daysFromToday(p.start_datetime) !== 0) return false
@@ -489,7 +510,7 @@ function ProductionsPageContent() {
     if (focusFilter === 'live-email-pending') {
       if (!isLivestreamType(p)) return false
       if (!(p.livestream_url || '').trim()) return false
-      if (p.youtube_link_email_sent_at) return false
+      if (youtubeOrganizerEmailLogged(p)) return false
       if (p.status === 'Abandoned') return false
     }
     if (typeFilter !== 'all' && getTypeLabel(p) !== typeFilter) return false
@@ -506,7 +527,7 @@ function ProductionsPageContent() {
       if (!hit) return false
     }
     return true
-  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search, isLivestreamType])
+  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search, isLivestreamType, youtubeOrganizerEmailLogged])
 
   const overdueProds = useMemo(() => filtered.filter(isOverdueProd), [filtered])
 
@@ -834,7 +855,7 @@ function ProductionsPageContent() {
           {focusFilter === 'live-email-pending' && (
             <div style={{ marginBottom: '14px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${info}`, background: dark ? 'rgba(91,163,224,0.08)' : 'rgba(91,163,224,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
               <p style={{ margin: 0, fontSize: '13px', color: text }}>
-                Livestream-type productions with a synced link and no organizer link email logged yet (any status except Abandoned).
+                Livestream-type productions with a synced link and no organizer link email logged yet (checks send timestamp and Activity).
               </p>
               <button type="button" onClick={() => setFocusFilter('all')} style={{ fontSize: '13px', fontWeight: 600, color: info, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const }}>
                 Clear filter
