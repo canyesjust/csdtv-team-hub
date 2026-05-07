@@ -756,27 +756,27 @@ function ProductionsPageContent() {
           style={{
             background: isOpen ? 'rgba(91,163,224,0.10)' : cardBg,
             border: `1px solid ${isOpen ? 'var(--brand-primary)' : needsAttention && healthColor ? `${healthColor}55` : border}`,
-            borderRadius: '12px', padding: '14px 16px', marginBottom: '8px',
+            borderRadius: '10px', padding: '10px 12px', marginBottom: '6px',
             cursor: 'pointer', transition: 'all 0.15s',
             borderLeft: `3px solid ${overdue ? danger : typeColor}`,
           }}
           onMouseEnter={e => { if (!isOpen) { (e.currentTarget as HTMLDivElement).style.background = hoverBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' } }}
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = isOpen ? 'rgba(91,163,224,0.10)' : cardBg; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
                 <span style={{ fontSize: '11px', color: muted }}>#{prod.production_number}</span>
                 {overdue && <span style={{ ...statusBadge('danger', true), fontSize: '10px', padding: '1px 6px' }}>Overdue</span>}
                 {past && !overdue && <span style={{ fontSize: '10px', color: muted, background: surface2, padding: '1px 6px', borderRadius: '4px' }}>Past</span>}
                 {healthColor && !past && <span title={healthTip || ''} style={{ width: '8px', height: '8px', borderRadius: '50%', background: healthColor, display: 'inline-block', flexShrink: 0 }} />}
               </div>
-              <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical' as any }}>{prod.title}</p>
+              <p style={{ fontSize: '14px', fontWeight: 600, color: text, margin: 0, lineHeight: 1.25, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1 as any, WebkitBoxOrient: 'vertical' as any }}>{prod.title}</p>
             </div>
             {members.length > 0 ? (
               <div style={{ display: 'flex', flexShrink: 0 }}>
                 {members.slice(0, 3).map((m, i) => m.team && (
-                  <div key={m.user_id} title={m.team.name} style={{ width: '22px', height: '22px', borderRadius: '50%', background: m.team.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', marginLeft: i > 0 ? '-6px' : 0, border: `2px solid ${cardBg}`, zIndex: members.length - i, position: 'relative' }}>
+                  <div key={m.user_id} title={m.team.name} style={{ width: '20px', height: '20px', borderRadius: '50%', background: m.team.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', marginLeft: i > 0 ? '-6px' : 0, border: `2px solid ${cardBg}`, zIndex: members.length - i, position: 'relative' }}>
                     {m.team.name.slice(0, 2).toUpperCase()}
                   </div>
                 ))}
@@ -786,10 +786,10 @@ function ProductionsPageContent() {
             ) : null}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: progress ? '8px' : '0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: progress ? '6px' : '0' }}>
             {renderTypePill(prod)}
-            <span style={{ fontSize: '12px', color: muted }}>{primaryContactLabel(prod)}</span>
-            {prod.start_datetime && <span style={{ fontSize: '12px', color: muted }}>· {formatDate(prod.start_datetime)}</span>}
+            <span style={{ fontSize: '11px', color: muted }}>{primaryContactLabel(prod)}</span>
+            {prod.start_datetime && <span style={{ fontSize: '11px', color: muted }}>· {formatDate(prod.start_datetime)}</span>}
           </div>
 
           {progress && (
@@ -801,16 +801,16 @@ function ProductionsPageContent() {
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
             <Link
               href={`/dashboard/productions/${prod.production_number}`}
               onClick={e => e.stopPropagation()}
               style={{
-                fontSize: '11px',
+                fontSize: '10px',
                 fontWeight: 600,
                 color: 'var(--brand-primary)',
                 textDecoration: 'none',
-                padding: '4px 8px',
+                padding: '3px 7px',
                 border: `1px solid ${border}`,
                 borderRadius: '6px',
                 background: surface2,
