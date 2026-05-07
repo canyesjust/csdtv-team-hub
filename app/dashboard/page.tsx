@@ -213,7 +213,7 @@ export default function DashboardPage() {
         const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
         const { data: prods } = await supabase
           .from('productions')
-          .select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, checklist_items(completed)')
+          .select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, checklist_items(id, title, completed)')
           .in('id', ids)
           .neq('status', 'Complete')
           .order('start_datetime', { ascending: true, nullsFirst: false })
