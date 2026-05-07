@@ -3,7 +3,17 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const expectedKey = process.env.SIGNAGE_TASKS_KEY
+  if (!expectedKey) {
+    return NextResponse.json({ error: 'SIGNAGE_TASKS_KEY not configured' }, { status: 500 })
+  }
+
+  const incomingKey = new URL(request.url).searchParams.get('k')
+  if (!incomingKey || incomingKey !== expectedKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {

@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase'
 
 interface TaskRow {
   id: string
@@ -49,56 +48,24 @@ function initials(name: string): string {
 }
 
 export default function TasksSignagePage() {
-  const supabase = createClient()
   const [now, setNow] = useState(new Date())
   const [viewport, setViewport] = useState({ w: 1920, h: 1080 })
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [prodMembers, setProdMembers] = useState<ProductionMemberRow[]>([])
 
   const loadData = useCallback(async () => {
-    const res = await fetch('/api/signage/tasks-data', { cache: 'no-store' })
+    setLoadError(null)
+    const key = new URLSearchParams(window.location.search).get('k') || ''
+    const res = await fetch(`/api/signage/tasks-data?k=${encodeURIComponent(key)}`, { cache: 'no-store' })
     const payload = await res.json().catch(() => ({}))
     if (!res.ok) {
-      // Fallback for any server-route failure so signage still renders.
-      const [tasksRes, teamRes] = await Promise.all([
-        supabase
-          .from('tasks')
-          .select('id,title,priority,due_date,assigned_to,production_id,purchase_request,productions(production_number,title)')
-          .not('status', 'ilike', 'complete')
-          .order('due_date', { ascending: true, nullsFirst: false }),
-        supabase
-          .from('team')
-          .select('id,name,avatar_color,role')
-          .eq('active', true)
-          .order('name'),
-      ])
-      const fallbackTasks = ((tasksRes.data || []) as Array<{
-        id: string
-        title: string
-        priority: string
-        due_date: string | null
-        assigned_to: string | null
-        production_id: string | null
-        purchase_request: boolean | null
-        productions?: { production_number: number; title: string } | { production_number: number; title: string }[] | null
-      }>).map(row => {
-        const prod = Array.isArray(row.productions) ? row.productions[0] || null : row.productions || null
-        return {
-          id: row.id,
-          title: row.title,
-          priority: row.priority,
-          due_date: row.due_date,
-          assigned_to: row.assigned_to,
-          production_id: row.production_id,
-          purchase_request: !!row.purchase_request,
-          productions: prod ? { production_number: prod.production_number, title: prod.title } : null,
-        }
-      })
-      setTasks(fallbackTasks)
-      setTeam((teamRes.data as TeamMember[]) || [])
+      setTasks([])
+      setTeam([])
       setProdMembers([])
+      setLoadError(payload?.error || 'Failed to load signage data')
       setLoading(false)
       return
     }
@@ -129,7 +96,7 @@ export default function TasksSignagePage() {
     setTeam((payload.team as TeamMember[]) || [])
     setProdMembers((payload.prodMembers as ProductionMemberRow[]) || [])
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -264,6 +231,11 @@ export default function TasksSignagePage() {
 
   return (
     <div style={{ background: bg, color: text, height: '100vh', padding: '14px 16px', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
+      {loadError && (
+        <div style={{ marginBottom: '10px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(18, 13)}px`, fontWeight: 600 }}>
+          {loadError}. Add `?k=YOUR_SIGNAGE_KEY` to this URL.
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.05 }}>CSDtv Task Ops Board</h1>

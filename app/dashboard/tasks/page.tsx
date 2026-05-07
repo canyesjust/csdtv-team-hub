@@ -83,7 +83,7 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-  const [focusFilter, setFocusFilter] = useState<FocusFilter>('today')
+  const [focusFilter, setFocusFilter] = useState<FocusFilter>('all')
   const [scope, setScope] = useState<Scope>('mine')
   const [statusFilter, setStatusFilter] = useState('all')
   const [groupBy, setGroupBy] = useState<Grouping>('none')
@@ -106,6 +106,8 @@ export default function TasksPage() {
   const [panelNotes, setPanelNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [search, setSearch] = useState('')
+  const [denseMode, setDenseMode] = useState(true)
+  const [productionFilterId, setProductionFilterId] = useState<string | null>(null)
   const [myProductions, setMyProductions] = useState<{ id: string; title: string; production_number: number; total: number; done: number }[]>([])
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
@@ -575,9 +577,10 @@ export default function TasksPage() {
           || (t.scanned_sheet_id || '').toLowerCase().includes(q)
         if (!hit) return false
       }
+      if (productionFilterId && t.production_id !== productionFilterId) return false
       return true
     })
-  }, [scopedTasks, scopedCompleted, focusFilter, statusFilter, search])
+  }, [scopedTasks, scopedCompleted, focusFilter, statusFilter, search, productionFilterId])
 
   const grouped = useMemo<{ label: string | null; tasks: Task[] }[]>(() => {
     if (groupBy === 'none') return [{ label: null, tasks: filtered }]
@@ -676,12 +679,16 @@ export default function TasksPage() {
     </div>
   )
 
+  const activeProductionFilter = productionFilterId
+    ? myProductions.find(p => p.id === productionFilterId) || null
+    : null
+
   return (
     <div className="tasks-shell" style={{ maxWidth: '1760px', margin: '0 auto' }}>
-      <div className="tasks-layout" style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+      <div className="tasks-layout" style={{ display: 'flex', gap: denseMode ? '14px' : '20px', alignItems: 'flex-start' }}>
         <main style={{ flex: 1, minWidth: 0 }}>
           {/* HEADER */}
-          <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', gap: '12px', flexWrap: 'wrap' as const }}>
+          <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: denseMode ? '14px' : '24px', gap: '12px', flexWrap: 'wrap' as const }}>
             <div>
               <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>Tasks</h1>
               <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{briefingText}</p>
@@ -750,7 +757,7 @@ export default function TasksPage() {
           </header>
 
           {/* FOCUS ZONE */}
-          <section style={uiStyles.zoneSection}>
+          <section style={{ ...uiStyles.zoneSection, marginBottom: denseMode ? '12px' : '20px' }}>
             <ZoneHeader
               label="Focus"
               hint="Pick what matters now"
@@ -765,7 +772,7 @@ export default function TasksPage() {
           </section>
 
           {/* SCOPE / SEARCH ROW */}
-          <section style={{ marginBottom: '20px' }}>
+          <section style={{ marginBottom: denseMode ? '12px' : '20px' }}>
             <div className="scope-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
               {!isStudentInternUser && (
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -779,6 +786,22 @@ export default function TasksPage() {
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: text, fontFamily: 'inherit' }} />
                 {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>}
               </div>
+              <button
+                onClick={() => setDenseMode(v => !v)}
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  border: `1px solid ${border}`,
+                  background: denseMode ? surface2 : cardBg,
+                  color: denseMode ? text : muted,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {denseMode ? 'Dense mode on' : 'Dense mode off'}
+              </button>
             </div>
             {(statusFilter !== 'all' || groupBy !== 'none') && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const, marginTop: '10px', fontSize: '12px', color: muted }}>
@@ -798,7 +821,7 @@ export default function TasksPage() {
 
           {/* MY PRODUCTIONS strip — collapsible */}
           {myProductions.length > 0 && (
-            <section style={{ marginBottom: '20px' }}>
+            <section style={{ marginBottom: denseMode ? '12px' : '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <button onClick={() => setShowProductions(v => !v)} aria-expanded={showProductions} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', color: muted, fontSize: '11px', fontWeight: 700, letterSpacing: '0.6px', textTransform: 'uppercase' as const }}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: showProductions ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}><polyline points="9 18 15 12 9 6"/></svg>
@@ -806,24 +829,30 @@ export default function TasksPage() {
                 </button>
               </div>
               {showProductions && (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
+                <div style={{ display: 'flex', gap: denseMode ? '6px' : '8px', flexWrap: 'wrap' as const }}>
                   {myProductions.map(p => {
                     const pct = Math.round((p.done / p.total) * 100)
+                    const active = productionFilterId === p.id
                     return (
-                      <Link key={p.id} href={`/dashboard/productions/${p.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', minWidth: '200px', transition: 'border-color 0.15s' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--brand-primary)'}
-                        onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.borderColor = border}
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: denseMode ? '7px 10px' : '8px 14px', background: active ? statusTone.info.background : cardBg, border: `1px solid ${active ? info : border}`, borderRadius: '10px', minWidth: denseMode ? '170px' : '200px' }}
                       >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: '13px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{p.production_number} {p.title}</p>
+                        <button
+                          onClick={() => setProductionFilterId(prev => prev === p.id ? null : p.id)}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'inherit', textAlign: 'left', flex: 1, minWidth: 0 }}
+                          title={active ? 'Clear production filter' : 'Filter tasks to this production'}
+                        >
+                          <p style={{ fontSize: denseMode ? '12px' : '13px', fontWeight: 700, color: active ? info : text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>#{p.production_number} {p.title}</p>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
                             <div style={{ flex: 1, height: '3px', background: surface2, borderRadius: '2px', overflow: 'hidden' }}>
                               <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? success : 'var(--brand-primary)' }} />
                             </div>
-                            <span style={{ fontSize: '11px', color: pct === 100 ? success : muted, fontWeight: 500, flexShrink: 0 }}>{p.done}/{p.total}</span>
+                            <span style={{ fontSize: '11px', color: active ? info : (pct === 100 ? success : muted), fontWeight: 600, flexShrink: 0 }}>{p.done}/{p.total}</span>
                           </div>
-                        </div>
-                      </Link>
+                        </button>
+                        <Link href={`/dashboard/productions/${p.production_number}`} style={{ textDecoration: 'none', fontSize: '11px', color: muted, fontWeight: 700, whiteSpace: 'nowrap' as const }}>
+                          Open →
+                        </Link>
+                      </div>
                     )
                   })}
                 </div>
@@ -831,9 +860,18 @@ export default function TasksPage() {
             </section>
           )}
 
+          {activeProductionFilter && (
+            <div style={{ marginBottom: denseMode ? '10px' : '14px' }}>
+              <span style={{ ...statusBadge('info', true), fontSize: '11px' }}>
+                Production filter: #{activeProductionFilter.production_number} {activeProductionFilter.title}
+                <button onClick={() => setProductionFilterId(null)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: '4px', padding: 0, fontSize: '12px', lineHeight: 1 }}>×</button>
+              </span>
+            </div>
+          )}
+
           {/* NEW TASK FORM */}
           {showNewTask && (
-            <div style={{ ...uiStyles.card, padding: '18px', marginBottom: '20px' }}>
+            <div style={{ ...uiStyles.card, padding: denseMode ? '14px' : '18px', marginBottom: denseMode ? '12px' : '20px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: '0 0 14px' }}>New task</h3>
               <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} placeholder="Task title" style={{ ...inputStyle, marginBottom: '8px' }} />
               <textarea value={newTask.description} onChange={e => setNewTask(p => ({ ...p, description: e.target.value }))} placeholder="Description (optional)" style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const, marginBottom: '8px' }} />
@@ -891,7 +929,7 @@ export default function TasksPage() {
 
           {/* TEMPLATES PANEL */}
           {showTemplates && !isStudentInternUser && (
-            <div style={{ ...uiStyles.card, padding: '18px', marginBottom: '20px' }}>
+            <div style={{ ...uiStyles.card, padding: denseMode ? '14px' : '18px', marginBottom: denseMode ? '12px' : '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: 0 }}>Task templates</h3>
                 <button onClick={() => setShowTemplates(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
@@ -968,13 +1006,18 @@ export default function TasksPage() {
 
           {/* TASKS LIST */}
           {filtered.length === 0 ? (
-            <div style={{ ...uiStyles.card, padding: '60px 20px', textAlign: 'center' as const }}>
+            <div style={{ ...uiStyles.card, padding: denseMode ? '36px 14px' : '60px 20px', textAlign: 'center' as const }}>
               <p style={{ color: muted, fontSize: '14px', margin: 0 }}>
                 {focusFilter === 'today' ? 'Nothing due today.' :
                  focusFilter === 'overdue' ? 'No overdue tasks. Nice.' :
                  focusFilter === 'this-week' ? 'Nothing due this week.' :
                  focusFilter === 'recent-done' ? 'No tasks completed in the last 7 days.' :
                  'No tasks match your filters.'}
+              </p>
+              <p style={{ color: muted, fontSize: '12px', margin: '8px 0 0' }}>
+                {productionFilterId ? 'Clear the production filter to see all open work.' :
+                 search ? 'Try a shorter search or clear filters in the menu.' :
+                 'Try switching scope, status, or opening Recent done.'}
               </p>
             </div>
           ) : grouped.map(({ label, tasks: groupTasks }) => (
@@ -1007,8 +1050,8 @@ export default function TasksPage() {
                       onClick={() => !isCompleting && openTask(task)}
                       style={{
                         position: 'relative',
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        padding: '12px 16px',
+                        display: 'flex', alignItems: 'center', gap: denseMode ? '8px' : '12px',
+                        padding: denseMode ? '8px 10px' : '12px 16px',
                         borderBottom: i < groupTasks.length - 1 ? `1px solid ${border}` : 'none',
                         background: rowBg,
                         cursor: isCompleting ? 'default' : 'pointer',
@@ -1043,7 +1086,7 @@ export default function TasksPage() {
                         title={task.status === 'complete' ? 'Reopen' : 'Mark complete'}
                         disabled={isCompleting}
                         style={{
-                          width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0,
+                          width: denseMode ? '18px' : '20px', height: denseMode ? '18px' : '20px', borderRadius: '6px', flexShrink: 0,
                           border: `1.5px solid ${task.status === 'complete' || isCompleting ? success : border}`,
                           background: task.status === 'complete' || isCompleting ? success : 'transparent',
                           cursor: isCompleting ? 'default' : 'pointer',
@@ -1056,12 +1099,12 @@ export default function TasksPage() {
 
                       {/* main content */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: '14px', fontWeight: 500, color: isCompleting ? muted : text, margin: 0, textDecoration: isCompleting ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                        <p style={{ fontSize: denseMode ? '13px' : '14px', fontWeight: 600, color: isCompleting ? muted : text, margin: 0, textDecoration: isCompleting ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
                           {task.title}
                         </p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', fontSize: '12px', color: muted, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: denseMode ? '6px' : '8px', marginTop: '2px', fontSize: denseMode ? '11px' : '12px', color: muted, overflow: 'hidden' }}>
                           {task.productions?.title && (
-                            <span style={{ color: info, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '40%' }}>
+                            <span style={{ color: info, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '48%', border: `1px solid ${info}`, borderRadius: '999px', padding: denseMode ? '1px 6px' : '2px 8px', fontWeight: 700 }}>
                               #{task.productions.production_number} {task.productions.title}
                             </span>
                           )}
@@ -1081,6 +1124,15 @@ export default function TasksPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                         {renderPriorityPill(task.priority)}
                         {task.status !== 'pending' && renderStatusPill(task.status)}
+                        {task.status !== 'complete' && (
+                          <button
+                            onClick={e => { e.stopPropagation(); if (!isCompleting) completeTask(task) }}
+                            disabled={isCompleting}
+                            style={{ padding: denseMode ? '4px 8px' : '5px 10px', borderRadius: '999px', background: success, color: '#fff', border: 'none', cursor: isCompleting ? 'default' : 'pointer', fontSize: denseMode ? '10px' : '11px', fontWeight: 700, fontFamily: 'inherit' }}
+                          >
+                            Complete
+                          </button>
+                        )}
                         {dateInfo && <span style={{ fontSize: '12px', color: dateInfo.color, fontWeight: 600, whiteSpace: 'nowrap' as const, minWidth: '52px', textAlign: 'right' as const }}>{dateInfo.label}</span>}
                         {assignee ? (
                           <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: assignee.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }} title={assignee.name}>{assignee.name.slice(0, 2).toUpperCase()}</div>
@@ -1132,6 +1184,23 @@ export default function TasksPage() {
                     <option value="">Unassigned</option>
                     {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
+                </div>
+                <div style={{ marginBottom: '14px' }}>
+                  {selectedTask.status === 'complete' ? (
+                    <button
+                      onClick={() => reopenTask(selectedTask)}
+                      style={{ fontSize: '13px', padding: '8px 12px', borderRadius: '8px', background: cardBg, color: text, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
+                    >
+                      Reopen task
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => completeTask(selectedTask)}
+                      style={{ fontSize: '13px', padding: '8px 12px', borderRadius: '8px', background: success, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
+                    >
+                      Mark complete
+                    </button>
+                  )}
                 </div>
 
                 {/* LINKED PRODUCTION */}
