@@ -409,9 +409,10 @@ export default function ProductionDetailPage() {
 
   const createTaskForProduction = useCallback(async () => {
     if (!newTaskTitle || !currentUser || !uuid) return
+    const assigneeId = newTaskAssignee || currentUser.id
     const { data, error } = await supabase.from('tasks').insert({
       title: newTaskTitle, priority: newTaskPriority,
-      assigned_to: newTaskAssignee || null, due_date: newTaskDue || null,
+      assigned_to: assigneeId, due_date: newTaskDue || null,
       purchase_request: newTaskPurchaseRequest,
       purchase_request_link: newTaskPurchaseLink.trim() || null,
       production_id: uuid, status: 'pending', created_by: currentUser.id,
@@ -419,8 +420,8 @@ export default function ProductionDetailPage() {
     if (error) { toast(`Failed to create task: ${error.message}`); return }
     if (data) setLinkedTasks(prev => [data, ...prev])
     // Send email to assignee if assigned to someone else
-    if (newTaskAssignee && newTaskAssignee !== currentUser.id && production) {
-      const assignee = allTeam.find(m => m.id === newTaskAssignee)
+    if (assigneeId && assigneeId !== currentUser.id && production) {
+      const assignee = allTeam.find(m => m.id === assigneeId)
       if (assignee?.email) {
         const { data: { session } } = await supabase.auth.refreshSession()
         if (session) {

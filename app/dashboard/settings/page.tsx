@@ -52,6 +52,8 @@ export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
+  const signageTasksKey = process.env.NEXT_PUBLIC_SIGNAGE_TASKS_KEY || ''
+  const signageTasksHref = signageTasksKey ? `/signage/tasks?k=${encodeURIComponent(signageTasksKey)}` : '/signage/tasks'
 
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [team, setTeam] = useState<TeamMember[]>([])
@@ -786,7 +788,7 @@ export default function SettingsPage() {
             Production calendar signage →
           </a>
           <a
-            href="/signage/tasks"
+            href={signageTasksHref}
             target="_blank"
             rel="noopener noreferrer"
             style={{ fontSize: '14px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 600 }}
@@ -794,6 +796,11 @@ export default function SettingsPage() {
             Task ops signage →
           </a>
         </div>
+        {!signageTasksKey && (
+          <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>
+            Missing `NEXT_PUBLIC_SIGNAGE_TASKS_KEY` env var. Task signage link will open without key until it is set.
+          </p>
+        )}
       </div>
 
       {/* Team management — manager only */}

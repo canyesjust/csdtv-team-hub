@@ -27,6 +27,8 @@ interface Task {
   purchase_request: boolean; purchase_request_link: string | null
   completed_at: string | null; recurring: string | null; recurring_interval: number | null
   blocked_by: string | null; scanned_sheet_id: string | null
+  source?: 'task' | 'checklist'
+  checklist_item_id?: string | null
   productions?: { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null } | null
 }
 
@@ -34,6 +36,14 @@ interface TeamMember { id: string; name: string; role: string; avatar_color: str
 interface CurrentUser { id: string; name: string; role: string }
 interface TaskTemplate { id: string; name: string; description: string | null; items?: TaskTemplateItem[] }
 interface TaskTemplateItem { id: string; title: string; description: string | null; priority: string; due_offset_days: number | null; sort_order: number }
+interface ChecklistRow {
+  id: string
+  title: string
+  completed: boolean
+  assigned_to: string | null
+  production_id: string
+  productions?: { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null } | null
+}
 
 const PRIORITIES = ['low', 'normal', 'high', 'day of']
 
@@ -194,12 +204,20 @@ export default function TasksPage() {
     let completedRes: { data: Task[] | null }
     let teamList: TeamMember[]
     let prodsList: Production[]
+    let checklistRows: ChecklistRow[] = []
 
     if (isStu && uid) {
       ;[tasksRes, completedRes] = await Promise.all([
         supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('assigned_to', uid).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }),
         supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('assigned_to', uid).eq('status', 'complete').order('completed_at', { ascending: false }).limit(50),
       ])
+      const { data: checklistData } = await supabase
+        .from('checklist_items')
+        .select('id,title,completed,assigned_to,production_id,productions(id,title,production_number,request_type_label,start_datetime,status)')
+        .eq('assigned_to', uid)
+        .eq('completed', false)
+        .order('sort_order', { ascending: true })
+      checklistRows = (checklistData as ChecklistRow[]) || []
       const { data: memRows } = await supabase.from('production_members').select('production_id').eq('user_id', uid)
       const pids = [...new Set((memRows || []).map(m => m.production_id).filter(Boolean))] as string[]
       if (pids.length === 0) {
@@ -216,13 +234,44 @@ export default function TasksPage() {
         supabase.from('team').select('*').eq('active', true),
         supabase.from('productions').select('id,title,production_number,request_type_label,start_datetime,status').order('production_number', { ascending: false }).limit(100),
       ])
+      const { data: checklistData } = await supabase
+        .from('checklist_items')
+        .select('id,title,completed,assigned_to,production_id,productions(id,title,production_number,request_type_label,start_datetime,status)')
+        .eq('completed', false)
+        .order('sort_order', { ascending: true })
+      checklistRows = (checklistData as ChecklistRow[]) || []
       tasksRes = tRes
       completedRes = cRes
       teamList = (tmRes.data as TeamMember[]) || []
       prodsList = (pRes.data as Production[]) || []
     }
 
-    setTasks(tasksRes.data || [])
+    const checklistAsTasks: Task[] = checklistRows.map((row) => ({
+      id: `checklist:${row.id}`,
+      title: row.title,
+      description: null,
+      status: 'pending',
+      priority: 'normal',
+      due_date: null,
+      created_at: new Date().toISOString(),
+      assigned_to: row.assigned_to,
+      created_by: row.assigned_to || uid || '',
+      production_id: row.production_id,
+      needs_equipment: false,
+      notes: null,
+      purchase_request: false,
+      purchase_request_link: null,
+      completed_at: null,
+      recurring: null,
+      recurring_interval: null,
+      blocked_by: null,
+      scanned_sheet_id: null,
+      source: 'checklist',
+      checklist_item_id: row.id,
+      productions: row.productions || null,
+    }))
+
+    setTasks([...(tasksRes.data || []), ...checklistAsTasks])
     setCompletedTasks(completedRes.data || [])
     setTeam(teamList)
     setCurrentUser(userRes.data)
@@ -277,7 +326,8 @@ export default function TasksPage() {
 
   useEffect(() => {
     if (isStudentInternUser) setScope('mine')
-  }, [isStudentInternUser])
+    else if (currentUser && scope === 'mine') setScope('team')
+  }, [isStudentInternUser, currentUser, scope])
 
   const getMember = (id: string | null) => id ? team.find(m => m.id === id) || null : null
 
@@ -421,6 +471,15 @@ export default function TasksPage() {
   }, [newTask, currentUser, supabase, sendAssignEmail, allProductions])
 
   const completeTask = useCallback(async (task: Task) => {
+    if (task.source === 'checklist' && task.checklist_item_id) {
+      const { error } = await supabase.from('checklist_items').update({ completed: true }).eq('id', task.checklist_item_id)
+      if (error) { toast('Failed to complete checklist item', 'error'); return }
+      setTasks(prev => prev.filter(t => t.id !== task.id))
+      if (selectedTask?.id === task.id) closePanel()
+      toast('Checklist item complete', 'success')
+      return
+    }
+
     const { error } = await supabase.from('tasks').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', task.id)
     if (error) { toast('Failed to complete task', 'error'); return }
     setCompleting(prev => new Set(prev).add(task.id))
@@ -582,28 +641,31 @@ export default function TasksPage() {
     })
   }, [scopedTasks, scopedCompleted, focusFilter, statusFilter, search, productionFilterId])
 
+  const regularFiltered = useMemo(() => filtered.filter(t => t.source !== 'checklist'), [filtered])
+  const checklistFiltered = useMemo(() => filtered.filter(t => t.source === 'checklist'), [filtered])
+
   const grouped = useMemo<{ label: string | null; tasks: Task[] }[]>(() => {
-    if (groupBy === 'none') return [{ label: null, tasks: filtered }]
+    if (groupBy === 'none') return [{ label: null, tasks: regularFiltered }]
     if (groupBy === 'priority') {
       const order = ['day of', 'high', 'normal', 'low']
       const groups: Record<string, Task[]> = {}
-      filtered.forEach(t => { if (!groups[t.priority]) groups[t.priority] = []; groups[t.priority].push(t) })
+      regularFiltered.forEach(t => { if (!groups[t.priority]) groups[t.priority] = []; groups[t.priority].push(t) })
       return order.filter(p => groups[p]).map(p => ({ label: p, tasks: groups[p] }))
     }
     if (groupBy === 'person') {
       const groups: Record<string, Task[]> = {}
-      filtered.forEach(t => { const n = getMember(t.assigned_to)?.name || 'Unassigned'; if (!groups[n]) groups[n] = []; groups[n].push(t) })
+      regularFiltered.forEach(t => { const n = getMember(t.assigned_to)?.name || 'Unassigned'; if (!groups[n]) groups[n] = []; groups[n].push(t) })
       return Object.entries(groups).map(([label, tasks]) => ({ label, tasks }))
     }
     if (groupBy === 'status') {
       const order = ['pending', 'in progress', 'in review', 'complete']
       const groups: Record<string, Task[]> = {}
-      filtered.forEach(t => { if (!groups[t.status]) groups[t.status] = []; groups[t.status].push(t) })
+      regularFiltered.forEach(t => { if (!groups[t.status]) groups[t.status] = []; groups[t.status].push(t) })
       return order.filter(s => groups[s]).map(s => ({ label: s, tasks: groups[s] }))
     }
-    return [{ label: null, tasks: filtered }]
+    return [{ label: null, tasks: regularFiltered }]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, groupBy, team])
+  }, [regularFiltered, groupBy, team])
 
   const focusChip = (key: FocusFilter, label: string, count: number, tone: keyof typeof statusTone | null) => {
     const active = focusFilter === key
@@ -837,7 +899,11 @@ export default function TasksPage() {
                       <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: denseMode ? '7px 10px' : '8px 14px', background: active ? statusTone.info.background : cardBg, border: `1px solid ${active ? info : border}`, borderRadius: '10px', minWidth: denseMode ? '170px' : '200px' }}
                       >
                         <button
-                          onClick={() => setProductionFilterId(prev => prev === p.id ? null : p.id)}
+                          onClick={() => {
+                            setProductionFilterId(prev => prev === p.id ? null : p.id)
+                            if (!isStudentInternUser) setScope('team')
+                            setFocusFilter('all')
+                          }}
                           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: 'inherit', textAlign: 'left', flex: 1, minWidth: 0 }}
                           title={active ? 'Clear production filter' : 'Filter tasks to this production'}
                         >
@@ -1005,7 +1071,7 @@ export default function TasksPage() {
           )}
 
           {/* TASKS LIST */}
-          {filtered.length === 0 ? (
+          {(regularFiltered.length + checklistFiltered.length) === 0 ? (
             <div style={{ ...uiStyles.card, padding: denseMode ? '36px 14px' : '60px 20px', textAlign: 'center' as const }}>
               <p style={{ color: muted, fontSize: '14px', margin: 0 }}>
                 {focusFilter === 'today' ? 'Nothing due today.' :
@@ -1020,16 +1086,19 @@ export default function TasksPage() {
                  'Try switching scope, status, or opening Recent done.'}
               </p>
             </div>
-          ) : grouped.map(({ label, tasks: groupTasks }) => (
-            <div key={label || 'all'} style={{ marginBottom: '14px' }}>
-              {label && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{label}</span>
-                  <span style={{ fontSize: '11px', color: muted, opacity: 0.7 }}>· {groupTasks.length}</span>
-                </div>
-              )}
-              <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
-                {groupTasks.map((task, i) => {
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: checklistFiltered.length > 0 ? 'minmax(0,1fr) minmax(280px,360px)' : '1fr', gap: denseMode ? '10px' : '14px', alignItems: 'start' }}>
+              <div>
+                {grouped.map(({ label, tasks: groupTasks }) => (
+                  <div key={label || 'all'} style={{ marginBottom: '14px' }}>
+                    {label && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{label}</span>
+                        <span style={{ fontSize: '11px', color: muted, opacity: 0.7 }}>· {groupTasks.length}</span>
+                      </div>
+                    )}
+                    <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+                      {groupTasks.map((task, i) => {
                   const isCompleting = completing.has(task.id)
                   const isOpen = selectedTask?.id === task.id
                   const isBulkSelected = selectedIds.has(task.id)
@@ -1044,7 +1113,7 @@ export default function TasksPage() {
                     : isBulkSelected
                     ? hoverBg
                     : 'transparent'
-                  return (
+                        return (
                     <div
                       key={task.id}
                       onClick={() => !isCompleting && openTask(task)}
@@ -1115,6 +1184,7 @@ export default function TasksPage() {
                           )}
                           {task.needs_equipment && <span style={{ color: warning, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Equipment</span>}
                           {task.purchase_request && <span style={{ color: info, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Purchase</span>}
+                          {task.source === 'checklist' && <span style={{ color: info, fontWeight: 700, whiteSpace: 'nowrap' as const }}>Checklist</span>}
                           {task.recurring && <span style={{ whiteSpace: 'nowrap' as const }}>Recurring</span>}
                           {task.blocked_by && <span style={{ color: review, whiteSpace: 'nowrap' as const, fontWeight: 600 }}>Blocked</span>}
                         </div>
@@ -1139,11 +1209,45 @@ export default function TasksPage() {
                         ) : <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `1.5px dashed ${border}`, flexShrink: 0 }} />}
                       </div>
                     </div>
-                  )
-                })}
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
+              {checklistFiltered.length > 0 && (
+                <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+                  <div style={{ padding: denseMode ? '8px 10px' : '10px 12px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: info, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>
+                      Production checklist
+                    </p>
+                    <span style={{ fontSize: '11px', color: muted }}>{checklistFiltered.length}</span>
+                  </div>
+                  {checklistFiltered.map((task, i) => (
+                    <div key={task.id} style={{ padding: denseMode ? '8px 10px' : '10px 12px', borderBottom: i < checklistFiltered.length - 1 ? `1px solid ${border}` : 'none' }}>
+                      <p style={{ margin: 0, fontSize: denseMode ? '12px' : '13px', fontWeight: 600, color: text }}>{task.title}</p>
+                      <p style={{ margin: '3px 0 8px', fontSize: '11px', color: info, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {task.productions ? `#${task.productions.production_number} ${task.productions.title}` : 'Linked production'}
+                      </p>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => completeTask(task)}
+                          style={{ padding: '4px 8px', borderRadius: '999px', background: success, color: '#fff', border: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: 700, fontFamily: 'inherit' }}
+                        >
+                          Complete
+                        </button>
+                        {task.productions?.production_number && (
+                          <Link href={`/dashboard/productions/${task.productions.production_number}`} style={{ padding: '4px 8px', borderRadius: '999px', background: surface2, color: muted, border: `1px solid ${border}`, fontSize: '10px', fontWeight: 700, textDecoration: 'none' }}>
+                            Open production
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
+          )}
         </main>
 
         {/* DETAIL DRAWER */}
