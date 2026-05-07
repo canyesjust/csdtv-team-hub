@@ -80,7 +80,7 @@ export async function GET(request: Request) {
     }, { status: 500 })
   }
 
-  const taskRows = (tasksRes.data ?? []) as Record<string, unknown>[]
+  const taskRows = (tasksRes.data ?? []) as unknown as Record<string, unknown>[]
   const tasksPayload = taskRows
     .map((row) => ({
       ...row,
