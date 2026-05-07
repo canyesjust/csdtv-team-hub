@@ -63,17 +63,15 @@ function signageTypeTag(label: string | null | undefined): { text: string; bg: s
   return { text: cap, bg: 'rgba(100,116,139,0.55)' }
 }
 
-function formatProductionDateTime(iso: string | null | undefined): string {
+/** Compact wall display: MM/DD/YYYY in local time. */
+function formatProductionDateShort(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  return `${mm}/${dd}/${yyyy}`
 }
 
 export default function TasksSignagePage() {
@@ -274,9 +272,9 @@ export default function TasksSignagePage() {
     staffStat: fitStaff(30, 22, staffDensitySoft * 0.45),
     taskLine: fitStaff(28, 20, staffDensitySoft * 0.55),
     subLabel: fitStaff(22, 15, staffDensitySoft * 0.25),
-    prodLine: fitStaff(28, 20, staffDensitySoft * 0.55),
-    prodDate: fitStaff(22, 16, staffDensitySoft * 0.5),
-    prodTag: fitStaff(16, 12, staffDensitySoft * 0.35),
+    prodLine: fitStaff(26, 18, staffDensitySoft * 0.55),
+    prodDate: fitStaff(17, 12, staffDensitySoft * 0.5),
+    prodTag: fitStaff(12, 9, staffDensitySoft * 0.35),
   }
 
   if (loading) {
@@ -325,7 +323,7 @@ export default function TasksSignagePage() {
         ))}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.25fr 1.75fr', gap: '10px' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 3.75fr)', gap: '22px' }}>
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <h2 style={{ margin: 0, fontSize: `${fs.sectionTitle}px` }}>Unassigned Tasks</h2>
           <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gap: '8px' }}>
@@ -360,7 +358,7 @@ export default function TasksSignagePage() {
                 <p style={{ margin: '0 0 14px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.35 }}>
                   {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming · {checklistOpen} checklist
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px 36px', alignItems: 'start' }}>
                   <div style={{ display: 'grid', gap: '10px' }}>
                     <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
                       Open tasks
@@ -386,7 +384,7 @@ export default function TasksSignagePage() {
                     {next5DayProds.slice(0, 10).map((pm, idx) => {
                       const prod = pm.productions
                       const tag = signageTypeTag(prod?.request_type_label)
-                      const dateStr = formatProductionDateTime(prod?.start_datetime ?? null)
+                      const dateStr = formatProductionDateShort(prod?.start_datetime ?? null)
                       const list = next5DayProds.slice(0, 10)
                       return (
                         <div
@@ -394,16 +392,16 @@ export default function TasksSignagePage() {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '12px',
-                            padding: '8px 0',
+                            gap: '20px',
+                            padding: '10px 0',
                             borderBottom: idx < list.length - 1 ? `1px solid ${border}` : 'none',
-                            minHeight: `${Math.round(fs.prodLine * 1.6)}px`,
+                            minHeight: `${Math.round(fs.prodLine * 1.45)}px`,
                           }}
                         >
-                          <span style={{ flex: '0 0 auto', fontSize: `${fs.prodDate}px`, color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                          <span style={{ flex: '0 0 auto', fontSize: `${fs.prodDate}px`, color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const, fontVariantNumeric: 'tabular-nums' }}>
                             {dateStr}
                           </span>
-                          <span style={{ flex: 1, minWidth: 0, fontSize: `${fs.prodLine}px`, color: '#a7c4ee', fontWeight: 600, lineHeight: 1.35 }}>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: `${fs.prodLine}px`, color: '#a7c4ee', fontWeight: 600, lineHeight: 1.35, paddingRight: '8px' }}>
                             #{prod?.production_number} {prod?.title}
                           </span>
                           {tag && (
@@ -411,12 +409,12 @@ export default function TasksSignagePage() {
                               style={{
                                 flexShrink: 0,
                                 fontSize: `${fs.prodTag}px`,
-                                fontWeight: 800,
-                                padding: '4px 10px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
                                 borderRadius: '999px',
                                 background: tag.bg,
                                 color: '#ffffff',
-                                letterSpacing: '0.03em',
+                                letterSpacing: '0.02em',
                                 textTransform: 'uppercase' as const,
                               }}
                             >
