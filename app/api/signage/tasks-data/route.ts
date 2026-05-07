@@ -27,10 +27,15 @@ export async function GET(request: Request) {
   const end = new Date(start)
   end.setDate(end.getDate() + 14)
 
-  const [tasksRes, teamRes, prodsRes] = await Promise.all([
+  const tasksSelectFull =
+    'id,title,priority,due_date,assigned_to,production_id,purchase_request,status,productions(production_number,title)'
+  const tasksSelectLegacy =
+    'id,title,priority,due_date,assigned_to,production_id,status,productions(production_number,title)'
+
+  const [tasksResInitial, teamRes, prodsRes] = await Promise.all([
     supabase
       .from('tasks')
-      .select('id,title,priority,due_date,assigned_to,production_id,purchase_request,status,productions(production_number,title)')
+      .select(tasksSelectFull)
       .not('status', 'ilike', 'complete')
       .order('due_date', { ascending: true, nullsFirst: false }),
     supabase
@@ -40,10 +45,22 @@ export async function GET(request: Request) {
       .order('name'),
     supabase
       .from('productions')
-      .select('id,production_number,title,start_datetime,status')
+      .select('id,production_number,title,start_datetime,status,request_type_label')
       .gte('start_datetime', start.toISOString())
       .lt('start_datetime', end.toISOString()),
   ])
+
+  let tasksRes = tasksResInitial
+  if (tasksRes.error) {
+    const msg = tasksRes.error.message || ''
+    if (/purchase_request|column .* does not exist/i.test(msg)) {
+      tasksRes = await supabase
+        .from('tasks')
+        .select(tasksSelectLegacy)
+        .not('status', 'ilike', 'complete')
+        .order('due_date', { ascending: true, nullsFirst: false })
+    }
+  }
 
   if (tasksRes.error || teamRes.error || prodsRes.error) {
     return NextResponse.json({
@@ -51,13 +68,28 @@ export async function GET(request: Request) {
     }, { status: 500 })
   }
 
+  const tasksPayload = (tasksRes.data || []).map((row: Record<string, unknown>) => ({
+    ...row,
+    purchase_request: Boolean(row.purchase_request),
+  }))
+
   const upcomingProds = (prodsRes.data || []).filter((p: { status?: string | null }) => {
     const status = (p.status || '').toLowerCase()
     return status !== 'complete' && status !== 'abandoned' && status !== 'cancelled'
   })
   const prodById = new Map(upcomingProds.map((p: { id: string }) => [p.id, p]))
   const prodIds = upcomingProds.map((p: { id: string }) => p.id)
-  let prodMembers: Array<{ production_id: string; user_id: string; productions: { production_number: number; title: string; start_datetime: string | null; status: string | null } | null }> = []
+  let prodMembers: Array<{
+    production_id: string
+    user_id: string
+    productions: {
+      production_number: number
+      title: string
+      start_datetime: string | null
+      status: string | null
+      request_type_label: string | null
+    } | null
+  }> = []
 
   if (prodIds.length > 0) {
     const { data: pmRows, error: pmErr } = await supabase
@@ -70,7 +102,15 @@ export async function GET(request: Request) {
     }
 
     prodMembers = (pmRows || []).map((row: { production_id: string; user_id: string }) => {
-      const prod = prodById.get(row.production_id) as { production_number: number; title: string; start_datetime: string | null; status: string | null } | undefined
+      const prod = prodById.get(row.production_id) as
+        | {
+            production_number: number
+            title: string
+            start_datetime: string | null
+            status: string | null
+            request_type_label: string | null
+          }
+        | undefined
       return {
         production_id: row.production_id,
         user_id: row.user_id,
@@ -80,6 +120,7 @@ export async function GET(request: Request) {
               title: prod.title,
               start_datetime: prod.start_datetime,
               status: prod.status,
+              request_type_label: prod.request_type_label ?? null,
             }
           : null,
       }
@@ -87,7 +128,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    tasks: tasksRes.data || [],
+    tasks: tasksPayload,
     team: teamRes.data || [],
     prodMembers,
   })

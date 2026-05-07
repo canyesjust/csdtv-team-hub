@@ -28,6 +28,7 @@ interface ProductionMemberRow {
     title: string
     start_datetime: string | null
     status: string | null
+    request_type_label: string | null
   } | null
 }
 
@@ -47,11 +48,39 @@ function initials(name: string): string {
   return (parts[0] || '?').slice(0, 2).toUpperCase()
 }
 
+/** Short label for wall display from `request_type_label`. */
+function signageTypeTag(label: string | null | undefined): { text: string; bg: string } | null {
+  const raw = (label || '').trim()
+  if (!raw) return null
+  const t = raw.toLowerCase()
+  if (t.includes('livestream') || t.includes('live stream')) return { text: 'Livestream', bg: '#2563eb' }
+  if (t.includes('board')) return { text: 'Board', bg: '#7c3aed' }
+  if (t.includes('record') || t.includes('recording') || t.includes('studio') || t.includes('multi-cam')) {
+    return { text: 'Recording', bg: '#059669' }
+  }
+  const short = raw.split('(')[0]?.trim() || raw
+  const cap = short.length > 18 ? `${short.slice(0, 16)}…` : short
+  return { text: cap, bg: 'rgba(100,116,139,0.55)' }
+}
+
+function formatProductionDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export default function TasksSignagePage() {
   const [now, setNow] = useState(new Date())
   const [viewport, setViewport] = useState({ w: 1920, h: 1080 })
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<{ message: string; hint: string | null } | null>(null)
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [prodMembers, setProdMembers] = useState<ProductionMemberRow[]>([])
@@ -65,7 +94,16 @@ export default function TasksSignagePage() {
       setTasks([])
       setTeam([])
       setProdMembers([])
-      setLoadError(payload?.error || 'Failed to load signage data')
+      const message = (typeof payload?.error === 'string' && payload.error) || 'Failed to load signage data'
+      let hint: string | null = null
+      if (res.status === 401) {
+        hint = key.trim()
+          ? 'Unauthorized: this ?k= value does not match SIGNAGE_TASKS_KEY on the server. Copy the link from Settings → Signage.'
+          : 'Unauthorized: add ?k=… to the URL, or copy the full link from Settings → Signage.'
+      } else if (res.status === 500) {
+        hint = 'Server error — this is usually a database or configuration issue on the API, not a bad URL key.'
+      }
+      setLoadError({ message, hint })
       setLoading(false)
       return
     }
@@ -204,6 +242,8 @@ export default function TasksSignagePage() {
   const unassignedCount = unassignedTasks.length
   const densityPenalty = Math.max(0, staffMaxTasks - 4) * 1.2 + Math.max(0, unassignedCount - 6) * 0.7
   const fit = (max: number, min: number, penalty = 0) => Math.max(min, Math.round(max * baseScale - penalty))
+  const staffDensitySoft = Math.max(0, densityPenalty * 0.55)
+  const fitStaff = (max: number, min: number, penalty = 0) => Math.max(min, Math.round(max * baseScale - penalty))
   const fs = {
     title: fit(56, 32, densityPenalty * 0.4),
     subtitle: fit(24, 16, densityPenalty * 0.3),
@@ -214,11 +254,13 @@ export default function TasksSignagePage() {
     empty: fit(30, 18, densityPenalty * 0.2),
     cardTitle: fit(34, 18, densityPenalty * 0.6),
     cardMeta: fit(22, 16, densityPenalty * 0.5),
-    staffName: fit(30, 18, densityPenalty * 0.4),
-    staffStat: fit(22, 16, densityPenalty * 0.5),
-    taskLine: fit(20, 18, densityPenalty * 0.65),
-    subLabel: fit(16, 12, densityPenalty * 0.2),
-    prodLine: fit(20, 18, densityPenalty * 0.65),
+    staffName: fitStaff(40, 26, staffDensitySoft * 0.35),
+    staffStat: fitStaff(30, 22, staffDensitySoft * 0.45),
+    taskLine: fitStaff(28, 20, staffDensitySoft * 0.55),
+    subLabel: fitStaff(22, 15, staffDensitySoft * 0.25),
+    prodLine: fitStaff(28, 20, staffDensitySoft * 0.55),
+    prodDate: fitStaff(22, 16, staffDensitySoft * 0.5),
+    prodTag: fitStaff(16, 12, staffDensitySoft * 0.35),
   }
 
   if (loading) {
@@ -233,7 +275,12 @@ export default function TasksSignagePage() {
     <div style={{ background: bg, color: text, height: '100vh', padding: '14px 16px', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
       {loadError && (
         <div style={{ marginBottom: '10px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(18, 13)}px`, fontWeight: 600 }}>
-          {loadError}. Add `?k=YOUR_SIGNAGE_KEY` to this URL.
+          <div>{loadError.message}</div>
+          {loadError.hint && (
+            <div style={{ marginTop: '6px', fontSize: `${fit(15, 11)}px`, fontWeight: 500, opacity: 0.95 }}>
+              {loadError.hint}
+            </div>
+          )}
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
@@ -284,48 +331,86 @@ export default function TasksSignagePage() {
 
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <h2 style={{ margin: 0, fontSize: `${fs.sectionTitle}px` }}>Staff Workload</h2>
-          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '16px', paddingRight: '4px' }}>
+          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '22px', paddingRight: '6px' }}>
             {staffCards.map(({ member, personTasks, personOverdue, personProds, next5DayProds }) => (
-              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 14px', background: 'rgba(255,255,255,0.035)', boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                  <div style={{ width: `${fit(44, 28)}px`, height: `${fit(44, 28)}px`, borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${fit(16, 11)}px`, fontWeight: 800 }}>
+              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '14px', padding: '18px 22px', background: 'rgba(255,255,255,0.035)', boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
+                  <div style={{ width: `${fitStaff(48, 32)}px`, height: `${fitStaff(48, 32)}px`, borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${fitStaff(18, 12)}px`, fontWeight: 800 }}>
                     {initials(member.name)}
                   </div>
-                  <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 700 }}>{member.name}</p>
+                  <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 800, lineHeight: 1.2 }}>{member.name}</p>
                 </div>
-                <p style={{ margin: '0 0 10px', fontSize: `${fs.staffName}px`, color: text, fontWeight: 700 }}>
+                <p style={{ margin: '0 0 14px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.35 }}>
                   {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
-                  <div style={{ display: 'grid', gap: '6px' }}>
-                    <p style={{ margin: 0, fontSize: `${Math.max(fs.subLabel + 2, fs.subLabel)}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
                       Open tasks
                     </p>
                     {personTasks.slice(0, 10).map(t => {
                       const d = daysFromToday(t.due_date)
                       const dueLabel = d === null ? 'No due' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `${d}d`
                       return (
-                        <p key={t.id} style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: '#d8e4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {t.title} · {dueLabel}
+                        <p key={t.id} style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: '#d8e4ff', lineHeight: 1.4, padding: '4px 0' }}>
+                          {t.title} · <span style={{ color: muted }}>{dueLabel}</span>
                         </p>
                       )
                     })}
                     {personTasks.length === 0 && (
-                      <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted }}>No open tasks assigned.</p>
+                      <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, padding: '4px 0' }}>No open tasks assigned.</p>
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gap: '6px' }}>
-                    <p style={{ margin: 0, fontSize: `${Math.max(fs.subLabel + 2, fs.subLabel)}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
                       Upcoming (next 5 days)
                     </p>
-                    {next5DayProds.slice(0, 10).map(pm => (
-                      <p key={`${pm.production_id}-${pm.user_id}`} style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: '#a7c4ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        #{pm.productions?.production_number} {pm.productions?.title}
-                      </p>
-                    ))}
+                    {next5DayProds.slice(0, 10).map((pm, idx) => {
+                      const prod = pm.productions
+                      const tag = signageTypeTag(prod?.request_type_label)
+                      const dateStr = formatProductionDateTime(prod?.start_datetime ?? null)
+                      const list = next5DayProds.slice(0, 10)
+                      return (
+                        <div
+                          key={`${pm.production_id}-${pm.user_id}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '8px 0',
+                            borderBottom: idx < list.length - 1 ? `1px solid ${border}` : 'none',
+                            minHeight: `${Math.round(fs.prodLine * 1.6)}px`,
+                          }}
+                        >
+                          <span style={{ flex: '0 0 auto', fontSize: `${fs.prodDate}px`, color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                            {dateStr}
+                          </span>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: `${fs.prodLine}px`, color: '#a7c4ee', fontWeight: 600, lineHeight: 1.35 }}>
+                            #{prod?.production_number} {prod?.title}
+                          </span>
+                          {tag && (
+                            <span
+                              style={{
+                                flexShrink: 0,
+                                fontSize: `${fs.prodTag}px`,
+                                fontWeight: 800,
+                                padding: '4px 10px',
+                                borderRadius: '999px',
+                                background: tag.bg,
+                                color: '#ffffff',
+                                letterSpacing: '0.03em',
+                                textTransform: 'uppercase' as const,
+                              }}
+                            >
+                              {tag.text}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
                     {next5DayProds.length === 0 && (
-                      <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted }}>No upcoming productions in next 5 days.</p>
+                      <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted, padding: '8px 0' }}>No upcoming productions in next 5 days.</p>
                     )}
                   </div>
                 </div>
