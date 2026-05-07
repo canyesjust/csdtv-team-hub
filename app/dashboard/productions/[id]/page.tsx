@@ -66,6 +66,17 @@ interface SchoolBrand {
   active?: boolean | null
 }
 
+interface SchoolBrandColorRow {
+  id: string
+  school_code: string | null
+  school_name: string | null
+  primary_color: string | null
+  secondary_color: string | null
+  accent_color: string | null
+  mascot: string | null
+  active: boolean | null
+}
+
 interface ProductionLink { id: string; title: string; url: string; created_at: string }
 
 interface KBArticle { id: string; title: string; category: string }
@@ -196,6 +207,7 @@ export default function ProductionDetailPage() {
   const [emailSubject, setEmailSubject] = useState('')
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [schools, setSchools] = useState<SchoolBrand[]>([])
+  const [schoolBrandColors, setSchoolBrandColors] = useState<SchoolBrandColorRow[]>([])
   const [thumbSchoolCode, setThumbSchoolCode] = useState('')
   const [thumbEventName, setThumbEventName] = useState('')
   const [thumbDate, setThumbDate] = useState('')
@@ -264,7 +276,7 @@ export default function ProductionDetailPage() {
     )
 
     // All related queries use the UUID as FK
-    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes, camPkgRes] = await Promise.all([
+    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes, colorRes, camPkgRes] = await Promise.all([
       supabase.from('checklist_items').select('*').eq('production_id', prodUUID).order('sort_order'),
       supabase.from('production_members').select('*, team:team(id, name, role, avatar_color)').eq('production_id', prodUUID),
       supabase.from('team').select('id, name, email, role, avatar_color').eq('active', true),
@@ -274,6 +286,7 @@ export default function ProductionDetailPage() {
       supabase.from('knowledge_base').select('id, title, category').order('title'),
       supabase.from('email_templates').select('*').order('sort_order'),
       supabase.from('schools').select('*').order('name'),
+      supabase.from('school_brand_colors').select('*').eq('active', true).order('school_name'),
       supabase.from('cost_camera_packages').select('option_id, label, cost').eq('active', true).order('display_order'),
     ])
 
@@ -288,6 +301,7 @@ export default function ProductionDetailPage() {
     setKbArticles(kbRes.data || [])
     setTemplates(tplRes.data || [])
     setSchools((schoolsRes.data as SchoolBrand[]) || [])
+    setSchoolBrandColors((colorRes.data as SchoolBrandColorRow[]) || [])
     const [vidRes, taskRes, sheetRes, allProdsRes] = await Promise.all([
       supabase
         .from('videos')
@@ -1023,6 +1037,26 @@ export default function ProductionDetailPage() {
     return schools.find(s => s.code === thumbSchoolCode || s.name === thumbSchoolCode) || null
   })()
 
+  const selectedThumbBrand = (() => {
+    const normalizedCode = (thumbSchoolCode || '').trim().toLowerCase()
+    const normalizedName = (thumbSchoolOverride || selectedThumbSchool?.name || '').trim().toLowerCase()
+    const override = schoolBrandColors.find(row => {
+      const rowCode = (row.school_code || '').trim().toLowerCase()
+      const rowName = (row.school_name || '').trim().toLowerCase()
+      return (!!normalizedCode && !!rowCode && rowCode === normalizedCode)
+        || (!!normalizedName && !!rowName && rowName === normalizedName)
+    })
+
+    return {
+      name: selectedThumbSchool?.name || override?.school_name || 'Canyons School District',
+      short_name: selectedThumbSchool?.short_name || override?.school_name || 'Canyons',
+      mascot: override?.mascot || selectedThumbSchool?.mascot || '',
+      primary_color: override?.primary_color || selectedThumbSchool?.primary_color || '#003087',
+      secondary_color: override?.secondary_color || selectedThumbSchool?.secondary_color || '#e8a020',
+      accent_color: override?.accent_color || selectedThumbSchool?.accent_color || '#ffffff',
+    }
+  })()
+
   useEffect(() => {
     if (!thumbSchoolOverride && selectedThumbSchool?.name) {
       setThumbSchoolOverride(selectedThumbSchool.name)
@@ -1073,7 +1107,7 @@ export default function ProductionDetailPage() {
     }
   }, [productionNum])
 
-  const normalizedThumbSchool = (thumbSchoolOverride || selectedThumbSchool?.name || '').trim()
+  const normalizedThumbSchool = (thumbSchoolOverride || selectedThumbBrand.name || '').trim()
   const normalizedThumbEventName = thumbEventName.trim()
   const missingThumbFields = [
     !normalizedThumbSchool ? 'School' : null,
@@ -1121,7 +1155,7 @@ export default function ProductionDetailPage() {
       ? '- mascot: none-applicable'
       : thumbMascotMode === 'unknown'
         ? '- mascot: unknown'
-        : `- mascot: ${selectedThumbSchool?.mascot || 'unknown'}`
+        : `- mascot: ${selectedThumbBrand.mascot || 'unknown'}`
 
     const lines = [
       'Create one complete, self-contained SVG thumbnail (1280x720). Return ONLY raw <svg>...</svg>.',
@@ -1140,9 +1174,9 @@ export default function ProductionDetailPage() {
       `- concept_anchor: ${thumbConceptAnchor || 'n/a'}`,
       '',
       'BRAND COLORS',
-      `- primary: ${selectedThumbSchool?.primary_color || '#003087'}`,
-      `- secondary: ${selectedThumbSchool?.secondary_color || '#e8a020'}`,
-      selectedThumbSchool?.accent_color ? `- accent: ${selectedThumbSchool.accent_color}` : '',
+      `- primary: ${selectedThumbBrand.primary_color || '#003087'}`,
+      `- secondary: ${selectedThumbBrand.secondary_color || '#e8a020'}`,
+      selectedThumbBrand.accent_color ? `- accent: ${selectedThumbBrand.accent_color}` : '',
       '',
       'HARD RULES',
       '- Exact 1280x720 SVG viewBox.',
@@ -1156,7 +1190,7 @@ export default function ProductionDetailPage() {
       '- Return only valid SVG markup, starting with <svg and ending with </svg>.',
     ].filter(Boolean)
     setThumbPrompt(lines.join('\n'))
-  }, [thumbSchoolOverride, selectedThumbSchool, thumbEventName, thumbEventType, thumbDate, thumbTime, thumbDetail, thumbTone, thumbEventDescription, thumbLogistics, thumbConceptAnchor, thumbMascotMode])
+  }, [thumbSchoolOverride, selectedThumbBrand, thumbEventName, thumbEventType, thumbDate, thumbTime, thumbDetail, thumbTone, thumbEventDescription, thumbLogistics, thumbConceptAnchor, thumbMascotMode])
 
   useEffect(() => {
     if (!thumbSvgInput.trim()) {
@@ -1212,7 +1246,7 @@ export default function ProductionDetailPage() {
       URL.revokeObjectURL(url)
       const link = document.createElement('a')
       const datePart = thumbDate || new Date().toISOString().slice(0, 10)
-      const schoolPart = slug((selectedThumbSchool?.short_name || thumbSchoolOverride || 'School'))
+      const schoolPart = slug((selectedThumbBrand.short_name || thumbSchoolOverride || 'School'))
       const eventPart = slug(thumbEventName || 'Event')
       link.download = `CSDtv_${schoolPart}_${eventPart}_${datePart}.png`
       const pngBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
@@ -1236,7 +1270,7 @@ export default function ProductionDetailPage() {
     if (!thumbSanitizedSvg) return
     try {
       const datePart = thumbDate || new Date().toISOString().slice(0, 10)
-      const schoolPart = slug((selectedThumbSchool?.short_name || thumbSchoolOverride || 'School'))
+      const schoolPart = slug((selectedThumbBrand.short_name || thumbSchoolOverride || 'School'))
       const eventPart = slug(thumbEventName || 'Event')
       const svgBlob = new Blob([thumbSanitizedSvg], { type: 'image/svg+xml;charset=utf-8' })
       const svgUrl = URL.createObjectURL(svgBlob)
@@ -2190,6 +2224,17 @@ export default function ProductionDetailPage() {
                   {schools.map(s => (
                     <option key={s.id} value={s.code || s.name}>{s.name}</option>
                   ))}
+                  {schoolBrandColors
+                    .filter(row => {
+                      const rowName = (row.school_name || '').trim()
+                      if (!rowName) return false
+                      return !schools.some(s => s.name.toLowerCase() === rowName.toLowerCase())
+                    })
+                    .map(row => (
+                      <option key={`brand-${row.id}`} value={row.school_code || row.school_name || ''}>
+                        {row.school_name}
+                      </option>
+                    ))}
                 </select>
               </div>
               <div>

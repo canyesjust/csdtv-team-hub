@@ -1,0 +1,75 @@
+-- Seed + metadata columns for school_brand_colors
+-- Mirrors what was applied in Supabase via MCP.
+
+alter table public.school_brand_colors
+  add column if not exists city text,
+  add column if not exists title_i text,
+  add column if not exists mascot_name text,
+  add column if not exists text_color text,
+  add column if not exists link_url text;
+
+insert into public.school_brand_colors (
+  city, school_name, mascot, title_i, mascot_name,
+  primary_color, secondary_color, accent_color, text_color, link_url, active
+)
+values
+  ('Sandy','Alta View Elementary','Roadroanners',null,null,'#001A64','#3e77bc','#F3FF00','#aa1f24','#FFFFFF',true),
+  ('Sandy','Altara Elementary','Kitty Hawks',null,null,'#7392b5','#2F384C','#CCCCCC','#FFFFFF','#FFFFFF',true),
+  ('Cottonwood H.','Bella Vista Elementary','Tigers',null,null,'#172056','#FFFFFF','#F1571C','#FFFFFF','#FFFFFF',true),
+  ('Sandy','Brookwood Elementary','Bears',null,null,'#213F7C','#131A27','#987249','#FFFFFF','#FFFFFF',true),
+  ('Cottonwood H.','Butler Elementary','Bobcats',null,null,'#be1e2d','#000000','#90785f','#FFFFFF','#FFFFFF',true),
+  ('Cottonwood H.','Canyon View Elementary','Cubs',null,null,'#1E2051','#F47421','#FFFFFF','#FFFFFF','#FFFFFF',true),
+  ('Midvale','Copperview Elementary','Cougars','T1',null,'#045686','#192f3a','#B77436','#FFFFFF','#FFFFFF',true),
+  ('Sandy','Crescent Elementary','Cubs',null,null,'#1F2758','#31709D','#67A5B5','#FFFFFF','#FFFFFF',true),
+  ('Draper','Draper Elementary','Dragons',null,null,'#000000','#0095DA','#8DD8F8','#FFFFFF','#FFFFFF',true),
+  ('E. Midvale','East Midvale Elementary','Eagles','T1',null,'#252D6A','#FFFFFF','#E2E3A7','#FFFFFF','#FFFFFF',true),
+  ('Sandy','East Sandy Elementary','Mustangs',null,null,'#002947','#252122','#DFC278','#FFFFFF','#FFFFFF',true),
+  ('Sandy','Glacier Hills Elementary','Yetis',null,'Blizzard','#4477BC','#1F335E','#3FC1C9','#FFFFFF','#FFFFFF',true),
+  ('Sandy','Granite Elementary','Grizzles',null,null,'#015FA7','#4A99B1','#1D2327','#FFFFFF','#FFFFFF',true),
+  ('Sandy','Lone Peak Elementary','Eagles',null,null,'#630C0D','#6D6F70','#F2D780','#FFFFFF','#FFFFFF',true),
+  ('Midvale','Midvale Elementary','Mustangs','T1',null,'#112032','#bbbcb8','#000000','#FFFFFF','#FFFFFF',true),
+  ('Midvale','Midvalley Elementary','Jr Huskies','T1',null,'#ba252b','#1e2a49','#000000','#FFFFFF','#FFFFFF',true),
+  ('Draper','Oak Hollow Elementary','Eagles',null,null,'#3a8e2d','#ffe502','#000000','#FFFFFF','#FFFFFF',true),
+  ('Sandy','Oakdale Elementary','Roadrunners',null,null,'#b42227','#0f6eb6','#fadc67','#FFFFFF','#FFFFFF',true),
+  ('Sandy','Park Lane Elementary','Panthers',null,null,'#f8cd2a','#222e53','#5d5f61','#000000','#FFFFFF',true),
+  ('Sandy','Peruvian Park Elementary','Panthers',null,null,'#050608','#bf222a','#4d4b4c','#FFFFFF','#FFFFFF',true),
+  ('Cottonwood H.','Ridgecrest Elementary','Tigers',null,null,'#dd6c2c','#121625','#cfd0cf','#bc6f3c','#FFFFFF',true),
+  ('Sandy','Quail Hollow Elementary','Quails',null,null,'#346da7','#f2ca4f','#7a7970','#000000','#FFFFFF',true),
+  ('Sandy','Sandy Elementary','Sharks','T1','Sharky','#882c26','#989998','#cfd0ce','#000000','#FFFFFF',true),
+  ('Sandy','Silver Mesa Elementary','Eagles',null,null,'#1b446b','#25609d','#c8cfdf','#fbd56a','#000000',true),
+  ('Sandy','Sprucewood Elementary','Falcons',null,null,'#2f482a','#f9ec42','#b7b08c','#e6e2cd','#000000',true),
+  ('Sandy','Sunrise Elementary','Eagles',null,null,'#af2535','#2e313c','#1c5b89','#fad736','#000000',true),
+  ('Sandy','Willow Canyon Elementary','Wildcats (Linx)',null,'Wilford','#335a44','#f7c34f','#329359','#fcd45c','#000000',true),
+  ('Draper','Willow Springs Elementary','Wildcat',null,'Willey','#665493','#382761','#fcea98','#dadad5','#FFFFFF',true),
+  ('Sandy','Albion Middle','Knights',null,null,'#322351','#5c4488','#90918d','#585956','#FFFFFF',true),
+  ('Cottonwood H.','Butler Middle','Bruins',null,null,'#1d2f4d','#FFFFFF','#50bde1','#7e7f7b','#FFFFFF',true),
+  ('Draper','Draper Park Middle','Vikings',null,null,'#0f1225','#a9a9ab','#dacec0','#5b312a','#aa9573',true),
+  ('Sandy','Eastmont Middle','Patriots',null,null,'#21407c','#d32432','#FFFFFF','#17335d','#941b1e',true),
+  ('Sandy','Indian Hills Middle','Warriors',null,null,'#c5662e','#10162a','#717376','#FFFFFF','#FFFFFF',true),
+  ('Midvale','Midvale Middle','Trojans',null,null,'#6e1b2c','#444542','#5f605c','#181916','#FFFFFF',true),
+  ('Sandy','Mount Jordan Middle','Mountaineers',null,null,'#241d91','#ede43e','#FFFFFF','#000000','#FFFFFF',true),
+  ('Sandy','Union Middle','Bobcats',null,null,'#ead470','#ead470','#FFFFFF','#939598','#FFFFFF',true),
+  ('Sandy','Alta High','Hawks',null,null,null,'#989998','#8d2020','#525352','#FFFFFF',true),
+  ('Cottonwood H.','Brighton High','Bengals',null,null,'#de4a2a','#0d1625','#FFFFFF','#000000','#FFFFFF',true),
+  ('Draper','Corner Canyon High','Chargers',null,null,'#001236','#002b52','#c2c4c5','#FFFFFF','#FFFFFF',true),
+  ('Midvale','Hillcrest High','Huskies',null,null,'#01ab4e','#FFFFFF','#000000','#c6c6c6','#FFFFFF',true),
+  ('Sandy','Jordan High','Beetdigger',null,'Digger Dan','#710f38','#716d6c','#FFFFFF',null,null,true),
+  ('Sandy','CTEC','-',null,null,'#ad272b','#2e3b81','#FFFFFF',null,null,true),
+  ('Sandy','Diamond Ridge High','Raptors',null,null,'#29aed0','#1a1919','#cea668','#FFFFFF',null,true),
+  ('-','Canyons Virtual Academy','-',null,null,'#022259','#0dc6f7','#FFFFFF',null,null,true),
+  ('Midvale','Jordan Valley School','Chameleons',null,null,null,null,null,'#333380','#FFFFFF',true),
+  ('Sandy','Life Skills Academy','Frogs',null,null,'#13427a','#6fb4e1','#FFFFFF','#305691','#000000',true),
+  ('Sandy','Entrada','-',null,null,'#efdb25','#FFFFFF','#000000',null,null,true)
+on conflict ((lower(school_name))) do update
+set
+  city = excluded.city,
+  mascot = excluded.mascot,
+  title_i = excluded.title_i,
+  mascot_name = excluded.mascot_name,
+  primary_color = excluded.primary_color,
+  secondary_color = excluded.secondary_color,
+  accent_color = excluded.accent_color,
+  text_color = excluded.text_color,
+  link_url = excluded.link_url,
+  active = excluded.active,
+  updated_at = now();

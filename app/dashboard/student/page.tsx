@@ -116,11 +116,11 @@ export default function StudentHomePage() {
       .order('start_datetime', { ascending: true, nullsFirst: false })
       .limit(30)
 
-    const cleaned: Production[] = (prods || []).map((p: Record<string, unknown>) => ({
+    const cleaned: Production[] = (prods || []).map((p: any) => ({
       ...p,
-      production_members: ((p.production_members as unknown[]) || []).map((m: Record<string, unknown>) => ({
+      production_members: (Array.isArray(p.production_members) ? p.production_members : []).map((m: any) => ({
         ...m,
-        team: Array.isArray(m.team) ? (m.team[0] || null) : (m.team || null),
+        team: Array.isArray(m?.team) ? (m.team[0] || null) : (m?.team || null),
       })),
     })) as Production[]
 

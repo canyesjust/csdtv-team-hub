@@ -800,6 +800,25 @@ function ProductionsPageContent() {
               <span style={{ fontSize: '11px', color: muted, flexShrink: 0 }}>{progress.done}/{progress.total}</span>
             </div>
           )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+            <Link
+              href={`/dashboard/productions/${prod.production_number}`}
+              onClick={e => e.stopPropagation()}
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--brand-primary)',
+                textDecoration: 'none',
+                padding: '4px 8px',
+                border: `1px solid ${border}`,
+                borderRadius: '6px',
+                background: surface2,
+              }}
+            >
+              Open page →
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -852,6 +871,23 @@ function ProductionsPageContent() {
           </div>
         )}
         {renderStatusPill(prod.status)}
+        <Link
+          href={`/dashboard/productions/${prod.production_number}`}
+          onClick={e => e.stopPropagation()}
+          style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            color: 'var(--brand-primary)',
+            textDecoration: 'none',
+            padding: '4px 8px',
+            border: `1px solid ${border}`,
+            borderRadius: '6px',
+            background: surface2,
+            flexShrink: 0,
+          }}
+        >
+          Open page →
+        </Link>
       </div>
     )
   }
