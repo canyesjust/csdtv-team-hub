@@ -33,6 +33,7 @@ interface Production {
   project_lead: string | null; synced_at: string | null; team_notes: string | null
   deliverables_count: number; deliverables_notes: string | null
   estimated_external_cost: number | null
+  camera_options: string | null
   youtube_link_email_sent_at: string | null
   youtube_link_email_first_click_at: string | null
   youtube_link_email_click_count: number | null
@@ -72,6 +73,12 @@ interface ActivityItem {
   id: string; action: string; detail: string | null; created_at: string
   user_id: string
   team?: { name: string } | null
+}
+
+interface CameraPackageRow {
+  option_id: number
+  label: string
+  cost: number
 }
 
 interface EmailTemplate {
@@ -171,6 +178,8 @@ export default function ProductionDetailPage() {
   const [savingDeliv, setSavingDeliv] = useState(false)
   const [externalCostUsd, setExternalCostUsd] = useState('')
   const [savingExternalCost, setSavingExternalCost] = useState(false)
+  const [cameraPackages, setCameraPackages] = useState<CameraPackageRow[]>([])
+  const [recomputingEstCost, setRecomputingEstCost] = useState(false)
   const [youtubeUrl, setYoutubeUrl] = useState('')
   const [fetchingYt, setFetchingYt] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
@@ -238,7 +247,7 @@ export default function ProductionDetailPage() {
     )
 
     // All related queries use the UUID as FK
-    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes] = await Promise.all([
+    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes, camPkgRes] = await Promise.all([
       supabase.from('checklist_items').select('*').eq('production_id', prodUUID).order('sort_order'),
       supabase.from('production_members').select('*, team:team(id, name, role, avatar_color)').eq('production_id', prodUUID),
       supabase.from('team').select('*').eq('active', true),
@@ -248,8 +257,10 @@ export default function ProductionDetailPage() {
       supabase.from('knowledge_base').select('id, title, category').order('title'),
       supabase.from('email_templates').select('*').order('sort_order'),
       supabase.from('schools').select('*').order('name'),
+      supabase.from('cost_camera_packages').select('option_id, label, cost').eq('active', true).order('display_order'),
     ])
 
+    setCameraPackages((camPkgRes.data as CameraPackageRow[]) || [])
     setChecklist(checkRes.data || [])
     if ((checkRes.data || []).length === 0) setActiveTab('info')
     setMembers(membersRes.data || [])
@@ -275,6 +286,49 @@ export default function ProductionDetailPage() {
   useEffect(() => { loadData() }, [loadData])
 
   const getTypeLabel = (prod: Production) => prod.request_type_label || prod.type || 'Unknown'
+
+  const formatOutsourcedUsd = (n: number) =>
+    `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+  const cameraOptionIdFromProduction = (raw: string | null | undefined): number | null => {
+    if (raw === null || raw === undefined || String(raw).trim() === '') return null
+    const n = parseInt(String(raw).trim(), 10)
+    return Number.isFinite(n) ? n : null
+  }
+
+  const recomputeOneEstimatedCost = useCallback(async () => {
+    if (!uuid) return
+    setRecomputingEstCost(true)
+    const { data, error } = await supabase.rpc('recompute_one_estimated_cost', { production_id: uuid })
+    setRecomputingEstCost(false)
+    if (error) {
+      toast(`Recompute failed: ${error.message}`, 'error')
+      return
+    }
+    const { data: row, error: fetchErr } = await supabase
+      .from('productions')
+      .select('estimated_external_cost, camera_options')
+      .eq('id', uuid)
+      .single()
+    if (fetchErr || !row) {
+      toast('Cost updated but could not refresh row', 'error')
+      return
+    }
+    setProduction(prev =>
+      prev ? { ...prev, estimated_external_cost: row.estimated_external_cost, camera_options: row.camera_options } : null
+    )
+    const rawExt = row.estimated_external_cost
+    setExternalCostUsd(
+      rawExt !== null && rawExt !== undefined && String(rawExt).trim() !== ''
+        ? String(Number(rawExt))
+        : ''
+    )
+    if (data !== null && data !== undefined && Number.isFinite(Number(data))) {
+      toast(`Updated to ${formatOutsourcedUsd(Number(data))}`, 'success')
+    } else {
+      toast('Cost recomputed (using type default)', 'success')
+    }
+  }, [uuid, supabase])
 
   const sanitizeSvgMarkup = useCallback((raw: string): string => {
     return raw
@@ -1640,6 +1694,38 @@ export default function ProductionDetailPage() {
               </div>
             ) : null)}
           </div>
+          {(() => {
+            const hasStored = production.estimated_external_cost != null
+            const displayAmount = hasStored
+              ? Number(production.estimated_external_cost)
+              : getDefaultExternalCostForType(production.request_type_label)
+            const camId = cameraOptionIdFromProduction(production.camera_options)
+            const camPkg = camId !== null ? cameraPackages.find(p => p.option_id === camId) : undefined
+            const subtitle = hasStored
+              ? (camPkg
+                ? `Based on the ${camPkg.label} camera package`
+                : 'Stored outsourced cost (no matching camera package row)')
+              : `Based on production type default (${production.request_type_label || 'Unknown'})`
+            return (
+              <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 8px' }}>Estimated outsourced cost</h3>
+                    <p style={{ fontSize: '26px', fontWeight: 800, color: '#22c55e', margin: '0 0 6px', lineHeight: 1.2 }}>{formatOutsourcedUsd(displayAmount)}</p>
+                    <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>{subtitle}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void recomputeOneEstimatedCost()}
+                    disabled={recomputingEstCost}
+                    style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: 'transparent', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)', cursor: recomputingEstCost ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0, alignSelf: 'flex-start' }}
+                  >
+                    {recomputingEstCost ? 'Recomputing…' : 'Recompute'}
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Source metadata</h3>
             {([

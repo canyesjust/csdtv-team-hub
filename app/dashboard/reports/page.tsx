@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
 import { getSchoolName } from '@/lib/schools'
 import { EXTERNAL_COST_DEFAULTS, getDefaultExternalCostForType } from '@/lib/external-production-costs'
+import { toast } from '@/lib/toast'
 
 interface Production { id: string; title: string; production_number: number; status: string | null; request_type_label: string | null; school_department: string | null; start_datetime: string | null; school_year: string | null; synced_at: string | null; estimated_external_cost: number | null }
 interface Task { id: string; status: string; assigned_to: string | null; completed_at: string | null; created_at: string; priority: string }
@@ -17,6 +18,7 @@ interface Loan { id: string; equipment_id: string; checked_out_at: string; check
 interface Equipment { id: string; name: string; asset_tag: string; status: string; category_id: string | null }
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
 interface ProdMember { production_id: string; user_id: string }
+interface CameraPackageRow { option_id: number; label: string; cost: number }
 
 const TYPE_COLORS: Record<string, string> = {
   'Photo Headshots': '#e8a020', 'Create a Video(Film, Edit, Publish)': '#5ba3e0', 'LiveStream Meeting': '#22c55e',
@@ -53,11 +55,13 @@ export default function ReportsPage() {
   const [allSchools, setAllSchools] = useState<{ code: string; name: string; type: string }[]>([])
   const [timeEntries, setTimeEntries] = useState<{ task_id: string; hours: number }[]>([])
   const [taskProdMap, setTaskProdMap] = useState<Record<string, string>>({})
+  const [cameraPackages, setCameraPackages] = useState<CameraPackageRow[]>([])
+  const [recomputing, setRecomputing] = useState(false)
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [prodsRes, tasksRes, actRes, videosRes, destRes, talentRes, loansRes, eqRes, teamRes, pmRes, schoolsRes, timeRes, taskProdsRes] = await Promise.all([
+    const [prodsRes, tasksRes, actRes, videosRes, destRes, talentRes, loansRes, eqRes, teamRes, pmRes, schoolsRes, timeRes, taskProdsRes, camPkgRes] = await Promise.all([
       supabase.from('productions').select('id, title, production_number, status, request_type_label, school_department, start_datetime, school_year, synced_at, estimated_external_cost, deliverables_count').order('production_number'),
       supabase.from('tasks').select('id, status, assigned_to, completed_at, created_at, priority'),
       supabase.from('production_activity').select('id, production_id, action, created_at').order('created_at'),
@@ -71,8 +75,10 @@ export default function ReportsPage() {
       supabase.from('schools').select('code, name, type').order('name'),
       supabase.from('time_entries').select('task_id, hours'),
       supabase.from('tasks').select('id, production_id').not('production_id', 'is', null),
+      supabase.from('cost_camera_packages').select('option_id, label, cost').eq('active', true).order('display_order'),
     ])
     setProductions(prodsRes.data || [])
+    setCameraPackages((camPkgRes.data as CameraPackageRow[]) || [])
     setTasks(tasksRes.data || [])
     setActivity(actRes.data || [])
     setVideos(videosRes.data || [])
@@ -89,6 +95,19 @@ export default function ReportsPage() {
     setTaskProdMap(tpMap)
     setLoading(false)
   }, [supabase])
+
+  const recomputeAll = useCallback(async () => {
+    setRecomputing(true)
+    const { data, error } = await supabase.rpc('recompute_all_estimated_costs')
+    setRecomputing(false)
+    if (error) {
+      toast(`Recompute failed: ${error.message}`, 'error')
+      return
+    }
+    const n = typeof data === 'number' ? data : Number(data)
+    toast(`Recomputed ${Number.isFinite(n) ? n : 0} productions`, 'success')
+    await loadData()
+  }, [supabase, loadData])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -583,6 +602,16 @@ export default function ReportsPage() {
             <p style={{ fontSize: '48px', fontWeight: 800, color: '#22c55e', margin: '0 0 4px', lineHeight: 1 }}>${costSavings.toLocaleString()}</p>
             <p style={{ fontSize: '14px', color: muted, margin: 0 }}>Based on estimated external production costs for {fp.length} productions</p>
           </div>
+          <div style={{ marginBottom: '16px' }}>
+            <button
+              type="button"
+              onClick={() => void recomputeAll()}
+              disabled={recomputing}
+              style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: recomputing ? 'wait' : 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              {recomputing ? 'Recomputing…' : 'Recompute all costs'}
+            </button>
+          </div>
           <p style={{ fontSize: '13px', color: muted, marginBottom: '16px' }}>
             These estimates reflect what an outside production company would charge for each type of work. Override individual production costs in the production detail page. Default rates shown below.
           </p>
@@ -604,6 +633,19 @@ export default function ReportsPage() {
                 <span style={{ fontSize: '15px', fontWeight: 600, color: text }}>Total:</span>
                 <span style={{ fontSize: '15px', fontWeight: 800, color: '#22c55e' }}>${costSavings.toLocaleString()}</span>
               </div>
+            </div>
+          ))}
+          {sectionCard('Camera package rates', (
+            <div>
+              <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>These are the per-package rates used when a production has a camera_options value set. Edit in Supabase to update.</p>
+              {cameraPackages.length === 0 ? (
+                <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No active camera packages found.</p>
+              ) : cameraPackages.map(row => (
+                <div key={row.option_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
+                  <span style={{ color: text }}>{row.label}</span>
+                  <span style={{ color: muted, fontWeight: 500 }}>${Number(row.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              ))}
             </div>
           ))}
           {sectionCard('Default external cost rates', (
