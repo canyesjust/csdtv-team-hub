@@ -168,21 +168,21 @@ function buildVideoCard(v: RecentVideo): string {
     ? `<span style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.3;color:#5C6370;border:1px solid #D8D8CE;border-radius:999px;padding:3px 8px;margin:0 0 8px 0;">${escapeHtml(dur)}</span>`
     : ''
   const tw = CARD_THUMB_PX
-  return `<a href="${url}" style="text-decoration:none;color:inherit;display:block;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;border:1px solid #D8D8CE;background:#FAFAF8;">
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;border:1px solid #D8D8CE;background:#FAFAF8;">
   <tr>
     <td class="bu-thumb" width="${tw}" valign="top" style="width:${tw}px;max-width:${tw}px;padding:12px 0 12px 12px;vertical-align:top;">
-      <img src="${thumb}" width="${tw}" alt="${escapeHtml(v.title)}" style="display:block;width:${tw}px;max-width:${tw}px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+      <a href="${url}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;border:0;">
+        <img src="${thumb}" width="${tw}" alt="${escapeHtml(v.title)}" style="display:block;width:${tw}px;max-width:${tw}px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+      </a>
     </td>
     <td class="bu-copy" valign="top" style="padding:12px 14px 12px 8px;vertical-align:top;">
       <div style="${TITLE_SERIF}margin:0 0 6px 0;">${escapeHtml(v.title)}</div>
       <div style="${META_ORANGE}margin:0 0 6px 0;">${escapeHtml(formatVideoPostedLine(v.datePublished))}</div>
       ${durBlock ? `<div style="margin:0;">${durBlock}</div>` : ''}
-      <div style="margin:${durBlock ? '6px' : '0'} 0 0 0;"><span style="${LINK_STYLE}">Watch on YouTube →</span></div>
+      <div style="margin:${durBlock ? '6px' : '0'} 0 0 0;"><a href="${url}" target="_blank" rel="noopener noreferrer" style="${LINK_STYLE}">Watch on YouTube →</a></div>
     </td>
   </tr>
-</table>
-</a>`
+</table>`
 }
 
 function buildFullWidthItemRows<T>(items: T[], renderCard: (item: T) => string, emptyMessage: string): string {
