@@ -52,8 +52,6 @@ export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
-  const signageTasksKey = process.env.NEXT_PUBLIC_SIGNAGE_TASKS_KEY || ''
-  const signageTasksHref = signageTasksKey ? `/signage/tasks?k=${encodeURIComponent(signageTasksKey)}` : '/signage/tasks'
 
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [team, setTeam] = useState<TeamMember[]>([])
@@ -109,6 +107,9 @@ export default function SettingsPage() {
   const [digestPreviewLoading, setDigestPreviewLoading] = useState(false)
   const [digestPreviewError, setDigestPreviewError] = useState<string | null>(null)
   const [digestSendLoading, setDigestSendLoading] = useState(false)
+  const [taskSignageHref, setTaskSignageHref] = useState<string>('/signage/tasks')
+  const [taskSignageAbsolute, setTaskSignageAbsolute] = useState<string>('')
+  const [signageTasksKeyConfigured, setSignageTasksKeyConfigured] = useState<boolean | null>(null)
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -141,6 +142,21 @@ export default function SettingsPage() {
       const { data: prefs } = await supabase.from('notification_preferences').select('*').eq('user_id', userRes.data.id).single()
       if (prefs) setNotifPrefs(prefs)
     }
+
+    try {
+      const sigRes = await fetch('/api/dashboard/signage-links', { cache: 'no-store' })
+      const sigBody = await sigRes.json().catch(() => ({}))
+      if (sigRes.ok && typeof sigBody.taskSignagePath === 'string') {
+        setTaskSignageHref(sigBody.taskSignagePath)
+        setTaskSignageAbsolute(typeof sigBody.absoluteTaskSignageUrl === 'string' ? sigBody.absoluteTaskSignageUrl : '')
+        setSignageTasksKeyConfigured(Boolean(sigBody.keyConfigured))
+      } else {
+        setSignageTasksKeyConfigured(false)
+      }
+    } catch {
+      setSignageTasksKeyConfigured(false)
+    }
+
     setLoading(false)
   }, [supabase])
 
@@ -788,7 +804,7 @@ export default function SettingsPage() {
             Production calendar signage →
           </a>
           <a
-            href={signageTasksHref}
+            href={taskSignageHref}
             target="_blank"
             rel="noopener noreferrer"
             style={{ fontSize: '14px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 600 }}
@@ -796,9 +812,15 @@ export default function SettingsPage() {
             Task ops signage →
           </a>
         </div>
-        {!signageTasksKey && (
+        {signageTasksKeyConfigured === false && (
           <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>
-            Missing `NEXT_PUBLIC_SIGNAGE_TASKS_KEY` env var. Task signage link will open without key until it is set.
+            Set the server env var <code style={{ fontSize: '11px' }}>SIGNAGE_TASKS_KEY</code> in Vercel (same value you use for the signage API). Until then, task signage opens without authorization and may not load data.
+          </p>
+        )}
+        {taskSignageAbsolute && signageTasksKeyConfigured && (
+          <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>
+            Full URL for TVs:{' '}
+            <span style={{ wordBreak: 'break-all' as const, color: text }}>{taskSignageAbsolute}</span>
           </p>
         )}
       </div>
