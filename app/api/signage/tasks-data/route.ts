@@ -82,11 +82,11 @@ export async function GET(request: Request) {
 
   const taskRows = (tasksRes.data ?? []) as unknown as Record<string, unknown>[]
   const tasksPayload = taskRows
-    .map((row) => ({
+    .map((row): Record<string, unknown> => ({
       ...row,
       purchase_request: Boolean(row.purchase_request),
     }))
-    .filter((row) => !Boolean(row.hide_from_signage))
+    .filter((row) => !Boolean(row['hide_from_signage']))
 
   const { data: checklistRowsRaw, error: checklistErr } = await supabase
     .from('checklist_items')
