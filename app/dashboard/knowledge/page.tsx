@@ -7,6 +7,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
+import { isStudentInternRole } from '@/lib/roles'
 
 interface Article {
   id: string
@@ -189,6 +190,8 @@ export default function KnowledgePage() {
     if (selected?.id === article.id) setSelected(null)
   }
 
+  const readOnlyKb = isStudentInternRole(currentUser?.role)
+
   const filtered = articles.filter(a => {
     const matchSearch = search === '' || a.title.toLowerCase().includes(search.toLowerCase()) || stripHtml(a.content).toLowerCase().includes(search.toLowerCase())
     const matchCat = catFilter === 'all' || a.category === catFilter
@@ -227,7 +230,7 @@ export default function KnowledgePage() {
           Back
         </button>
         <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
-          {selected && !editing && (
+          {selected && !editing && !readOnlyKb && (
             <>
             <button
               onClick={() => togglePin(selected)}
@@ -298,6 +301,7 @@ export default function KnowledgePage() {
           <h1 style={{ fontSize: '22px', fontWeight: 500, color: text, margin: 0 }}>Knowledge base</h1>
           <p style={{ fontSize: '15px', color: muted, margin: '2px 0 0' }}>{articles.length} articles</p>
         </div>
+        {!readOnlyKb && (
         <button
           onClick={() => {
             setShowNew(true)
@@ -310,6 +314,7 @@ export default function KnowledgePage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New article
         </button>
+        )}
       </div>
 
       <div className="kb-layout" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
@@ -339,6 +344,7 @@ export default function KnowledgePage() {
                 <div>
                   <p style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 6px' }}>No articles yet</p>
                   <p style={{ fontSize: '15px', color: muted, margin: '0 0 16px' }}>Start documenting your team's processes</p>
+                  {!readOnlyKb && (
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                     {STARTER_ARTICLES.map(s => (
                       <button key={s.title} onClick={() => { setForm({ title: s.title, category: s.category }); setShowNew(true); setShowMobileDetail(true); editor?.commands.setContent(s.content) }} style={{ fontSize: '14px', padding: '8px 14px', borderRadius: '8px', background: 'var(--surface-2)', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -346,6 +352,7 @@ export default function KnowledgePage() {
                       </button>
                     ))}
                   </div>
+                  )}
                 </div>
               ) : (
                 <p style={{ color: muted, fontSize: '14px' }}>No articles match your search</p>

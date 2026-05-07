@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE } from './lib/roles'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -33,6 +34,20 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+
+  // Student Interns use a dedicated home at /dashboard/student
+  if (user && (pathname === '/dashboard' || pathname === '/dashboard/')) {
+    const { data: teamRow } = await supabase
+      .from('team')
+      .select('role')
+      .eq('supabase_user_id', user.id)
+      .maybeSingle()
+    if (teamRow?.role === STUDENT_INTERN_ROLE) {
+      const url = request.nextUrl.clone()
+      url.pathname = STUDENT_INTERN_HOME_PATH
+      return NextResponse.redirect(url)
+    }
+  }
 
   // If no user and trying to access dashboard, redirect to login
   if (!user && pathname.startsWith('/dashboard')) {

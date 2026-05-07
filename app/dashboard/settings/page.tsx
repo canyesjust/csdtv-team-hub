@@ -758,6 +758,7 @@ export default function SettingsPage() {
                   <option value="Staff">Staff</option>
                   <option value="Manager">Manager</option>
                   <option value="Intern">Intern</option>
+                  <option value="Student Intern">Student Intern</option>
                 </select>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '8px 12px' }}>
                   <span style={{ fontSize: '14px', color: muted, flexShrink: 0 }}>Color:</span>

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Loader from '../../components/Loader'
 import CommentsSection from '../../components/CommentsSection'
@@ -14,6 +14,7 @@ import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
+import { isStudentInternRole } from '@/lib/roles'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -138,6 +139,7 @@ export default function ProductionDetailPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const params = useParams()
+  const router = useRouter()
   const supabase = createClient()
   const productionNum = params.id as string
 
@@ -234,6 +236,21 @@ export default function ProductionDetailPage() {
     if (!prodRes.data) { setLoading(false); return }
 
     const prodUUID = prodRes.data.id
+
+    const { data: meRow } = await supabase.from('team').select('id, role').eq('supabase_user_id', session.user.id).single()
+    if (meRow && isStudentInternRole(meRow.role)) {
+      const { data: memRow } = await supabase
+        .from('production_members')
+        .select('id')
+        .eq('production_id', prodUUID)
+        .eq('user_id', meRow.id)
+        .maybeSingle()
+      if (!memRow) {
+        setLoading(false)
+        router.replace('/dashboard/productions')
+        return
+      }
+    }
     setProduction(prodRes.data)
     setUuid(prodUUID)
     setTeamNotes(prodRes.data.team_notes || '')
@@ -296,7 +313,7 @@ export default function ProductionDetailPage() {
     const allProdsData = allProdsRes.data
     setAllProductions(allProdsData || [])
     setLoading(false)
-  }, [supabase, productionNum])
+  }, [supabase, productionNum, router])
 
   useEffect(() => { loadData() }, [loadData])
 

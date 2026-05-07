@@ -3,12 +3,13 @@
 import { useTheme } from '@/lib/theme'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
 import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
+import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 
 const NAV_ITEMS = [
   { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
@@ -99,6 +100,46 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null)
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([])
 
+  const studentInternNav = useMemo(
+    () => ({
+      navItems: [
+        { section: 'Main', items: [{ label: 'Home', href: STUDENT_INTERN_HOME_PATH, icon: 'home' }] },
+        {
+          section: 'Work',
+          items: [
+            { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
+            { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
+          ],
+        },
+        {
+          section: 'Resources',
+          items: [
+            { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
+            { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
+          ],
+        },
+        { section: 'Account', items: [{ label: 'Settings', href: '/dashboard/settings', icon: 'settings' }] },
+      ] as typeof NAV_ITEMS,
+      bottomNav: [
+        { label: 'Home', href: STUDENT_INTERN_HOME_PATH, icon: 'home' },
+        { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
+        { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
+        { label: 'KB', href: '/dashboard/knowledge', icon: 'book' },
+        { label: 'More', href: '#more', icon: 'more' },
+      ] as typeof BOTTOM_NAV,
+      moreItems: [
+        { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
+        { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
+      ] as typeof MORE_ITEMS,
+    }),
+    []
+  )
+
+  const isStudentIntern = isStudentInternRole(userRole)
+  const navItemsResolved = isStudentIntern ? studentInternNav.navItems : NAV_ITEMS
+  const bottomNavResolved = isStudentIntern ? studentInternNav.bottomNav : BOTTOM_NAV
+  const moreItemsResolved = isStudentIntern ? studentInternNav.moreItems : MORE_ITEMS
+
   // Global toast listener
   useEffect(() => {
     const handler = (e: Event) => {
@@ -181,7 +222,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.push('/login')
   }, [supabase, router])
 
-  const isActive = (href: string) => href === '/dashboard' ? pathname === href : pathname.startsWith(href)
+  const isActive = (href: string) => {
+    if (href === '/dashboard') return pathname === href
+    if (href === STUDENT_INTERN_HOME_PATH) return pathname === href || pathname.startsWith(`${href}/`)
+    return pathname.startsWith(href)
+  }
 
   const NavLink = ({ href, icon, label, onClick }: { href: string; icon: string; label: string; onClick?: () => void }) => (
     <Link href={href} onClick={onClick} style={{
@@ -204,7 +249,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Image src="/images/CSDtv Logo - New Logo Outlined.png" alt="CSDtv" width={110} height={48} style={{ objectFit: 'contain' }} priority />
       </div>
       <nav style={{ flex: 1, overflowY: 'auto' as const, padding: '8px' }}>
-        {NAV_ITEMS.map(({ section, items }) => (
+        {navItemsResolved.map(({ section, items }) => (
           <div key={section}>
             <p style={{ fontSize: '10px', fontWeight: 600, color: muted, letterSpacing: '1.2px', textTransform: 'uppercase' as const, padding: '10px 8px 4px', margin: 0 }}>{section}</p>
             {items.map(item => <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} onClick={onNavClick} />)}
@@ -257,7 +302,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
-            {MORE_ITEMS.map(item => (
+            {moreItemsResolved.map(item => (
               <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', textDecoration: 'none', marginBottom: '4px', background: isActive(item.href) ? 'var(--status-info-bg)' : 'transparent', color: isActive(item.href) ? 'var(--brand-primary-strong)' : text }}>
                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: isActive(item.href) ? 'var(--status-info-bg)' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive(item.href) ? 'var(--brand-primary-strong)' : muted }}>
                   <Icon type={item.icon} size={18} />
@@ -281,10 +326,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <button className="csdtv-hamburger" onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', display: 'none', padding: '4px', minWidth: '44px', minHeight: '44px', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
-          <button onClick={() => { setShowSearch(true); setShowNotifications(false) }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: searchBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '9px 14px', cursor: 'text', minHeight: '44px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <span className="csdtv-search-label" style={{ fontSize: '15px', color: muted }}>Search productions, tasks, knowledge base...</span>
-          </button>
+          {!isStudentIntern ? (
+            <button onClick={() => { setShowSearch(true); setShowNotifications(false) }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: searchBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '9px 14px', cursor: 'text', minHeight: '44px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span className="csdtv-search-label" style={{ fontSize: '15px', color: muted }}>Search productions, tasks, knowledge base...</span>
+            </button>
+          ) : (
+            <div style={{ flex: 1, minHeight: '44px' }} aria-hidden />
+          )}
           <button onClick={() => { setShowNotifications(!showNotifications); setShowSearch(false) }} style={{ position: 'relative', width: '44px', height: '44px', borderRadius: '10px', background: iconBg, border: `0.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: muted, flexShrink: 0 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
             {unreadCount > 0 && <span style={{ position: 'absolute', top: '6px', right: '6px', minWidth: '16px', height: '16px', fontSize: '9px', color: '#071020', display: 'flex', alignItems: 'center', justifyContent: 'center', ...statusBadge('warning', true) }}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
@@ -302,7 +351,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <nav className="csdtv-mobile-nav" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'none', background: sidebar, borderTop: `0.5px solid ${border}`, zIndex: 10, paddingBottom: 'env(safe-area-inset-bottom)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', width: '100%' }}>
-            {BOTTOM_NAV.map(item => {
+            {bottomNavResolved.map(item => {
               const active = item.href !== '#more' && isActive(item.href)
               const isMore = item.href === '#more'
               const itemStyle = { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '3px', padding: '10px 0 8px', minHeight: '56px', color: active || (isMore && showMore) ? 'var(--brand-primary-strong)' : muted, textDecoration: 'none' as const, background: 'none' as const, border: 'none' as const, cursor: 'pointer' as const, fontFamily: 'inherit' as const }
@@ -323,7 +372,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {showNotifications && <NotificationPanel onClose={() => setShowNotifications(false)} onUnreadChange={setUnreadCount} userId={userId} />}
-      {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
+      {showSearch && !isStudentIntern && <SearchPanel onClose={() => setShowSearch(false)} />}
 
       {/* Toast notifications */}
       <div style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 9999, display: 'flex', flexDirection: 'column' as const, gap: '8px', pointerEvents: 'none' }}>

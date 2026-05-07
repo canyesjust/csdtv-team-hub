@@ -10,6 +10,7 @@ import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
+import { isStudentInternRole } from '@/lib/roles'
 
 interface Production {
   id: string; title: string; production_number: number
@@ -171,21 +172,55 @@ export default function TasksPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [tasksRes, completedRes, teamRes, userRes, prodsRes] = await Promise.all([
-      supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }),
-      supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('status', 'complete').order('completed_at', { ascending: false }).limit(50),
-      supabase.from('team').select('*').eq('active', true),
-      supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
-      supabase.from('productions').select('id,title,production_number,request_type_label,start_datetime,status').order('production_number', { ascending: false }).limit(100),
-    ])
+    const userRes = await supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single()
+    const uid = userRes.data?.id
+    const isStu = isStudentInternRole(userRes.data?.role)
+
+    let tasksRes: { data: Task[] | null }
+    let completedRes: { data: Task[] | null }
+    let teamList: TeamMember[]
+    let prodsList: Production[]
+
+    if (isStu && uid) {
+      ;[tasksRes, completedRes] = await Promise.all([
+        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('assigned_to', uid).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }),
+        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('assigned_to', uid).eq('status', 'complete').order('completed_at', { ascending: false }).limit(50),
+      ])
+      const { data: memRows } = await supabase.from('production_members').select('production_id').eq('user_id', uid)
+      const pids = [...new Set((memRows || []).map(m => m.production_id).filter(Boolean))] as string[]
+      if (pids.length === 0) {
+        prodsList = []
+      } else {
+        const { data } = await supabase.from('productions').select('id,title,production_number,request_type_label,start_datetime,status').in('id', pids).order('production_number', { ascending: false })
+        prodsList = (data as Production[]) || []
+      }
+      teamList = userRes.data ? [userRes.data as TeamMember] : []
+    } else {
+      const [tRes, cRes, tmRes, pRes] = await Promise.all([
+        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }),
+        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('status', 'complete').order('completed_at', { ascending: false }).limit(50),
+        supabase.from('team').select('*').eq('active', true),
+        supabase.from('productions').select('id,title,production_number,request_type_label,start_datetime,status').order('production_number', { ascending: false }).limit(100),
+      ])
+      tasksRes = tRes
+      completedRes = cRes
+      teamList = (tmRes.data as TeamMember[]) || []
+      prodsList = (pRes.data as Production[]) || []
+    }
+
     setTasks(tasksRes.data || [])
     setCompletedTasks(completedRes.data || [])
-    setTeam(teamRes.data || [])
+    setTeam(teamList)
     setCurrentUser(userRes.data)
-    setAllProductions(prodsRes.data || [])
+    setAllProductions(prodsList)
 
-    const { data: tplData } = await supabase.from('task_templates').select('*, items:task_template_items(*)').order('name')
-    setTemplates((tplData || []).map((t: any) => ({ ...t, items: t.items?.sort((a: any, b: any) => a.sort_order - b.sort_order) })))
+    if (isStu) {
+      setTemplates([])
+      setShowTemplates(false)
+    } else {
+      const { data: tplData } = await supabase.from('task_templates').select('*, items:task_template_items(*)').order('name')
+      setTemplates((tplData || []).map((t: any) => ({ ...t, items: t.items?.sort((a: any, b: any) => a.sort_order - b.sort_order) })))
+    }
 
     const taskIdsForSubs = [...new Set([
       ...(tasksRes.data || []).map((t: { id: string }) => t.id),
@@ -223,6 +258,12 @@ export default function TasksPage() {
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
+
+  const isStudentInternUser = useMemo(() => isStudentInternRole(currentUser?.role), [currentUser?.role])
+
+  useEffect(() => {
+    if (isStudentInternUser) setScope('mine')
+  }, [isStudentInternUser])
 
   const getMember = (id: string | null) => id ? team.find(m => m.id === id) || null : null
 
@@ -635,8 +676,12 @@ export default function TasksPage() {
                 </button>
                 {showOverflow && (
                 <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: '220px', background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '6px', zIndex: 50, boxShadow: 'var(--shadow-raised)' }}>
-                  <button onClick={() => { setShowTemplates(true); setShowOverflow(false) }} style={overflowItem(text)}>Templates &amp; saved sets</button>
-                  <div style={{ height: '1px', background: border, margin: '4px 6px' }} />
+                  {!isStudentInternUser && (
+                    <>
+                      <button onClick={() => { setShowTemplates(true); setShowOverflow(false) }} style={overflowItem(text)}>Templates &amp; saved sets</button>
+                      <div style={{ height: '1px', background: border, margin: '4px 6px' }} />
+                    </>
+                  )}
                   <div style={{ padding: '6px 10px' }}>
                     <p style={{ fontSize: '11px', fontWeight: 700, color: muted, margin: '0 0 4px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Group by</p>
                     <select value={groupBy} onChange={e => { setGroupBy(e.target.value as Grouping); setShowOverflow(false) }} style={{ ...inputStyle, fontSize: '13px', padding: '6px 8px' }}>
@@ -685,11 +730,13 @@ export default function TasksPage() {
           {/* SCOPE / SEARCH ROW */}
           <section style={{ marginBottom: '20px' }}>
             <div className="scope-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {scopeBtn('mine', 'Mine')}
-                {scopeBtn('team', 'Team')}
-                {scopeBtn('unassigned', 'Unassigned')}
-              </div>
+              {!isStudentInternUser && (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {scopeBtn('mine', 'Mine')}
+                  {scopeBtn('team', 'Team')}
+                  {scopeBtn('unassigned', 'Unassigned')}
+                </div>
+              )}
               <div className="search-wrap" style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 12px' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: text, fontFamily: 'inherit' }} />
@@ -788,7 +835,7 @@ export default function TasksPage() {
           )}
 
           {/* TEMPLATES PANEL */}
-          {showTemplates && (
+          {showTemplates && !isStudentInternUser && (
             <div style={{ ...uiStyles.card, padding: '18px', marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: 0 }}>Task templates</h3>

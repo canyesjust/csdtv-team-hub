@@ -77,6 +77,19 @@ const ONBOARDING_TASKS: { title: string; description: string; week: number }[] =
   { week: 2, title: 'Sign onboarding completion acknowledgment', description: 'Review and sign the onboarding completion form confirming you have finished all tasks.' },
 ]
 
+/** Shorter track for district student interns (same `onboarding_tasks` table, different seed set). */
+const STUDENT_ONBOARDING_TASKS: { title: string; description: string; week: number }[] = [
+  { week: 1, title: 'Log into the Team Hub', description: 'Sign in to csdtvstaff.org using your district email magic link.' },
+  { week: 1, title: 'Review assigned productions', description: 'Open Productions and confirm which shows you are listed on.' },
+  { week: 1, title: 'Read Equipment Checkout Policy in Knowledge Base', description: 'Find and read the Equipment Checkout Policy article in the Team Hub Knowledge Base.' },
+  { week: 1, title: 'Equipment room orientation', description: 'Walk the equipment room with a staff member; learn where items live and how checkout works.' },
+  { week: 1, title: 'Shadow one production or classroom shoot', description: 'Attend as an observer; take notes on setup, roles, and safety.' },
+  { week: 1, title: 'Complete district digital safety training', description: 'Finish the required online digital safety course assigned by the district.' },
+  { week: 1, title: 'Week 1 check-in with your manager', description: 'Review expectations, hours, and questions about your assignments.' },
+  { week: 2, title: 'Assist with one assigned production task', description: 'Work on a concrete task your manager assigns (camera, grip, logging, etc.).' },
+  { week: 2, title: 'Student intern wrap-up', description: 'Review progress with your manager and confirm next steps.' },
+]
+
 export default function OnboardingPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
@@ -88,11 +101,14 @@ export default function OnboardingPage() {
 
   // Manager state
   const [internSummaries, setInternSummaries] = useState<InternSummary[]>([])
+  const [studentSummaries, setStudentSummaries] = useState<InternSummary[]>([])
   const [selectedIntern, setSelectedIntern] = useState<TeamMember | null>(null)
+  const [selectedStudent, setSelectedStudent] = useState<TeamMember | null>(null)
   const [internTasks, setInternTasks] = useState<OnboardingTask[]>([])
+  const [studentTasks, setStudentTasks] = useState<OnboardingTask[]>([])
   const [loadingDetail, setLoadingDetail] = useState(false)
 
-  // Intern state
+  // Intern / student intern self-serve state
   const [myTasks, setMyTasks] = useState<OnboardingTask[]>([])
 
   const text    = 'var(--text-primary)'
@@ -111,10 +127,8 @@ export default function OnboardingPage() {
     setCurrentUser(user)
 
     if (user?.role === 'Manager' || user?.role === 'Staff') {
-      // Load all interns and their task counts
       const internsRes = await supabase.from('team').select('*').eq('role', 'Intern').eq('active', true)
       const interns: TeamMember[] = internsRes.data || []
-
       const summaries: InternSummary[] = await Promise.all(
         interns.map(async (intern) => {
           const tasksRes = await supabase.from('onboarding_tasks').select('*').eq('assigned_to', intern.id).order('week').order('sort_order')
@@ -123,8 +137,18 @@ export default function OnboardingPage() {
         })
       )
       setInternSummaries(summaries)
-    } else if (user?.role === 'Intern') {
-      // Interns only see their own tasks
+
+      const studentsRes = await supabase.from('team').select('*').eq('role', 'Student Intern').eq('active', true)
+      const students: TeamMember[] = studentsRes.data || []
+      const studentSum: InternSummary[] = await Promise.all(
+        students.map(async (s) => {
+          const tasksRes = await supabase.from('onboarding_tasks').select('*').eq('assigned_to', s.id).order('week').order('sort_order')
+          const tasks = tasksRes.data || []
+          return { intern: s, tasks, seeded: tasks.length > 0 }
+        })
+      )
+      setStudentSummaries(studentSum)
+    } else if (user?.role === 'Intern' || user?.role === 'Student Intern') {
       const tasksRes = await supabase.from('onboarding_tasks').select('*').eq('assigned_to', user.id).order('week').order('sort_order')
       setMyTasks(tasksRes.data || [])
     }
@@ -155,12 +179,44 @@ export default function OnboardingPage() {
     setSeeding(null)
   }, [supabase])
 
+  const seedStudentTasks = useCallback(async (student: TeamMember) => {
+    setSeeding(student.id)
+    const rows = STUDENT_ONBOARDING_TASKS.map((t, i) => ({
+      title: t.title,
+      description: t.description,
+      week: t.week,
+      sort_order: i,
+      assigned_to: student.id,
+      completed: false,
+      completed_at: null,
+    }))
+    const { data } = await supabase.from('onboarding_tasks').insert(rows).select('*')
+    if (data) {
+      setStudentSummaries(prev => prev.map(s =>
+        s.intern.id === student.id ? { ...s, tasks: data, seeded: true } : s
+      ))
+    }
+    setSeeding(null)
+  }, [supabase])
+
   // ─── Open intern detail (manager) ─────────────────────────────────────────
   const openInternDetail = useCallback(async (intern: TeamMember) => {
     setLoadingDetail(true)
+    setSelectedStudent(null)
+    setStudentTasks([])
     setSelectedIntern(intern)
     const tasksRes = await supabase.from('onboarding_tasks').select('*').eq('assigned_to', intern.id).order('week').order('sort_order')
     setInternTasks(tasksRes.data || [])
+    setLoadingDetail(false)
+  }, [supabase])
+
+  const openStudentDetail = useCallback(async (student: TeamMember) => {
+    setLoadingDetail(true)
+    setSelectedIntern(null)
+    setInternTasks([])
+    setSelectedStudent(student)
+    const tasksRes = await supabase.from('onboarding_tasks').select('*').eq('assigned_to', student.id).order('week').order('sort_order')
+    setStudentTasks(tasksRes.data || [])
     setLoadingDetail(false)
   }, [supabase])
 
@@ -180,7 +236,13 @@ export default function OnboardingPage() {
         return { ...s, tasks: s.tasks.map(t => t.id === task.id ? { ...t, completed, completed_at } : t) }
       }))
     }
-  }, [supabase, selectedIntern])
+    if (selectedStudent) {
+      setStudentSummaries(prev => prev.map(s => {
+        if (s.intern.id !== selectedStudent.id) return s
+        return { ...s, tasks: s.tasks.map(t => t.id === task.id ? { ...t, completed, completed_at } : t) }
+      }))
+    }
+  }, [supabase, selectedIntern, selectedStudent])
 
   // ─── Reset onboarding for an intern ─────────────────────────────────────
   const resetOnboarding = useCallback(async (intern: TeamMember) => {
@@ -194,6 +256,18 @@ export default function OnboardingPage() {
       setSelectedIntern(null)
     }
   }, [supabase, selectedIntern])
+
+  const resetStudentOnboarding = useCallback(async (student: TeamMember) => {
+    if (!confirm(`Reset all onboarding tasks for ${student.name}? This will delete all their tasks and progress.`)) return
+    await supabase.from('onboarding_tasks').delete().eq('assigned_to', student.id)
+    setStudentSummaries(prev => prev.map(s =>
+      s.intern.id === student.id ? { ...s, tasks: [], seeded: false } : s
+    ))
+    if (selectedStudent?.id === student.id) {
+      setStudentTasks([])
+      setSelectedStudent(null)
+    }
+  }, [supabase, selectedStudent])
 
   // ─── Week section component ────────────────────────────────────────────────
   const WeekSection = ({
@@ -259,18 +333,19 @@ export default function OnboardingPage() {
     )
   }
 
-  // ─── INTERN VIEW ──────────────────────────────────────────────────────────
-  if (currentUser?.role === 'Intern') {
+  // ─── INTERN / STUDENT INTERN VIEW ──────────────────────────────────────────
+  if (currentUser?.role === 'Intern' || currentUser?.role === 'Student Intern') {
     const week1 = myTasks.filter(t => t.week === 1)
     const week2 = myTasks.filter(t => t.week === 2)
     const totalDone = myTasks.filter(t => t.completed).length
     const pct = myTasks.length > 0 ? Math.round((totalDone / myTasks.length) * 100) : 0
+    const traineeHint = currentUser.role === 'Student Intern' ? 'Your student intern checklist' : 'Your two-week checklist'
     return (
       <div style={{ maxWidth: '800px', margin: '0 auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <h1 style={{ fontSize: '22px', fontWeight: 600, color: text, margin: 0 }}>Onboarding</h1>
-            <p style={{ fontSize: '14px', color: muted, margin: '3px 0 0' }}>Your two-week checklist</p>
+            <p style={{ fontSize: '14px', color: muted, margin: '3px 0 0' }}>{traineeHint}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '100px', height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
@@ -344,8 +419,58 @@ export default function OnboardingPage() {
     )
   }
 
+  // ─── MANAGER — STUDENT INTERN DETAIL VIEW ─────────────────────────────────
+  if (selectedStudent) {
+    const week1 = studentTasks.filter(t => t.week === 1)
+    const week2 = studentTasks.filter(t => t.week === 2)
+    const totalDone = studentTasks.filter(t => t.completed).length
+    const pct = studentTasks.length > 0 ? Math.round((totalDone / studentTasks.length) * 100) : 0
+    return (
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <button
+          onClick={() => { setSelectedStudent(null); setStudentTasks([]) }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: muted, background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 16px', fontFamily: 'inherit' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+          All student interns
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: selectedStudent.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
+              {selectedStudent.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <h1 style={{ fontSize: '22px', fontWeight: 600, color: text, margin: 0 }}>{selectedStudent.name}</h1>
+              <p style={{ fontSize: '14px', color: muted, margin: '2px 0 0' }}>Student intern onboarding</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '100px', height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
+            </div>
+            <span style={{ fontSize: '14px', color: muted }}>{totalDone} / {studentTasks.length}</span>
+            {isManager && (
+              <button onClick={() => resetStudentOnboarding(selectedStudent)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.2)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+        {loadingDetail ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}><Loader /></div>
+        ) : (
+          <>
+            <WeekSection weekNum={1} weekTasks={week1} setFn={setStudentTasks} />
+            <WeekSection weekNum={2} weekTasks={week2} setFn={setStudentTasks} />
+          </>
+        )}
+      </div>
+    )
+  }
+
   // ─── MANAGER — OVERVIEW ───────────────────────────────────────────────────
   const totalInterns = internSummaries.length
+  const totalStudents = studentSummaries.length
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
       <div style={{ marginBottom: '24px' }}>
@@ -408,6 +533,76 @@ export default function OnboardingPage() {
                 ) : isManager ? (
                   <button
                     onClick={e => { e.stopPropagation(); seedTasks(intern) }}
+                    disabled={isSeeding}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', background: isSeeding ? 'var(--surface-2)' : '#1e6cb5', color: isSeeding ? muted : '#fff', border: 'none', cursor: isSeeding ? 'wait' : 'pointer', fontSize: '14px', fontWeight: 500, fontFamily: 'inherit' }}
+                  >
+                    {isSeeding ? 'Setting up...' : 'Initialize onboarding'}
+                  </button>
+                ) : (
+                  <p style={{ fontSize: '13px', color: muted, margin: 0, textAlign: 'center' as const }}>Not yet initialized</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <div style={{ marginTop: '40px', marginBottom: '12px' }}>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: 0 }}>Student interns</h2>
+        <p style={{ fontSize: '14px', color: muted, margin: '4px 0 0' }}>
+          {totalStudents === 0 ? 'No student interns yet' : `${totalStudents} student intern${totalStudents !== 1 ? 's' : ''}`}
+        </p>
+      </div>
+      {totalStudents === 0 ? (
+        <div style={{ textAlign: 'center' as const, padding: '40px 20px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px' }}>
+          <p style={{ fontSize: '15px', color: muted, margin: 0 }}>No Student Intern users on the team.</p>
+          <p style={{ fontSize: '14px', color: muted, margin: '6px 0 0' }}>Invite them in Settings with role &quot;Student Intern&quot;.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
+          {studentSummaries.map(({ intern: st, tasks, seeded }) => {
+            const done = tasks.filter(t => t.completed).length
+            const total = tasks.length
+            const pct = total > 0 ? Math.round((done / total) * 100) : 0
+            const isSeeding = seeding === st.id
+            return (
+              <div
+                key={st.id}
+                onClick={seeded ? () => openStudentDetail(st) : undefined}
+                style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', cursor: seeded ? 'pointer' : 'default', transition: 'all 0.15s' }}
+                onMouseEnter={e => { if (seeded) (e.currentTarget as HTMLDivElement).style.background = hoverBg }}
+                onMouseLeave={e => { if (seeded) (e.currentTarget as HTMLDivElement).style.background = cardBg }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: st.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
+                    {st.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '16px', fontWeight: 600, color: text, margin: 0 }}>{st.name}</p>
+                    <p style={{ fontSize: '13px', color: muted, margin: '1px 0 0' }}>Student Intern</p>
+                  </div>
+                  {seeded && pct === 100 && (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </div>
+                {seeded ? (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '13px', color: muted }}>Progress</span>
+                      <span style={{ fontSize: '13px', fontWeight: 500, color: pct === 100 ? '#22c55e' : text }}>{done} / {total}</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
+                    </div>
+                    <p style={{ fontSize: '12px', color: muted, margin: '8px 0 0', textAlign: 'right' as const }}>
+                      {pct === 100 ? 'Complete ✓' : `${pct}%`}
+                    </p>
+                  </div>
+                ) : isManager ? (
+                  <button
+                    onClick={e => { e.stopPropagation(); seedStudentTasks(st) }}
                     disabled={isSeeding}
                     style={{ width: '100%', padding: '10px', borderRadius: '8px', background: isSeeding ? 'var(--surface-2)' : '#1e6cb5', color: isSeeding ? muted : '#fff', border: 'none', cursor: isSeeding ? 'wait' : 'pointer', fontSize: '14px', fontWeight: 500, fontFamily: 'inherit' }}
                   >

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
@@ -8,6 +9,7 @@ import Loader from './components/Loader'
 import { ZoneHeader } from './components/ZoneHeader'
 import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
+import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
@@ -57,6 +59,7 @@ export default function DashboardPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
+  const router = useRouter()
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [myTasks, setMyTasks] = useState<Task[]>([])
@@ -115,6 +118,10 @@ export default function DashboardPage() {
       if (!session) return
       const { data: user } = await supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single()
       if (!user) return
+      if (isStudentInternRole(user.role)) {
+        router.replace(STUDENT_INTERN_HOME_PATH)
+        return
+      }
       setCurrentUser(user)
 
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
@@ -306,7 +313,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [supabase, router])
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => {

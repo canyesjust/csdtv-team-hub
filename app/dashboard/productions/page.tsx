@@ -11,6 +11,7 @@ import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
+import { isStudentInternRole } from '@/lib/roles'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -30,7 +31,7 @@ interface Production {
 }
 
 interface TeamMember { id: string; name: string; avatar_color: string; email: string }
-interface CurrentUser { id: string; name: string; email: string }
+interface CurrentUser { id: string; name: string; email: string; role?: string }
 
 interface PanelChecklist { id: string; title: string; completed: boolean; sort_order: number }
 interface PanelActivity { id: string; action: string; detail: string | null; created_at: string; team: { name: string } | null }
@@ -226,16 +227,37 @@ function ProductionsPageContent() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     const userPromise = session
-      ? supabase.from('team').select('id, name, email').eq('supabase_user_id', session.user.id).single()
+      ? supabase.from('team').select('id, name, email, role').eq('supabase_user_id', session.user.id).single()
       : Promise.resolve({ data: null as CurrentUser | null, error: null })
-    const [prodsRes, teamRes, dismissedDataRes, userRes] = await Promise.all([
-      supabase.from('productions').select(PRODUCTION_LIST_SELECT),
-      supabase.from('team').select('id, name, avatar_color, email').eq('active', true).order('name'),
+    const [dismissedDataRes, userRes] = await Promise.all([
       supabase.from('dismissed_conflicts').select('production_a_id, production_b_id'),
       userPromise,
     ])
-    const prodsData = prodsRes.data
-    setTeam(teamRes.data || [])
+
+    let prodsData: Production[] | null = null
+    let teamList: TeamMember[] = []
+
+    if (userRes?.data && isStudentInternRole(userRes.data.role)) {
+      const uid = userRes.data.id
+      const { data: memRows } = await supabase.from('production_members').select('production_id').eq('user_id', uid)
+      const ids = [...new Set((memRows || []).map(m => m.production_id).filter(Boolean))] as string[]
+      if (ids.length === 0) {
+        prodsData = []
+      } else {
+        const { data } = await supabase.from('productions').select(PRODUCTION_LIST_SELECT).in('id', ids)
+        prodsData = data as Production[] | null
+      }
+      teamList = []
+    } else {
+      const [pRes, tRes] = await Promise.all([
+        supabase.from('productions').select(PRODUCTION_LIST_SELECT),
+        supabase.from('team').select('id, name, avatar_color, email').eq('active', true).order('name'),
+      ])
+      prodsData = pRes.data as Production[] | null
+      teamList = (tRes.data as TeamMember[]) || []
+    }
+
+    setTeam(teamList)
     if (userRes?.data) setCurrentUser(userRes.data as CurrentUser)
     // Defensive normalization in case the sync sends prefixed values from the district site
     const cleaned: Production[] = (prodsData || []).map((p: any) => ({
@@ -493,6 +515,12 @@ function ProductionsPageContent() {
     const t = (p.request_type_label || p.type || '').toLowerCase()
     return t.includes('livestream') || t.includes('live stream')
   }, [])
+
+  const isStudentInternUser = useMemo(() => isStudentInternRole(currentUser?.role), [currentUser?.role])
+
+  useEffect(() => {
+    if (isStudentInternUser) setScope('mine')
+  }, [isStudentInternUser])
 
   /** True if staff logged sending the organizer link email (column or activity). */
   const youtubeOrganizerEmailLogged = useCallback((p: Production) => {
@@ -946,11 +974,13 @@ function ProductionsPageContent() {
           {/* SCOPE / SEARCH */}
           <section style={{ marginBottom: '20px' }}>
             <div className="scope-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {scopeBtn('all', 'All')}
-                {scopeBtn('mine', 'Mine')}
-                {scopeBtn('unassigned', 'Unassigned')}
-              </div>
+              {!isStudentInternUser && (
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {scopeBtn('all', 'All')}
+                  {scopeBtn('mine', 'Mine')}
+                  {scopeBtn('unassigned', 'Unassigned')}
+                </div>
+              )}
               <div className="search-wrap" style={{ flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 12px' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search title, organizer, type, number..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: text, fontFamily: 'inherit' }} />
