@@ -238,9 +238,13 @@ function ProductionsPageContent() {
     setTeam(teamRes.data || [])
     if (userRes?.data) setCurrentUser(userRes.data as CurrentUser)
     // Defensive normalization in case the sync sends prefixed values from the district site
-    const cleaned = (prodsData || []).map(p => ({
+    const cleaned: Production[] = (prodsData || []).map((p: any) => ({
       ...p,
-      status: p.status ? p.status.replace(/^\d+\s*-\s*/, '') : p.status
+      status: p.status ? p.status.replace(/^\d+\s*-\s*/, '') : p.status,
+      production_members: (p.production_members || []).map((m: any) => ({
+        ...m,
+        team: Array.isArray(m.team) ? (m.team[0] || null) : (m.team || null),
+      })),
     }))
     setProductions(sortProductions(cleaned))
 
