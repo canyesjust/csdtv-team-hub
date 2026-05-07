@@ -18,6 +18,7 @@ interface TeamMember {
   id: string
   name: string
   avatar_color: string
+  role?: string | null
 }
 
 interface ProductionMemberRow {
@@ -70,7 +71,7 @@ export default function TasksSignagePage() {
         .order('due_date', { ascending: true, nullsFirst: false }),
       supabase
         .from('team')
-        .select('id,name,avatar_color')
+        .select('id,name,avatar_color,role')
         .eq('active', true)
         .order('name'),
       supabase
@@ -203,6 +204,14 @@ export default function TasksSignagePage() {
       byPersonProds.get(pm.user_id)!.push(pm)
     })
 
+    const roleRank = (role: string | null | undefined): number => {
+      const r = (role || '').toLowerCase()
+      if (r === 'staff') return 0
+      if (r.includes('intern')) return 1
+      if (r === 'manager') return 2
+      return 3
+    }
+
     return team.map(member => {
       const personTasks = (byPersonTasks.get(member.id) || []).sort(
         (a, b) => (daysFromToday(a.due_date) ?? 9999) - (daysFromToday(b.due_date) ?? 9999)
@@ -222,6 +231,10 @@ export default function TasksSignagePage() {
         return days >= 0 && days <= 5
       })
       return { member, personTasks, personOverdue, personProds, next5DayProds }
+    }).sort((a, b) => {
+      const rankDiff = roleRank(a.member.role) - roleRank(b.member.role)
+      if (rankDiff !== 0) return rankDiff
+      return a.member.name.localeCompare(b.member.name)
     })
   }, [displayTasks, team, prodMembers])
 
@@ -310,16 +323,16 @@ export default function TasksSignagePage() {
 
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <h2 style={{ margin: 0, fontSize: `${fs.sectionTitle}px` }}>Staff Workload</h2>
-          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '16px', paddingRight: '4px' }}>
             {staffCards.map(({ member, personTasks, personOverdue, personProds, next5DayProds }) => (
-              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '11px 12px', background: 'rgba(255,255,255,0.02)' }}>
+              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 14px', background: 'rgba(255,255,255,0.035)', boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                   <div style={{ width: `${fit(44, 28)}px`, height: `${fit(44, 28)}px`, borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${fit(16, 11)}px`, fontWeight: 800 }}>
                     {initials(member.name)}
                   </div>
                   <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 700 }}>{member.name}</p>
                 </div>
-                <p style={{ margin: '0 0 8px', fontSize: `${fs.staffStat}px`, color: muted }}>
+                <p style={{ margin: '0 0 8px', fontSize: `${fs.staffName}px`, color: text, fontWeight: 700 }}>
                   {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming (14d)
                 </p>
                 <div style={{ display: 'grid', gap: '6px' }}>
