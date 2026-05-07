@@ -84,6 +84,8 @@ export default function TasksSignagePage() {
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [prodMembers, setProdMembers] = useState<ProductionMemberRow[]>([])
+  const [checklistOpenByUser, setChecklistOpenByUser] = useState<Record<string, number>>({})
+  const [checklistUnassignedOpen, setChecklistUnassignedOpen] = useState(0)
 
   const loadData = useCallback(async () => {
     setLoadError(null)
@@ -94,6 +96,8 @@ export default function TasksSignagePage() {
       setTasks([])
       setTeam([])
       setProdMembers([])
+      setChecklistOpenByUser({})
+      setChecklistUnassignedOpen(0)
       const message = (typeof payload?.error === 'string' && payload.error) || 'Failed to load signage data'
       let hint: string | null = null
       if (res.status === 401) {
@@ -133,6 +137,12 @@ export default function TasksSignagePage() {
     setTasks(normalizedTasks)
     setTeam((payload.team as TeamMember[]) || [])
     setProdMembers((payload.prodMembers as ProductionMemberRow[]) || [])
+    setChecklistOpenByUser(
+      payload.checklistOpenByUser && typeof payload.checklistOpenByUser === 'object' && !Array.isArray(payload.checklistOpenByUser)
+        ? (payload.checklistOpenByUser as Record<string, number>)
+        : {}
+    )
+    setChecklistUnassignedOpen(typeof payload.checklistUnassignedOpen === 'number' ? payload.checklistUnassignedOpen : 0)
     setLoading(false)
   }, [])
 
@@ -184,6 +194,12 @@ export default function TasksSignagePage() {
     [displayTasks]
   )
 
+  const checklistOpenTotal = useMemo(() => {
+    let n = checklistUnassignedOpen
+    for (const v of Object.values(checklistOpenByUser)) n += v
+    return n
+  }, [checklistOpenByUser, checklistUnassignedOpen])
+
   const staffCards = useMemo(() => {
     const byPersonTasks = new Map<string, TaskRow[]>()
     displayTasks.forEach(t => {
@@ -224,13 +240,13 @@ export default function TasksSignagePage() {
         const days = ms / 86400000
         return days >= 0 && days <= 5
       })
-      return { member, personTasks, personOverdue, personProds, next5DayProds }
+      return { member, personTasks, personOverdue, personProds, next5DayProds, checklistOpen: checklistOpenByUser[member.id] ?? 0 }
     }).sort((a, b) => {
       const rankDiff = roleRank(a.member.role) - roleRank(b.member.role)
       if (rankDiff !== 0) return rankDiff
       return a.member.name.localeCompare(b.member.name)
     })
-  }, [displayTasks, team, prodMembers])
+  }, [displayTasks, team, prodMembers, checklistOpenByUser])
 
   const bg = '#070d18'
   const cardBg = '#0f1828'
@@ -293,12 +309,13 @@ export default function TasksSignagePage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
         {[
           { label: 'Unassigned', value: unassignedTasks.length, color: '#fbbf24' },
           { label: 'Overdue', value: overdueTasks.length, color: '#ef4444' },
           { label: 'Due today', value: dueTodayCount, color: '#60b8f0' },
           { label: 'Open tasks', value: displayTasks.length, color: '#34d399' },
+          { label: 'Checklist items', value: checklistOpenTotal, color: '#f472b6' },
           { label: 'Request queue', value: purchaseQueueCount, color: '#c084fc' },
         ].map(stat => (
           <div key={stat.label} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px' }}>
@@ -332,7 +349,7 @@ export default function TasksSignagePage() {
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <h2 style={{ margin: 0, fontSize: `${fs.sectionTitle}px` }}>Staff Workload</h2>
           <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '22px', paddingRight: '6px' }}>
-            {staffCards.map(({ member, personTasks, personOverdue, personProds, next5DayProds }) => (
+            {staffCards.map(({ member, personTasks, personOverdue, personProds, next5DayProds, checklistOpen }) => (
               <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '14px', padding: '18px 22px', background: 'rgba(255,255,255,0.035)', boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
                   <div style={{ width: `${fitStaff(48, 32)}px`, height: `${fitStaff(48, 32)}px`, borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${fitStaff(18, 12)}px`, fontWeight: 800 }}>
@@ -341,7 +358,7 @@ export default function TasksSignagePage() {
                   <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 800, lineHeight: 1.2 }}>{member.name}</p>
                 </div>
                 <p style={{ margin: '0 0 14px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.35 }}>
-                  {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming
+                  {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming · {checklistOpen} checklist
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
                   <div style={{ display: 'grid', gap: '10px' }}>

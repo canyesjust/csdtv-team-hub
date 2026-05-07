@@ -185,6 +185,7 @@ export default function ProductionDetailPage() {
   const [newTaskPriority, setNewTaskPriority] = useState('normal')
   const [newTaskPurchaseRequest, setNewTaskPurchaseRequest] = useState(false)
   const [newTaskPurchaseLink, setNewTaskPurchaseLink] = useState('')
+  const [newTaskHideFromSignage, setNewTaskHideFromSignage] = useState(false)
   const [teamNotes, setTeamNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
@@ -415,6 +416,7 @@ export default function ProductionDetailPage() {
       assigned_to: assigneeId, due_date: newTaskDue || null,
       purchase_request: newTaskPurchaseRequest,
       purchase_request_link: newTaskPurchaseLink.trim() || null,
+      hide_from_signage: newTaskHideFromSignage,
       production_id: uuid, status: 'pending', created_by: currentUser.id,
     }).select('id, title, status, priority, assigned_to, due_date').single()
     if (error) { toast(`Failed to create task: ${error.message}`); return }
@@ -444,9 +446,10 @@ export default function ProductionDetailPage() {
     setNewTaskPriority('normal')
     setNewTaskPurchaseRequest(false)
     setNewTaskPurchaseLink('')
+    setNewTaskHideFromSignage(false)
     setShowCreateTask(false)
     await logActivity('Created task', newTaskTitle)
-  }, [newTaskTitle, newTaskPriority, newTaskAssignee, newTaskDue, newTaskPurchaseRequest, newTaskPurchaseLink, currentUser, uuid, supabase, logActivity, allTeam, production])
+  }, [newTaskTitle, newTaskPriority, newTaskAssignee, newTaskDue, newTaskPurchaseRequest, newTaskPurchaseLink, newTaskHideFromSignage, currentUser, uuid, supabase, logActivity, allTeam, production])
 
   const initChecklist = useCallback(async () => {
     if (!production || !currentUser || !uuid) return
@@ -1561,6 +1564,16 @@ export default function ProductionDetailPage() {
                   style={{ ...inputStyle, marginBottom: '10px' }}
                 />
               )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <input
+                  type="checkbox"
+                  id="prod_task_hide_signage"
+                  checked={newTaskHideFromSignage}
+                  onChange={e => setNewTaskHideFromSignage(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }}
+                />
+                <label htmlFor="prod_task_hide_signage" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Hide from task signage</label>
+              </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   onClick={createTaskForProduction}

@@ -25,6 +25,7 @@ interface Task {
   due_date: string | null; created_at: string; assigned_to: string | null; created_by: string
   production_id: string | null; needs_equipment: boolean; notes: string | null
   purchase_request: boolean; purchase_request_link: string | null
+  hide_from_signage?: boolean
   completed_at: string | null; recurring: string | null; recurring_interval: number | null
   blocked_by: string | null; scanned_sheet_id: string | null
   source?: 'task' | 'checklist'
@@ -118,6 +119,7 @@ export default function TasksPage() {
     needs_equipment: false,
     purchase_request: false,
     purchase_request_link: '',
+    hide_from_signage: false,
     recurring: '',
   })
   const [panelNotes, setPanelNotes] = useState('')
@@ -268,6 +270,7 @@ export default function TasksPage() {
       notes: null,
       purchase_request: false,
       purchase_request_link: null,
+      hide_from_signage: false,
       completed_at: null,
       recurring: null,
       recurring_interval: null,
@@ -452,6 +455,7 @@ export default function TasksPage() {
       needs_equipment: newTask.needs_equipment,
       purchase_request: newTask.purchase_request,
       purchase_request_link: newTask.purchase_request_link?.trim() || null,
+      hide_from_signage: newTask.hide_from_signage,
       recurring: newTask.recurring || null,
       recurring_interval: newTask.recurring ? 1 : null, status: 'pending', created_by: currentUser.id,
     }).select('*').single()
@@ -470,6 +474,7 @@ export default function TasksPage() {
         needs_equipment: false,
         purchase_request: false,
         purchase_request_link: '',
+        hide_from_signage: false,
         recurring: '',
       })
       setShowNewTask(false)
@@ -511,6 +516,7 @@ export default function TasksPage() {
         needs_equipment: task.needs_equipment,
         purchase_request: task.purchase_request,
         purchase_request_link: task.purchase_request_link,
+        hide_from_signage: task.hide_from_signage,
         recurring: task.recurring,
         recurring_interval: task.recurring_interval, status: 'pending',
         due_date: nextDate.toISOString().split('T')[0], created_by: task.created_by,
@@ -984,6 +990,16 @@ export default function TasksPage() {
                   style={{ ...inputStyle, marginBottom: '12px' }}
                 />
               )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <input
+                  type="checkbox"
+                  id="hide_from_signage"
+                  checked={newTask.hide_from_signage}
+                  onChange={e => setNewTask(p => ({ ...p, hide_from_signage: e.target.checked }))}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }}
+                />
+                <label htmlFor="hide_from_signage" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Hide from task signage</label>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
                 <label style={{ fontSize: '13px', color: muted }}>Repeat:</label>
                 <select value={newTask.recurring} onChange={e => setNewTask(p => ({ ...p, recurring: e.target.value }))} style={{ ...inputStyle, width: 'auto', minWidth: '110px' }}>
@@ -1191,6 +1207,7 @@ export default function TasksPage() {
                           )}
                           {task.needs_equipment && <span style={{ color: warning, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Equipment</span>}
                           {task.purchase_request && <span style={{ color: info, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Purchase</span>}
+                          {task.hide_from_signage && task.source !== 'checklist' && <span style={{ color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Off signage</span>}
                           {task.source === 'checklist' && <span style={{ color: info, fontWeight: 700, whiteSpace: 'nowrap' as const }}>Checklist</span>}
                           {task.recurring && <span style={{ whiteSpace: 'nowrap' as const }}>Recurring</span>}
                           {task.blocked_by && <span style={{ color: review, whiteSpace: 'nowrap' as const, fontWeight: 600 }}>Blocked</span>}
@@ -1369,6 +1386,16 @@ export default function TasksPage() {
                         Open purchase link →
                       </a>
                     )}
+                  </div>
+                )}
+
+                {selectedTask.source !== 'checklist' && (
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', padding: '11px 13px', background: surface2, borderRadius: '10px', border: `1px solid ${selectedTask.hide_from_signage ? muted : border}`, cursor: 'pointer' }}
+                    onClick={() => updateTask(selectedTask.id, { hide_from_signage: !selectedTask.hide_from_signage })}
+                  >
+                    <input type="checkbox" checked={!!selectedTask.hide_from_signage} onChange={() => {}} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }} />
+                    <span style={{ fontSize: '13px', color: selectedTask.hide_from_signage ? text : muted, fontWeight: selectedTask.hide_from_signage ? 600 : 500 }}>Hide from task signage</span>
                   </div>
                 )}
 

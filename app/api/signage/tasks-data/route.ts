@@ -27,17 +27,24 @@ export async function GET(request: Request) {
   const end = new Date(start)
   end.setDate(end.getDate() + 14)
 
-  const tasksSelectFull =
+  const TASK_FULL =
+    'id,title,priority,due_date,assigned_to,production_id,purchase_request,hide_from_signage,status,productions(production_number,title)'
+  const TASK_NO_PURCHASE =
+    'id,title,priority,due_date,assigned_to,production_id,hide_from_signage,status,productions(production_number,title)'
+  const TASK_NO_HIDE =
     'id,title,priority,due_date,assigned_to,production_id,purchase_request,status,productions(production_number,title)'
-  const tasksSelectLegacy =
+  const TASK_MINIMAL =
     'id,title,priority,due_date,assigned_to,production_id,status,productions(production_number,title)'
 
-  const [tasksResInitial, teamRes, prodsRes] = await Promise.all([
+  const tasksOpenQuery = (cols: string) =>
     supabase
       .from('tasks')
-      .select(tasksSelectFull)
+      .select(cols)
       .not('status', 'ilike', 'complete')
-      .order('due_date', { ascending: true, nullsFirst: false }),
+      .order('due_date', { ascending: true, nullsFirst: false })
+
+  const [tasksResInitial, teamRes, prodsRes] = await Promise.all([
+    tasksOpenQuery(TASK_FULL),
     supabase
       .from('team')
       .select('id,name,avatar_color,role')
@@ -53,13 +60,18 @@ export async function GET(request: Request) {
   let tasksRes = tasksResInitial
   if (tasksRes.error) {
     const msg = tasksRes.error.message || ''
-    if (/purchase_request|column .* does not exist/i.test(msg)) {
-      tasksRes = await supabase
-        .from('tasks')
-        .select(tasksSelectLegacy)
-        .not('status', 'ilike', 'complete')
-        .order('due_date', { ascending: true, nullsFirst: false })
+    if (/purchase_request/i.test(msg)) {
+      tasksRes = await tasksOpenQuery(TASK_NO_PURCHASE)
     }
+  }
+  if (tasksRes.error) {
+    const msg = tasksRes.error.message || ''
+    if (/hide_from_signage/i.test(msg)) {
+      tasksRes = await tasksOpenQuery(TASK_NO_HIDE)
+    }
+  }
+  if (tasksRes.error) {
+    tasksRes = await tasksOpenQuery(TASK_MINIMAL)
   }
 
   if (tasksRes.error || teamRes.error || prodsRes.error) {
@@ -68,10 +80,30 @@ export async function GET(request: Request) {
     }, { status: 500 })
   }
 
-  const tasksPayload = (tasksRes.data || []).map((row: Record<string, unknown>) => ({
-    ...row,
-    purchase_request: Boolean(row.purchase_request),
-  }))
+  const tasksPayload = (tasksRes.data || [])
+    .map((row: Record<string, unknown>) => ({
+      ...row,
+      purchase_request: Boolean(row.purchase_request),
+    }))
+    .filter((row) => !Boolean(row.hide_from_signage))
+
+  const { data: checklistRowsRaw, error: checklistErr } = await supabase
+    .from('checklist_items')
+    .select('assigned_to, productions(status)')
+    .eq('completed', false)
+
+  const checklistOpenByUser: Record<string, number> = {}
+  let checklistUnassignedOpen = 0
+  if (!checklistErr && checklistRowsRaw) {
+    for (const row of checklistRowsRaw as Array<{ assigned_to: string | null; productions: { status: string | null } | { status: string | null }[] | null }>) {
+      const prodRel = row.productions
+      const prod = Array.isArray(prodRel) ? prodRel[0] : prodRel
+      const st = (prod?.status || '').toLowerCase()
+      if (st === 'complete' || st === 'abandoned' || st === 'cancelled') continue
+      if (!row.assigned_to) checklistUnassignedOpen += 1
+      else checklistOpenByUser[row.assigned_to] = (checklistOpenByUser[row.assigned_to] || 0) + 1
+    }
+  }
 
   const upcomingProds = (prodsRes.data || []).filter((p: { status?: string | null }) => {
     const status = (p.status || '').toLowerCase()
@@ -131,5 +163,7 @@ export async function GET(request: Request) {
     tasks: tasksPayload,
     team: teamRes.data || [],
     prodMembers,
+    checklistOpenByUser,
+    checklistUnassignedOpen,
   })
 }
