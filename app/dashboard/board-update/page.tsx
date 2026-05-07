@@ -143,21 +143,21 @@ function buildEventCard(evt: UpcomingEvent): string {
   const href = evt.link?.trim() || 'https://csdtv.org'
   const image = escapeHtml(evt.image || `https://via.placeholder.com/${CARD_THUMB_PX}x${Math.round(CARD_THUMB_PX * 9 / 16)}?text=CSDtv`)
   const tw = CARD_THUMB_PX
-  return `<a href="${escapeHtml(href)}" style="text-decoration:none;color:inherit;display:block;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;border:1px solid #D8D8CE;background:#FAFAF8;">
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;border:1px solid #D8D8CE;background:#FAFAF8;">
   <tr>
     <td class="bu-thumb" width="${tw}" valign="top" style="width:${tw}px;max-width:${tw}px;padding:12px 0 12px 12px;vertical-align:top;">
-      <img src="${image}" width="${tw}" alt="${escapeHtml(evt.title)}" style="display:block;width:${tw}px;max-width:${tw}px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+      <a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;border:0;">
+        <img src="${image}" width="${tw}" alt="${escapeHtml(evt.title)}" style="display:block;width:${tw}px;max-width:${tw}px;height:auto;border:0;border-radius:6px;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+      </a>
     </td>
     <td class="bu-copy" valign="top" style="padding:12px 14px 12px 8px;vertical-align:top;">
       <div style="${TITLE_SERIF}margin:0 0 6px 0;">${escapeHtml(evt.title)}</div>
       <div style="${META_ORANGE}margin:0 0 8px 0;">${escapeHtml(formatEventLine(evt.date, evt.time))}</div>
       ${evt.school?.trim() ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;color:#6B7280;margin:0 0 8px 0;">${escapeHtml(evt.school)}</div>` : ''}
-      ${evt.link?.trim() ? `<div style="margin:0;"><span style="${LINK_STYLE}">Watch live →</span></div>` : ''}
+      ${evt.link?.trim() ? `<div style="margin:0;"><a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" style="${LINK_STYLE}">Watch live →</a></div>` : ''}
     </td>
   </tr>
-</table>
-</a>`
+</table>`
 }
 
 function buildVideoCard(v: RecentVideo): string {
