@@ -122,6 +122,14 @@ function normalizeDriveImageUrl(raw: string): string {
   return url
 }
 
+function normalizeEventLink(raw: string): string {
+  const url = String(raw || '').trim()
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  if (url.startsWith('//')) return `https:${url}`
+  return `https://${url}`
+}
+
 function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * DAY_MS)
 }
@@ -202,10 +210,11 @@ export async function GET(request: Request) {
       .filter(n => Number.isFinite(n))
   )]
   const schoolByProdNum = new Map<number, string>()
+  const livestreamByProdNum = new Map<number, string>()
   if (prodNums.length > 0) {
     const { data: prodRows } = await supabase
       .from('productions')
-      .select('production_number, filming_location, school_department, event_location')
+      .select('production_number, filming_location, school_department, event_location, livestream_url')
       .in('production_number', prodNums)
     for (const row of prodRows || []) {
       const num = Number(row.production_number)
@@ -218,6 +227,7 @@ export async function GET(request: Request) {
         row.school_department ||
         ''
       schoolByProdNum.set(num, String(schoolLabel || '').trim())
+      livestreamByProdNum.set(num, normalizeEventLink(row.livestream_url || ''))
     }
   }
 
@@ -229,9 +239,9 @@ export async function GET(request: Request) {
     })
     .sort((a, b) => (a.dateObj as Date).getTime() - (b.dateObj as Date).getTime())
     .map(r => ({
+      link: normalizeEventLink(r.link) || livestreamByProdNum.get(Number.parseInt(r.productionId, 10)) || '',
       productionId: r.productionId,
       title: r.name,
-      link: r.link,
       image: r.image,
       date: r.dateIso as string,
       time: r.time,
