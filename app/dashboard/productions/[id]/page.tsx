@@ -694,10 +694,7 @@ export default function ProductionDetailPage() {
     const dateShort = production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBD'
     const venue = production.event_location || getSchoolName(production.filming_location) || 'TBD'
     const status = production.status || ''
-    const rawYt = getSyncedYoutubeLink()
-    const ytLink = rawYt && uuid && typeof window !== 'undefined'
-      ? `${window.location.origin}/api/track/youtube-click?productionId=${encodeURIComponent(uuid)}&u=${encodeURIComponent(rawYt)}`
-      : rawYt
+    const ytLink = getSyncedYoutubeLink()
     return str
       .replace(/\{\{name\}\}/g, name)
       .replace(/\{\{title\}\}/g, title)
