@@ -66,6 +66,39 @@ type FocusFilter = 'all' | 'today' | 'this-week' | 'overdue' | 'unstaffed' | 'up
 type Scope = 'all' | 'mine' | 'unassigned'
 type View = 'pipeline' | 'list'
 
+function chunkIds<T>(items: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
+  return out
+}
+
+const PRODUCTION_LIST_SELECT = `
+  id,
+  production_number,
+  title,
+  type,
+  request_type_label,
+  status,
+  organizer_name,
+  organizer_email,
+  school_department,
+  is_on_behalf,
+  submitter_name,
+  submitter_email,
+  livestream_url,
+  youtube_link_email_sent_at,
+  start_datetime,
+  end_datetime,
+  filming_location,
+  school_year,
+  synced_at,
+  additional_notes,
+  video_description,
+  team_notes,
+  production_members(user_id, team(name, avatar_color)),
+  checklist_items(completed)
+`
+
 function daysFromToday(d: string | null): number | null {
   if (!d) return null
   const eventDay = new Date(d)
@@ -192,16 +225,18 @@ function ProductionsPageContent() {
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    const [prodsRes, teamRes] = await Promise.all([
-      supabase.from('productions').select('*, production_members(user_id, team(name, avatar_color)), checklist_items(completed)'),
+    const userPromise = session
+      ? supabase.from('team').select('id, name, email').eq('supabase_user_id', session.user.id).single()
+      : Promise.resolve({ data: null as CurrentUser | null, error: null })
+    const [prodsRes, teamRes, dismissedDataRes, userRes] = await Promise.all([
+      supabase.from('productions').select(PRODUCTION_LIST_SELECT),
       supabase.from('team').select('id, name, avatar_color, email').eq('active', true).order('name'),
+      supabase.from('dismissed_conflicts').select('production_a_id, production_b_id'),
+      userPromise,
     ])
     const prodsData = prodsRes.data
     setTeam(teamRes.data || [])
-    if (session) {
-      const { data: user } = await supabase.from('team').select('id, name, email').eq('supabase_user_id', session.user.id).single()
-      if (user) setCurrentUser(user)
-    }
+    if (userRes?.data) setCurrentUser(userRes.data as CurrentUser)
     // Defensive normalization in case the sync sends prefixed values from the district site
     const cleaned = (prodsData || []).map(p => ({
       ...p,
@@ -209,15 +244,34 @@ function ProductionsPageContent() {
     }))
     setProductions(sortProductions(cleaned))
 
-    const { data: dismissedData } = await supabase.from('dismissed_conflicts').select('production_a_id, production_b_id')
+    const dismissedData = dismissedDataRes.data
     const dSet = new Set<string>()
     ;(dismissedData || []).forEach((d: any) => { dSet.add(`${d.production_a_id}-${d.production_b_id}`); dSet.add(`${d.production_b_id}-${d.production_a_id}`) })
     setDismissedConflicts(dSet)
 
-    const { data: organizerEmailActs } = await supabase
-      .from('production_activity')
-      .select('production_id, detail')
-      .eq('action', 'Emailed organizer')
+    const organizerEmailActs: { production_id: string; detail: string | null }[] = []
+    const pendingLivestreamIds = cleaned
+      .filter(p => {
+        const t = (p.request_type_label || p.type || '').toLowerCase()
+        const isLive = t.includes('livestream') || t.includes('live stream')
+        return isLive && !!(p.livestream_url || '').trim() && !p.youtube_link_email_sent_at
+      })
+      .map(p => p.id)
+    if (pendingLivestreamIds.length > 0) {
+      const chunks = chunkIds(pendingLivestreamIds, 120)
+      const chunkResults = await Promise.all(
+        chunks.map(ids =>
+          supabase
+            .from('production_activity')
+            .select('production_id, detail')
+            .eq('action', 'Emailed organizer')
+            .in('production_id', ids)
+        )
+      )
+      chunkResults.forEach(res => {
+        if (res.data) organizerEmailActs.push(...(res.data as { production_id: string; detail: string | null }[]))
+      })
+    }
     const ytMailSet = new Set<string>()
     for (const row of organizerEmailActs || []) {
       const det = (row.detail || '').toLowerCase()

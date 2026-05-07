@@ -39,6 +39,7 @@ interface CurrentUser { id: string; name: string; role: string }
 interface Activity { id: string; action: string; detail: string | null; created_at: string; production_id: string; user_id?: string | null; team?: { name: string } | null }
 interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
 interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
+const SCHEDULE_DAY_SELECT = 'monday,tuesday,wednesday,thursday,friday'
 
 const DAY_MS = 86400000
 
@@ -112,7 +113,7 @@ export default function DashboardPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const { data: user } = await supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single()
+      const { data: user } = await supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single()
       if (!user) return
       setCurrentUser(user)
 
@@ -122,10 +123,10 @@ export default function DashboardPage() {
       const [tasksRes, prodMembersRes, teamRes, countRes, todayProdsRes, schedDefaultRes, activityRes] = await Promise.all([
         supabase.from('tasks').select('*, productions(title)').eq('assigned_to', user.id).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(20),
         supabase.from('production_members').select('production_id').eq('user_id', user.id),
-        supabase.from('team').select('*').eq('active', true),
+        supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
         supabase.from('productions').select('id', { count: 'exact', head: true }),
         supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
-        supabase.from('schedule_defaults').select('*').eq('user_id', user.id).single(),
+        supabase.from('schedule_defaults').select(SCHEDULE_DAY_SELECT).eq('user_id', user.id).single(),
         supabase.from('production_activity').select('id, action, detail, created_at, production_id, user_id').order('created_at', { ascending: false }).limit(10),
       ])
 
@@ -147,19 +148,14 @@ export default function DashboardPage() {
       }
       setRecentActivity(enrichedActivity)
 
-      const { data: pendingCandidates, error: pendingErr } = await supabase
+      const { count: pendingCount, error: pendingErr } = await supabase
         .from('productions')
-        .select('id, livestream_url')
+        .select('id', { count: 'exact', head: true })
         .eq('status', 'Complete')
         .is('youtube_link_email_sent_at', null)
         .not('livestream_url', 'is', null)
-      let pending = 0
-      if (!pendingErr) {
-        for (const p of pendingCandidates || []) {
-          if (p.livestream_url && String(p.livestream_url).trim()) pending += 1
-        }
-      }
-      setYtEmailPendingCount(pending)
+        .neq('livestream_url', '')
+      setYtEmailPendingCount(!pendingErr ? (pendingCount || 0) : 0)
 
       const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
       const todayDayName = dayNames[new Date().getDay()]
@@ -169,7 +165,12 @@ export default function DashboardPage() {
         const monday = new Date()
         monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
         const weekStart = monday.toISOString().split('T')[0]
-        const { data: override } = await supabase.from('schedule_overrides').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle()
+        const { data: override } = await supabase
+          .from('schedule_overrides')
+          .select(SCHEDULE_DAY_SELECT)
+          .eq('user_id', user.id)
+          .eq('week_start', weekStart)
+          .maybeSingle()
         if (override && override[dayKey]) {
           setTodayHours(override[dayKey])
         } else if (schedDefaultRes.data && schedDefaultRes.data[dayKey]) {
@@ -181,7 +182,7 @@ export default function DashboardPage() {
 
       const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
       const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
-      const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds, delivRes, ytRes] = await Promise.all([
+      const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds, delivAggRes, ytAggRes] = await Promise.all([
         supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monday.toISOString()),
         supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monthStart.toISOString()),
         supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monday.toISOString()),
@@ -189,11 +190,19 @@ export default function DashboardPage() {
         supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monday.toISOString().split('T')[0]),
         supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
         supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
-        supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0),
-        supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null),
+        supabase.from('productions').select('sum_deliverables:deliverables_count.sum()').gt('deliverables_count', 0).maybeSingle(),
+        supabase.from('videos').select('sum_views:youtube_views.sum()').not('youtube_views', 'is', null).maybeSingle(),
       ])
-      const delivSum = (delivRes.data || []).reduce((s: number, p: { deliverables_count?: number | null }) => s + (p.deliverables_count || 0), 0)
-      const viewsSum = (ytRes.data || []).reduce((s: number, v: { youtube_views?: number | null }) => s + (v.youtube_views || 0), 0)
+      let delivSum = Number((delivAggRes.data as { sum_deliverables?: number | null } | null)?.sum_deliverables || 0)
+      let viewsSum = Number((ytAggRes.data as { sum_views?: number | null } | null)?.sum_views || 0)
+      if (!Number.isFinite(delivSum) || !Number.isFinite(viewsSum)) {
+        const [delivRes, ytRes] = await Promise.all([
+          supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0),
+          supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null),
+        ])
+        delivSum = (delivRes.data || []).reduce((s: number, p: { deliverables_count?: number | null }) => s + (p.deliverables_count || 0), 0)
+        viewsSum = (ytRes.data || []).reduce((s: number, v: { youtube_views?: number | null }) => s + (v.youtube_views || 0), 0)
+      }
       setWeekStats({ prodsCompleted: weekProds.count || 0, tasksCompleted: weekTasks.count || 0, videosPublished: weekVids.count || 0 })
       setMonthStats({ prodsCompleted: monthProds.count || 0, tasksCompleted: monthTasks.count || 0, videosPublished: monthVids.count || 0 })
       setYearProdCount(yearProds.count || 0)
@@ -202,7 +211,13 @@ export default function DashboardPage() {
 
       if (prodMembersRes.data && prodMembersRes.data.length > 0) {
         const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
-        const { data: prods } = await supabase.from('productions').select('*, checklist_items(completed)').in('id', ids).neq('status', 'Complete').order('start_datetime', { ascending: true, nullsFirst: false }).limit(8)
+        const { data: prods } = await supabase
+          .from('productions')
+          .select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, checklist_items(completed)')
+          .in('id', ids)
+          .neq('status', 'Complete')
+          .order('start_datetime', { ascending: true, nullsFirst: false })
+          .limit(8)
         setMyProductions(prods || [])
       } else {
         setMyProductions([])

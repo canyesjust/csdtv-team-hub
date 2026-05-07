@@ -250,7 +250,7 @@ export default function ProductionDetailPage() {
     const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes, camPkgRes] = await Promise.all([
       supabase.from('checklist_items').select('*').eq('production_id', prodUUID).order('sort_order'),
       supabase.from('production_members').select('*, team:team(id, name, role, avatar_color)').eq('production_id', prodUUID),
-      supabase.from('team').select('*').eq('active', true),
+      supabase.from('team').select('id, name, email, role, avatar_color').eq('active', true),
       supabase.from('production_links').select('*').eq('production_id', prodUUID).order('created_at'),
       supabase.from('production_activity').select('*').eq('production_id', prodUUID).order('created_at', { ascending: false }).limit(50),
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
@@ -271,14 +271,29 @@ export default function ProductionDetailPage() {
     setKbArticles(kbRes.data || [])
     setTemplates(tplRes.data || [])
     setSchools((schoolsRes.data as SchoolBrand[]) || [])
-    // Load linked videos
-    const { data: vidData } = await supabase.from('videos').select('id, title, video_type, status, date_published, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail').eq('production_id', prodUUID).order('created_at', { ascending: false })
-    setLinkedVideos(vidData || [])
-    const { data: taskData } = await supabase.from('tasks').select('id, title, status, priority, assigned_to, due_date').eq('production_id', prodUUID).order('created_at', { ascending: false })
-    setLinkedTasks(taskData || [])
-    const { data: sheetData } = await supabase.from('call_sheets').select('*').eq('production_id', prodUUID).single()
-    if (sheetData) setCallSheet(sheetData)
-    const { data: allProdsData } = await supabase.from('productions').select('id, production_number, title').neq('id', prodUUID).order('production_number', { ascending: false }).limit(50)
+    const [vidRes, taskRes, sheetRes, allProdsRes] = await Promise.all([
+      supabase
+        .from('videos')
+        .select('id, title, video_type, status, date_published, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail')
+        .eq('production_id', prodUUID)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('tasks')
+        .select('id, title, status, priority, assigned_to, due_date')
+        .eq('production_id', prodUUID)
+        .order('created_at', { ascending: false }),
+      supabase.from('call_sheets').select('*').eq('production_id', prodUUID).single(),
+      supabase
+        .from('productions')
+        .select('id, production_number, title')
+        .neq('id', prodUUID)
+        .order('production_number', { ascending: false })
+        .limit(50),
+    ])
+    setLinkedVideos(vidRes.data || [])
+    setLinkedTasks(taskRes.data || [])
+    if (sheetRes.data) setCallSheet(sheetRes.data)
+    const allProdsData = allProdsRes.data
     setAllProductions(allProdsData || [])
     setLoading(false)
   }, [supabase, productionNum])
