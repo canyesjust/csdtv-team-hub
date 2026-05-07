@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase'
 
 interface TaskRow {
   id: string
@@ -49,7 +48,6 @@ function initials(name: string): string {
 }
 
 export default function TasksSignagePage() {
-  const supabase = createClient()
   const [now, setNow] = useState(new Date())
   const [viewport, setViewport] = useState({ w: 1920, h: 1080 })
   const [loading, setLoading] = useState(true)
@@ -58,30 +56,17 @@ export default function TasksSignagePage() {
   const [prodMembers, setProdMembers] = useState<ProductionMemberRow[]>([])
 
   const loadData = useCallback(async () => {
-    const today = new Date()
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-    const end = new Date(start)
-    end.setDate(end.getDate() + 14)
+    const res = await fetch('/api/signage/tasks-data', { cache: 'no-store' })
+    const payload = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setTasks([])
+      setTeam([])
+      setProdMembers([])
+      setLoading(false)
+      return
+    }
 
-    const [tasksRes, teamRes, upcomingProdsRes] = await Promise.all([
-      supabase
-        .from('tasks')
-        .select('id,title,priority,due_date,assigned_to,production_id,purchase_request,productions(production_number,title)')
-        .not('status', 'ilike', 'complete')
-        .order('due_date', { ascending: true, nullsFirst: false }),
-      supabase
-        .from('team')
-        .select('id,name,avatar_color,role')
-        .eq('active', true)
-        .order('name'),
-      supabase
-        .from('productions')
-        .select('id,production_number,title,start_datetime,status')
-        .gte('start_datetime', start.toISOString())
-        .lt('start_datetime', end.toISOString()),
-    ])
-
-    const normalizedTasks: TaskRow[] = ((tasksRes.data || []) as Array<{
+    const normalizedTasks: TaskRow[] = ((payload.tasks || []) as Array<{
       id: string
       title: string
       priority: string
@@ -104,43 +89,10 @@ export default function TasksSignagePage() {
       }
     })
     setTasks(normalizedTasks)
-    setTeam((teamRes.data as TeamMember[]) || [])
-
-    const upcomingProds = (upcomingProdsRes.data || []).filter((p: { status?: string | null }) => {
-      const status = (p.status || '').toLowerCase()
-      return status !== 'complete' && status !== 'abandoned' && status !== 'cancelled'
-    })
-    const prodIds = upcomingProds.map((p: { id: string }) => p.id)
-    if (prodIds.length === 0) {
-      setProdMembers([])
-    } else {
-      const { data: pmRes } = await supabase
-        .from('production_members')
-        .select('production_id,user_id')
-        .in('production_id', prodIds)
-
-      const prodById = new Map(
-        upcomingProds.map((p: { id: string; production_number: number; title: string; start_datetime: string | null; status: string | null }) => [p.id, p])
-      )
-      const merged = ((pmRes || []) as { production_id: string; user_id: string }[]).map(row => {
-        const prod = prodById.get(row.production_id)
-        return {
-          production_id: row.production_id,
-          user_id: row.user_id,
-          productions: prod
-            ? {
-                production_number: prod.production_number,
-                title: prod.title,
-                start_datetime: prod.start_datetime,
-                status: prod.status,
-              }
-            : null,
-        } as ProductionMemberRow
-      })
-      setProdMembers(merged)
-    }
+    setTeam((payload.team as TeamMember[]) || [])
+    setProdMembers((payload.prodMembers as ProductionMemberRow[]) || [])
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -332,35 +284,41 @@ export default function TasksSignagePage() {
                   </div>
                   <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 700 }}>{member.name}</p>
                 </div>
-                <p style={{ margin: '0 0 8px', fontSize: `${fs.staffName}px`, color: text, fontWeight: 700 }}>
-                  {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming (14d)
+                <p style={{ margin: '0 0 10px', fontSize: `${fs.staffName}px`, color: text, fontWeight: 700 }}>
+                  {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming
                 </p>
-                <div style={{ display: 'grid', gap: '6px' }}>
-                  {personTasks.slice(0, 10).map(t => {
-                    const d = daysFromToday(t.due_date)
-                    const dueLabel = d === null ? 'No due' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `${d}d`
-                    return (
-                      <p key={t.id} style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: '#d8e4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        Task: {t.title} · {dueLabel}
-                      </p>
-                    )
-                  })}
-                  {personTasks.length === 0 && (
-                    <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted }}>No open tasks assigned.</p>
-                  )}
-                </div>
-                <div style={{ marginTop: '8px', display: 'grid', gap: '6px' }}>
-                  <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: muted, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
-                    Next 5 days productions
-                  </p>
-                  {next5DayProds.slice(0, 2).map(pm => (
-                    <p key={`${pm.production_id}-${pm.user_id}`} style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: '#a7c4ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      Prod: #{pm.productions?.production_number} {pm.productions?.title}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', alignItems: 'start' }}>
+                  <div style={{ display: 'grid', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: `${Math.max(fs.subLabel + 2, fs.subLabel)}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
+                      Open tasks
                     </p>
-                  ))}
-                  {next5DayProds.length === 0 && (
-                    <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted }}>No productions in next 5 days.</p>
-                  )}
+                    {personTasks.slice(0, 10).map(t => {
+                      const d = daysFromToday(t.due_date)
+                      const dueLabel = d === null ? 'No due' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `${d}d`
+                      return (
+                        <p key={t.id} style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: '#d8e4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {t.title} · {dueLabel}
+                        </p>
+                      )
+                    })}
+                    {personTasks.length === 0 && (
+                      <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted }}>No open tasks assigned.</p>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gap: '6px' }}>
+                    <p style={{ margin: 0, fontSize: `${Math.max(fs.subLabel + 2, fs.subLabel)}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
+                      Upcoming (next 5 days)
+                    </p>
+                    {next5DayProds.slice(0, 10).map(pm => (
+                      <p key={`${pm.production_id}-${pm.user_id}`} style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: '#a7c4ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        #{pm.productions?.production_number} {pm.productions?.title}
+                      </p>
+                    ))}
+                    {next5DayProds.length === 0 && (
+                      <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted }}>No upcoming productions in next 5 days.</p>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
