@@ -158,7 +158,7 @@ export default function DashboardPage() {
 
       const { data: ytRows, error: ytErr } = await supabase
         .from('productions')
-        .select('id, request_type_label, type, livestream_url, youtube_link_email_sent_at')
+        .select('id, request_type_label, type, status, livestream_url, youtube_link_email_sent_at')
         .neq('status', 'Abandoned')
       if (ytErr) {
         setYtEmailPendingCount(0)
@@ -171,11 +171,16 @@ export default function DashboardPage() {
           const t = `${p.request_type_label || ''} ${p.type || ''}`.toLowerCase()
           return t.includes('livestream') || t.includes('live stream') || t.includes('board')
         })
-        const withLinkNoSend = relevant.filter((p: {
+        const allowedStatus = (status: string | null | undefined): boolean => {
+          const s = (status || '').toLowerCase()
+          return s.includes('approved') || s.includes('in progress')
+        }
+        const activeRelevant = relevant.filter((p: { status?: string | null }) => allowedStatus(p.status))
+        const withLinkNoSend = activeRelevant.filter((p: {
           livestream_url?: string | null
           youtube_link_email_sent_at?: string | null
         }) => !!(p.livestream_url || '').trim() && !p.youtube_link_email_sent_at).length
-        const missingLink = relevant.filter((p: { livestream_url?: string | null }) => !(p.livestream_url || '').trim()).length
+        const missingLink = activeRelevant.filter((p: { livestream_url?: string | null }) => !(p.livestream_url || '').trim()).length
         setYtEmailPendingCount(withLinkNoSend)
         setYtMissingLinkCount(missingLink)
       }

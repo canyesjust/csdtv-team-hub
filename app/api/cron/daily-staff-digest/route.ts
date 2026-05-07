@@ -12,6 +12,10 @@ import { loadDailyDigestContext } from '@/lib/load-daily-digest-context'
 export const dynamic = 'force-dynamic'
 
 function verifyCron(request: Request): boolean {
+  // Vercel Cron requests include this header; accept it for platform-scheduled runs.
+  const vercelCron = request.headers.get('x-vercel-cron')
+  if (vercelCron === '1') return true
+
   const secret = process.env.CRON_SECRET
   if (!secret) return false
   const auth = request.headers.get('authorization')
@@ -24,18 +28,24 @@ function parseSendHour(): number {
   return raw
 }
 
+function shouldEnforceLocalHour(): boolean {
+  return process.env.DAILY_DIGEST_ENFORCE_LOCAL_HOUR === '1'
+}
+
 /**
  * Scheduled daily email to active staff (personalized).
  * Protect with CRON_SECRET: Authorization: Bearer <CRON_SECRET>
+ * Also accepts Vercel's x-vercel-cron header for platform cron invocations.
  *
- * Sends once per **weekday** (Mon–Fri) at DAILY_DIGEST_LOCAL_HOUR (default 8) in DAILY_DIGEST_TIMEZONE.
- * Vercel cron is UTC-only, so vercel.json runs this route every hour; the handler no-ops until
- * the local hour is at/after the send hour (DST-safe) and the local day is Monday–Friday.
+ * Sends once per **weekday** (Mon–Fri). The actual run time is controlled by `vercel.json`.
+ * By default we do not enforce a local-hour check because some Vercel plans only allow daily cron.
+ * Optional: set DAILY_DIGEST_ENFORCE_LOCAL_HOUR=1 to require local hour >= DAILY_DIGEST_LOCAL_HOUR.
  *
  * Env:
- * - CRON_SECRET (required)
+ * - CRON_SECRET (optional if only using Vercel cron header verification)
  * - DAILY_DIGEST_TIMEZONE (default America/Denver) — send time + "today" in the email
- * - DAILY_DIGEST_LOCAL_HOUR (default 8) — 0–23, local wall-clock hour to send
+ * - DAILY_DIGEST_LOCAL_HOUR (default 8) — 0–23 local wall-clock hour (only used when DAILY_DIGEST_ENFORCE_LOCAL_HOUR=1)
+ * - DAILY_DIGEST_ENFORCE_LOCAL_HOUR=1 — enable local-hour gating
  * - DAILY_DIGEST_DISABLED=1 — skip sending (health checks)
  *
  * Preview (no send): GET /api/daily-digest/preview while signed in.
@@ -68,7 +78,7 @@ export async function GET(request: Request) {
     })
   }
   const localHour = localHourInTimeZone(now, tz)
-  if (localHour < sendHour) {
+  if (shouldEnforceLocalHour() && localHour < sendHour) {
     return NextResponse.json({
       ok: true,
       skipped: true,
