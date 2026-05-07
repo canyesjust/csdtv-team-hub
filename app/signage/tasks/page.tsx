@@ -78,7 +78,27 @@ export default function TasksSignagePage() {
         .lt('start_datetime', end.toISOString()),
     ])
 
-    setTasks((tasksRes.data as TaskRow[]) || [])
+    const normalizedTasks: TaskRow[] = ((tasksRes.data || []) as Array<{
+      id: string
+      title: string
+      priority: string
+      due_date: string | null
+      assigned_to: string | null
+      production_id: string | null
+      productions?: { production_number: number; title: string } | { production_number: number; title: string }[] | null
+    }>).map(row => {
+      const prod = Array.isArray(row.productions) ? row.productions[0] || null : row.productions || null
+      return {
+        id: row.id,
+        title: row.title,
+        priority: row.priority,
+        due_date: row.due_date,
+        assigned_to: row.assigned_to,
+        production_id: row.production_id,
+        productions: prod ? { production_number: prod.production_number, title: prod.title } : null,
+      }
+    })
+    setTasks(normalizedTasks)
     setTeam((teamRes.data as TeamMember[]) || [])
 
     const upcomingProds = (upcomingProdsRes.data || []).filter((p: { status?: string | null }) => {
