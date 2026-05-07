@@ -24,6 +24,7 @@ interface Task {
   id: string; title: string; description: string | null; status: string; priority: string
   due_date: string | null; created_at: string; assigned_to: string | null; created_by: string
   production_id: string | null; needs_equipment: boolean; notes: string | null
+  purchase_request: boolean; purchase_request_link: string | null
   completed_at: string | null; recurring: string | null; recurring_interval: number | null
   blocked_by: string | null; scanned_sheet_id: string | null
   productions?: { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null } | null
@@ -90,7 +91,18 @@ export default function TasksPage() {
   const [showOverflow, setShowOverflow] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [showProductions, setShowProductions] = useState(true)
-  const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'normal', assigned_to: '', due_date: '', production_id: '', needs_equipment: false, recurring: '' })
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    priority: 'normal',
+    assigned_to: '',
+    due_date: '',
+    production_id: '',
+    needs_equipment: false,
+    purchase_request: false,
+    purchase_request_link: '',
+    recurring: '',
+  })
   const [panelNotes, setPanelNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [search, setSearch] = useState('')
@@ -378,7 +390,10 @@ export default function TasksPage() {
       title: newTask.title, description: newTask.description || null,
       priority: newTask.priority, assigned_to: newTask.assigned_to || null,
       due_date: newTask.due_date || null, production_id: newTask.production_id || null,
-      needs_equipment: newTask.needs_equipment, recurring: newTask.recurring || null,
+      needs_equipment: newTask.needs_equipment,
+      purchase_request: newTask.purchase_request,
+      purchase_request_link: newTask.purchase_request_link?.trim() || null,
+      recurring: newTask.recurring || null,
       recurring_interval: newTask.recurring ? 1 : null, status: 'pending', created_by: currentUser.id,
     }).select('*').single()
     if (error) { toast('Failed to create task', 'error'); return }
@@ -386,7 +401,18 @@ export default function TasksPage() {
       const linkedProd = newTask.production_id ? allProductions.find(p => p.id === newTask.production_id) || null : null
       setTasks(prev => [{ ...data, productions: linkedProd }, ...prev])
       if (newTask.assigned_to) sendAssignEmail(newTask.assigned_to, newTask.title)
-      setNewTask({ title: '', description: '', priority: 'normal', assigned_to: '', due_date: '', production_id: '', needs_equipment: false, recurring: '' })
+      setNewTask({
+        title: '',
+        description: '',
+        priority: 'normal',
+        assigned_to: currentUser.id,
+        due_date: '',
+        production_id: '',
+        needs_equipment: false,
+        purchase_request: false,
+        purchase_request_link: '',
+        recurring: '',
+      })
       setShowNewTask(false)
       toast('Task created', 'success')
     }
@@ -414,7 +440,10 @@ export default function TasksPage() {
       const { data: newRecurring } = await supabase.from('tasks').insert({
         title: task.title, description: task.description, priority: task.priority,
         assigned_to: task.assigned_to, production_id: task.production_id,
-        needs_equipment: task.needs_equipment, recurring: task.recurring,
+        needs_equipment: task.needs_equipment,
+        purchase_request: task.purchase_request,
+        purchase_request_link: task.purchase_request_link,
+        recurring: task.recurring,
         recurring_interval: task.recurring_interval, status: 'pending',
         due_date: nextDate.toISOString().split('T')[0], created_by: task.created_by,
       }).select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').single()
@@ -659,7 +688,15 @@ export default function TasksPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
               <button
-                onClick={() => setShowNewTask(v => !v)}
+                onClick={() => {
+                  setShowNewTask(v => {
+                    const next = !v
+                    if (next) {
+                      setNewTask(p => ({ ...p, assigned_to: p.assigned_to || currentUser?.id || '' }))
+                    }
+                    return next
+                  })
+                }}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', padding: '9px 16px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -818,6 +855,24 @@ export default function TasksPage() {
                 <input type="checkbox" id="needs_equipment" checked={newTask.needs_equipment} onChange={e => setNewTask(p => ({ ...p, needs_equipment: e.target.checked }))} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }} />
                 <label htmlFor="needs_equipment" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Needs equipment pulled</label>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: newTask.purchase_request ? '8px' : '12px' }}>
+                <input
+                  type="checkbox"
+                  id="purchase_request"
+                  checked={newTask.purchase_request}
+                  onChange={e => setNewTask(p => ({ ...p, purchase_request: e.target.checked, purchase_request_link: e.target.checked ? p.purchase_request_link : '' }))}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }}
+                />
+                <label htmlFor="purchase_request" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Purchase request</label>
+              </div>
+              {newTask.purchase_request && (
+                <input
+                  value={newTask.purchase_request_link}
+                  onChange={e => setNewTask(p => ({ ...p, purchase_request_link: e.target.value }))}
+                  placeholder="Purchase link (optional)"
+                  style={{ ...inputStyle, marginBottom: '12px' }}
+                />
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
                 <label style={{ fontSize: '13px', color: muted }}>Repeat:</label>
                 <select value={newTask.recurring} onChange={e => setNewTask(p => ({ ...p, recurring: e.target.value }))} style={{ ...inputStyle, width: 'auto', minWidth: '110px' }}>
@@ -1016,6 +1071,7 @@ export default function TasksPage() {
                             </span>
                           )}
                           {task.needs_equipment && <span style={{ color: warning, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Equipment</span>}
+                          {task.purchase_request && <span style={{ color: info, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Purchase</span>}
                           {task.recurring && <span style={{ whiteSpace: 'nowrap' as const }}>Recurring</span>}
                           {task.blocked_by && <span style={{ color: review, whiteSpace: 'nowrap' as const, fontWeight: 600 }}>Blocked</span>}
                         </div>
@@ -1110,6 +1166,31 @@ export default function TasksPage() {
                   <input type="checkbox" checked={selectedTask.needs_equipment} onChange={() => {}} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }} />
                   <span style={{ fontSize: '13px', color: selectedTask.needs_equipment ? warning : muted, fontWeight: selectedTask.needs_equipment ? 700 : 500 }}>Needs equipment pulled</span>
                 </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: selectedTask.purchase_request ? '8px' : '14px', padding: '11px 13px', background: selectedTask.purchase_request ? statusTone.info.background : surface2, borderRadius: '10px', border: `1px solid ${selectedTask.purchase_request ? info : border}`, cursor: 'pointer' }}
+                  onClick={() => updateTask(selectedTask.id, { purchase_request: !selectedTask.purchase_request, purchase_request_link: selectedTask.purchase_request ? null : selectedTask.purchase_request_link })}>
+                  <input type="checkbox" checked={selectedTask.purchase_request} onChange={() => {}} style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }} />
+                  <span style={{ fontSize: '13px', color: selectedTask.purchase_request ? info : muted, fontWeight: selectedTask.purchase_request ? 700 : 500 }}>Purchase request</span>
+                </div>
+                {selectedTask.purchase_request && (
+                  <div style={{ marginBottom: '14px' }}>
+                    <input
+                      value={selectedTask.purchase_request_link || ''}
+                      onChange={e => updateTask(selectedTask.id, { purchase_request_link: e.target.value || null })}
+                      placeholder="Purchase link (optional)"
+                      style={{ ...inputStyle, fontSize: '13px' }}
+                    />
+                    {selectedTask.purchase_request_link && (
+                      <a
+                        href={selectedTask.purchase_request_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: 'inline-block', marginTop: '6px', fontSize: '12px', color: info, textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        Open purchase link →
+                      </a>
+                    )}
+                  </div>
+                )}
 
                 {/* BLOCKED BY */}
                 <div style={{ marginBottom: '14px' }}>

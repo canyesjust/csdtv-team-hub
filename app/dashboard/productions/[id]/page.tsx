@@ -183,6 +183,8 @@ export default function ProductionDetailPage() {
   const [newTaskAssignee, setNewTaskAssignee] = useState('')
   const [newTaskDue, setNewTaskDue] = useState('')
   const [newTaskPriority, setNewTaskPriority] = useState('normal')
+  const [newTaskPurchaseRequest, setNewTaskPurchaseRequest] = useState(false)
+  const [newTaskPurchaseLink, setNewTaskPurchaseLink] = useState('')
   const [teamNotes, setTeamNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
@@ -410,6 +412,8 @@ export default function ProductionDetailPage() {
     const { data, error } = await supabase.from('tasks').insert({
       title: newTaskTitle, priority: newTaskPriority,
       assigned_to: newTaskAssignee || null, due_date: newTaskDue || null,
+      purchase_request: newTaskPurchaseRequest,
+      purchase_request_link: newTaskPurchaseLink.trim() || null,
       production_id: uuid, status: 'pending', created_by: currentUser.id,
     }).select('id, title, status, priority, assigned_to, due_date').single()
     if (error) { toast(`Failed to create task: ${error.message}`); return }
@@ -433,10 +437,15 @@ export default function ProductionDetailPage() {
         }
       }
     }
-    setNewTaskTitle(''); setNewTaskAssignee(''); setNewTaskDue(''); setNewTaskPriority('normal')
+    setNewTaskTitle('')
+    setNewTaskAssignee(currentUser.id)
+    setNewTaskDue('')
+    setNewTaskPriority('normal')
+    setNewTaskPurchaseRequest(false)
+    setNewTaskPurchaseLink('')
     setShowCreateTask(false)
     await logActivity('Created task', newTaskTitle)
-  }, [newTaskTitle, newTaskPriority, newTaskAssignee, newTaskDue, currentUser, uuid, supabase, logActivity, allTeam, production])
+  }, [newTaskTitle, newTaskPriority, newTaskAssignee, newTaskDue, newTaskPurchaseRequest, newTaskPurchaseLink, currentUser, uuid, supabase, logActivity, allTeam, production])
 
   const initChecklist = useCallback(async () => {
     if (!production || !currentUser || !uuid) return
@@ -1488,7 +1497,13 @@ export default function ProductionDetailPage() {
               Copy setup to...
             </button>
             <button
-              onClick={() => setShowCreateTask(!showCreateTask)}
+              onClick={() => {
+                setShowCreateTask(prev => {
+                  const next = !prev
+                  if (next) setNewTaskAssignee(a => a || currentUser?.id || '')
+                  return next
+                })
+              }}
               style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px' }}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1527,6 +1542,24 @@ export default function ProductionDetailPage() {
                 </select>
                 <input type="date" value={newTaskDue} onChange={e => setNewTaskDue(e.target.value)} style={inputStyle} />
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: newTaskPurchaseRequest ? '8px' : '10px' }}>
+                <input
+                  type="checkbox"
+                  id="prod_task_purchase_request"
+                  checked={newTaskPurchaseRequest}
+                  onChange={e => { setNewTaskPurchaseRequest(e.target.checked); if (!e.target.checked) setNewTaskPurchaseLink('') }}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }}
+                />
+                <label htmlFor="prod_task_purchase_request" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Purchase request</label>
+              </div>
+              {newTaskPurchaseRequest && (
+                <input
+                  value={newTaskPurchaseLink}
+                  onChange={e => setNewTaskPurchaseLink(e.target.value)}
+                  placeholder="Purchase link (optional)"
+                  style={{ ...inputStyle, marginBottom: '10px' }}
+                />
+              )}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   onClick={createTaskForProduction}
