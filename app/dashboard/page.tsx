@@ -74,6 +74,7 @@ export default function DashboardPage() {
   const [todayHours, setTodayHours] = useState<string | null>(null)
   const [recentActivity, setRecentActivity] = useState<Activity[]>([])
   const [ytEmailPendingCount, setYtEmailPendingCount] = useState(0)
+  const [ytMissingLinkCount, setYtMissingLinkCount] = useState(0)
   const [completing, setCompleting] = useState<Set<string>>(new Set())
   const [weekStats, setWeekStats] = useState({ prodsCompleted: 0, tasksCompleted: 0, videosPublished: 0 })
   const [expandedTodayProd, setExpandedTodayProd] = useState<string | null>(null)
@@ -155,14 +156,29 @@ export default function DashboardPage() {
       }
       setRecentActivity(enrichedActivity)
 
-      const { count: pendingCount, error: pendingErr } = await supabase
+      const { data: ytRows, error: ytErr } = await supabase
         .from('productions')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'Complete')
-        .is('youtube_link_email_sent_at', null)
-        .not('livestream_url', 'is', null)
-        .neq('livestream_url', '')
-      setYtEmailPendingCount(!pendingErr ? (pendingCount || 0) : 0)
+        .select('id, request_type_label, type, livestream_url, youtube_link_email_sent_at')
+        .neq('status', 'Abandoned')
+      if (ytErr) {
+        setYtEmailPendingCount(0)
+        setYtMissingLinkCount(0)
+      } else {
+        const relevant = (ytRows || []).filter((p: {
+          request_type_label?: string | null
+          type?: string | null
+        }) => {
+          const t = `${p.request_type_label || ''} ${p.type || ''}`.toLowerCase()
+          return t.includes('livestream') || t.includes('live stream') || t.includes('board')
+        })
+        const withLinkNoSend = relevant.filter((p: {
+          livestream_url?: string | null
+          youtube_link_email_sent_at?: string | null
+        }) => !!(p.livestream_url || '').trim() && !p.youtube_link_email_sent_at).length
+        const missingLink = relevant.filter((p: { livestream_url?: string | null }) => !(p.livestream_url || '').trim()).length
+        setYtEmailPendingCount(withLinkNoSend)
+        setYtMissingLinkCount(missingLink)
+      }
 
       const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
       const todayDayName = dayNames[new Date().getDay()]
@@ -773,6 +789,24 @@ export default function DashboardPage() {
               <div className="manager-panels" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: '12px' }}>
                 <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
                   <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>YouTube link follow-up</h3>
+                    <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Board + Livestream</span>
+                  </div>
+                  <div style={{ padding: '12px 16px', display: 'grid', gap: '8px' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: text, fontWeight: 600 }}>
+                      {ytEmailPendingCount} with link, email not sent
+                    </p>
+                    <p style={{ margin: 0, fontSize: '13px', color: text, fontWeight: 600 }}>
+                      {ytMissingLinkCount} missing link
+                    </p>
+                    <Link href="/dashboard/productions?ytPending=1" style={{ marginTop: '2px', fontSize: '13px', fontWeight: 600, color: info, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
+                      View list →
+                    </Link>
+                  </div>
+                </div>
+
+                <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>Ownership risks</h3>
                     <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{managerRiskCounts.overdue} overdue · {managerRiskCounts.blocked} blocked</span>
                   </div>
@@ -850,20 +884,6 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-
-            {ytEmailPendingCount > 0 && (
-              <div style={{ ...uiStyles.card, padding: '12px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
-                <div>
-                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: text }}>YouTube link emails</p>
-                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: muted }}>
-                    {ytEmailPendingCount} completed production{ytEmailPendingCount !== 1 ? 's' : ''} have a synced livestream/video link but no logged send yet.
-                  </p>
-                </div>
-                <Link href="/dashboard/productions?ytPending=1" style={{ fontSize: '13px', fontWeight: 600, color: info, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
-                  View list →
-                </Link>
-              </div>
-            )}
 
             <div style={{ ...uiStyles.card, overflow: 'hidden' as const }}>
               <div style={{ padding: '12px 18px', borderBottom: `1px solid ${border}` }}>
