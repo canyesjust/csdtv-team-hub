@@ -10,6 +10,7 @@ interface TaskRow {
   due_date: string | null
   assigned_to: string | null
   production_id: string | null
+  purchase_request: boolean
   productions?: { production_number: number; title: string } | null
 }
 
@@ -63,8 +64,8 @@ export default function TasksSignagePage() {
     const [tasksRes, teamRes, upcomingProdsRes] = await Promise.all([
       supabase
         .from('tasks')
-        .select('id,title,priority,due_date,assigned_to,production_id,productions(production_number,title)')
-        .neq('status', 'complete')
+        .select('id,title,priority,due_date,assigned_to,production_id,purchase_request,productions(production_number,title)')
+        .not('status', 'ilike', 'complete')
         .order('due_date', { ascending: true, nullsFirst: false }),
       supabase
         .from('team')
@@ -85,6 +86,7 @@ export default function TasksSignagePage() {
       due_date: string | null
       assigned_to: string | null
       production_id: string | null
+      purchase_request: boolean | null
       productions?: { production_number: number; title: string } | { production_number: number; title: string }[] | null
     }>).map(row => {
       const prod = Array.isArray(row.productions) ? row.productions[0] || null : row.productions || null
@@ -95,6 +97,7 @@ export default function TasksSignagePage() {
         due_date: row.due_date,
         assigned_to: row.assigned_to,
         production_id: row.production_id,
+        purchase_request: !!row.purchase_request,
         productions: prod ? { production_number: prod.production_number, title: prod.title } : null,
       }
     })
@@ -150,27 +153,37 @@ export default function TasksSignagePage() {
     }
   }, [loadData])
 
-  const unassignedTasks = useMemo(
-    () => tasks.filter(t => !t.assigned_to).sort((a, b) => (daysFromToday(a.due_date) ?? 9999) - (daysFromToday(b.due_date) ?? 9999)),
+  const displayTasks = useMemo(
+    () => tasks.filter(t => !t.purchase_request),
     [tasks]
+  )
+
+  const purchaseQueueCount = useMemo(
+    () => tasks.filter(t => t.purchase_request).length,
+    [tasks]
+  )
+
+  const unassignedTasks = useMemo(
+    () => displayTasks.filter(t => !t.assigned_to).sort((a, b) => (daysFromToday(a.due_date) ?? 9999) - (daysFromToday(b.due_date) ?? 9999)),
+    [displayTasks]
   )
 
   const overdueTasks = useMemo(
-    () => tasks.filter(t => {
+    () => displayTasks.filter(t => {
       const d = daysFromToday(t.due_date)
       return d !== null && d < 0
     }),
-    [tasks]
+    [displayTasks]
   )
 
   const dueTodayCount = useMemo(
-    () => tasks.filter(t => daysFromToday(t.due_date) === 0).length,
-    [tasks]
+    () => displayTasks.filter(t => daysFromToday(t.due_date) === 0).length,
+    [displayTasks]
   )
 
   const staffCards = useMemo(() => {
     const byPersonTasks = new Map<string, TaskRow[]>()
-    tasks.forEach(t => {
+    displayTasks.forEach(t => {
       if (!t.assigned_to) return
       if (!byPersonTasks.has(t.assigned_to)) byPersonTasks.set(t.assigned_to, [])
       byPersonTasks.get(t.assigned_to)!.push(t)
@@ -193,28 +206,16 @@ export default function TasksSignagePage() {
       const personProds = (byPersonProds.get(member.id) || [])
         .filter(p => p.productions?.start_datetime)
         .sort((a, b) => new Date(a.productions!.start_datetime!).getTime() - new Date(b.productions!.start_datetime!).getTime())
-      return { member, personTasks, personOverdue, personProds }
-    })
-  }, [tasks, team, prodMembers])
-
-  const upcomingProductionList = useMemo(() => {
-    const seen = new Set<string>()
-    const rows: { id: string; production_number: number; title: string; start_datetime: string | null; crewCount: number }[] = []
-    const crewCounts = new Map<string, number>()
-    prodMembers.forEach(pm => crewCounts.set(pm.production_id, (crewCounts.get(pm.production_id) || 0) + 1))
-    prodMembers.forEach(pm => {
-      if (!pm.productions || seen.has(pm.production_id)) return
-      seen.add(pm.production_id)
-      rows.push({
-        id: pm.production_id,
-        production_number: pm.productions.production_number,
-        title: pm.productions.title,
-        start_datetime: pm.productions.start_datetime,
-        crewCount: crewCounts.get(pm.production_id) || 0,
+      const next5DayProds = personProds.filter(p => {
+        const startIso = p.productions?.start_datetime
+        if (!startIso) return false
+        const ms = new Date(startIso).getTime() - Date.now()
+        const days = ms / 86400000
+        return days >= 0 && days <= 5
       })
+      return { member, personTasks, personOverdue, personProds, next5DayProds }
     })
-    return rows.sort((a, b) => new Date(a.start_datetime || '').getTime() - new Date(b.start_datetime || '').getTime())
-  }, [prodMembers])
+  }, [displayTasks, team, prodMembers])
 
   const bg = '#070d18'
   const cardBg = '#0f1828'
@@ -232,43 +233,44 @@ export default function TasksSignagePage() {
 
   return (
     <div style={{ background: bg, color: text, height: '100vh', padding: '14px 16px', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '40px', lineHeight: 1.1 }}>CSDtv Task Ops Board</h1>
-          <p style={{ margin: '5px 0 0', color: muted, fontSize: '18px' }}>Unassigned work, ownership, and upcoming 14-day production load</p>
+          <h1 style={{ margin: 0, fontSize: '56px', lineHeight: 1.05 }}>CSDtv Task Ops Board</h1>
+          <p style={{ margin: '6px 0 0', color: muted, fontSize: '24px' }}>Unassigned work, ownership, and upcoming 14-day production load</p>
         </div>
-        <div style={{ fontSize: '46px', fontWeight: 800, color: '#60b8f0', lineHeight: 1 }}>
+        <div style={{ fontSize: '68px', fontWeight: 800, color: '#60b8f0', lineHeight: 1 }}>
           {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
         {[
           { label: 'Unassigned', value: unassignedTasks.length, color: '#fbbf24' },
           { label: 'Overdue', value: overdueTasks.length, color: '#ef4444' },
           { label: 'Due today', value: dueTodayCount, color: '#60b8f0' },
-          { label: 'Open tasks', value: tasks.length, color: '#34d399' },
+          { label: 'Open tasks', value: displayTasks.length, color: '#34d399' },
+          { label: 'Request queue', value: purchaseQueueCount, color: '#c084fc' },
         ].map(stat => (
           <div key={stat.label} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: muted, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>{stat.label}</p>
-            <p style={{ margin: '6px 0 0', fontSize: '54px', color: stat.color, fontWeight: 800, lineHeight: 1 }}>{stat.value}</p>
+            <p style={{ margin: 0, fontSize: '20px', color: muted, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>{stat.label}</p>
+            <p style={{ margin: '8px 0 0', fontSize: '72px', color: stat.color, fontWeight: 800, lineHeight: 1 }}>{stat.value}</p>
           </div>
         ))}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.1fr 1.5fr 1.1fr', gap: '10px' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.25fr 1.75fr', gap: '10px' }}>
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <h2 style={{ margin: 0, fontSize: '28px' }}>Unassigned Tasks</h2>
+          <h2 style={{ margin: 0, fontSize: '44px' }}>Unassigned Tasks</h2>
           <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gap: '8px' }}>
             {unassignedTasks.length === 0 ? (
-              <p style={{ color: muted, fontSize: '22px' }}>No unassigned tasks right now.</p>
-            ) : unassignedTasks.slice(0, 20).map(task => {
+              <p style={{ color: muted, fontSize: '30px' }}>No unassigned tasks right now.</p>
+            ) : unassignedTasks.slice(0, 10).map(task => {
               const d = daysFromToday(task.due_date)
               const dueLabel = d === null ? 'No due date' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `Due in ${d}d`
               return (
                 <div key={task.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)' }}>
-                  <p style={{ margin: 0, fontSize: '22px', fontWeight: 700, lineHeight: 1.2 }}>{task.title}</p>
-                  <p style={{ margin: '5px 0 0', fontSize: '16px', color: muted }}>
+                  <p style={{ margin: 0, fontSize: '34px', fontWeight: 700, lineHeight: 1.15 }}>{task.title}</p>
+                  <p style={{ margin: '6px 0 0', fontSize: '22px', color: muted }}>
                     {dueLabel}{task.productions ? ` · #${task.productions.production_number} ${task.productions.title}` : ''}
                   </p>
                 </div>
@@ -278,52 +280,46 @@ export default function TasksSignagePage() {
         </div>
 
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <h2 style={{ margin: 0, fontSize: '28px' }}>Staff Workload</h2>
+          <h2 style={{ margin: 0, fontSize: '44px' }}>Staff Workload</h2>
           <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-            {staffCards.map(({ member, personTasks, personOverdue, personProds }) => (
+            {staffCards.map(({ member, personTasks, personOverdue, personProds, next5DayProds }) => (
               <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '11px 12px', background: 'rgba(255,255,255,0.02)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px', fontWeight: 800 }}>
                     {initials(member.name)}
                   </div>
-                  <p style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>{member.name}</p>
+                  <p style={{ margin: 0, fontSize: '30px', fontWeight: 700 }}>{member.name}</p>
                 </div>
-                <p style={{ margin: '0 0 8px', fontSize: '16px', color: muted }}>
-                  {personTasks.length} open task{personTasks.length !== 1 ? 's' : ''} · {personOverdue} overdue · {personProds.length} production{personProds.length !== 1 ? 's' : ''} upcoming
+                <p style={{ margin: '0 0 8px', fontSize: '22px', color: muted }}>
+                  {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming (14d)
                 </p>
-                <div style={{ display: 'grid', gap: '5px' }}>
-                  {personTasks.slice(0, 2).map(t => (
-                    <p key={t.id} style={{ margin: 0, fontSize: '15px', color: '#d8e4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      Task: {t.title}
-                    </p>
-                  ))}
-                  {personProds.slice(0, 2).map(pm => (
-                    <p key={`${pm.production_id}-${pm.user_id}`} style={{ margin: 0, fontSize: '15px', color: '#a7c4ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ display: 'grid', gap: '6px' }}>
+                  {personTasks.slice(0, 10).map(t => {
+                    const d = daysFromToday(t.due_date)
+                    const dueLabel = d === null ? 'No due' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `${d}d`
+                    return (
+                      <p key={t.id} style={{ margin: 0, fontSize: '20px', color: '#d8e4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        Task: {t.title} · {dueLabel}
+                      </p>
+                    )
+                  })}
+                  {personTasks.length === 0 && (
+                    <p style={{ margin: 0, fontSize: '20px', color: muted }}>No open tasks assigned.</p>
+                  )}
+                </div>
+                <div style={{ marginTop: '8px', display: 'grid', gap: '6px' }}>
+                  <p style={{ margin: 0, fontSize: '16px', color: muted, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
+                    Next 5 days productions
+                  </p>
+                  {next5DayProds.slice(0, 2).map(pm => (
+                    <p key={`${pm.production_id}-${pm.user_id}`} style={{ margin: 0, fontSize: '20px', color: '#a7c4ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       Prod: #{pm.productions?.production_number} {pm.productions?.title}
                     </p>
                   ))}
-                  {personTasks.length === 0 && personProds.length === 0 && (
-                    <p style={{ margin: 0, fontSize: '15px', color: muted }}>No current assignments.</p>
+                  {next5DayProds.length === 0 && (
+                    <p style={{ margin: 0, fontSize: '18px', color: muted }}>No productions in next 5 days.</p>
                   )}
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <h2 style={{ margin: 0, fontSize: '28px' }}>Next 14 Days</h2>
-          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gap: '8px' }}>
-            {upcomingProductionList.length === 0 ? (
-              <p style={{ color: muted, fontSize: '20px' }}>No upcoming productions.</p>
-            ) : upcomingProductionList.map(prod => (
-              <div key={prod.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)' }}>
-                <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, lineHeight: 1.2 }}>#{prod.production_number} {prod.title}</p>
-                <p style={{ margin: '5px 0 0', fontSize: '15px', color: muted }}>
-                  {prod.start_datetime ? new Date(prod.start_datetime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'No date'}
-                  {' · '}
-                  {prod.crewCount} crew
-                </p>
               </div>
             ))}
           </div>
