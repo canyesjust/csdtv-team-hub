@@ -42,7 +42,7 @@ interface ChecklistRow {
   completed: boolean
   assigned_to: string | null
   production_id: string
-  productions?: { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null } | null
+  productions?: { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null } | { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null }[] | null
 }
 
 const PRIORITIES = ['low', 'normal', 'high', 'day of']
@@ -78,6 +78,13 @@ function daysFromToday(dueDate: string | null): number | null {
   due.setHours(0, 0, 0, 0)
   now.setHours(0, 0, 0, 0)
   return Math.round((due.getTime() - now.getTime()) / 86400000)
+}
+
+function normalizeProductionRelation(
+  rel: ChecklistRow['productions']
+): { id: string; title: string; production_number: number; request_type_label: string | null; start_datetime: string | null; status: string | null } | null {
+  if (!rel) return null
+  return Array.isArray(rel) ? (rel[0] || null) : rel
 }
 
 export default function TasksPage() {
@@ -217,7 +224,7 @@ export default function TasksPage() {
         .eq('assigned_to', uid)
         .eq('completed', false)
         .order('sort_order', { ascending: true })
-      checklistRows = (checklistData as ChecklistRow[]) || []
+      checklistRows = ((checklistData as ChecklistRow[] | null) || [])
       const { data: memRows } = await supabase.from('production_members').select('production_id').eq('user_id', uid)
       const pids = [...new Set((memRows || []).map(m => m.production_id).filter(Boolean))] as string[]
       if (pids.length === 0) {
@@ -239,7 +246,7 @@ export default function TasksPage() {
         .select('id,title,completed,assigned_to,production_id,productions(id,title,production_number,request_type_label,start_datetime,status)')
         .eq('completed', false)
         .order('sort_order', { ascending: true })
-      checklistRows = (checklistData as ChecklistRow[]) || []
+      checklistRows = ((checklistData as ChecklistRow[] | null) || [])
       tasksRes = tRes
       completedRes = cRes
       teamList = (tmRes.data as TeamMember[]) || []
@@ -268,7 +275,7 @@ export default function TasksPage() {
       scanned_sheet_id: null,
       source: 'checklist',
       checklist_item_id: row.id,
-      productions: row.productions || null,
+      productions: normalizeProductionRelation(row.productions),
     }))
 
     setTasks([...(tasksRes.data || []), ...checklistAsTasks])
