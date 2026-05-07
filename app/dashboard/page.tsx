@@ -511,7 +511,7 @@ export default function DashboardPage() {
             {todayProductions.map(p => {
               const d = p.start_datetime ? new Date(p.start_datetime) : null
               const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
-              const loc = getSchoolName(p.school_department) || p.filming_location || ''
+              const loc = getSchoolName(p.filming_location) || getSchoolName(p.school_department) || p.filming_location || ''
               const members = (p.production_members || []).map(m => m.team).filter(Boolean)
               const isExpanded = expandedTodayProd === p.id
               const items = (p.checklist_items || []).sort((a, b) => (a as any).sort_order - (b as any).sort_order)

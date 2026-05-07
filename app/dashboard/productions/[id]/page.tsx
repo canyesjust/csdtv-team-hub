@@ -1667,7 +1667,24 @@ export default function ProductionDetailPage() {
                 This request was submitted by a staff member on behalf of the organizer.
               </p>
             )}
-            {([['Name', organizerName], ['Email', organizerEmail], ['School', getSchoolName(production.school_department)], ['Year', production.school_year], ['Focus', production.focus_area]] as [string, string | null][]).map(([l, v]) => v ? (
+            {([[
+              'Name',
+              organizerName,
+            ], [
+              'Email',
+              organizerEmail,
+            ], [
+              'School',
+              getSchoolName(production.submitter_building_code) ||
+              getSchoolName(production.filming_location) ||
+              getSchoolName(production.school_department),
+            ], [
+              'Year',
+              production.school_year,
+            ], [
+              'Focus',
+              production.focus_area,
+            ]] as [string, string | null][]).map(([l, v]) => v ? (
               <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
                 <span style={{ color: muted, minWidth: '60px', flexShrink: 0 }}>{l}</span>
                 <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
