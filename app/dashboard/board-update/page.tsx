@@ -12,6 +12,7 @@ type UpcomingEvent = {
   date: string
   time: string
   day: string
+  school: string
 }
 
 type RecentVideo = {
@@ -35,8 +36,8 @@ type BoardUpdatePayload = {
 }
 
 const DEFAULT_NOTE = `Hello board members,
-Ahead of tonight's meeting, here's a quick look at what's coming up on CSDtv in the next fourteen days and what we've published in the fourteen days leading up to this meeting. If any livestream below would be helpful as a short reel for your school's social channels, just reply and let me know — happy to put one together.
-See you tonight.`
+Twice each month, around board meetings, I’ll send this update to keep you in the loop on the fun things happening across CSDtv — what’s coming up and what we’ve recently published. If any livestream below would be helpful as a short reel, just reply and let me know — happy to put one together.
+Thanks.`
 
 function formatSinceDate(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
@@ -151,6 +152,7 @@ function buildEventCard(evt: UpcomingEvent): string {
     <td class="bu-copy" valign="top" style="padding:12px 14px 12px 8px;vertical-align:top;">
       <div style="${TITLE_SERIF}margin:0 0 6px 0;">${escapeHtml(evt.title)}</div>
       <div style="${META_ORANGE}margin:0 0 8px 0;">${escapeHtml(formatEventLine(evt.date, evt.time))}</div>
+      ${evt.school?.trim() ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.45;color:#6B7280;margin:0 0 8px 0;">${escapeHtml(evt.school)}</div>` : ''}
       ${evt.link?.trim() ? `<div style="margin:0;"><span style="${LINK_STYLE}">Watch live →</span></div>` : ''}
     </td>
   </tr>
@@ -284,8 +286,8 @@ a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !im
 
           <tr>
             <td class="bu-pad" style="padding:28px ${EMAIL_PAD}px;background:#F7F4EC;border-top:1px solid #E5DFD0;">
-              <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.35;font-weight:bold;color:#0A2342;margin:0 0 12px 0;">Want a reel for your school&rsquo;s social media?</div>
-              <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#2C3E50;word-wrap:break-word;">If any of the livestreams above would help promote an event at your school, reply to this email and let me know which one. I&rsquo;ll cut a short reel you can share.</div>
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.35;font-weight:bold;color:#0A2342;margin:0 0 12px 0;">Want a short reel from one of these events?</div>
+              <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#2C3E50;word-wrap:break-word;">If any of the livestreams above would be helpful as a short reel, reply to this email and let me know which one. I&rsquo;ll cut one for you.</div>
             </td>
           </tr>
 
@@ -345,7 +347,7 @@ export default function BoardUpdatePage() {
     return new Date(y, m - 1, d)
   }, [selectedDate])
   const subject = useMemo(
-    () => `CSDtv Update — Board Meeting ${formatSubjectDate(now)}`,
+    () => `CSDtv Update — Highlights & Upcoming Events (${formatSubjectDate(now)})`,
     [now]
   )
   const emailHtml = useMemo(() => buildBoardUpdateHtml(payload, note, now), [payload, note, now])
@@ -355,7 +357,9 @@ export default function BoardUpdatePage() {
       note,
       '',
       `Coming Up on CSDtv (${formatDateRangeSubtitle(payload.upcomingWindowStart, payload.upcomingWindowEnd)})`,
-      ...(payload.upcomingEvents || []).map(e => `${e.title} — ${formatEventLine(e.date, e.time)}`),
+      ...(payload.upcomingEvents || []).map(e =>
+        `${e.title}${e.school?.trim() ? ` (${e.school.trim()})` : ''} — ${formatEventLine(e.date, e.time)}`
+      ),
       '',
       `Recently Posted (${formatDateRangeSubtitle(payload.recentWindowStart, payload.recentWindowEnd)})`,
       ...(payload.recentVideos || []).map(v => `${v.title} — ${v.youtubeUrl}`),

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { getSchoolName } from '@/lib/schools'
 
 const BOARD_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSRGyV2ebR1T6tpyRlMEll17VczOveAlBVGO2GiZuEWgwO5Bp6Dulph6Oo0gIpZVeFXcr8_303SVYsk/pub?gid=0&single=true&output=csv'
 const DAY_MS = 86400000
@@ -13,6 +14,7 @@ type SheetRow = {
   dateIso: string | null
   dateObj: Date | null
   time: string
+  school: string
 }
 
 function toLocalIso(date: Date): string {
@@ -159,6 +161,7 @@ export async function GET(request: Request) {
       dateIso,
       dateObj: dateIso ? fromIsoLocal(dateIso) : null,
       time: idx.time >= 0 ? formatTime(String(r[idx.time] || '')) : '',
+      school: '',
     }
   })
 
@@ -188,6 +191,36 @@ export async function GET(request: Request) {
   const upcomingWindowEndDate = addDays(referenceDate, 13)
   const upcomingWindowEndIso = toLocalIso(upcomingWindowEndDate)
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  const supabase = createClient(url, key)
+
+  const prodNums = [...new Set(
+    sheetRows
+      .map(r => Number.parseInt(r.productionId, 10))
+      .filter(n => Number.isFinite(n))
+  )]
+  const schoolByProdNum = new Map<number, string>()
+  if (prodNums.length > 0) {
+    const { data: prodRows } = await supabase
+      .from('productions')
+      .select('production_number, filming_location, school_department, event_location')
+      .in('production_number', prodNums)
+    for (const row of prodRows || []) {
+      const num = Number(row.production_number)
+      if (!Number.isFinite(num)) continue
+      const schoolLabel =
+        getSchoolName(row.filming_location) ||
+        getSchoolName(row.school_department) ||
+        row.event_location ||
+        row.filming_location ||
+        row.school_department ||
+        ''
+      schoolByProdNum.set(num, String(schoolLabel || '').trim())
+    }
+  }
+
   const upcomingEvents = sheetRows
     .filter(r => r.dateObj)
     .filter(r => {
@@ -203,12 +236,8 @@ export async function GET(request: Request) {
       date: r.dateIso as string,
       time: r.time,
       day: (r.dateObj as Date).toLocaleDateString('en-US', { weekday: 'short' }),
+      school: schoolByProdNum.get(Number.parseInt(r.productionId, 10)) || '',
     }))
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-  const supabase = createClient(url, key)
 
   const { data: videos, error } = await supabase
     .from('videos')
