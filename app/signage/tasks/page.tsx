@@ -197,6 +197,25 @@ export default function TasksSignagePage() {
     })
   }, [tasks, team, prodMembers])
 
+  const upcomingProductionList = useMemo(() => {
+    const seen = new Set<string>()
+    const rows: { id: string; production_number: number; title: string; start_datetime: string | null; crewCount: number }[] = []
+    const crewCounts = new Map<string, number>()
+    prodMembers.forEach(pm => crewCounts.set(pm.production_id, (crewCounts.get(pm.production_id) || 0) + 1))
+    prodMembers.forEach(pm => {
+      if (!pm.productions || seen.has(pm.production_id)) return
+      seen.add(pm.production_id)
+      rows.push({
+        id: pm.production_id,
+        production_number: pm.productions.production_number,
+        title: pm.productions.title,
+        start_datetime: pm.productions.start_datetime,
+        crewCount: crewCounts.get(pm.production_id) || 0,
+      })
+    })
+    return rows.sort((a, b) => new Date(a.start_datetime || '').getTime() - new Date(b.start_datetime || '').getTime())
+  }, [prodMembers])
+
   const bg = '#070d18'
   const cardBg = '#0f1828'
   const text = '#eef2ff'
@@ -213,43 +232,43 @@ export default function TasksSignagePage() {
 
   return (
     <div style={{ background: bg, color: text, height: '100vh', padding: '14px 16px', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '30px', lineHeight: 1.1 }}>CSDtv Task Ops Board</h1>
-          <p style={{ margin: '4px 0 0', color: muted, fontSize: '14px' }}>Unassigned work, ownership, and upcoming 14-day production load</p>
+          <h1 style={{ margin: 0, fontSize: '40px', lineHeight: 1.1 }}>CSDtv Task Ops Board</h1>
+          <p style={{ margin: '5px 0 0', color: muted, fontSize: '18px' }}>Unassigned work, ownership, and upcoming 14-day production load</p>
         </div>
-        <div style={{ fontSize: '30px', fontWeight: 800, color: '#60b8f0' }}>
+        <div style={{ fontSize: '46px', fontWeight: 800, color: '#60b8f0', lineHeight: 1 }}>
           {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px', marginBottom: '10px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
         {[
           { label: 'Unassigned', value: unassignedTasks.length, color: '#fbbf24' },
           { label: 'Overdue', value: overdueTasks.length, color: '#ef4444' },
           { label: 'Due today', value: dueTodayCount, color: '#60b8f0' },
           { label: 'Open tasks', value: tasks.length, color: '#34d399' },
         ].map(stat => (
-          <div key={stat.label} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 12px' }}>
-            <p style={{ margin: 0, fontSize: '11px', color: muted, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>{stat.label}</p>
-            <p style={{ margin: '4px 0 0', fontSize: '34px', color: stat.color, fontWeight: 800, lineHeight: 1 }}>{stat.value}</p>
+          <div key={stat.label} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: muted, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>{stat.label}</p>
+            <p style={{ margin: '6px 0 0', fontSize: '54px', color: stat.color, fontWeight: 800, lineHeight: 1 }}>{stat.value}</p>
           </div>
         ))}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.1fr 2fr', gap: '10px' }}>
-        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '10px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <h2 style={{ margin: 0, fontSize: '18px' }}>Unassigned Tasks</h2>
-          <div style={{ marginTop: '8px', overflow: 'auto', display: 'grid', gap: '6px' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.1fr 1.5fr 1.1fr', gap: '10px' }}>
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <h2 style={{ margin: 0, fontSize: '28px' }}>Unassigned Tasks</h2>
+          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gap: '8px' }}>
             {unassignedTasks.length === 0 ? (
-              <p style={{ color: muted, fontSize: '14px' }}>No unassigned tasks right now.</p>
+              <p style={{ color: muted, fontSize: '22px' }}>No unassigned tasks right now.</p>
             ) : unassignedTasks.slice(0, 20).map(task => {
               const d = daysFromToday(task.due_date)
               const dueLabel = d === null ? 'No due date' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `Due in ${d}d`
               return (
-                <div key={task.id} style={{ border: `1px solid ${border}`, borderRadius: '8px', padding: '8px 10px', background: 'rgba(255,255,255,0.02)' }}>
-                  <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, lineHeight: 1.25 }}>{task.title}</p>
-                  <p style={{ margin: '3px 0 0', fontSize: '12px', color: muted }}>
+                <div key={task.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)' }}>
+                  <p style={{ margin: 0, fontSize: '22px', fontWeight: 700, lineHeight: 1.2 }}>{task.title}</p>
+                  <p style={{ margin: '5px 0 0', fontSize: '16px', color: muted }}>
                     {dueLabel}{task.productions ? ` · #${task.productions.production_number} ${task.productions.title}` : ''}
                   </p>
                 </div>
@@ -258,35 +277,53 @@ export default function TasksSignagePage() {
           </div>
         </div>
 
-        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '10px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <h2 style={{ margin: 0, fontSize: '18px' }}>Staff Workload + Next 14 Days</h2>
-          <div style={{ marginTop: '8px', overflow: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <h2 style={{ margin: 0, fontSize: '28px' }}>Staff Workload</h2>
+          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
             {staffCards.map(({ member, personTasks, personOverdue, personProds }) => (
-              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '10px', background: 'rgba(255,255,255,0.02)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800 }}>
+              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '11px 12px', background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800 }}>
                     {initials(member.name)}
                   </div>
-                  <p style={{ margin: 0, fontSize: '15px', fontWeight: 700 }}>{member.name}</p>
+                  <p style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>{member.name}</p>
                 </div>
-                <p style={{ margin: '0 0 6px', fontSize: '12px', color: muted }}>
+                <p style={{ margin: '0 0 8px', fontSize: '16px', color: muted }}>
                   {personTasks.length} open task{personTasks.length !== 1 ? 's' : ''} · {personOverdue} overdue · {personProds.length} production{personProds.length !== 1 ? 's' : ''} upcoming
                 </p>
-                <div style={{ display: 'grid', gap: '4px' }}>
+                <div style={{ display: 'grid', gap: '5px' }}>
                   {personTasks.slice(0, 2).map(t => (
-                    <p key={t.id} style={{ margin: 0, fontSize: '12px', color: '#d8e4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <p key={t.id} style={{ margin: 0, fontSize: '15px', color: '#d8e4ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       Task: {t.title}
                     </p>
                   ))}
                   {personProds.slice(0, 2).map(pm => (
-                    <p key={`${pm.production_id}-${pm.user_id}`} style={{ margin: 0, fontSize: '12px', color: '#a7c4ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <p key={`${pm.production_id}-${pm.user_id}`} style={{ margin: 0, fontSize: '15px', color: '#a7c4ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       Prod: #{pm.productions?.production_number} {pm.productions?.title}
                     </p>
                   ))}
                   {personTasks.length === 0 && personProds.length === 0 && (
-                    <p style={{ margin: 0, fontSize: '12px', color: muted }}>No current assignments.</p>
+                    <p style={{ margin: 0, fontSize: '15px', color: muted }}>No current assignments.</p>
                   )}
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <h2 style={{ margin: 0, fontSize: '28px' }}>Next 14 Days</h2>
+          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gap: '8px' }}>
+            {upcomingProductionList.length === 0 ? (
+              <p style={{ color: muted, fontSize: '20px' }}>No upcoming productions.</p>
+            ) : upcomingProductionList.map(prod => (
+              <div key={prod.id} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)' }}>
+                <p style={{ margin: 0, fontSize: '20px', fontWeight: 700, lineHeight: 1.2 }}>#{prod.production_number} {prod.title}</p>
+                <p style={{ margin: '5px 0 0', fontSize: '15px', color: muted }}>
+                  {prod.start_datetime ? new Date(prod.start_datetime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'No date'}
+                  {' · '}
+                  {prod.crewCount} crew
+                </p>
               </div>
             ))}
           </div>

@@ -411,6 +411,8 @@ export default function SettingsPage() {
 
   const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 14px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box', minHeight: '44px' }
   const isManager = currentUser?.role === 'Manager'
+  type SettingsTab = 'account' | 'notifications' | 'signage' | 'team' | 'admin'
+  const [activeTab, setActiveTab] = useState<SettingsTab>('account')
 
   const addSchool = async () => {
     if (!newSchoolCode.trim() || !newSchoolName.trim()) return
@@ -480,8 +482,38 @@ export default function SettingsPage() {
         {savedMsg && <span style={{ fontSize: '14px', color: '#22c55e', background: 'rgba(34,197,94,0.1)', padding: '6px 14px', borderRadius: '8px' }}>{savedMsg}</span>}
       </div>
 
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+        {[
+          { id: 'account', label: 'Account' },
+          { id: 'notifications', label: 'Notifications' },
+          { id: 'signage', label: 'Signage' },
+          ...(isManager ? [{ id: 'team', label: 'Team' }, { id: 'admin', label: 'Admin' }] : []),
+        ].map(tab => {
+          const active = activeTab === (tab.id as SettingsTab)
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as SettingsTab)}
+              style={{
+                fontSize: '13px',
+                padding: '8px 14px',
+                borderRadius: '999px',
+                border: `1px solid ${active ? '#1e6cb5' : border}`,
+                background: active ? 'rgba(30,108,181,0.2)' : cardBg,
+                color: active ? '#8dc4ff' : muted,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: active ? 700 : 500,
+              }}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Profile */}
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'account' ? 'block' : 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: 0 }}>Profile</h2>
           <button onClick={() => setEditingProfile(!editingProfile)} style={{ fontSize: '15px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '40px' }}>{editingProfile ? 'Cancel' : 'Edit'}</button>
@@ -521,7 +553,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Appearance */}
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'account' ? 'block' : 'none' }}>
         <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 16px' }}>Appearance</h2>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '44px' }}>
           <div>
@@ -533,7 +565,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Security */}
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'account' ? 'block' : 'none' }}>
         <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 16px' }}>Security</h2>
         <p style={{ fontSize: '14px', color: muted, margin: '0 0 12px' }}>Set or change your login password</p>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' as const }}>
@@ -561,7 +593,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Notifications */}
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'notifications' ? 'block' : 'none' }}>
         <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 16px' }}>Notifications</h2>
         {NOTIF_SETTINGS.map(({ label, desc, emailKey, inappKey }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: `0.5px solid ${border}` }}>
@@ -585,7 +617,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Daily briefing email preview */}
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'notifications' ? 'block' : 'none' }}>
         <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 8px' }}>Daily briefing email</h2>
         <p style={{ fontSize: '14px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
           Preview the automated morning email (your tasks first, then the full team calendar for the day). Sends Monday–Friday only, at the configured local time. This is what you would receive; other staff see their own version.
@@ -739,7 +771,7 @@ export default function SettingsPage() {
       </div>
 
       {/* Signage links */}
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'signage' ? 'block' : 'none' }}>
         <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 8px' }}>Office signage screens</h2>
         <p style={{ fontSize: '14px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
           Use these links for your wall displays. Open in full-screen on each TV/browser for always-on office dashboards.
@@ -766,7 +798,7 @@ export default function SettingsPage() {
 
       {/* Team management — manager only */}
       {isManager && (
-        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px' }}>
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'team' ? 'block' : 'none' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 16px' }}>Team</h2>
 
           {team.map(member => (
@@ -846,7 +878,7 @@ export default function SettingsPage() {
 
       {/* ── Admin Settings ── */}
       {isManager && (
-        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px', display: activeTab === 'admin' ? 'block' : 'none' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Admin settings</h2>
           <p style={{ fontSize: '13px', color: muted, margin: '0 0 14px' }}>System-wide configuration</p>
           <div style={{ marginBottom: '12px' }}>
@@ -864,7 +896,7 @@ export default function SettingsPage() {
 
       {/* ── Email Templates ── */}
       {isManager && (
-        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px', display: activeTab === 'admin' ? 'block' : 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', gap: '8px' }}>
             <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Email templates</h2>
@@ -943,7 +975,7 @@ export default function SettingsPage() {
 
       {/* ── Sign-up tiers ── */}
       {isManager && (
-        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px', display: activeTab === 'admin' ? 'block' : 'none' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Student sign-up tiers</h2>
           <p style={{ fontSize: '13px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
             Rules for how often students in each tier can sign up for crew events. Manager override is always available regardless of these rules.
@@ -999,7 +1031,7 @@ export default function SettingsPage() {
       )}
 
       {/* ── Schools / Locations ── */}
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px' }}>
+      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', display: isManager ? (activeTab === 'admin' ? 'block' : 'none') : (activeTab === 'account' ? 'block' : 'none') }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: 0 }}>Schools &amp; locations</h2>
