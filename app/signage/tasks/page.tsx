@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createClient } from '@/lib/supabase'
 
 interface TaskRow {
   id: string
@@ -48,6 +49,7 @@ function initials(name: string): string {
 }
 
 export default function TasksSignagePage() {
+  const supabase = createClient()
   const [now, setNow] = useState(new Date())
   const [viewport, setViewport] = useState({ w: 1920, h: 1080 })
   const [loading, setLoading] = useState(true)
@@ -59,8 +61,43 @@ export default function TasksSignagePage() {
     const res = await fetch('/api/signage/tasks-data', { cache: 'no-store' })
     const payload = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setTasks([])
-      setTeam([])
+      // Fallback for any server-route failure so signage still renders.
+      const [tasksRes, teamRes] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id,title,priority,due_date,assigned_to,production_id,purchase_request,productions(production_number,title)')
+          .not('status', 'ilike', 'complete')
+          .order('due_date', { ascending: true, nullsFirst: false }),
+        supabase
+          .from('team')
+          .select('id,name,avatar_color,role')
+          .eq('active', true)
+          .order('name'),
+      ])
+      const fallbackTasks = ((tasksRes.data || []) as Array<{
+        id: string
+        title: string
+        priority: string
+        due_date: string | null
+        assigned_to: string | null
+        production_id: string | null
+        purchase_request: boolean | null
+        productions?: { production_number: number; title: string } | { production_number: number; title: string }[] | null
+      }>).map(row => {
+        const prod = Array.isArray(row.productions) ? row.productions[0] || null : row.productions || null
+        return {
+          id: row.id,
+          title: row.title,
+          priority: row.priority,
+          due_date: row.due_date,
+          assigned_to: row.assigned_to,
+          production_id: row.production_id,
+          purchase_request: !!row.purchase_request,
+          productions: prod ? { production_number: prod.production_number, title: prod.title } : null,
+        }
+      })
+      setTasks(fallbackTasks)
+      setTeam((teamRes.data as TeamMember[]) || [])
       setProdMembers([])
       setLoading(false)
       return
@@ -92,7 +129,7 @@ export default function TasksSignagePage() {
     setTeam((payload.team as TeamMember[]) || [])
     setProdMembers((payload.prodMembers as ProductionMemberRow[]) || [])
     setLoading(false)
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     loadData()

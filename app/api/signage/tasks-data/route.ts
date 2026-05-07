@@ -17,7 +17,7 @@ export async function GET() {
   const end = new Date(start)
   end.setDate(end.getDate() + 14)
 
-  const [tasksRes, teamRes, prodsRes, pmRes] = await Promise.all([
+  const [tasksRes, teamRes, prodsRes] = await Promise.all([
     supabase
       .from('tasks')
       .select('id,title,priority,due_date,assigned_to,production_id,purchase_request,status,productions(production_number,title)')
@@ -33,14 +33,11 @@ export async function GET() {
       .select('id,production_number,title,start_datetime,status')
       .gte('start_datetime', start.toISOString())
       .lt('start_datetime', end.toISOString()),
-    supabase
-      .from('production_members')
-      .select('production_id,user_id'),
   ])
 
-  if (tasksRes.error || teamRes.error || prodsRes.error || pmRes.error) {
+  if (tasksRes.error || teamRes.error || prodsRes.error) {
     return NextResponse.json({
-      error: tasksRes.error?.message || teamRes.error?.message || prodsRes.error?.message || pmRes.error?.message || 'Query failed',
+      error: tasksRes.error?.message || teamRes.error?.message || prodsRes.error?.message || 'Query failed',
     }, { status: 500 })
   }
 
@@ -49,10 +46,20 @@ export async function GET() {
     return status !== 'complete' && status !== 'abandoned' && status !== 'cancelled'
   })
   const prodById = new Map(upcomingProds.map((p: { id: string }) => [p.id, p]))
+  const prodIds = upcomingProds.map((p: { id: string }) => p.id)
+  let prodMembers: Array<{ production_id: string; user_id: string; productions: { production_number: number; title: string; start_datetime: string | null; status: string | null } | null }> = []
 
-  const prodMembers = (pmRes.data || [])
-    .filter((row: { production_id: string }) => prodById.has(row.production_id))
-    .map((row: { production_id: string; user_id: string }) => {
+  if (prodIds.length > 0) {
+    const { data: pmRows, error: pmErr } = await supabase
+      .from('production_members')
+      .select('production_id,user_id')
+      .in('production_id', prodIds)
+
+    if (pmErr) {
+      return NextResponse.json({ error: pmErr.message }, { status: 500 })
+    }
+
+    prodMembers = (pmRows || []).map((row: { production_id: string; user_id: string }) => {
       const prod = prodById.get(row.production_id) as { production_number: number; title: string; start_datetime: string | null; status: string | null } | undefined
       return {
         production_id: row.production_id,
@@ -67,6 +74,7 @@ export async function GET() {
           : null,
       }
     })
+  }
 
   return NextResponse.json({
     tasks: tasksRes.data || [],
