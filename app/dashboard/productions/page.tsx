@@ -315,7 +315,7 @@ function ProductionsPageContent() {
           supabase
             .from('production_activity')
             .select('production_id')
-            .eq('action', 'requested_complete')
+            .in('action', ['requested_complete', 'marked_complete'])
             .in('production_id', ids)
         )
       )
