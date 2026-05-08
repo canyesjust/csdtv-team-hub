@@ -143,6 +143,7 @@ export default function TasksPage() {
   const [subtaskCounts, setSubtaskCounts] = useState<Record<string, { total: number; done: number }>>({})
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const overflowRef = useRef<HTMLDivElement | null>(null)
+  const newTaskTitleRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -186,6 +187,36 @@ export default function TasksPage() {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [selectedTask])
+
+  useEffect(() => {
+    if (!showNewTask) return
+    const id = requestAnimationFrame(() => newTaskTitleRef.current?.focus())
+    return () => cancelAnimationFrame(id)
+  }, [showNewTask])
+
+  // Alt+Shift+N: new task (avoid Cmd/Ctrl+N and Cmd/Ctrl+Shift+N browser bindings)
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      const el = target as HTMLElement | undefined
+      if (!el) return false
+      const tag = el.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+      if (el.isContentEditable) return true
+      return false
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || !e.shiftKey || e.key.toLowerCase() !== 'n') return
+      if (e.metaKey || e.ctrlKey) return
+      if (isTypingTarget(e.target)) return
+      e.preventDefault()
+      setShowTemplates(false)
+      setShowOverflow(false)
+      setNewTask(p => ({ ...p, assigned_to: p.assigned_to || currentUser?.id || '' }))
+      setShowNewTask(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [currentUser?.id])
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -336,8 +367,7 @@ export default function TasksPage() {
 
   useEffect(() => {
     if (isStudentInternUser) setScope('mine')
-    else if (currentUser && scope === 'mine') setScope('team')
-  }, [isStudentInternUser, currentUser, scope])
+  }, [isStudentInternUser])
 
   const getMember = (id: string | null) => id ? team.find(m => m.id === id) || null : null
 
@@ -766,10 +796,12 @@ export default function TasksPage() {
           <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: denseMode ? '14px' : '24px', gap: '12px', flexWrap: 'wrap' as const }}>
             <div>
               <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>Tasks</h1>
-              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{briefingText}</p>
+              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{briefingText}<span style={{ opacity: 0.9 }}> · Alt+Shift+N new task</span></p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
               <button
+                type="button"
+                title="New task (Alt+Shift+N)"
                 onClick={() => {
                   setShowNewTask(v => {
                     const next = !v
@@ -952,7 +984,7 @@ export default function TasksPage() {
           {showNewTask && (
             <div style={{ ...uiStyles.card, padding: denseMode ? '14px' : '18px', marginBottom: denseMode ? '12px' : '20px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: '0 0 14px' }}>New task</h3>
-              <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} placeholder="Task title" style={{ ...inputStyle, marginBottom: '8px' }} />
+              <input ref={newTaskTitleRef} value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} placeholder="Task title" style={{ ...inputStyle, marginBottom: '8px' }} />
               <textarea value={newTask.description} onChange={e => setNewTask(p => ({ ...p, description: e.target.value }))} placeholder="Description (optional)" style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const, marginBottom: '8px' }} />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', marginBottom: '8px' }}>
                 <select value={newTask.assigned_to} onChange={e => setNewTask(p => ({ ...p, assigned_to: e.target.value }))} style={inputStyle}>
@@ -1063,7 +1095,7 @@ export default function TasksPage() {
                   setCompletedTasks(prev => [...movedTasks, ...prev])
                   if (selectedTask && selectedIds.has(selectedTask.id)) closePanel()
                   setSelectedIds(new Set())
-                }} style={{ padding: '6px 12px', borderRadius: '6px', background: success, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600 }}>Complete all</button>
+                }} style={{ padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600 }}>Complete all</button>
               )}
               <select onChange={async e => {
                 if (!e.target.value) return
@@ -1220,9 +1252,11 @@ export default function TasksPage() {
                         {task.status !== 'pending' && renderStatusPill(task.status)}
                         {task.status !== 'complete' && (
                           <button
+                            type="button"
                             onClick={e => { e.stopPropagation(); if (!isCompleting) completeTask(task) }}
                             disabled={isCompleting}
-                            style={{ padding: denseMode ? '4px 8px' : '5px 10px', borderRadius: '999px', background: success, color: '#fff', border: 'none', cursor: isCompleting ? 'default' : 'pointer', fontSize: denseMode ? '10px' : '11px', fontWeight: 700, fontFamily: 'inherit' }}
+                            title="Mark complete"
+                            style={{ padding: denseMode ? '4px 8px' : '5px 10px', borderRadius: '999px', background: 'transparent', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', cursor: isCompleting ? 'default' : 'pointer', fontSize: denseMode ? '10px' : '11px', fontWeight: 700, fontFamily: 'inherit', opacity: isCompleting ? 0.5 : 1 }}
                           >
                             Complete
                           </button>
@@ -1255,8 +1289,10 @@ export default function TasksPage() {
                       </p>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <button
+                          type="button"
                           onClick={() => completeTask(task)}
-                          style={{ padding: '4px 8px', borderRadius: '999px', background: success, color: '#fff', border: 'none', cursor: 'pointer', fontSize: '10px', fontWeight: 700, fontFamily: 'inherit' }}
+                          title="Mark checklist item complete"
+                          style={{ padding: '4px 8px', borderRadius: '999px', background: 'transparent', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', cursor: 'pointer', fontSize: '10px', fontWeight: 700, fontFamily: 'inherit' }}
                         >
                           Complete
                         </button>
@@ -1323,8 +1359,9 @@ export default function TasksPage() {
                     </button>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => completeTask(selectedTask)}
-                      style={{ fontSize: '13px', padding: '8px 12px', borderRadius: '8px', background: success, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
+                      style={{ fontSize: '13px', padding: '8px 12px', borderRadius: '8px', background: 'transparent', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}
                     >
                       Mark complete
                     </button>
