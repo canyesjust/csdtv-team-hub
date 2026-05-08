@@ -202,6 +202,7 @@ export default function ProductionDetailPage() {
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [completeChecks, setCompleteChecks] = useState({ deliverables: false, organizer: false, files: false, quality: false })
   const [sendingComplete, setSendingComplete] = useState(false)
+  const [clearingCompleteRequested, setClearingCompleteRequested] = useState(false)
   const [showCopySetup, setShowCopySetup] = useState(false)
   const [copyTargetId, setCopyTargetId] = useState('')
   const [allProductions, setAllProductions] = useState<{ id: string; production_number: number; title: string }[]>([])
@@ -813,6 +814,37 @@ export default function ProductionDetailPage() {
     } catch { toast('Failed to send request', 'error') }
   }, [production, currentUser, uuid, supabase, logActivity])
 
+  const clearCompleteRequested = useCallback(async () => {
+    if (!production || !currentUser || !uuid) return
+    setClearingCompleteRequested(true)
+    try {
+      const { error } = await supabase.from('productions').update({ status: 'In Progress' }).eq('id', uuid)
+      if (error) {
+        toast(`Failed to clear Complete Requested: ${error.message}`, 'error')
+        return
+      }
+      setProduction(prev => prev ? { ...prev, status: 'In Progress' } : prev)
+      await supabase.from('production_activity').insert({
+        production_id: uuid,
+        user_id: currentUser.id,
+        action: 'requested_in_progress',
+        detail: 'Removed Complete Requested and returned to In Progress',
+      })
+      setActivity(prev => [{
+        id: Date.now().toString(),
+        production_id: uuid,
+        user_id: currentUser.id,
+        action: 'requested_in_progress',
+        detail: 'Removed Complete Requested and returned to In Progress',
+        created_at: new Date().toISOString(),
+        team: { name: currentUser.name },
+      }, ...prev])
+      toast('Complete Requested removed', 'success')
+    } finally {
+      setClearingCompleteRequested(false)
+    }
+  }, [production, currentUser, uuid, supabase])
+
   // Open organizer email in user's default mail client (Outlook) via mailto.
   // This replaces the previous send-via-Resend approach so the user can review
   // and edit before sending. Activity is logged when the button is clicked.
@@ -1407,19 +1439,32 @@ export default function ProductionDetailPage() {
                 )}
               </p>
             )}
-            {production.organizer_email && (
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+              {production.organizer_email && (
                 <button onClick={() => setShowEmailModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.info.background, color: infoTone, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ✉ Email organizer
                 </button>
+              )}
+              {production.organizer_email && (
                 <button onClick={requestInProgress} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.warning.background, color: warningTone, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ◴ Request In Progress
                 </button>
+              )}
+              {effectiveProdStatus === 'Complete Requested' && (
+                <button
+                  onClick={clearCompleteRequested}
+                  disabled={clearingCompleteRequested}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.warning.background, color: warningTone, border: `0.5px solid ${border}`, cursor: clearingCompleteRequested ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: clearingCompleteRequested ? 0.7 : 1 }}
+                >
+                  {clearingCompleteRequested ? '…Removing request' : '↺ Remove complete request'}
+                </button>
+              )}
+              {production.organizer_email && (
                 <button onClick={() => setShowCompleteModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: statusTone.success.background, color: successTone, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   ✓ Mark complete
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
           {production.thumbnail_url && production.thumbnail_url.startsWith('http') && (
             <div style={{ width: '120px', height: '68px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>

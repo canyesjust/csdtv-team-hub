@@ -190,6 +190,8 @@ function ProductionsPageContent() {
   const [organizerYoutubeEmailedIds, setOrganizerYoutubeEmailedIds] = useState<Set<string>>(() => new Set())
   /** Production IDs with completion requested logged in activity, used when status sync lags. */
   const [completeRequestedIds, setCompleteRequestedIds] = useState<Set<string>>(() => new Set())
+  /** Production IDs explicitly moved back to In Progress after a completion request. */
+  const [requestedInProgressIds, setRequestedInProgressIds] = useState<Set<string>>(() => new Set())
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -283,6 +285,7 @@ function ProductionsPageContent() {
 
     const organizerEmailActs: { production_id: string; detail: string | null }[] = []
     const completeRequestedActs: { production_id: string }[] = []
+    const requestedInProgressActs: { production_id: string }[] = []
     const pendingLivestreamIds = cleaned
       .filter(p => {
         const t = (p.request_type_label || p.type || '').toLowerCase()
@@ -322,6 +325,18 @@ function ProductionsPageContent() {
       chunkResults.forEach(res => {
         if (res.data) completeRequestedActs.push(...(res.data as { production_id: string }[]))
       })
+      const inProgressResults = await Promise.all(
+        chunks.map(ids =>
+          supabase
+            .from('production_activity')
+            .select('production_id')
+            .eq('action', 'requested_in_progress')
+            .in('production_id', ids)
+        )
+      )
+      inProgressResults.forEach(res => {
+        if (res.data) requestedInProgressActs.push(...(res.data as { production_id: string }[]))
+      })
     }
     const ytMailSet = new Set<string>()
     for (const row of organizerEmailActs || []) {
@@ -332,6 +347,7 @@ function ProductionsPageContent() {
     }
     setOrganizerYoutubeEmailedIds(ytMailSet)
     setCompleteRequestedIds(new Set((completeRequestedActs || []).map(r => r.production_id)))
+    setRequestedInProgressIds(new Set((requestedInProgressActs || []).map(r => r.production_id)))
 
     const latestSync = (prodsData || []).reduce<string | null>((max, p) =>
       p.synced_at && (!max || p.synced_at > max) ? p.synced_at : max, null)
@@ -556,8 +572,9 @@ function ProductionsPageContent() {
   const isCompleteRequested = useCallback((p: Production) => {
     if (p.status === 'Complete Requested') return true
     if (p.status === 'Complete' || p.status === 'Abandoned') return false
+    if (requestedInProgressIds.has(p.id)) return false
     return completeRequestedIds.has(p.id)
-  }, [completeRequestedIds])
+  }, [completeRequestedIds, requestedInProgressIds])
   const getProgress = (p: Production) => {
     const items = p.checklist_items || []
     if (items.length === 0) return null
@@ -689,7 +706,8 @@ function ProductionsPageContent() {
   // Pipeline groups — keep all non-complete/non-abandoned visible regardless of date.
   const inProgress = useMemo(() => filtered.filter(p => p.status === 'In Progress' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
   const ideaForward = useMemo(() => filtered.filter(p => p.status === 'Idea/Request' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
-  const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled' || isCompleteRequested(p)), [filtered, isCompleteRequested])
+  const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
+  const completeRequestedForward = useMemo(() => filtered.filter(p => isCompleteRequested(p)), [filtered, isCompleteRequested])
   const pastArchiveProds = useMemo(() => filtered.filter(p => {
     return p.status === 'Complete'
   }), [filtered])
@@ -1201,6 +1219,12 @@ function ProductionsPageContent() {
                     {approvedForward.length === 0 ? (
                       <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No approved / scheduled productions</p>
                     ) : approvedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                  </div>
+                  <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
+                    {colHeader('Complete Requested', completeRequestedForward.length, 'review')}
+                    {completeRequestedForward.length === 0 ? (
+                      <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No completion requests</p>
+                    ) : completeRequestedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
                   </div>
                   {miscPipelineProds.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
