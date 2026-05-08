@@ -25,6 +25,23 @@ const TYPE_SHORT: Record<string, string> = {
 const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const DOW_MAP: Record<number, string> = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' }
 
+/** Match hub: strip numeric prefix from synced status values. */
+function normalizeProductionStatus(status: string | null | undefined): string {
+  return status ? status.replace(/^\d+\s*-\s*/, '') : ''
+}
+
+/** Calendar shows only approved-or-later pipeline (not ideas, not abandoned). */
+const SIGNAGE_CALENDAR_STATUSES = new Set([
+  'Approved/Scheduled',
+  'In Progress',
+  'Complete Requested',
+  'Complete',
+])
+
+function showProductionOnSignageCalendar(p: Production): boolean {
+  return SIGNAGE_CALENDAR_STATUSES.has(normalizeProductionStatus(p.status))
+}
+
 function getSunday(d: Date): Date { const dt = new Date(d); dt.setDate(dt.getDate() - dt.getDay()); dt.setHours(0, 0, 0, 0); return dt }
 function getMondayStr(d: Date): string { const dt = new Date(d); const day = dt.getDay(); dt.setDate(dt.getDate() + (day === 0 ? -6 : 1 - day)); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}` }
 function isSameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate() }
@@ -96,7 +113,12 @@ export default function SignagePage() {
   const getProdsForDay = (date: Date) => {
     const ds = new Date(date.getFullYear(), date.getMonth(), date.getDate())
     const de = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59)
-    return productions.filter(p => { if (!p.start_datetime) return false; const s = new Date(p.start_datetime); return s >= ds && s <= de })
+    return productions.filter(p => {
+      if (!showProductionOnSignageCalendar(p)) return false
+      if (!p.start_datetime) return false
+      const s = new Date(p.start_datetime)
+      return s >= ds && s <= de
+    })
   }
 
   const getHoursForUser = (userId: string): string | null => {
@@ -109,14 +131,23 @@ export default function SignagePage() {
     return def ? ((def as any)[dayKey] || null) : null
   }
 
-  const inProgressProds = productions.filter(p => p.status === 'In Progress')
+  const inProgressProds = productions.filter(p => normalizeProductionStatus(p.status) === 'In Progress')
   const endOfWeek = new Date(sunday); endOfWeek.setDate(endOfWeek.getDate() + 7)
-  const thisWeekProds = productions.filter(p => { if (!p.start_datetime) return false; const d = new Date(p.start_datetime); return d >= sunday && d < endOfWeek })
+  const thisWeekProds = productions.filter(p => {
+    if (!showProductionOnSignageCalendar(p) || !p.start_datetime) return false
+    const d = new Date(p.start_datetime)
+    return d >= sunday && d < endOfWeek
+  })
   const currentSchoolYear = (() => { const m = now.getMonth(); const y = now.getFullYear(); return m >= 7 ? `${y + 1}` : `${y}` })()
   const ytdCompleted = productions.filter(p => p.status === 'Complete' && p.school_year === currentSchoolYear).length
   const ytdTotal = productions.filter(p => p.school_year === currentSchoolYear).length
   const ytdVidsProduced = productions.filter(p => p.school_year === currentSchoolYear).reduce((s, p) => s + ((p as any).deliverables_count || 0), 0)
-  const nextProd = productions.find(p => { if (!p.start_datetime || p.status === 'Complete' || p.status === 'Cancelled') return false; return new Date(p.start_datetime) > now })
+  const nextProd = productions.find(p => {
+    if (!p.start_datetime || !showProductionOnSignageCalendar(p)) return false
+    const s = normalizeProductionStatus(p.status)
+    if (s === 'Complete') return false
+    return new Date(p.start_datetime) > now
+  })
   const countdown = (() => {
     if (!nextProd?.start_datetime) return null
     const diff = new Date(nextProd.start_datetime).getTime() - now.getTime()
@@ -202,7 +233,7 @@ export default function SignagePage() {
               const past = date < today && !isSameDay(date, today)
               const todayCell = isSameDay(date, today)
               const isWeekend = di === 0 || di === 6
-              const hasActive = dayProds.some(p => p.status === 'In Progress')
+                  const hasActive = dayProds.some(p => normalizeProductionStatus(p.status) === 'In Progress')
               const opacity = past ? (hasActive ? 0.8 : 0.3) : 1
 
               return (
@@ -241,8 +272,9 @@ export default function SignagePage() {
                     const tc = TYPE_COLORS[p.request_type_label || ''] || '#94a3b8'
                     const members = p.production_members || []
                     const ini = members.map(m => m.team ? getInitials(m.team.name) : '').filter(Boolean).join(' ')
-                    const done = p.status === 'Complete'
-                    const active = p.status === 'In Progress'
+                    const st = normalizeProductionStatus(p.status)
+                    const done = st === 'Complete'
+                    const active = st === 'In Progress'
                     const d = p.start_datetime ? new Date(p.start_datetime) : null
                     const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
                     const loc = getSchoolName(p.filming_location) || p.filming_location || getSchoolName(p.school_department) || ''
