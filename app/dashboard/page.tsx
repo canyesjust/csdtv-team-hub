@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
@@ -10,6 +10,7 @@ import { ZoneHeader } from './components/ZoneHeader'
 import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
+import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
@@ -21,6 +22,7 @@ interface Task {
 interface Production {
   id: string; production_number: number; title: string
   request_type_label: string | null; type: string | null; status: string | null
+  school_year?: string | null
   start_datetime: string | null; filming_location: string | null; school_department: string | null
   checklist_items?: { id: string; title: string; completed: boolean }[]
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
@@ -89,6 +91,9 @@ export default function DashboardPage() {
   const [crewSlotsFilled, setCrewSlotsFilled] = useState(0)
   const [managerRiskCounts, setManagerRiskCounts] = useState({ unassigned: 0, blocked: 0, overdue: 0 })
   const [overdueOwnerRows, setOverdueOwnerRows] = useState<OverdueOwnerRow[]>([])
+  const [schoolYearFilter, setSchoolYearFilter] = useState(currentSchoolYearKey())
+  const [schoolYearOptions, setSchoolYearOptions] = useState<string[]>([])
+  const [productionYearRows, setProductionYearRows] = useState<Array<{ school_year: string | null; start_datetime: string | null; status: string | null }>>([])
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -128,20 +133,29 @@ export default function DashboardPage() {
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
       const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
 
-      const [tasksRes, prodMembersRes, teamRes, countRes, todayProdsRes, schedDefaultRes, activityRes] = await Promise.all([
+      const [tasksRes, prodMembersRes, teamRes, countRes, todayProdsRes, schedDefaultRes, activityRes, schoolYearRowsRes] = await Promise.all([
         supabase.from('tasks').select('*, productions(title)').eq('assigned_to', user.id).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(20),
         supabase.from('production_members').select('production_id').eq('user_id', user.id),
         supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
         supabase.from('productions').select('id', { count: 'exact', head: true }),
-        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
+        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
         supabase.from('schedule_defaults').select(SCHEDULE_DAY_SELECT).eq('user_id', user.id).single(),
         supabase.from('production_activity').select('id, action, detail, created_at, production_id, user_id').order('created_at', { ascending: false }).limit(10),
+        supabase.from('productions').select('school_year,start_datetime,status'),
       ])
 
       setMyTasks(tasksRes.data || [])
       setTeamMembers(teamRes.data || [])
       setTotalProductions(countRes.count || 0)
       setTodayProductions((todayProdsRes.data as any) || [])
+      const yearSet = new Set<string>()
+      ;((schoolYearRowsRes.data as Array<{ school_year: string | null; start_datetime: string | null }> | null) || []).forEach((row) => {
+        const y = resolvedSchoolYearKey(row)
+        if (y) yearSet.add(y)
+      })
+      yearSet.add(currentSchoolYearKey())
+      setSchoolYearOptions(Array.from(yearSet).sort((a, b) => b.localeCompare(a)))
+      setProductionYearRows((schoolYearRowsRes.data as Array<{ school_year: string | null; start_datetime: string | null; status: string | null }> | null) || [])
 
       const activityRows = activityRes.error ? [] : (activityRes.data || [])
       const actUserIds = [...new Set(activityRows.map((a: { user_id: string | null }) => a.user_id).filter(Boolean))] as string[]
@@ -241,7 +255,7 @@ export default function DashboardPage() {
         const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
         const { data: prods } = await supabase
           .from('productions')
-          .select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, checklist_items(id, title, completed)')
+          .select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, checklist_items(id, title, completed)')
           .in('id', ids)
           .neq('status', 'Complete')
           .order('start_datetime', { ascending: true, nullsFirst: false })
@@ -253,7 +267,7 @@ export default function DashboardPage() {
       if ((user.role || '').toLowerCase() === 'manager') {
         const { data: allManagerProds } = await supabase
           .from('productions')
-          .select('id, title, production_number, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)')
+          .select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)')
           .not('status', 'in', '("Complete","Abandoned")')
           .order('start_datetime', { ascending: true, nullsFirst: false })
           .limit(200)
@@ -356,7 +370,7 @@ export default function DashboardPage() {
       const d = dayDiffFromToday(t.due_date)
       return d !== null && d < 0
     })
-    if (todayProductions.length > 0) parts.push(`${todayProductions.length} production${todayProductions.length > 1 ? 's' : ''} happening today`)
+    if (filteredTodayProductions.length > 0) parts.push(`${filteredTodayProductions.length} production${filteredTodayProductions.length > 1 ? 's' : ''} happening today`)
     if (overdueTasks.length > 0) parts.push(`${overdueTasks.length} overdue task${overdueTasks.length > 1 ? 's' : ''} need attention`)
     else if (todayTasks.length > 0) parts.push(`${todayTasks.length} task${todayTasks.length > 1 ? 's' : ''} due today`)
     if (parts.length === 0 && myTasks.length === 0) return "You're all caught up — no open tasks."
@@ -383,6 +397,36 @@ export default function DashboardPage() {
     return { done, total: items.length, pct: Math.round((done / items.length) * 100) }
   }
 
+  const filteredTodayProductions = useMemo(
+    () => todayProductions.filter(p => inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)),
+    [todayProductions, schoolYearFilter]
+  )
+  const filteredMyProductions = useMemo(
+    () => myProductions.filter(p => inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)),
+    [myProductions, schoolYearFilter]
+  )
+  const filteredManagerProductions = useMemo(
+    () => managerProductions.filter(p => inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)),
+    [managerProductions, schoolYearFilter]
+  )
+  const totalProductionsForFilter = useMemo(() => {
+    const all = [...todayProductions, ...myProductions, ...managerProductions]
+    const seen = new Set<string>()
+    let count = 0
+    for (const p of all) {
+      if (seen.has(p.id)) continue
+      seen.add(p.id)
+      if (inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)) count += 1
+    }
+    return count
+  }, [todayProductions, myProductions, managerProductions, schoolYearFilter])
+  const yearProdCountForFilter = useMemo(() => {
+    return productionYearRows.filter((p) => {
+      if ((p.status || '').toLowerCase() !== 'complete') return false
+      return inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)
+    }).length
+  }, [productionYearRows, schoolYearFilter])
+
   const overdueCount = myTasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length
   const urgentCount = myTasks.filter(t => t.priority === 'high' || t.priority === 'day of').length
   const dueSoonCount = myTasks.filter(t => {
@@ -391,7 +435,7 @@ export default function DashboardPage() {
     return days !== null && days >= 0 && days <= 2
   }).length
   const blockedCount = myTasks.filter(t => Boolean(t.blocked_by)).length
-  const atRiskProductions = myProductions.filter(prod => {
+  const atRiskProductions = filteredMyProductions.filter(prod => {
     const progress = getProgress(prod)
     const startsSoon = (() => {
       const days = dayDiffFromToday(prod.start_datetime)
@@ -402,7 +446,7 @@ export default function DashboardPage() {
     return startsSoon && (checklistMissing || lowProgress)
   }).slice(0, 4)
   const isManager = (currentUser?.role || '').toLowerCase() === 'manager'
-  const startsSoonManager = managerProductions.filter(p => {
+  const startsSoonManager = filteredManagerProductions.filter(p => {
     const days = dayDiffFromToday(p.start_datetime)
     return days !== null && days >= 0 && days <= 2
   })
@@ -411,7 +455,7 @@ export default function DashboardPage() {
     const members = p.production_members || []
     return members.length > 0 && members.length < 2
   })
-  const missingProdMetadata = managerProductions.filter(p => !p.start_datetime || !(p.filming_location || p.school_department))
+  const missingProdMetadata = filteredManagerProductions.filter(p => !p.start_datetime || !(p.filming_location || p.school_department))
   const crewFillPct = crewSlotsTotal > 0 ? Math.round((crewSlotsFilled / crewSlotsTotal) * 100) : 0
 
   const queueItems: QueueItem[] = [
@@ -497,7 +541,7 @@ export default function DashboardPage() {
 
   const QUICK_ACTIONS = [
     { href: '/dashboard/tasks', label: 'New task', desc: 'Create a task', color: 'var(--brand-primary)', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> },
-    { href: '/dashboard/productions', label: 'Productions', desc: `${totalProductions} total`, color: warning, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
+    { href: '/dashboard/productions', label: 'Productions', desc: `${totalProductionsForFilter} total`, color: warning, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
     { href: '/dashboard/schedule', label: 'My schedule', desc: 'Set your hours', color: success, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
     { href: '/dashboard/knowledge', label: 'Knowledge base', desc: 'Guides & docs', color: review, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg> },
   ]
@@ -507,7 +551,13 @@ export default function DashboardPage() {
       {/* ============== HEADER ============== */}
       <header style={{ marginBottom: '20px' }}>
         <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>{greeting()}, {currentUser?.name?.split(' ')[0]}</h1>
-        <p style={{ fontSize: '14px', color: muted, margin: '0 0 6px' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, margin: '0 0 6px' }}>
+          <p style={{ fontSize: '14px', color: muted, margin: 0 }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+          <select value={schoolYearFilter} onChange={e => setSchoolYearFilter(e.target.value)} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '8px', padding: '5px 10px', fontSize: '12px', color: text, fontFamily: 'inherit', outline: 'none' }}>
+            <option value={ALL_SCHOOL_YEARS}>All school years</option>
+            {schoolYearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
         <p style={{ fontSize: '14px', color: urgentCount > 0 || overdueCount > 0 ? warning : muted, margin: 0 }}>{getMorningBriefing()}</p>
         {loadError && <p style={{ margin: '8px 0 0', fontSize: '13px', color: danger }}>{loadError}</p>}
       </header>
@@ -534,24 +584,24 @@ export default function DashboardPage() {
             <span style={{ fontSize: '13px', color: danger, fontWeight: 500 }}>{overdueCount} overdue</span>
           </div>
         )}
-        {todayProductions.length > 0 && (
+        {filteredTodayProductions.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: infoBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={info} strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-            <span style={{ fontSize: '13px', color: info, fontWeight: 500 }}>{todayProductions.length} production{todayProductions.length > 1 ? 's' : ''} today</span>
+            <span style={{ fontSize: '13px', color: info, fontWeight: 500 }}>{filteredTodayProductions.length} production{filteredTodayProductions.length > 1 ? 's' : ''} today</span>
           </div>
         )}
       </div>
 
       {/* ============== ZONE: TODAY ============== */}
-      {todayProductions.length > 0 && (
+      {filteredTodayProductions.length > 0 && (
         <section style={uiStyles.zoneSection}>
           <ZoneHeader
             label="Today"
-            hint={`${todayProductions.length} production${todayProductions.length > 1 ? 's' : ''} on the schedule`}
+            hint={`${filteredTodayProductions.length} production${filteredTodayProductions.length > 1 ? 's' : ''} on the schedule`}
             accent={info}
           />
           <div className="today-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '12px' }}>
-            {todayProductions.map(p => {
+            {filteredTodayProductions.map(p => {
               const d = p.start_datetime ? new Date(p.start_datetime) : null
               const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
               const loc = getSchoolName(p.filming_location) || getSchoolName(p.school_department) || p.filming_location || ''
@@ -706,12 +756,12 @@ export default function DashboardPage() {
               <Link href="/dashboard/productions" style={uiStyles.panelLink}>View all →</Link>
             </div>
             <div style={{ flex: 1 }}>
-              {myProductions.length === 0 ? (
+              {filteredMyProductions.length === 0 ? (
                 <div style={{ padding: '32px 18px', textAlign: 'center' as const }}>
                   <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No active productions</p>
                   <Link href="/dashboard/productions" style={uiStyles.panelLink}>Browse productions →</Link>
                 </div>
-              ) : myProductions.slice(0, 8).map((prod, i, arr) => {
+              ) : filteredMyProductions.slice(0, 8).map((prod, i, arr) => {
                 const progress = getProgress(prod)
                 const typeLabel = prod.request_type_label || prod.type || 'Unknown'
                 return (
@@ -880,7 +930,7 @@ export default function DashboardPage() {
               {[
                 { label: 'This week', items: [`${weekStats.prodsCompleted} productions`, `${weekStats.tasksCompleted} tasks`, `${weekStats.videosPublished} videos`], color: info },
                 { label: 'This month', items: [`${monthStats.prodsCompleted} productions`, `${monthStats.tasksCompleted} tasks`, `${monthStats.videosPublished} videos`], color: review },
-                { label: 'Year pace', items: [`${yearProdCount} completed`, `${Math.round(yearProdCount / Math.max(1, new Date().getMonth() + 1) * 12)} projected/yr`], color: success },
+                { label: 'Year pace', items: [`${yearProdCountForFilter} completed`, `${Math.round(yearProdCountForFilter / Math.max(1, new Date().getMonth() + 1) * 12)} projected/yr`], color: success },
                 ...(totalVidsProduced > 0 || totalYtViews > 0 ? [{ label: 'Output', items: [`${totalVidsProduced} videos produced`, ...(totalYtViews > 0 ? [`${totalYtViews.toLocaleString()} YT views`] : [])], color: danger }] : []),
               ].map(s => (
                 <div key={s.label} style={{ ...uiStyles.cardSoft, padding: '12px 14px' }}>

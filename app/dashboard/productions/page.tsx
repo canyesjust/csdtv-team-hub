@@ -12,6 +12,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
+import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -160,6 +161,7 @@ function ProductionsPageContent() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [schoolYearFilter, setSchoolYearFilter] = useState(currentSchoolYearKey())
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [view, setView] = useState<View>('pipeline')
   const initialScope: Scope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'unassigned' ? 'unassigned' : 'all'
@@ -536,12 +538,26 @@ function ProductionsPageContent() {
 
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
 
+  const yearOptions = useMemo(() => {
+    const set = new Set<string>()
+    productions.forEach(p => {
+      const y = resolvedSchoolYearKey({ school_year: p.school_year, start_datetime: p.start_datetime })
+      if (y) set.add(y)
+    })
+    set.add(currentSchoolYearKey())
+    return Array.from(set).sort((a, b) => b.localeCompare(a))
+  }, [productions])
+
+  const yearScopedProductions = useMemo(() => productions.filter(p => (
+    inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)
+  )), [productions, schoolYearFilter])
+
   // Scope-aware base set
-  const scopedProductions = useMemo(() => productions.filter(p => {
+  const scopedProductions = useMemo(() => yearScopedProductions.filter(p => {
     if (scope === 'mine') return currentUser !== null && (p.production_members || []).some(m => m.user_id === currentUser.id)
     if (scope === 'unassigned') return (p.production_members || []).length === 0
     return true
-  }), [productions, scope, currentUser])
+  }), [yearScopedProductions, scope, currentUser])
 
   const allTypes = useMemo(() => Array.from(new Set(productions.map(p => getTypeLabel(p)))).filter(Boolean).sort(), [productions])
 
@@ -640,25 +656,12 @@ function ProductionsPageContent() {
     return all.filter(c => !dismissedConflicts.has(`${c.a.id}-${c.b.id}`))
   }, [filtered, dismissedConflicts])
 
-  // Pipeline groups — forward-looking columns; past / complete / abandoned pulled into expandables below
+  // Pipeline groups — keep all non-complete/non-abandoned visible regardless of date.
   const inProgress = useMemo(() => filtered.filter(p => p.status === 'In Progress'), [filtered])
-  const ideaForward = useMemo(() => filtered.filter(p => {
-    if (p.status !== 'Idea/Request') return false
-    if (!p.start_datetime) return true
-    return !isPastProd(p)
-  }), [filtered])
-  const approvedForward = useMemo(() => filtered.filter(p => {
-    if (p.status !== 'Approved/Scheduled') return false
-    if (!p.start_datetime) return true
-    return !isPastProd(p)
-  }), [filtered])
+  const ideaForward = useMemo(() => filtered.filter(p => p.status === 'Idea/Request'), [filtered])
+  const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled'), [filtered])
   const pastArchiveProds = useMemo(() => filtered.filter(p => {
-    if (p.status === 'Abandoned') return false
-    if (p.status === 'Complete') return true
-    if (p.status === 'In Progress') return false
-    if (p.status === 'Approved/Scheduled' && p.start_datetime && isPastProd(p)) return true
-    if (p.status === 'Idea/Request' && p.start_datetime && isPastProd(p)) return true
-    return false
+    return p.status === 'Complete'
   }), [filtered])
   const abandonedProds = useMemo(() => filtered.filter(p => p.status === 'Abandoned'), [filtered])
   const miscPipelineProds = useMemo(() => filtered.filter(p => {
@@ -1022,8 +1025,12 @@ function ProductionsPageContent() {
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search title, organizer, type, number..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: text, fontFamily: 'inherit' }} />
                 {search && <button onClick={() => setSearch('')} aria-label="Clear search" style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>}
               </div>
+              <select value={schoolYearFilter} onChange={e => setSchoolYearFilter(e.target.value)} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 10px', fontSize: '13px', color: text, fontFamily: 'inherit', outline: 'none' }}>
+                <option value={ALL_SCHOOL_YEARS}>All school years</option>
+                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
             </div>
-            {(typeFilter !== 'all' || statusFilter !== 'all') && (
+            {(typeFilter !== 'all' || statusFilter !== 'all' || schoolYearFilter !== currentSchoolYearKey()) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const, marginTop: '10px', fontSize: '12px', color: muted }}>
                 {typeFilter !== 'all' && (
                   <span style={{ ...statusBadge('info', true), fontSize: '11px' }}>
@@ -1033,6 +1040,12 @@ function ProductionsPageContent() {
                 {statusFilter !== 'all' && (
                   <span style={{ ...statusBadge('info', true), fontSize: '11px' }}>
                     Status: {statusFilter} <button onClick={() => setStatusFilter('all')} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: '4px', padding: 0, fontSize: '12px', lineHeight: 1 }}>×</button>
+                  </span>
+                )}
+                {schoolYearFilter !== currentSchoolYearKey() && (
+                  <span style={{ ...statusBadge('info', true), fontSize: '11px' }}>
+                    Year: {schoolYearFilter === ALL_SCHOOL_YEARS ? 'All' : schoolYearFilter}
+                    <button onClick={() => setSchoolYearFilter(currentSchoolYearKey())} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: '4px', padding: 0, fontSize: '12px', lineHeight: 1 }}>×</button>
                   </span>
                 )}
               </div>
@@ -1142,7 +1155,7 @@ function ProductionsPageContent() {
                 </section>
               )}
 
-              {(inProgress.length > 0 || approvedForward.length > 0) ? (
+              {(inProgress.length > 0 || approvedForward.length > 0 || miscPipelineProds.length > 0) ? (
                 <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '16px', alignItems: 'start' }}>
                   {inProgress.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
@@ -1153,9 +1166,15 @@ function ProductionsPageContent() {
                   <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                     {colHeader('Approved / Scheduled', approvedForward.length, 'success')}
                     {approvedForward.length === 0 ? (
-                      <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No upcoming approved dates</p>
+                      <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No approved / scheduled productions</p>
                     ) : approvedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
                   </div>
+                  {miscPipelineProds.length > 0 && (
+                    <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
+                      {colHeader('Other statuses', miscPipelineProds.length, null)}
+                      {miscPipelineProds.map(p => <ProductionCard key={`misc-${p.id}`} prod={p} />)}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 12px', margin: '0 0 8px', background: colBg, border: `1px solid ${border}`, borderRadius: '12px' }}>
@@ -1163,7 +1182,7 @@ function ProductionsPageContent() {
                 </p>
               )}
 
-              {(pastArchiveProds.length > 0 || miscPipelineProds.length > 0) && (
+              {pastArchiveProds.length > 0 && (
                 <section style={{ marginTop: '12px' }}>
                   <div style={{ background: surface2, border: `1px solid ${border}`, borderRadius: '8px', overflow: 'hidden' }}>
                     <button
@@ -1174,22 +1193,16 @@ function ProductionsPageContent() {
                     >
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: text }}>
-                          Past &amp; archive ({pastArchiveProds.length + miscPipelineProds.length})
+                          Past &amp; archive ({pastArchiveProds.length})
                         </span>
                         <span style={{ display: 'block', fontSize: '10px', color: muted, marginTop: '2px', lineHeight: 1.35 }}>
-                          Complete, past-dated rows, and non-standard statuses
+                          Completed productions only
                         </span>
                       </span>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2.5" style={{ transform: pastArchiveExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }} aria-hidden><polyline points="9 18 15 12 9 6"/></svg>
                     </button>
                     {pastArchiveExpanded && (
                       <div style={{ borderTop: `1px solid ${border}`, padding: '8px 10px 10px', maxHeight: 'min(70vh, 520px)', overflowY: 'auto' as const }}>
-                        {miscPipelineProds.length > 0 && (
-                          <>
-                            <p style={{ fontSize: '10px', fontWeight: 700, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em', margin: '0 0 6px' }}>Non-standard status</p>
-                            {miscPipelineProds.map(p => <ProductionCard key={`misc-${p.id}`} prod={p} />)}
-                          </>
-                        )}
                         {pastArchiveProds.map(p => <ProductionCard key={p.id} prod={p} />)}
                       </div>
                     )}
