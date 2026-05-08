@@ -40,6 +40,7 @@ interface PanelActivity { id: string; action: string; detail: string | null; cre
 const STATUS_TONE_MAP: Record<string, keyof typeof statusTone | null> = {
   'In Progress': 'warning',
   'Approved/Scheduled': 'success',
+  'Complete Requested': 'review',
   'Complete': 'info',
   'Abandoned': null,
   'Idea/Request': null,
@@ -49,6 +50,7 @@ const STATUS_DISPLAY: Record<string, string> = {
   'Idea/Request': 'Idea / Request',
   'In Progress': 'In Progress',
   'Approved/Scheduled': 'Approved / Scheduled',
+  'Complete Requested': 'Complete Requested',
   'Complete': 'Complete',
   'Abandoned': 'Abandoned',
 }
@@ -660,13 +662,14 @@ function ProductionsPageContent() {
   const inProgress = useMemo(() => filtered.filter(p => p.status === 'In Progress'), [filtered])
   const ideaForward = useMemo(() => filtered.filter(p => p.status === 'Idea/Request'), [filtered])
   const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled'), [filtered])
+  const completeRequestedForward = useMemo(() => filtered.filter(p => p.status === 'Complete Requested'), [filtered])
   const pastArchiveProds = useMemo(() => filtered.filter(p => {
     return p.status === 'Complete'
   }), [filtered])
   const abandonedProds = useMemo(() => filtered.filter(p => p.status === 'Abandoned'), [filtered])
   const miscPipelineProds = useMemo(() => filtered.filter(p => {
     const s = p.status || ''
-    return s !== '' && !['Idea/Request', 'In Progress', 'Approved/Scheduled', 'Complete', 'Abandoned'].includes(s)
+    return s !== '' && !['Idea/Request', 'In Progress', 'Approved/Scheduled', 'Complete Requested', 'Complete', 'Abandoned'].includes(s)
   }), [filtered])
 
   // ---------- Render helpers ----------
@@ -965,6 +968,7 @@ function ProductionsPageContent() {
                         <option value="Idea/Request">Idea / Request</option>
                         <option value="In Progress">In Progress</option>
                         <option value="Approved/Scheduled">Approved / Scheduled</option>
+                        <option value="Complete Requested">Complete Requested</option>
                         <option value="Complete">Complete</option>
                         <option value="Abandoned">Abandoned</option>
                       </select>
@@ -1155,7 +1159,7 @@ function ProductionsPageContent() {
                 </section>
               )}
 
-              {(inProgress.length > 0 || approvedForward.length > 0 || miscPipelineProds.length > 0) ? (
+              {(inProgress.length > 0 || approvedForward.length > 0 || completeRequestedForward.length > 0 || miscPipelineProds.length > 0) ? (
                 <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '16px', alignItems: 'start' }}>
                   {inProgress.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
@@ -1169,6 +1173,12 @@ function ProductionsPageContent() {
                       <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No approved / scheduled productions</p>
                     ) : approvedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
                   </div>
+                  {completeRequestedForward.length > 0 && (
+                    <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
+                      {colHeader('Complete Requested', completeRequestedForward.length, 'review')}
+                      {completeRequestedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                    </div>
+                  )}
                   {miscPipelineProds.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                       {colHeader('Other statuses', miscPipelineProds.length, null)}

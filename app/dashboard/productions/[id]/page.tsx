@@ -765,17 +765,27 @@ export default function ProductionDetailPage() {
       const adminEmail = settingData?.value || ''
       const recipients = [currentUser.email, adminEmail].filter(Boolean)
       const prodTitle = `#${production.production_number} ${production.title}`
-      const body = `Production ${prodTitle} has been marked complete in CSDtv Team Hub.\n\nPlease mark this production as complete in the district productions system.\n\nType: ${production.request_type_label || 'Unknown'}\nOrganizer: ${production.organizer_name || 'N/A'}\nDate: ${production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}\n\n— CSDtv Team Hub`
+      const body = `Production ${prodTitle} is marked as "Complete Requested" in CSDtv Team Hub.\n\nPlease mark this production as complete in the district productions system.\n\nType: ${production.request_type_label || 'Unknown'}\nOrganizer: ${production.organizer_name || 'N/A'}\nDate: ${production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}\n\n— CSDtv Team Hub`
       for (const email of recipients) {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ type: 'production_complete', recipientEmail: email, subject: sanitizeEmailSubject(`Production complete: ${prodTitle}`), body }),
+          body: JSON.stringify({ type: 'production_complete', recipientEmail: email, subject: sanitizeEmailSubject(`Complete requested: ${prodTitle}`), body }),
         })
       }
-      await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin' })
-      setActivity(prev => [{ id: Date.now().toString(), production_id: uuid, user_id: currentUser.id, action: 'marked_complete', detail: 'Production marked complete — email sent to admin', created_at: new Date().toISOString(), team: { name: currentUser.name } }, ...prev])
-    } catch { /* error */ }
+      const { error: statusErr } = await supabase.from('productions').update({ status: 'Complete Requested' }).eq('id', uuid)
+      if (statusErr) {
+        toast(`Failed to set Complete Requested: ${statusErr.message}`, 'error')
+        setSendingComplete(false)
+        return
+      }
+      setProduction(prev => prev ? { ...prev, status: 'Complete Requested' } : prev)
+      await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action: 'requested_complete', detail: 'Requested completion — email sent to admin' })
+      setActivity(prev => [{ id: Date.now().toString(), production_id: uuid, user_id: currentUser.id, action: 'requested_complete', detail: 'Requested completion — email sent to admin', created_at: new Date().toISOString(), team: { name: currentUser.name } }, ...prev])
+      toast('Complete request sent', 'success')
+    } catch {
+      toast('Failed to send completion request', 'error')
+    }
     setSendingComplete(false)
     setShowCompleteModal(false)
     setCompleteChecks({ deliverables: false, organizer: false, files: false, quality: false })
@@ -1379,7 +1389,7 @@ export default function ProductionDetailPage() {
               {production.internal_type_label && production.internal_type_label !== typeLabel && (
                 <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{production.internal_type_label}</span>
               )}
-              <span style={{ ...statusBadge('success', true), fontSize: '11px' }}>{production.status}</span>
+              <span style={{ ...statusBadge(production.status === 'Complete Requested' ? 'review' : 'success', true), fontSize: '11px' }}>{production.status}</span>
             </div>
             <h1 style={{ fontSize: '22px', fontWeight: 500, color: text, margin: '0 0 6px' }}>{production.title}</h1>
             {production.organizer_name && (
@@ -1745,7 +1755,8 @@ export default function ProductionDetailPage() {
                   { label: 'Requested', date: null, done: true },
                   { label: 'Approved', date: null, done: production.status !== 'Idea/Request' },
                   { label: 'Scheduled', date: production.start_datetime, done: !!production.start_datetime },
-                  { label: 'Complete', date: activity.find(a => a.action === 'marked_complete')?.created_at || null, done: production.status === 'Complete' || activity.some(a => a.action === 'marked_complete') },
+                  { label: 'Complete Requested', date: activity.find(a => a.action === 'requested_complete' || a.action === 'marked_complete')?.created_at || null, done: production.status === 'Complete Requested' || production.status === 'Complete' || activity.some(a => a.action === 'requested_complete' || a.action === 'marked_complete') },
+                  { label: 'Complete', date: activity.find(a => a.action === 'marked_complete')?.created_at || null, done: production.status === 'Complete' },
                 ]
                 return steps.map((step, i) => (
                   <div key={step.label} style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', position: 'relative' as const }}>
@@ -2606,7 +2617,7 @@ export default function ProductionDetailPage() {
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
           onClick={e => { if (e.target === e.currentTarget) setShowCompleteModal(false) }}>
           <div style={{ background: 'var(--surface-1)', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '480px', padding: '24px' }}>
-            <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Mark production complete</h2>
+            <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Request production completion</h2>
             <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px' }}>#{production.production_number} {production.title}</p>
 
             <p style={{ fontSize: '13px', fontWeight: 600, color: text, margin: '0 0 10px' }}>Confirm before completing:</p>
@@ -2624,11 +2635,11 @@ export default function ProductionDetailPage() {
               </div>
             ))}
 
-            <p style={{ fontSize: '12px', color: muted, margin: '14px 0 12px' }}>An email will be sent to you and the admin assistant to mark this complete in the district system.</p>
+            <p style={{ fontSize: '12px', color: muted, margin: '14px 0 12px' }}>This sets status to Complete Requested and emails you + the admin assistant to finish the official district status update.</p>
 
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={markProductionComplete} disabled={sendingComplete || !Object.values(completeChecks).every(Boolean)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: Object.values(completeChecks).every(Boolean) ? '#22c55e' : 'var(--surface-2)', color: Object.values(completeChecks).every(Boolean) ? '#fff' : muted, border: 'none', cursor: Object.values(completeChecks).every(Boolean) ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
-                {sendingComplete ? 'Sending...' : 'Confirm & notify'}
+                {sendingComplete ? 'Sending...' : 'Set Complete Requested'}
               </button>
               <button onClick={() => setShowCompleteModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             </div>
