@@ -188,6 +188,8 @@ function ProductionsPageContent() {
   const overflowRef = useRef<HTMLDivElement | null>(null)
   /** Production IDs with logged “Emailed organizer” activity that looks like a YouTube/livestream template (backfill when DB column did not update). */
   const [organizerYoutubeEmailedIds, setOrganizerYoutubeEmailedIds] = useState<Set<string>>(() => new Set())
+  /** Production IDs with completion requested logged in activity, used when status sync lags. */
+  const [completeRequestedIds, setCompleteRequestedIds] = useState<Set<string>>(() => new Set())
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -280,6 +282,7 @@ function ProductionsPageContent() {
     setDismissedConflicts(dSet)
 
     const organizerEmailActs: { production_id: string; detail: string | null }[] = []
+    const completeRequestedActs: { production_id: string }[] = []
     const pendingLivestreamIds = cleaned
       .filter(p => {
         const t = (p.request_type_label || p.type || '').toLowerCase()
@@ -302,6 +305,24 @@ function ProductionsPageContent() {
         if (res.data) organizerEmailActs.push(...(res.data as { production_id: string; detail: string | null }[]))
       })
     }
+    const activeCompletionIds = cleaned
+      .filter(p => p.status !== 'Complete' && p.status !== 'Abandoned')
+      .map(p => p.id)
+    if (activeCompletionIds.length > 0) {
+      const chunks = chunkIds(activeCompletionIds, 120)
+      const chunkResults = await Promise.all(
+        chunks.map(ids =>
+          supabase
+            .from('production_activity')
+            .select('production_id')
+            .eq('action', 'requested_complete')
+            .in('production_id', ids)
+        )
+      )
+      chunkResults.forEach(res => {
+        if (res.data) completeRequestedActs.push(...(res.data as { production_id: string }[]))
+      })
+    }
     const ytMailSet = new Set<string>()
     for (const row of organizerEmailActs || []) {
       const det = (row.detail || '').toLowerCase()
@@ -310,6 +331,7 @@ function ProductionsPageContent() {
       }
     }
     setOrganizerYoutubeEmailedIds(ytMailSet)
+    setCompleteRequestedIds(new Set((completeRequestedActs || []).map(r => r.production_id)))
 
     const latestSync = (prodsData || []).reduce<string | null>((max, p) =>
       p.synced_at && (!max || p.synced_at > max) ? p.synced_at : max, null)
@@ -531,6 +553,11 @@ function ProductionsPageContent() {
     if (p.youtube_link_email_sent_at) return true
     return organizerYoutubeEmailedIds.has(p.id)
   }, [organizerYoutubeEmailedIds])
+  const isCompleteRequested = useCallback((p: Production) => {
+    if (p.status === 'Complete Requested') return true
+    if (p.status === 'Complete' || p.status === 'Abandoned') return false
+    return completeRequestedIds.has(p.id)
+  }, [completeRequestedIds])
   const getProgress = (p: Production) => {
     const items = p.checklist_items || []
     if (items.length === 0) return null
@@ -626,7 +653,8 @@ function ProductionsPageContent() {
       if (p.status === 'Abandoned') return false
     }
     if (typeFilter !== 'all' && getTypeLabel(p) !== typeFilter) return false
-    if (statusFilter !== 'all' && p.status !== statusFilter) return false
+    const effectiveStatus = isCompleteRequested(p) ? 'Complete Requested' : p.status
+    if (statusFilter !== 'all' && effectiveStatus !== statusFilter) return false
     if (search) {
       const q = search.toLowerCase()
       const hit = p.title.toLowerCase().includes(q)
@@ -639,7 +667,7 @@ function ProductionsPageContent() {
       if (!hit) return false
     }
     return true
-  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search, isLivestreamType, youtubeOrganizerEmailLogged])
+  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search, isLivestreamType, youtubeOrganizerEmailLogged, isCompleteRequested])
 
   const overdueProds = useMemo(() => filtered.filter(isOverdueProd), [filtered])
 
@@ -659,18 +687,19 @@ function ProductionsPageContent() {
   }, [filtered, dismissedConflicts])
 
   // Pipeline groups — keep all non-complete/non-abandoned visible regardless of date.
-  const inProgress = useMemo(() => filtered.filter(p => p.status === 'In Progress'), [filtered])
-  const ideaForward = useMemo(() => filtered.filter(p => p.status === 'Idea/Request'), [filtered])
-  const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled'), [filtered])
-  const completeRequestedForward = useMemo(() => filtered.filter(p => p.status === 'Complete Requested'), [filtered])
+  const inProgress = useMemo(() => filtered.filter(p => p.status === 'In Progress' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
+  const ideaForward = useMemo(() => filtered.filter(p => p.status === 'Idea/Request' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
+  const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
+  const completeRequestedForward = useMemo(() => filtered.filter(p => isCompleteRequested(p)), [filtered, isCompleteRequested])
   const pastArchiveProds = useMemo(() => filtered.filter(p => {
     return p.status === 'Complete'
   }), [filtered])
   const abandonedProds = useMemo(() => filtered.filter(p => p.status === 'Abandoned'), [filtered])
   const miscPipelineProds = useMemo(() => filtered.filter(p => {
     const s = p.status || ''
+    if (isCompleteRequested(p)) return false
     return s !== '' && !['Idea/Request', 'In Progress', 'Approved/Scheduled', 'Complete Requested', 'Complete', 'Abandoned'].includes(s)
-  }), [filtered])
+  }), [filtered, isCompleteRequested])
 
   // ---------- Render helpers ----------
   const renderStatusPill = (status: string | null, large = false): ReactNode => {
@@ -735,7 +764,8 @@ function ProductionsPageContent() {
   // ---------- Production card (pipeline) ----------
   const ProductionCard = ({ prod }: { prod: Production }) => {
     const past      = isPastProd(prod)
-    const overdue   = isOverdueProd(prod)
+    const effectiveStatus = isCompleteRequested(prod) ? 'Complete Requested' : prod.status
+    const overdue   = isOverdueProd({ ...prod, status: effectiveStatus })
     const typeColor = getTypeColor(prod)
     const progress  = getProgress(prod)
     const members   = prod.production_members || []
@@ -833,7 +863,8 @@ function ProductionsPageContent() {
   // ---------- Production row (list view) ----------
   const ProductionRow = ({ prod, isLast }: { prod: Production; isLast: boolean }) => {
     const past      = isPastProd(prod)
-    const overdue   = isOverdueProd(prod)
+    const effectiveStatus = isCompleteRequested(prod) ? 'Complete Requested' : prod.status
+    const overdue   = isOverdueProd({ ...prod, status: effectiveStatus })
     const typeColor = getTypeColor(prod)
     const progress  = getProgress(prod)
     const members   = prod.production_members || []
@@ -876,7 +907,7 @@ function ProductionsPageContent() {
             ))}
           </div>
         )}
-        {renderStatusPill(prod.status)}
+        {renderStatusPill(effectiveStatus)}
         <Link
           href={`/dashboard/productions/${prod.production_number}`}
           onClick={e => e.stopPropagation()}
@@ -1159,8 +1190,7 @@ function ProductionsPageContent() {
                 </section>
               )}
 
-              {(inProgress.length > 0 || approvedForward.length > 0 || completeRequestedForward.length > 0 || miscPipelineProds.length > 0) ? (
-                <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '16px', alignItems: 'start' }}>
+              <div className="pipeline-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '16px', alignItems: 'start' }}>
                   {inProgress.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                       {colHeader('In Progress', inProgress.length, 'warning')}
@@ -1173,24 +1203,19 @@ function ProductionsPageContent() {
                       <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No approved / scheduled productions</p>
                     ) : approvedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
                   </div>
-                  {completeRequestedForward.length > 0 && (
-                    <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
-                      {colHeader('Complete Requested', completeRequestedForward.length, 'review')}
-                      {completeRequestedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
-                    </div>
-                  )}
+                  <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
+                    {colHeader('Complete Requested', completeRequestedForward.length, 'review')}
+                    {completeRequestedForward.length === 0 ? (
+                      <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No completion requests</p>
+                    ) : completeRequestedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                  </div>
                   {miscPipelineProds.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                       {colHeader('Other statuses', miscPipelineProds.length, null)}
                       {miscPipelineProds.map(p => <ProductionCard key={`misc-${p.id}`} prod={p} />)}
                     </div>
                   )}
-                </div>
-              ) : (
-                <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '20px 12px', margin: '0 0 8px', background: colBg, border: `1px solid ${border}`, borderRadius: '12px' }}>
-                  No items in the forward pipeline — expand Past &amp; archive or Abandoned below if you expect older rows.
-                </p>
-              )}
+              </div>
 
               {pastArchiveProds.length > 0 && (
                 <section style={{ marginTop: '12px' }}>

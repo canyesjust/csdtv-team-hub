@@ -977,6 +977,13 @@ export default function ProductionDetailPage() {
   const warningTone = statusTone.warning.color
   const successTone = statusTone.success.color
   const dangerTone = statusTone.danger.color
+  const hasCompleteRequestedActivity = useMemo(
+    () => activity.some(a => a.action === 'requested_complete'),
+    [activity]
+  )
+  const effectiveProdStatus = production && production.status !== 'Complete' && production.status !== 'Abandoned' && hasCompleteRequestedActivity
+    ? 'Complete Requested'
+    : production?.status || null
   const brandTone = 'var(--brand-primary)'
 
   const tabBtn = (tab: typeof activeTab, label: string, count?: number) => (
@@ -1389,7 +1396,7 @@ export default function ProductionDetailPage() {
               {production.internal_type_label && production.internal_type_label !== typeLabel && (
                 <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{production.internal_type_label}</span>
               )}
-              <span style={{ ...statusBadge(production.status === 'Complete Requested' ? 'review' : 'success', true), fontSize: '11px' }}>{production.status}</span>
+              <span style={{ ...statusBadge(effectiveProdStatus === 'Complete Requested' ? 'review' : 'success', true), fontSize: '11px' }}>{effectiveProdStatus || 'Unknown'}</span>
             </div>
             <h1 style={{ fontSize: '22px', fontWeight: 500, color: text, margin: '0 0 6px' }}>{production.title}</h1>
             {production.organizer_name && (
@@ -1753,10 +1760,10 @@ export default function ProductionDetailPage() {
               {(() => {
                 const steps = [
                   { label: 'Requested', date: null, done: true },
-                  { label: 'Approved', date: null, done: production.status !== 'Idea/Request' },
+                  { label: 'Approved', date: null, done: (effectiveProdStatus || '') !== 'Idea/Request' },
                   { label: 'Scheduled', date: production.start_datetime, done: !!production.start_datetime },
-                  { label: 'Complete Requested', date: activity.find(a => a.action === 'requested_complete' || a.action === 'marked_complete')?.created_at || null, done: production.status === 'Complete Requested' || production.status === 'Complete' || activity.some(a => a.action === 'requested_complete' || a.action === 'marked_complete') },
-                  { label: 'Complete', date: activity.find(a => a.action === 'marked_complete')?.created_at || null, done: production.status === 'Complete' },
+                  { label: 'Complete Requested', date: activity.find(a => a.action === 'requested_complete' || a.action === 'marked_complete')?.created_at || null, done: effectiveProdStatus === 'Complete Requested' || effectiveProdStatus === 'Complete' || activity.some(a => a.action === 'requested_complete' || a.action === 'marked_complete') },
+                  { label: 'Complete', date: activity.find(a => a.action === 'marked_complete')?.created_at || null, done: effectiveProdStatus === 'Complete' },
                 ]
                 return steps.map((step, i) => (
                   <div key={step.label} style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', position: 'relative' as const }}>
@@ -1773,7 +1780,7 @@ export default function ProductionDetailPage() {
             {production.synced_at && production.start_datetime && (
               <p style={{ fontSize: '12px', color: muted, margin: '12px 0 0', textAlign: 'center' as const }}>
                 {Math.round((new Date(production.start_datetime).getTime() - new Date(production.synced_at).getTime()) / (1000 * 60 * 60 * 24))} days from request to shoot
-                {production.status === 'Complete' || activity.some(a => a.action === 'marked_complete') ? ` · ${Math.round((new Date(activity.find(a => a.action === 'marked_complete')?.created_at || Date.now()).getTime() - new Date(production.synced_at).getTime()) / (1000 * 60 * 60 * 24))} days total turnaround` : ''}
+                {effectiveProdStatus === 'Complete' || activity.some(a => a.action === 'marked_complete') ? ` · ${Math.round((new Date(activity.find(a => a.action === 'marked_complete')?.created_at || Date.now()).getTime() - new Date(production.synced_at).getTime()) / (1000 * 60 * 60 * 24))} days total turnaround` : ''}
               </p>
             )}
           </div>
