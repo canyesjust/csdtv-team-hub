@@ -689,8 +689,7 @@ function ProductionsPageContent() {
   // Pipeline groups — keep all non-complete/non-abandoned visible regardless of date.
   const inProgress = useMemo(() => filtered.filter(p => p.status === 'In Progress' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
   const ideaForward = useMemo(() => filtered.filter(p => p.status === 'Idea/Request' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
-  const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled' && !isCompleteRequested(p)), [filtered, isCompleteRequested])
-  const completeRequestedForward = useMemo(() => filtered.filter(p => isCompleteRequested(p)), [filtered, isCompleteRequested])
+  const approvedForward = useMemo(() => filtered.filter(p => p.status === 'Approved/Scheduled' || isCompleteRequested(p)), [filtered, isCompleteRequested])
   const pastArchiveProds = useMemo(() => filtered.filter(p => {
     return p.status === 'Complete'
   }), [filtered])
@@ -1202,12 +1201,6 @@ function ProductionsPageContent() {
                     {approvedForward.length === 0 ? (
                       <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No approved / scheduled productions</p>
                     ) : approvedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
-                  </div>
-                  <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
-                    {colHeader('Complete Requested', completeRequestedForward.length, 'review')}
-                    {completeRequestedForward.length === 0 ? (
-                      <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No completion requests</p>
-                    ) : completeRequestedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
                   </div>
                   {miscPipelineProds.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
