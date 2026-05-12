@@ -155,6 +155,10 @@ export default function TasksPage() {
   const [intakeQrDataUrl, setIntakeQrDataUrl] = useState<string | null>(null)
   const [intakePanelLoading, setIntakePanelLoading] = useState(false)
   const [intakeBusy, setIntakeBusy] = useState(false)
+  /** Active token row has no stored plaintext (created before migration) — rotate once to show URL. */
+  const [intakeNeedsLegacyRotate, setIntakeNeedsLegacyRotate] = useState(false)
+  /** After a successful rotate (not first-time create). */
+  const [intakeRotateNotice, setIntakeRotateNotice] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -239,6 +243,7 @@ export default function TasksPage() {
   const success = statusTone.success.color
   const successBg = statusTone.success.background
   const warning = statusTone.warning.color
+  const warningBg = statusTone.warning.background
   const danger = statusTone.danger.color
   const dangerBg = statusTone.danger.background
   const info = statusTone.info.color
@@ -385,6 +390,9 @@ export default function TasksPage() {
       setIntakeActive(false)
       setIntakeCreatedAt(null)
       setIntakeLastUsedAt(null)
+      setIntakeUrlReveal(null)
+      setIntakeNeedsLegacyRotate(false)
+      setIntakeRotateNotice(false)
       setIntakePanelLoading(false)
       return
     }
@@ -398,18 +406,46 @@ export default function TasksPage() {
           setIntakeActive(true)
           setIntakeCreatedAt(data.created_at ?? null)
           setIntakeLastUsedAt(data.last_used_at ?? null)
+          setIntakeNeedsLegacyRotate(!!data.needs_rotate_for_stored_url)
+          if (typeof data.url === 'string' && data.url) setIntakeUrlReveal(data.url)
+          else setIntakeUrlReveal(null)
         } else {
           setIntakeActive(false)
           setIntakeCreatedAt(null)
           setIntakeLastUsedAt(null)
+          setIntakeUrlReveal(null)
+          setIntakeNeedsLegacyRotate(false)
+          setIntakeRotateNotice(false)
         }
       })
-      .catch(() => { if (!cancelled) setIntakeActive(false) })
+      .catch(() => {
+        if (!cancelled) {
+          setIntakeActive(false)
+          setIntakeUrlReveal(null)
+          setIntakeNeedsLegacyRotate(false)
+          setIntakeRotateNotice(false)
+        }
+      })
       .finally(() => { if (!cancelled) setIntakePanelLoading(false) })
     return () => { cancelled = true }
   }, [currentUser, isStudentInternUser])
 
+  useEffect(() => {
+    if (!intakeUrlReveal) {
+      setIntakeQrDataUrl(null)
+      return
+    }
+    let cancelled = false
+    void import('qrcode').then(({ default: QR }) =>
+      QR.toDataURL(intakeUrlReveal, { margin: 1, width: 220, errorCorrectionLevel: 'M' })
+        .then(dataUrl => { if (!cancelled) setIntakeQrDataUrl(dataUrl) })
+        .catch(() => { if (!cancelled) setIntakeQrDataUrl(null) })
+    )
+    return () => { cancelled = true }
+  }, [intakeUrlReveal])
+
   const generateIntakeLink = useCallback(async () => {
+    const wasRotating = intakeActive
     setIntakeBusy(true)
     try {
       const res = await fetch('/api/dashboard/task-intake-token', { method: 'POST' })
@@ -423,18 +459,18 @@ export default function TasksPage() {
       setIntakeActive(true)
       setIntakeCreatedAt(data.created_at ?? null)
       setIntakeLastUsedAt(null)
-      try {
-        const QR = (await import('qrcode')).default
-        const dataUrl = await QR.toDataURL(url, { margin: 1, width: 220, errorCorrectionLevel: 'M' })
-        setIntakeQrDataUrl(dataUrl)
-      } catch {
-        setIntakeQrDataUrl(null)
+      setIntakeNeedsLegacyRotate(false)
+      if (wasRotating) {
+        setIntakeRotateNotice(true)
+        toast('Link rotated. Anyone using the old URL or QR should contact CSDtv for the new link.', 'success')
+      } else {
+        setIntakeRotateNotice(false)
+        toast('Magic link created. The URL and QR stay here until you rotate or revoke.', 'success')
       }
-      toast('New magic link ready. Old links no longer work.', 'success')
     } finally {
       setIntakeBusy(false)
     }
-  }, [])
+  }, [intakeActive])
 
   const revokeIntakeLink = useCallback(async () => {
     if (!confirm('Revoke this intake link? Shared QR codes and URLs will stop working.')) return
@@ -451,6 +487,8 @@ export default function TasksPage() {
       setIntakeLastUsedAt(null)
       setIntakeUrlReveal(null)
       setIntakeQrDataUrl(null)
+      setIntakeNeedsLegacyRotate(false)
+      setIntakeRotateNotice(false)
       toast('Intake link revoked', 'success')
     } finally {
       setIntakeBusy(false)
@@ -967,12 +1005,12 @@ export default function TasksPage() {
                 <div style={{ flex: 1, minWidth: '200px' }}>
                   <h2 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Public task intake</h2>
                   <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>
-                    Anyone with the magic link can submit a task with the same fields as &ldquo;New task&rdquo;. Submissions are assigned to you and appear in this list. Run the SQL in <code style={{ fontSize: '11px' }}>db/task_intake.sql</code> in Supabase if this section errors.
+                    Anyone with your magic link can submit a task with the same fields as &ldquo;New task&rdquo;. Submissions are assigned to you until you reassign them. The link and QR stay on this page until you rotate or revoke. If you rotate the link, anyone using the old URL or QR should contact <strong style={{ color: text }}>CSDtv</strong> for the new one.
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
                   <button type="button" disabled={intakeBusy} onClick={generateIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: intakeBusy ? 0.7 : 1 }}>
-                    {intakeActive ? 'Rotate link & QR' : 'Create magic link'}
+                    {intakeActive ? 'Rotate link' : 'Create magic link'}
                   </button>
                   {intakeActive && (
                     <button type="button" disabled={intakeBusy} onClick={revokeIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: danger, border: `1px solid ${danger}`, cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit' }}>
@@ -982,16 +1020,26 @@ export default function TasksPage() {
                 </div>
               </div>
               {intakePanelLoading && <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>Loading intake status…</p>}
-              {!intakePanelLoading && intakeActive && !intakeUrlReveal && (
-                <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>
-                  You have an active link. Use <strong style={{ color: text }}>Rotate link &amp; QR</strong> to get a fresh URL and QR (the previous link will stop working).
+              {!intakePanelLoading && intakeRotateNotice && (
+                <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}55`, fontSize: '12px', color: text, lineHeight: 1.45, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' as const }}>
+                  <span>
+                    <strong>Link rotated.</strong> Anyone using the previous URL or QR should <strong>contact CSDtv</strong> for the new link. Share the new URL or QR from this page with people who should submit tasks.
+                  </span>
+                  <button type="button" onClick={() => setIntakeRotateNotice(false)} style={{ fontSize: '12px', fontWeight: 600, padding: '4px 10px', borderRadius: '6px', background: cardBg, border: `1px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
+              {!intakePanelLoading && intakeActive && intakeNeedsLegacyRotate && !intakeUrlReveal && (
+                <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0', lineHeight: 1.45 }}>
+                  Your intake link was created before the hub could store it here. Click <strong style={{ color: text }}>Rotate link</strong> once to save your permanent URL and QR on this page. Anyone on the old link will need to <strong style={{ color: text }}>contact CSDtv</strong> for the new link.
                   {intakeLastUsedAt && <span> Last submission: {new Date(intakeLastUsedAt).toLocaleString()}</span>}
                 </p>
               )}
               {intakeUrlReveal && (
                 <div style={{ marginTop: '14px', display: 'flex', gap: '16px', flexWrap: 'wrap' as const, alignItems: 'flex-start' }}>
                   <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: muted, marginBottom: '6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Magic link (copy once — it is not stored)</label>
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: muted, marginBottom: '6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Magic link</label>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
                       <input readOnly value={intakeUrlReveal} style={{ ...inputStyle, flex: 1, fontSize: '12px' }} onFocus={e => e.currentTarget.select()} />
                       <button type="button" onClick={copyIntakeUrl} style={{ fontSize: '13px', fontWeight: 600, padding: '0 14px', borderRadius: '8px', background: surface2, color: text, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Copy</button>

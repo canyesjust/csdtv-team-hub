@@ -30,7 +30,7 @@ export async function GET() {
   const nowIso = new Date().toISOString()
   const { data, error } = await supabase
     .from('task_intake_tokens')
-    .select('id, created_at, expires_at, last_used_at')
+    .select('id, created_at, expires_at, last_used_at, token_plain')
     .eq('team_user_id', user.id)
     .is('revoked_at', null)
     .order('created_at', { ascending: false })
@@ -49,12 +49,23 @@ export async function GET() {
     return NextResponse.json({ active: false })
   }
 
+  const origin = siteOrigin()
+  const plain = (data as { token_plain?: string | null }).token_plain
+  const fullUrl =
+    plain && plain.length > 0
+      ? (origin ? `${origin}/submit-task?t=${encodeURIComponent(plain)}` : `/submit-task?t=${encodeURIComponent(plain)}`)
+      : null
+
   return NextResponse.json({
     active: true,
     id: data.id,
     created_at: data.created_at,
     expires_at: data.expires_at,
     last_used_at: data.last_used_at,
+    /** Full URL when token_plain exists (tokens created after migration, or after one rotate). */
+    url: fullUrl,
+    /** True if link is active but URL cannot be shown until you rotate once (legacy row). */
+    needs_rotate_for_stored_url: !fullUrl,
   })
 }
 
@@ -88,6 +99,7 @@ export async function POST() {
     .insert({
       team_user_id: user.id,
       token_hash: tokenHash,
+      token_plain: plain,
       expires_at: null,
     })
     .select('id, created_at')

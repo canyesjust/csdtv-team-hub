@@ -30,3 +30,10 @@ comment on column public.tasks.intake_submitter_name is 'Name entered on public 
 comment on column public.tasks.intake_submitter_email is 'Email entered on public intake form.';
 
 alter table public.task_intake_tokens enable row level security;
+
+-- Optional follow-up (also in db/task_intake_token_plain.sql if applied separately):
+alter table public.task_intake_tokens
+  add column if not exists token_plain text;
+
+comment on column public.task_intake_tokens.token_plain is
+  'Raw query token for /submit-task?t=... Returned only to the owning team user via authenticated API; cleared on revoke.';
