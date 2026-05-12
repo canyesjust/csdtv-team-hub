@@ -90,7 +90,6 @@ export async function POST(request: Request) {
 
   const needsEquipment = Boolean(body.needs_equipment)
   const purchaseRequest = Boolean(body.purchase_request)
-  const hideFromSignage = Boolean(body.hide_from_signage)
   const purchaseLink = purchaseRequest ? (body.purchase_request_link || '').trim() || null : null
   if (purchaseRequest && !isValidPurchaseRequestLink(purchaseLink)) {
     return NextResponse.json({ error: 'Purchase link must start with http:// or https://' }, { status: 400 })
