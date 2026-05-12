@@ -76,15 +76,16 @@ export default function SignagePage() {
     setSchedOverrides(ovrsRes.data || [])
     setCalEvents(eventsRes.data || [])
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        const ir = await fetch('/api/ical')
-        if (ir.ok) {
-          const { events: oe } = await ir.json()
-          setOutlookEvents(oe || [])
-        }
+      const ir = await fetch('/api/signage/ical-events', { cache: 'no-store' })
+      if (ir.ok) {
+        const { events: oe } = await ir.json()
+        setOutlookEvents(oe || [])
+      } else {
+        setOutlookEvents([])
       }
-    } catch {}
+    } catch {
+      setOutlookEvents([])
+    }
     const m: Record<string, string> = {}
     ;(schoolsRes.data || []).forEach((s: any) => { m[s.code] = s.name })
     setSchoolMap(m)
