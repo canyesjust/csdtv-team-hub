@@ -158,6 +158,8 @@ export default function TasksPage() {
   const [intakeBusy, setIntakeBusy] = useState(false)
   /** Active token row has no stored plaintext (created before migration) — rotate once to show URL. */
   const [intakeNeedsLegacyRotate, setIntakeNeedsLegacyRotate] = useState(false)
+  /** Shown after rotating the magic link so staff know to redistribute URL/QR. */
+  const [intakeRotateNotice, setIntakeRotateNotice] = useState(false)
   /** URL stored for task ops signage QR (`app_settings`). */
   const [signageTaskIntakeUrl, setSignageTaskIntakeUrl] = useState<string | null>(null)
   const [signageTaskIntakeBusy, setSignageTaskIntakeBusy] = useState(false)
