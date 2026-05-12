@@ -258,6 +258,32 @@ export default function EquipmentPage() {
 
   const regularEquipment = useMemo(() => equipment.filter(e => !isPowerCableRow(e)), [equipment])
 
+  /** Equipment IDs that are accounted for by an open loan (single-item or kit membership). */
+  const equipmentIdsCoveredByOpenLoans = useMemo(() => {
+    const s = new Set<string>()
+    for (const loan of loans) {
+      if (loan.equipment_id) s.add(loan.equipment_id)
+      if (loan.kit_id) {
+        const kit = kits.find(k => k.id === loan.kit_id)
+        for (const it of kit?.items || []) {
+          if (it.equipment_id) s.add(it.equipment_id)
+        }
+      }
+    }
+    return s
+  }, [loans, kits])
+
+  /** Status says checked out but no open loan covers this row (data drift or legacy). */
+  const orphanCheckedOut = useMemo(
+    () =>
+      regularEquipment.filter(
+        e => e.status === 'checked_out' && !equipmentIdsCoveredByOpenLoans.has(e.id),
+      ),
+    [regularEquipment, equipmentIdsCoveredByOpenLoans],
+  )
+
+  const activeLoansTabCount = loans.length + orphanCheckedOut.length
+
   const stats = {
     total: listMode === 'regular' ? regularEquipment.length : equipment.filter(isPowerCableRow).length,
     available: regularEquipment.filter(e => e.status === 'available').length,
@@ -289,6 +315,36 @@ export default function EquipmentPage() {
     setDueDate('')
     loadData()
   }, [checkoutItem, borrowerName, borrowerInfo, dueDate, user, supabase, loadData])
+
+  const handleClearOrphanCheckoutStatus = useCallback(
+    async (eq: Equipment) => {
+      if (!user || !isManager) return
+      if (
+        !confirm(
+          `${eq.asset_tag} is marked checked out but has no open loan record. Mark it available? (Use only if the item was returned or the record was wrong.)`,
+        )
+      )
+        return
+      const { error } = await supabase
+        .from('equipment')
+        .update({ status: 'available', updated_at: new Date().toISOString() })
+        .eq('id', eq.id)
+        .eq('status', 'checked_out')
+      if (error) {
+        toast('Error: ' + error.message, 'error')
+        return
+      }
+      await supabase.from('equipment_activity').insert({
+        equipment_id: eq.id,
+        action: 'checked_in',
+        detail: `Status corrected to available (no loan row; was checked_out)`,
+        user_id: user.id,
+      })
+      toast('Item marked available')
+      loadData()
+    },
+    [user, isManager, supabase, loadData],
+  )
 
   const handleCreateKit = useCallback(async () => {
     if (!kitName.trim() || !user) return
@@ -708,7 +764,7 @@ export default function EquipmentPage() {
           >
             {t === 'items'
               ? `Items (${listMode === 'regular' ? equipment.filter(e => !isPowerCableRow(e)).length : equipment.filter(isPowerCableRow).length})`
-              : t === 'kits' ? `Kits (${kits.length})` : `Active Loans (${loans.length})`}
+              : t === 'kits' ? `Kits (${kits.length})` : `Active Loans (${activeLoansTabCount})`}
           </button>
         ))}
       </div>
@@ -891,8 +947,28 @@ export default function EquipmentPage() {
       {/* Active Loans Tab */}
       {tab === 'loans' && (
         <div>
-          {loans.length === 0 && (
+          {loans.length === 0 && orphanCheckedOut.length === 0 && (
             <div style={{ background: cardBg, borderRadius: '14px', padding: '40px', textAlign: 'center' as const, color: muted, border: `1px solid ${border}` }}>No items currently checked out.</div>
+          )}
+
+          {orphanCheckedOut.length > 0 && (
+            <div
+              style={{
+                marginBottom: '14px',
+                padding: '12px 14px',
+                borderRadius: '12px',
+                border: `1px solid ${dark ? '#854d0e' : '#fde68a'}`,
+                background: dark ? '#1c1917' : '#fffbeb',
+                color: text,
+                fontSize: '13px',
+              }}
+            >
+              <strong style={{ color: '#d97706' }}>No loan record</strong>
+              {' — '}
+              {orphanCheckedOut.length === 1
+                ? 'One item is marked checked out in inventory but has no matching open loan (often from an old import or a partial checkout). It appears below so you can fix or check it in.'
+                : `${orphanCheckedOut.length} items are marked checked out without an open loan row. They appear below.`}
+            </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -935,6 +1011,87 @@ export default function EquipmentPage() {
                 </div>
               )
             })}
+            {orphanCheckedOut.map(eq => (
+              <div
+                key={`orphan-${eq.id}`}
+                style={{
+                  background: cardBg,
+                  borderRadius: '14px',
+                  padding: '16px 20px',
+                  border: `1px solid ${dark ? '#854d0e' : '#fde68a'}`,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ flex: '1 1 300px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#5ba3e0', fontWeight: 600 }}>{eq.asset_tag}</span>
+                    <span style={{ fontSize: '15px', fontWeight: 500, color: text }}>{eq.name}</span>
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '20px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        background: dark ? '#3b2a15' : '#fef3c7',
+                        color: '#d97706',
+                        textTransform: 'uppercase' as const,
+                      }}
+                    >
+                      No loan row
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: muted }}>
+                    Inventory status is checked out, but there is no open row in <strong style={{ color: text }}>equipment_loans</strong>. Open the item to review history, or mark it available if it was returned.
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard/equipment/${eq.asset_tag}`)}
+                    style={{
+                      background: 'none',
+                      border: `1px solid ${border}`,
+                      borderRadius: '10px',
+                      color: text,
+                      padding: '8px 18px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontFamily: 'inherit',
+                      minHeight: '40px',
+                      whiteSpace: 'nowrap' as const,
+                    }}
+                  >
+                    Open item
+                  </button>
+                  {isManager && (
+                    <button
+                      type="button"
+                      onClick={() => handleClearOrphanCheckoutStatus(eq)}
+                      style={{
+                        background: '#22c55e',
+                        border: 'none',
+                        borderRadius: '10px',
+                        color: '#fff',
+                        padding: '8px 18px',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontFamily: 'inherit',
+                        minHeight: '40px',
+                        whiteSpace: 'nowrap' as const,
+                      }}
+                    >
+                      Mark available
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
