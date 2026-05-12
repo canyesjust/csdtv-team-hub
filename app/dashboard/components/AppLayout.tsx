@@ -109,6 +109,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           items: [
             { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
             { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
+            { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
           ],
         },
         {
@@ -124,10 +125,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { label: 'Home', href: STUDENT_INTERN_HOME_PATH, icon: 'home' },
         { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
         { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
+        { label: 'Equip', href: '/dashboard/equipment', icon: 'equipment' },
         { label: 'KB', href: '/dashboard/knowledge', icon: 'book' },
         { label: 'More', href: '#more', icon: 'more' },
       ] as typeof BOTTOM_NAV,
       moreItems: [
+        { label: 'Equipment scan', href: '/dashboard/equipment/scan', icon: 'equipment' },
         { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
         { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
       ] as typeof MORE_ITEMS,
