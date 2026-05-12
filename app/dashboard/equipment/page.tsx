@@ -1,11 +1,20 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTheme } from '@/lib/theme'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
+import { canAddOrEditEquipment } from '@/lib/equipment-access'
+import {
+  formatPowerSpecShort,
+  getNextPowerCableAssetTag,
+  isPowerCableRow,
+  POWER_INPUT_PRESETS,
+  POWER_POLARITY_OPTIONS,
+  type PowerPolarityDb,
+} from '@/lib/equipment-power'
 
 type Category = {
   id: string
@@ -30,6 +39,14 @@ type Equipment = {
   photo_url: string | null
   created_at: string
   updated_at: string
+  is_power_cable?: boolean | null
+  parent_equipment_id?: string | null
+  power_input_connector?: string | null
+  power_output_voltage?: string | null
+  power_output_amperage?: string | null
+  power_output_polarity?: string | null
+  power_barrel_size?: string | null
+  power_brand?: string | null
 }
 
 type Kit = {
@@ -86,6 +103,26 @@ export default function EquipmentPage() {
   const [filterCategory, setFilterCategory] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterSite, setFilterSite] = useState('')
+
+  const [listMode, setListMode] = useState<'regular' | 'power'>('regular')
+  const [powerSub, setPowerSub] = useState<'all' | 'paired' | 'orphan'>('all')
+  const [powerSort, setPowerSort] = useState<'tag' | 'voltage' | 'parent'>('tag')
+  const [showPowerForm, setShowPowerForm] = useState(false)
+  const [powerSaving, setPowerSaving] = useState(false)
+  const [powerForm, setPowerForm] = useState({
+    name: '',
+    power_input_preset: 'IEC C13',
+    power_input_other: '',
+    category_id: '',
+    power_brand: '',
+    power_output_voltage: '',
+    power_output_amperage: '',
+    power_output_polarity: 'na' as PowerPolarityDb,
+    power_barrel_size: '',
+    notes: '',
+    condition: 'Good',
+    site: 'Office',
+  })
 
   // Kit form
   const [showKitForm, setShowKitForm] = useState(false)
@@ -175,30 +212,58 @@ export default function EquipmentPage() {
     }
   }
 
-  const filtered = equipment.filter(e => {
-    if (search) {
-      const q = search.toLowerCase()
-      const matches = e.asset_tag.toLowerCase().includes(q) ||
-        e.name.toLowerCase().includes(q) ||
-        (e.brand || '').toLowerCase().includes(q) ||
-        (e.model || '').toLowerCase().includes(q) ||
-        (e.serial_number || '').toLowerCase().includes(q)
-      if (!matches) return false
+  const canAddEquipment = canAddOrEditEquipment(user?.role)
+  const isManager = user?.role === 'Manager'
+
+  const filtered = useMemo(() => {
+    const rows = equipment.filter(e => {
+      if (listMode === 'regular' && isPowerCableRow(e)) return false
+      if (listMode === 'power' && !isPowerCableRow(e)) return false
+      if (listMode === 'power') {
+        if (powerSub === 'paired' && !e.parent_equipment_id) return false
+        if (powerSub === 'orphan' && e.parent_equipment_id) return false
+      }
+      if (search) {
+        const q = search.toLowerCase()
+        const spec = formatPowerSpecShort(e).toLowerCase()
+        const matches =
+          e.asset_tag.toLowerCase().includes(q) ||
+          e.name.toLowerCase().includes(q) ||
+          (e.brand || '').toLowerCase().includes(q) ||
+          (e.model || '').toLowerCase().includes(q) ||
+          (e.serial_number || '').toLowerCase().includes(q) ||
+          (e.power_input_connector || '').toLowerCase().includes(q) ||
+          (e.power_brand || '').toLowerCase().includes(q) ||
+          spec.includes(q)
+        if (!matches) return false
+      }
+      if (filterCategory && e.category_id !== filterCategory) return false
+      if (filterStatus && e.status !== filterStatus) return false
+      if (filterSite && e.site !== filterSite) return false
+      return true
+    })
+    if (listMode !== 'power') return rows
+    const sorted = [...rows]
+    if (powerSort === 'tag') sorted.sort((a, b) => a.asset_tag.localeCompare(b.asset_tag))
+    else if (powerSort === 'voltage') sorted.sort((a, b) => (a.power_output_voltage || '').localeCompare(b.power_output_voltage || ''))
+    else {
+      sorted.sort((a, b) => {
+        const pa = a.parent_equipment_id ? equipment.find(x => x.id === a.parent_equipment_id)?.name || '' : ''
+        const pb = b.parent_equipment_id ? equipment.find(x => x.id === b.parent_equipment_id)?.name || '' : ''
+        return pa.localeCompare(pb)
+      })
     }
-    if (filterCategory && e.category_id !== filterCategory) return false
-    if (filterStatus && e.status !== filterStatus) return false
-    if (filterSite && e.site !== filterSite) return false
-    return true
-  })
+    return sorted
+  }, [equipment, listMode, powerSub, powerSort, search, filterCategory, filterStatus, filterSite])
+
+  const regularEquipment = useMemo(() => equipment.filter(e => !isPowerCableRow(e)), [equipment])
 
   const stats = {
-    total: equipment.length,
-    available: equipment.filter(e => e.status === 'available').length,
-    checkedOut: equipment.filter(e => e.status === 'checked_out').length,
-    broken: equipment.filter(e => e.status === 'broken').length,
+    total: listMode === 'regular' ? regularEquipment.length : equipment.filter(isPowerCableRow).length,
+    available: regularEquipment.filter(e => e.status === 'available').length,
+    checkedOut: regularEquipment.filter(e => e.status === 'checked_out').length,
+    broken: regularEquipment.filter(e => e.status === 'broken').length,
   }
-
-  const isManager = user?.role === 'Manager'
 
   const handleCheckout = useCallback(async () => {
     if (!checkoutItem || !borrowerName.trim() || !user) return
@@ -246,6 +311,87 @@ export default function EquipmentPage() {
     loadData()
   }, [supabase, loadData])
 
+  const savePowerCable = useCallback(async () => {
+    if (!user) return
+    const connector =
+      powerForm.power_input_preset === 'Other' ? powerForm.power_input_other.trim() : powerForm.power_input_preset
+    if (!powerForm.name.trim() || !connector) {
+      toast('Name and input connector are required', 'error')
+      return
+    }
+    if (!powerForm.category_id) {
+      toast('Category is required for power cables', 'error')
+      return
+    }
+    setPowerSaving(true)
+    try {
+      let tag: string
+      try {
+        tag = await getNextPowerCableAssetTag(supabase)
+      } catch (e: unknown) {
+        toast(e instanceof Error ? e.message : 'Could not allocate PWR tag', 'error')
+        setPowerSaving(false)
+        return
+      }
+      const { data, error } = await supabase
+        .from('equipment')
+        .insert({
+          asset_tag: tag,
+          name: powerForm.name.trim(),
+          is_power_cable: true,
+          parent_equipment_id: null,
+          category_id: powerForm.category_id,
+          power_input_connector: connector,
+          power_brand: powerForm.power_brand.trim() || null,
+          power_output_voltage: powerForm.power_output_voltage.trim() || null,
+          power_output_amperage: powerForm.power_output_amperage.trim() || null,
+          power_output_polarity: powerForm.power_output_polarity,
+          power_barrel_size: powerForm.power_barrel_size.trim() || null,
+          brand: powerForm.power_brand.trim() || null,
+          model: null,
+          site: powerForm.site,
+          condition: powerForm.condition,
+          status: 'available',
+          notes: powerForm.notes.trim() || null,
+          photo_url: `/images/equipment/${tag}.png`,
+        })
+        .select('*')
+        .single()
+      if (error) {
+        toast(error.message.includes('column') ? 'Run the power-cable DB migration in Supabase (db/equipment_power_cables.sql), then retry.' : error.message, 'error')
+        setPowerSaving(false)
+        return
+      }
+      if (data) {
+        await supabase.from('equipment_activity').insert({
+          equipment_id: data.id,
+          action: 'created',
+          detail: `Added power cable ${tag}`,
+          user_id: user.id,
+        })
+        setEquipment(prev => [...prev, data as Equipment].sort((a, b) => a.asset_tag.localeCompare(b.asset_tag)))
+      }
+      setPowerForm({
+        name: '',
+        power_input_preset: 'IEC C13',
+        power_input_other: '',
+        category_id: '',
+        power_brand: '',
+        power_output_voltage: '',
+        power_output_amperage: '',
+        power_output_polarity: 'na',
+        power_barrel_size: '',
+        notes: '',
+        condition: 'Good',
+        site: 'Office',
+      })
+      setShowPowerForm(false)
+      toast('Power cable created', 'success')
+    } finally {
+      setPowerSaving(false)
+    }
+  }, [powerForm, supabase, user])
+
   const inputStyle: React.CSSProperties = {
     background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px',
     padding: '10px 14px', fontSize: '14px', color: text, fontFamily: 'inherit',
@@ -266,7 +412,11 @@ export default function EquipmentPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 700, color: text, margin: 0 }}>Equipment</h1>
-          <p style={{ fontSize: '14px', color: muted, margin: '4px 0 0' }}>{stats.total} items tracked</p>
+          <p style={{ fontSize: '14px', color: muted, margin: '4px 0 0' }}>
+            {listMode === 'power'
+              ? `${equipment.filter(isPowerCableRow).length} power cables`
+              : `${stats.total} items tracked`}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
@@ -279,9 +429,9 @@ export default function EquipmentPage() {
           >
             📷 Scan
           </button>
-          {isManager && (
+          {canAddEquipment && listMode === 'regular' && (
             <button
-              onClick={() => setShowAddForm(!showAddForm)}
+              onClick={() => { setShowPowerForm(false); setShowAddForm(!showAddForm) }}
               style={{
                 background: '#1e6cb5', border: 'none', borderRadius: '10px',
                 padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer',
@@ -291,7 +441,66 @@ export default function EquipmentPage() {
               + Add item
             </button>
           )}
+          {canAddEquipment && listMode === 'power' && (
+            <button
+              onClick={() => { setShowAddForm(false); setShowPowerForm(!showPowerForm) }}
+              style={{
+                background: '#1e6cb5', border: 'none', borderRadius: '10px',
+                padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer',
+                fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px',
+              }}
+            >
+              + Add power cable
+            </button>
+          )}
         </div>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
+        <span style={{ fontSize: '13px', color: muted, fontWeight: 600 }}>View</span>
+        <button
+          type="button"
+          onClick={() => { setListMode('regular'); setPowerSub('all'); setShowPowerForm(false) }}
+          style={{
+            padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${border}`,
+            background: listMode === 'regular' ? '#1e6cb5' : cardBg, color: listMode === 'regular' ? '#fff' : muted,
+          }}
+        >
+          All equipment
+        </button>
+        <button
+          type="button"
+          onClick={() => { setListMode('power'); setShowAddForm(false) }}
+          style={{
+            padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${border}`,
+            background: listMode === 'power' ? '#1e6cb5' : cardBg, color: listMode === 'power' ? '#fff' : muted,
+          }}
+        >
+          Power cables
+        </button>
+        {listMode === 'power' && (
+          <>
+            <span style={{ width: '1px', height: '22px', background: border, margin: '0 4px' }} />
+            {(['all', 'paired', 'orphan'] as const).map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setPowerSub(s)}
+                style={{
+                  padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${border}`,
+                  background: powerSub === s ? 'rgba(30,108,181,0.25)' : 'transparent', color: text, textTransform: 'capitalize' as const,
+                }}
+              >
+                {s}
+              </button>
+            ))}
+            <select value={powerSort} onChange={e => setPowerSort(e.target.value as 'tag' | 'voltage' | 'parent')} style={{ ...inputStyle, maxWidth: '200px', marginLeft: '8px' }}>
+              <option value="tag">Sort: Asset tag</option>
+              <option value="voltage">Sort: Output voltage</option>
+              <option value="parent">Sort: Parent device</option>
+            </select>
+          </>
+        )}
       </div>
 
       {/* Add item form */}
@@ -382,6 +591,90 @@ export default function EquipmentPage() {
         </div>
       )}
 
+      {showPowerForm && (
+        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 16px' }}>Add power cable (orphan — link from device later)</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+            <div style={{ gridColumn: 'span 2' }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Name *</label>
+              <input value={powerForm.name} onChange={e => setPowerForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Atomos DC brick"
+                style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Category *</label>
+              <select value={powerForm.category_id} onChange={e => setPowerForm(f => ({ ...f, category_id: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
+                <option value="">Select…</option>
+                {topCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Input connector *</label>
+              <select value={powerForm.power_input_preset} onChange={e => setPowerForm(f => ({ ...f, power_input_preset: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
+                {POWER_INPUT_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            {powerForm.power_input_preset === 'Other' && (
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Other connector</label>
+                <input value={powerForm.power_input_other} onChange={e => setPowerForm(f => ({ ...f, power_input_other: e.target.value }))} placeholder="Describe connector"
+                  style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+              </div>
+            )}
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Brand</label>
+              <input value={powerForm.power_brand} onChange={e => setPowerForm(f => ({ ...f, power_brand: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Output voltage</label>
+              <input value={powerForm.power_output_voltage} onChange={e => setPowerForm(f => ({ ...f, power_output_voltage: e.target.value }))} placeholder="12V" style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Output amperage</label>
+              <input value={powerForm.power_output_amperage} onChange={e => setPowerForm(f => ({ ...f, power_output_amperage: e.target.value }))} placeholder="5A" style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Polarity</label>
+              <select value={powerForm.power_output_polarity} onChange={e => setPowerForm(f => ({ ...f, power_output_polarity: e.target.value as PowerPolarityDb }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
+                {POWER_POLARITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Barrel / output size</label>
+              <input value={powerForm.power_barrel_size} onChange={e => setPowerForm(f => ({ ...f, power_barrel_size: e.target.value }))} placeholder="5.5x2.5mm" style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Site</label>
+              <select value={powerForm.site} onChange={e => setPowerForm(f => ({ ...f, site: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
+                <option value="Office">Office</option>
+                <option value="Van">Van</option>
+                <option value="Trailer">Trailer</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Condition</label>
+              <select value={powerForm.condition} onChange={e => setPowerForm(f => ({ ...f, condition: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Needs Repair">Needs Repair</option>
+                <option value="Damaged">Damaged</option>
+                <option value="Broken">Broken</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Notes</label>
+            <textarea value={powerForm.notes} onChange={e => setPowerForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional — cable length, etc." style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', minHeight: '56px', resize: 'vertical' as const }} />
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button type="button" onClick={savePowerCable} disabled={powerSaving} style={{ padding: '10px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: powerSaving ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+              {powerSaving ? 'Saving…' : 'Save power cable'}
+            </button>
+            <button type="button" onClick={() => setShowPowerForm(false)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
         {[
@@ -413,7 +706,9 @@ export default function EquipmentPage() {
               textTransform: 'capitalize' as const,
             }}
           >
-            {t === 'items' ? `Items (${equipment.length})` : t === 'kits' ? `Kits (${kits.length})` : `Active Loans (${loans.length})`}
+            {t === 'items'
+              ? `Items (${listMode === 'regular' ? equipment.filter(e => !isPowerCableRow(e)).length : equipment.filter(isPowerCableRow).length})`
+              : t === 'kits' ? `Kits (${kits.length})` : `Active Loans (${loans.length})`}
           </button>
         ))}
       </div>
@@ -453,10 +748,11 @@ export default function EquipmentPage() {
           </div>
 
           {/* Results count */}
-          {(search || filterCategory || filterStatus || filterSite) && (
+          {(search || filterCategory || filterStatus || filterSite || listMode === 'power') && (
             <p style={{ fontSize: '13px', color: muted, marginBottom: '12px' }}>
-              Showing {filtered.length} of {equipment.length} items
-              <button onClick={() => { setSearch(''); setFilterCategory(''); setFilterStatus(''); setFilterSite('') }}
+              Showing {filtered.length} of {listMode === 'power' ? equipment.filter(isPowerCableRow).length : equipment.filter(e => !isPowerCableRow(e)).length}{' '}
+              {listMode === 'power' ? 'power cables' : 'items'}
+              <button onClick={() => { setSearch(''); setFilterCategory(''); setFilterStatus(''); setFilterSite(''); setListMode('regular'); setPowerSub('all') }}
                 style={{ background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '13px', marginLeft: '8px', fontFamily: 'inherit' }}>
                 Clear filters
               </button>
@@ -464,6 +760,44 @@ export default function EquipmentPage() {
           )}
 
           {/* Equipment table */}
+          {listMode === 'power' ? (
+            <div className="csdtv-equipment-table" style={{ background: cardBg, borderRadius: '14px', border: `1px solid ${border}`, overflow: 'hidden' }}>
+              <div className="csdtv-eq-header" style={{ display: 'grid', gridTemplateColumns: '88px 40px 100px 1fr minmax(100px, 1fr) 100px', padding: '12px 16px', borderBottom: `1px solid ${border}`, fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>
+                <span>Tag</span><span></span><span>Brand</span><span>Name / input</span><span>Output</span><span>Parent</span>
+              </div>
+              {filtered.length === 0 && (
+                <div style={{ padding: '40px', textAlign: 'center' as const, color: muted, fontSize: '14px' }}>
+                  No power cables match. Add one with <strong style={{ color: text }}>+ Add power cable</strong> or from a device&apos;s Power tab.
+                </div>
+              )}
+              {filtered.map((e, i) => {
+                const parent = e.parent_equipment_id ? equipment.find(x => x.id === e.parent_equipment_id) : null
+                return (
+                  <div
+                    key={e.id}
+                    onClick={() => router.push(`/dashboard/equipment/${e.asset_tag}`)}
+                    className="csdtv-eq-row"
+                    style={{ display: 'grid', gridTemplateColumns: '88px 40px 100px 1fr minmax(100px, 1fr) 100px', padding: '12px 16px', borderBottom: i < filtered.length - 1 ? `1px solid ${border}` : 'none', cursor: 'pointer', alignItems: 'center', fontSize: '14px', color: text, transition: 'background 0.15s' }}
+                    onMouseEnter={ev => (ev.currentTarget.style.background = dark ? '#111d33' : '#f0f4ff')}
+                    onMouseLeave={ev => (ev.currentTarget.style.background = 'transparent')}
+                  >
+                    <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '13px', color: '#5ba3e0' }}>{e.asset_tag}</span>
+                    <span>{e.photo_url ? <img src={e.photo_url} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', display: 'block' }} /> : <span style={{ width: '36px', height: '36px', borderRadius: '6px', background: dark ? '#111d33' : '#f0f4ff', display: 'block' }} />}</span>
+                    <span style={{ color: muted, fontSize: '13px' }}>{e.power_brand || e.brand || '—'}</span>
+                    <span style={{ fontWeight: 500, fontSize: '13px' }}>{e.name}{e.power_input_connector ? <span style={{ color: muted, fontWeight: 400 }}> · {e.power_input_connector}</span> : null}</span>
+                    <span style={{ color: muted, fontSize: '12px' }}>{formatPowerSpecShort(e) || '—'}</span>
+                    <span style={{ fontSize: '12px' }}>
+                      {parent ? (
+                        <span style={{ color: '#5ba3e0', fontWeight: 600 }} onClick={ev => { ev.stopPropagation(); router.push(`/dashboard/equipment/${parent.asset_tag}`) }}>{parent.asset_tag}</span>
+                      ) : (
+                        <span style={{ padding: '2px 8px', borderRadius: '6px', background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontWeight: 700 }}>Orphan</span>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
           <div className="csdtv-equipment-table" style={{ background: cardBg, borderRadius: '14px', border: `1px solid ${border}`, overflow: 'hidden' }}>
             <div className="csdtv-eq-header" style={{ display: 'grid', gridTemplateColumns: '80px 44px 1fr 140px 160px 110px 90px 60px', padding: '12px 16px', borderBottom: `1px solid ${border}`, fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>
               <span>Tag</span><span></span><span>Name</span><span>Brand</span><span>Category</span><span>Status</span><span>Site</span><span></span>
@@ -495,6 +829,7 @@ export default function EquipmentPage() {
               )
             })}
           </div>
+          )}
         </div>
       )}
 

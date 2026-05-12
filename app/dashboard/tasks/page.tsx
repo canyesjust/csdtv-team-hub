@@ -11,6 +11,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
+import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
 
 interface Production {
   id: string; title: string; production_number: number
@@ -157,8 +158,9 @@ export default function TasksPage() {
   const [intakeBusy, setIntakeBusy] = useState(false)
   /** Active token row has no stored plaintext (created before migration) — rotate once to show URL. */
   const [intakeNeedsLegacyRotate, setIntakeNeedsLegacyRotate] = useState(false)
-  /** After a successful rotate (not first-time create). */
-  const [intakeRotateNotice, setIntakeRotateNotice] = useState(false)
+  /** URL stored for task ops signage QR (`app_settings`). */
+  const [signageTaskIntakeUrl, setSignageTaskIntakeUrl] = useState<string | null>(null)
+  const [signageTaskIntakeBusy, setSignageTaskIntakeBusy] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -431,6 +433,27 @@ export default function TasksPage() {
   }, [currentUser, isStudentInternUser])
 
   useEffect(() => {
+    if (!currentUser || isStudentInternUser) {
+      setSignageTaskIntakeUrl(null)
+      return
+    }
+    let cancelled = false
+    fetch('/api/dashboard/signage-task-intake-url', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return
+        const u = typeof data.url === 'string' && data.url.trim() ? data.url.trim() : null
+        setSignageTaskIntakeUrl(u)
+      })
+      .catch(() => {
+        if (!cancelled) setSignageTaskIntakeUrl(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser, isStudentInternUser])
+
+  useEffect(() => {
     if (!intakeUrlReveal) {
       setIntakeQrDataUrl(null)
       return
@@ -504,6 +527,57 @@ export default function TasksPage() {
       toast('Could not copy — copy manually', 'error')
     }
   }, [intakeUrlReveal])
+
+  const sameTaskIntakeUrl = useCallback((a: string | null, b: string | null) => {
+    if (!a || !b) return false
+    const ta = a.trim()
+    const tb = b.trim()
+    if (ta === tb) return true
+    try {
+      return new URL(ta).href === new URL(tb).href
+    } catch {
+      return false
+    }
+  }, [])
+
+  const publishIntakeToTaskSignage = useCallback(async () => {
+    if (!intakeUrlReveal || !canPublishTaskSignageIntake(currentUser?.role)) return
+    setSignageTaskIntakeBusy(true)
+    try {
+      const res = await fetch('/api/dashboard/signage-task-intake-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: intakeUrlReveal }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast(typeof data.error === 'string' ? data.error : 'Could not update signage URL', 'error')
+        return
+      }
+      setSignageTaskIntakeUrl(intakeUrlReveal)
+      toast('Task signage will show this intake QR after the board refreshes.', 'success')
+    } finally {
+      setSignageTaskIntakeBusy(false)
+    }
+  }, [intakeUrlReveal, currentUser?.role])
+
+  const clearTaskSignageIntake = useCallback(async () => {
+    if (!canPublishTaskSignageIntake(currentUser?.role)) return
+    if (!confirm('Remove the intake QR from the task ops signage board?')) return
+    setSignageTaskIntakeBusy(true)
+    try {
+      const res = await fetch('/api/dashboard/signage-task-intake-url', { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast(typeof data.error === 'string' ? data.error : 'Could not clear signage URL', 'error')
+        return
+      }
+      setSignageTaskIntakeUrl(null)
+      toast('Removed intake QR from task signage.', 'success')
+    } finally {
+      setSignageTaskIntakeBusy(false)
+    }
+  }, [currentUser?.role])
 
   const getMember = (id: string | null) => id ? team.find(m => m.id === id) || null : null
 
@@ -1050,6 +1124,43 @@ export default function TasksPage() {
                       <p style={{ fontSize: '11px', fontWeight: 700, color: muted, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>QR</p>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={intakeQrDataUrl} alt="QR code for task intake link" width={200} height={200} style={{ display: 'block', borderRadius: '8px', border: `1px solid ${border}` }} />
+                    </div>
+                  )}
+                  {canPublishTaskSignageIntake(currentUser?.role) && (
+                    <div style={{ flex: '1 1 100%', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${border}`, background: cardBg }}>
+                      <p style={{ fontSize: '12px', color: text, margin: '0 0 10px', lineHeight: 1.45 }}>
+                        <strong>Task ops signage</strong> — the wall at <code style={{ fontSize: '11px' }}>/signage/tasks</code> can show this QR after you publish.{' '}
+                        {sameTaskIntakeUrl(signageTaskIntakeUrl, intakeUrlReveal)
+                          ? 'This link is what the board is set to use.'
+                          : signageTaskIntakeUrl
+                            ? 'The board may still use a different URL — update below if you want the wall to match this link.'
+                            : 'Nothing is published yet for the wall QR.'}
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                        {!sameTaskIntakeUrl(signageTaskIntakeUrl, intakeUrlReveal) && (
+                          <button
+                            type="button"
+                            disabled={signageTaskIntakeBusy}
+                            onClick={publishIntakeToTaskSignage}
+                            style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: signageTaskIntakeBusy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: signageTaskIntakeBusy ? 0.7 : 1 }}
+                          >
+                            {signageTaskIntakeUrl ? 'Update signage to this link' : 'Publish this link to task signage'}
+                          </button>
+                        )}
+                        {sameTaskIntakeUrl(signageTaskIntakeUrl, intakeUrlReveal) && (
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#22c55e' }}>Published on task signage</span>
+                        )}
+                        {signageTaskIntakeUrl && (
+                          <button
+                            type="button"
+                            disabled={signageTaskIntakeBusy}
+                            onClick={clearTaskSignageIntake}
+                            style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: muted, border: `1px solid ${border}`, cursor: signageTaskIntakeBusy ? 'default' : 'pointer', fontFamily: 'inherit' }}
+                          >
+                            Remove from signage
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

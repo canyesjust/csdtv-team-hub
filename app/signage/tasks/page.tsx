@@ -84,6 +84,8 @@ export default function TasksSignagePage() {
   const [prodMembers, setProdMembers] = useState<ProductionMemberRow[]>([])
   const [checklistOpenByUser, setChecklistOpenByUser] = useState<Record<string, number>>({})
   const [checklistUnassignedOpen, setChecklistUnassignedOpen] = useState(0)
+  const [taskIntakeUrl, setTaskIntakeUrl] = useState<string | null>(null)
+  const [taskIntakeQrDataUrl, setTaskIntakeQrDataUrl] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     setLoadError(null)
@@ -91,11 +93,12 @@ export default function TasksSignagePage() {
     const res = await fetch(`/api/signage/tasks-data?k=${encodeURIComponent(key)}`, { cache: 'no-store' })
     const payload = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setTasks([])
-      setTeam([])
-      setProdMembers([])
-      setChecklistOpenByUser({})
-      setChecklistUnassignedOpen(0)
+    setTasks([])
+    setTeam([])
+    setProdMembers([])
+    setChecklistOpenByUser({})
+    setChecklistUnassignedOpen(0)
+    setTaskIntakeUrl(null)
       const message = (typeof payload?.error === 'string' && payload.error) || 'Failed to load signage data'
       let hint: string | null = null
       if (res.status === 401) {
@@ -140,8 +143,10 @@ export default function TasksSignagePage() {
         ? (payload.checklistOpenByUser as Record<string, number>)
         : {}
     )
-    setChecklistUnassignedOpen(typeof payload.checklistUnassignedOpen === 'number' ? payload.checklistUnassignedOpen : 0)
-    setLoading(false)
+      setChecklistUnassignedOpen(typeof payload.checklistUnassignedOpen === 'number' ? payload.checklistUnassignedOpen : 0)
+      const rawUrl = typeof payload.taskIntakeUrl === 'string' && payload.taskIntakeUrl.trim() ? payload.taskIntakeUrl.trim() : null
+      setTaskIntakeUrl(rawUrl)
+      setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -163,6 +168,34 @@ export default function TasksSignagePage() {
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [])
+
+  useEffect(() => {
+    if (!taskIntakeUrl) {
+      setTaskIntakeQrDataUrl(null)
+      return
+    }
+    let target = taskIntakeUrl
+    if (target.startsWith('/') && typeof window !== 'undefined') {
+      target = `${window.location.origin}${target}`
+    }
+    if (!/^https?:\/\//i.test(target)) {
+      setTaskIntakeQrDataUrl(null)
+      return
+    }
+    let cancelled = false
+    void import('qrcode').then(({ default: QR }) =>
+      QR.toDataURL(target, { margin: 1, width: 200, errorCorrectionLevel: 'M' })
+        .then(dataUrl => {
+          if (!cancelled) setTaskIntakeQrDataUrl(dataUrl)
+        })
+        .catch(() => {
+          if (!cancelled) setTaskIntakeQrDataUrl(null)
+        })
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [taskIntakeUrl])
 
   const displayTasks = useMemo(
     () => tasks.filter(t => !t.purchase_request),
@@ -297,13 +330,22 @@ export default function TasksSignagePage() {
           )}
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-        <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', gap: '16px', flexWrap: 'wrap' as const }}>
+        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
           <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.05 }}>CSDtv Task Ops Board</h1>
           <p style={{ margin: '6px 0 0', color: muted, fontSize: `${fs.subtitle}px` }}>Unassigned work, ownership, and upcoming 14-day production load</p>
         </div>
-        <div style={{ fontSize: `${fs.clock}px`, fontWeight: 800, color: '#60b8f0', lineHeight: 1 }}>
-          {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexShrink: 0 }}>
+          {taskIntakeQrDataUrl && taskIntakeUrl && (
+            <div style={{ textAlign: 'center' as const }}>
+              <p style={{ margin: 0, fontSize: `${fit(16, 11)}px`, color: muted, fontWeight: 700, letterSpacing: '0.04em' }}>Submit a task</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={taskIntakeQrDataUrl} alt="" width={Math.min(140, Math.round(120 * (viewport.w / 1920)))} height={Math.min(140, Math.round(120 * (viewport.w / 1920)))} style={{ display: 'block', marginTop: '6px', borderRadius: '10px', border: `1px solid ${border}` }} />
+            </div>
+          )}
+          <div style={{ fontSize: `${fs.clock}px`, fontWeight: 800, color: '#60b8f0', lineHeight: 1, alignSelf: 'center' }}>
+            {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          </div>
         </div>
       </div>
 

@@ -1,7 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { SIGNAGE_TASK_INTAKE_APP_SETTINGS_KEY } from '@/lib/equipment-power'
 
 export const dynamic = 'force-dynamic'
+
+function absoluteIntakeUrl(stored: string | null): string | null {
+  if (!stored || !String(stored).trim()) return null
+  const t = String(stored).trim()
+  if (/^https?:\/\//i.test(t)) return t
+  const siteBase =
+    (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '') ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}`.replace(/\/$/, '') : '')
+  if (t.startsWith('/') && siteBase) return `${siteBase}${t}`
+  return t
+}
 
 export async function GET(request: Request) {
   const expectedKey = process.env.SIGNAGE_TASKS_KEY
@@ -160,11 +172,22 @@ export async function GET(request: Request) {
     })
   }
 
+  const { data: signRow } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', SIGNAGE_TASK_INTAKE_APP_SETTINGS_KEY)
+    .maybeSingle()
+
+  const taskIntakeUrl = absoluteIntakeUrl(
+    signRow?.value != null && String(signRow.value).trim() ? String(signRow.value) : null
+  )
+
   return NextResponse.json({
     tasks: tasksPayload,
     team: teamRes.data || [],
     prodMembers,
     checklistOpenByUser,
     checklistUnassignedOpen,
+    taskIntakeUrl,
   })
 }
