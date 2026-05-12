@@ -25,7 +25,6 @@ function SubmitTaskInner() {
   const [needsEquipment, setNeedsEquipment] = useState(false)
   const [purchaseRequest, setPurchaseRequest] = useState(false)
   const [purchaseRequestLink, setPurchaseRequestLink] = useState('')
-  const [hideFromSignage, setHideFromSignage] = useState(false)
   const [recurring, setRecurring] = useState('')
 
   const [submitting, setSubmitting] = useState(false)
@@ -78,7 +77,6 @@ function SubmitTaskInner() {
           needs_equipment: needsEquipment,
           purchase_request: purchaseRequest,
           purchase_request_link: purchaseRequest ? (purchaseRequestLink.trim() || null) : null,
-          hide_from_signage: hideFromSignage,
           recurring: recurring || null,
         }),
       })
@@ -208,10 +206,6 @@ function SubmitTaskInner() {
                 />
               </div>
             )}
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', cursor: 'pointer', fontSize: '13px', color: text }}>
-              <input type="checkbox" checked={hideFromSignage} onChange={e => setHideFromSignage(e.target.checked)} style={{ accentColor: '#5ba3e0' }} />
-              Hide from task signage
-            </label>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: muted, marginBottom: '6px' }}>Repeat</label>
               <select value={recurring} onChange={e => setRecurring(e.target.value)} style={{ ...inputStyle, width: 'auto', minWidth: '140px' }}>

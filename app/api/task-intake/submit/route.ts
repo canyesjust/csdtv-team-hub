@@ -24,7 +24,6 @@ type Body = {
   needs_equipment?: boolean
   purchase_request?: boolean
   purchase_request_link?: string | null
-  hide_from_signage?: boolean
   recurring?: string | null
 }
 
@@ -158,7 +157,7 @@ export async function POST(request: Request) {
       needs_equipment: needsEquipment,
       purchase_request: purchaseRequest,
       purchase_request_link: purchaseLink,
-      hide_from_signage: hideFromSignage,
+      hide_from_signage: false,
       recurring,
       recurring_interval: recurring ? 1 : null,
       status: 'pending',
