@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- Component video: 3 RCA bundled (red/green/blue) -->
+  <g>
+    <rect x="40" y="50" width="40" height="22" fill="#cc3333" stroke="#000" stroke-width="2"/>
+    <rect x="80" y="55" width="40" height="12" fill="#999" stroke="#000" stroke-width="2"/>
+    <circle cx="118" cy="61" r="8" fill="#444"/>
+  </g>
+  <g>
+    <rect x="40" y="90" width="40" height="22" fill="#33aa33" stroke="#000" stroke-width="2"/>
+    <rect x="80" y="95" width="40" height="12" fill="#999" stroke="#000" stroke-width="2"/>
+    <circle cx="118" cy="101" r="8" fill="#444"/>
+  </g>
+  <g>
+    <rect x="40" y="130" width="40" height="22" fill="#3366cc" stroke="#000" stroke-width="2"/>
+    <rect x="80" y="135" width="40" height="12" fill="#999" stroke="#000" stroke-width="2"/>
+    <circle cx="118" cy="141" r="8" fill="#444"/>
+  </g>
+
+</svg>

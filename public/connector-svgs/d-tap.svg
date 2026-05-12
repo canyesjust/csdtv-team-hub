@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- D-tap / P-tap connector -->
+  <rect x="50" y="55" width="100" height="90" rx="5" fill="#222" stroke="#000" stroke-width="2"/>
+  <!-- Two contact pads -->
+  <rect x="70" y="80" width="25" height="40" fill="#c8a045" stroke="#000" stroke-width="1.5"/>
+  <rect x="105" y="80" width="25" height="40" fill="#c8a045" stroke="#000" stroke-width="1.5"/>
+  <!-- D-shape indicator: one corner squared off -->
+  <line x1="50" y1="55" x2="150" y2="55" stroke="#000" stroke-width="2"/>
+  <line x1="50" y1="145" x2="150" y2="145" stroke="#000" stroke-width="2"/>
+
+</svg>

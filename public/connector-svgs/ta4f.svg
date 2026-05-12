@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- TA4F mini-XLR 4-pin -->
+  <circle cx="100" cy="100" r="35" fill="#333" stroke="#000" stroke-width="2"/>
+  <circle cx="100" cy="100" r="22" fill="#222"/>
+  <!-- 4 pins in square -->
+  <circle cx="91" cy="91" r="3" fill="#c8a045"/>
+  <circle cx="109" cy="91" r="3" fill="#c8a045"/>
+  <circle cx="91" cy="109" r="3" fill="#c8a045"/>
+  <circle cx="109" cy="109" r="3" fill="#c8a045"/>
+
+</svg>

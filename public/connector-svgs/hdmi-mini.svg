@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- HDMI Type C Mini -->
+  <path d="M 70 90 L 130 90 L 125 110 L 75 110 Z" fill="#bbb" stroke="#000" stroke-width="2"/>
+  <rect x="78" y="96" width="44" height="3" fill="#c8a045"/>
+  <rect x="78" y="103" width="44" height="3" fill="#c8a045"/>
+
+</svg>

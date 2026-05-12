@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- RJ45 plug -->
+  <path d="M 50 70 L 150 70 L 150 130 L 50 130 Z" fill="#bbb" stroke="#000" stroke-width="2"/>
+  <!-- Release tab on top -->
+  <rect x="65" y="58" width="70" height="14" rx="2" fill="#bbb" stroke="#000" stroke-width="2"/>
+  <!-- 8 visible contact wires -->
+  <g fill="#c8a045">
+    <rect x="60" y="80" width="3" height="10"/>
+    <rect x="70" y="80" width="3" height="10"/>
+    <rect x="80" y="80" width="3" height="10"/>
+    <rect x="90" y="80" width="3" height="10"/>
+    <rect x="100" y="80" width="3" height="10"/>
+    <rect x="110" y="80" width="3" height="10"/>
+    <rect x="120" y="80" width="3" height="10"/>
+    <rect x="130" y="80" width="3" height="10"/>
+  </g>
+
+</svg>

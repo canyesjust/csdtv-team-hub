@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- 3.5mm TRS — much smaller -->
+  <rect x="80" y="96" width="30" height="8" fill="#444" stroke="#000" stroke-width="1.5"/>
+  <rect x="110" y="97" width="40" height="6" fill="#999" stroke="#000" stroke-width="1.5"/>
+  <rect x="130" y="97" width="2" height="6" fill="#222"/>
+  <rect x="140" y="97" width="2" height="6" fill="#222"/>
+
+</svg>

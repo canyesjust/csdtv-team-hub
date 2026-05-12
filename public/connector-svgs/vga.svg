@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- VGA: 15-pin D-sub trapezoidal -->
+  <path d="M 40 75 L 160 75 L 150 125 L 50 125 Z" fill="#1a4fa3" stroke="#000" stroke-width="2"/>
+  <!-- 3 rows of 5 pins -->
+  <g fill="#c8a045">
+    <circle cx="55" cy="88" r="3.5"/><circle cx="75" cy="88" r="3.5"/><circle cx="95" cy="88" r="3.5"/><circle cx="115" cy="88" r="3.5"/><circle cx="135" cy="88" r="3.5"/><circle cx="55" cy="100" r="3.5"/><circle cx="75" cy="100" r="3.5"/><circle cx="95" cy="100" r="3.5"/><circle cx="115" cy="100" r="3.5"/><circle cx="135" cy="100" r="3.5"/><circle cx="55" cy="112" r="3.5"/><circle cx="75" cy="112" r="3.5"/><circle cx="95" cy="112" r="3.5"/><circle cx="115" cy="112" r="3.5"/><circle cx="135" cy="112" r="3.5"/>
+  </g>
+  <!-- Screws on either side -->
+  <circle cx="32" cy="100" r="6" fill="#888" stroke="#000" stroke-width="1.5"/>
+  <circle cx="168" cy="100" r="6" fill="#888" stroke="#000" stroke-width="1.5"/>
+
+</svg>

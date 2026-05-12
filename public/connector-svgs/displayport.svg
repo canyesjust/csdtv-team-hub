@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- DisplayPort: trapezoidal with one chamfered corner -->
+  <path d="M 35 80 L 155 80 L 165 90 L 165 120 L 45 120 Z"
+        fill="#bbb" stroke="#000" stroke-width="2"/>
+  <rect x="50" y="90" width="105" height="6" fill="#c8a045"/>
+  <rect x="50" y="104" width="105" height="6" fill="#c8a045"/>
+
+</svg>

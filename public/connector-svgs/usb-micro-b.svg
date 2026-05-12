@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- USB Micro-B -->
+  <path d="M 60 90 L 140 90 L 135 115 L 65 115 Z" fill="#444" stroke="#000" stroke-width="2"/>
+  <!-- Visible contact strip inside -->
+  <rect x="68" y="96" width="64" height="4" fill="#c8a045"/>
+
+</svg>

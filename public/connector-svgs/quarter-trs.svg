@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- 1/4 inch TRS plug -->
+  <rect x="40" y="92" width="40" height="16" fill="#444" stroke="#000" stroke-width="2"/>
+  <rect x="80" y="94" width="80" height="12" fill="#999" stroke="#000" stroke-width="2"/>
+  <!-- Two rings -->
+  <rect x="120" y="94" width="3" height="12" fill="#222"/>
+  <rect x="140" y="94" width="3" height="12" fill="#222"/>
+
+</svg>

@@ -34,13 +34,15 @@ Supersedes conflicting lines in the copied specs where noted.
 
 **Source file in repo:** [CSDtv-Connector-Visual-Dictionary.html](./CSDtv-Connector-Visual-Dictionary.html)
 
+**Canonical SVG assets (in repo):** `public/connector-svgs/` (31 files). URLs: **`/connector-svgs/<name>.svg`** (e.g. `/connector-svgs/iec-c13.svg`). Prefer these over pasting inline SVG into TipTap. Publishing to KB still needs **`IMG` allowed** in `sanitizeArticleHtml` (see `app/dashboard/knowledge/page.tsx`) or use markdown/external link pattern you choose in §3 above.
+
 **What we need from you (or whoever publishes the article)**
 
 1. **Title** (e.g. “CSDtv cable & connector visual dictionary”) and **category** (`Reference` recommended).
 2. **Whether to allow rich HTML in KB** for this article: current KB sanitizer only allows a small tag set (`P`, `H2`, `H3`, `UL`, `OL`, `LI`, `STRONG`, `EM`, `HR`, `BR`, `A`). The dictionary HTML uses **`<table>`**, **`<svg>`**, and inline styles — **those tags are stripped or broken** today if pasted as-is.
 3. **Pick one approach:**
    - **A — Simplest:** Manually recreate the dictionary in the KB editor using **headings + bullet lists** (no tables/SVG), optionally add **photos** uploaded elsewhere and linked with allowed `<a href="https://...">`.
-   - **B — Medium:** Add **`IMG`** (and maybe `FIGURE`) to the KB allowlist and host connector images in **Supabase Storage** or a CDN; short text per connector.
+   - **B — Medium:** Add **`IMG`** (and maybe `FIGURE`) to the KB allowlist; use **`/connector-svgs/<file>.svg`** (already in `public/connector-svgs/`) or Supabase Storage / CDN; short text per connector.
    - **C — Full fidelity:** Extend `sanitizeArticleHtml` in `app/dashboard/knowledge/page.tsx` to allow controlled **`TABLE` / `TD` / `TR` / `TH`** and/or embed the HTML as a **static public page** linked from the KB article (`<a href="/…">`) without pasting raw HTML into TipTap.
 
 4. **Who edits** the article after publish (managers only vs any staff).

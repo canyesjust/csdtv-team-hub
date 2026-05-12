@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- MIDI 5-pin DIN -->
+  <circle cx="100" cy="100" r="55" fill="#222" stroke="#000" stroke-width="2"/>
+  <circle cx="100" cy="100" r="42" fill="#333"/>
+  <!-- 5 pins in semicircle -->
+  <circle cx="100" cy="70" r="4" fill="#c8a045"/>
+  <circle cx="73" cy="90" r="4" fill="#c8a045"/>
+  <circle cx="127" cy="90" r="4" fill="#c8a045"/>
+  <circle cx="82" cy="120" r="4" fill="#c8a045"/>
+  <circle cx="118" cy="120" r="4" fill="#c8a045"/>
+
+</svg>

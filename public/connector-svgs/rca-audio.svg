@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- RCA single -->
+  <rect x="60" y="85" width="40" height="30" fill="#cc3333" stroke="#000" stroke-width="2"/>
+  <rect x="100" y="92" width="50" height="16" fill="#999" stroke="#000" stroke-width="2"/>
+  <circle cx="148" cy="100" r="11" fill="#444" stroke="#000" stroke-width="1.5"/>
+  <circle cx="148" cy="100" r="3" fill="#c8a045"/>
+
+</svg>

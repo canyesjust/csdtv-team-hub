@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- NEMA 5-15 standard US 3-prong wall plug -->
+  <!-- Body -->
+  <rect x="55" y="50" width="90" height="110" rx="20" fill="#fff" stroke="#000" stroke-width="2"/>
+  <!-- Two flat blades on top -->
+  <rect x="75" y="65" width="8" height="35" fill="#444"/>
+  <rect x="117" y="65" width="8" height="35" fill="#444"/>
+  <!-- Round ground pin below -->
+  <circle cx="100" cy="130" r="9" fill="#444" stroke="#000" stroke-width="1"/>
+
+</svg>

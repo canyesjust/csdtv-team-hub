@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- C13 female (the kettle lead) -->
+  <rect x="40" y="60" width="120" height="80" fill="#222" stroke="#000" stroke-width="2"/>
+  <rect x="50" y="70" width="100" height="60" fill="#444"/>
+  <!-- Three slots in a row -->
+  <rect x="65" y="90" width="10" height="20" fill="#000"/>
+  <rect x="95" y="90" width="10" height="20" fill="#000"/>
+  <rect x="125" y="90" width="10" height="20" fill="#000"/>
+  <!-- Distinctive notch on top of C13 -->
+  <path d="M 80 60 L 90 50 L 110 50 L 120 60 Z" fill="#222" stroke="#000" stroke-width="2"/>
+
+</svg>

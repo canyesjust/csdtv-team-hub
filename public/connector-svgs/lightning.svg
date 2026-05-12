@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- Apple Lightning -->
+  <rect x="65" y="95" width="80" height="14" rx="2" fill="#999" stroke="#000" stroke-width="2"/>
+  <!-- Visible 8 contacts -->
+  <g fill="#c8a045">
+    <rect x="70" y="99" width="6" height="6"/>
+    <rect x="79" y="99" width="6" height="6"/>
+    <rect x="88" y="99" width="6" height="6"/>
+    <rect x="97" y="99" width="6" height="6"/>
+    <rect x="106" y="99" width="6" height="6"/>
+    <rect x="115" y="99" width="6" height="6"/>
+    <rect x="124" y="99" width="6" height="6"/>
+    <rect x="133" y="99" width="6" height="6"/>
+  </g>
+
+</svg>

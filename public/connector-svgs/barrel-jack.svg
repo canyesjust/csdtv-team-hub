@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+<rect width="200" height="200" fill="#f8f8f8"/>
+
+  <!-- Standard DC barrel jack (e.g. 5.5x2.5mm) -->
+  <!-- Body -->
+  <rect x="50" y="80" width="40" height="40" rx="4" fill="#222" stroke="#000" stroke-width="2"/>
+  <!-- Cylinder -->
+  <rect x="90" y="85" width="55" height="30" fill="#999" stroke="#000" stroke-width="2"/>
+  <!-- Inner ring (visible at the end) -->
+  <circle cx="145" cy="100" r="13" fill="#666" stroke="#000" stroke-width="1.5"/>
+  <!-- Center pin -->
+  <circle cx="145" cy="100" r="4" fill="#222"/>
+
+</svg>
