@@ -26,6 +26,9 @@ interface Task {
   production_id: string | null; needs_equipment: boolean; notes: string | null
   purchase_request: boolean; purchase_request_link: string | null
   hide_from_signage?: boolean
+  intake_source?: string | null
+  intake_submitter_name?: string | null
+  intake_submitter_email?: string | null
   completed_at: string | null; recurring: string | null; recurring_interval: number | null
   blocked_by: string | null; scanned_sheet_id: string | null
   source?: 'task' | 'checklist'
@@ -144,6 +147,14 @@ export default function TasksPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const overflowRef = useRef<HTMLDivElement | null>(null)
   const newTaskTitleRef = useRef<HTMLInputElement | null>(null)
+
+  const [intakeActive, setIntakeActive] = useState(false)
+  const [intakeCreatedAt, setIntakeCreatedAt] = useState<string | null>(null)
+  const [intakeLastUsedAt, setIntakeLastUsedAt] = useState<string | null>(null)
+  const [intakeUrlReveal, setIntakeUrlReveal] = useState<string | null>(null)
+  const [intakeQrDataUrl, setIntakeQrDataUrl] = useState<string | null>(null)
+  const [intakePanelLoading, setIntakePanelLoading] = useState(false)
+  const [intakeBusy, setIntakeBusy] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -368,6 +379,93 @@ export default function TasksPage() {
   useEffect(() => {
     if (isStudentInternUser) setScope('mine')
   }, [isStudentInternUser])
+
+  useEffect(() => {
+    if (!currentUser || isStudentInternUser) {
+      setIntakeActive(false)
+      setIntakeCreatedAt(null)
+      setIntakeLastUsedAt(null)
+      setIntakePanelLoading(false)
+      return
+    }
+    let cancelled = false
+    setIntakePanelLoading(true)
+    fetch('/api/dashboard/task-intake-token', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.active) {
+          setIntakeActive(true)
+          setIntakeCreatedAt(data.created_at ?? null)
+          setIntakeLastUsedAt(data.last_used_at ?? null)
+        } else {
+          setIntakeActive(false)
+          setIntakeCreatedAt(null)
+          setIntakeLastUsedAt(null)
+        }
+      })
+      .catch(() => { if (!cancelled) setIntakeActive(false) })
+      .finally(() => { if (!cancelled) setIntakePanelLoading(false) })
+    return () => { cancelled = true }
+  }, [currentUser, isStudentInternUser])
+
+  const generateIntakeLink = useCallback(async () => {
+    setIntakeBusy(true)
+    try {
+      const res = await fetch('/api/dashboard/task-intake-token', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast(typeof data.error === 'string' ? data.error : 'Failed to create link', 'error')
+        return
+      }
+      const url = data.url as string
+      setIntakeUrlReveal(url)
+      setIntakeActive(true)
+      setIntakeCreatedAt(data.created_at ?? null)
+      setIntakeLastUsedAt(null)
+      try {
+        const QR = (await import('qrcode')).default
+        const dataUrl = await QR.toDataURL(url, { margin: 1, width: 220, errorCorrectionLevel: 'M' })
+        setIntakeQrDataUrl(dataUrl)
+      } catch {
+        setIntakeQrDataUrl(null)
+      }
+      toast('New magic link ready. Old links no longer work.', 'success')
+    } finally {
+      setIntakeBusy(false)
+    }
+  }, [])
+
+  const revokeIntakeLink = useCallback(async () => {
+    if (!confirm('Revoke this intake link? Shared QR codes and URLs will stop working.')) return
+    setIntakeBusy(true)
+    try {
+      const res = await fetch('/api/dashboard/task-intake-token', { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast(typeof data.error === 'string' ? data.error : 'Failed to revoke', 'error')
+        return
+      }
+      setIntakeActive(false)
+      setIntakeCreatedAt(null)
+      setIntakeLastUsedAt(null)
+      setIntakeUrlReveal(null)
+      setIntakeQrDataUrl(null)
+      toast('Intake link revoked', 'success')
+    } finally {
+      setIntakeBusy(false)
+    }
+  }, [])
+
+  const copyIntakeUrl = useCallback(async () => {
+    if (!intakeUrlReveal) return
+    try {
+      await navigator.clipboard.writeText(intakeUrlReveal)
+      toast('Copied link', 'success')
+    } catch {
+      toast('Could not copy — copy manually', 'error')
+    }
+  }, [intakeUrlReveal])
 
   const getMember = (id: string | null) => id ? team.find(m => m.id === id) || null : null
 
@@ -863,6 +961,54 @@ export default function TasksPage() {
             </div>
           </header>
 
+          {!isStudentInternUser && (
+            <section style={{ ...uiStyles.card, padding: denseMode ? '14px' : '18px', marginBottom: denseMode ? '12px' : '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <h2 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Public task intake</h2>
+                  <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>
+                    Anyone with the magic link can submit a task with the same fields as &ldquo;New task&rdquo;. Submissions are assigned to you and appear in this list. Run the SQL in <code style={{ fontSize: '11px' }}>db/task_intake.sql</code> in Supabase if this section errors.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                  <button type="button" disabled={intakeBusy} onClick={generateIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: intakeBusy ? 0.7 : 1 }}>
+                    {intakeActive ? 'Rotate link & QR' : 'Create magic link'}
+                  </button>
+                  {intakeActive && (
+                    <button type="button" disabled={intakeBusy} onClick={revokeIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: danger, border: `1px solid ${danger}`, cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                      Revoke link
+                    </button>
+                  )}
+                </div>
+              </div>
+              {intakePanelLoading && <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>Loading intake status…</p>}
+              {!intakePanelLoading && intakeActive && !intakeUrlReveal && (
+                <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>
+                  You have an active link. Use <strong style={{ color: text }}>Rotate link &amp; QR</strong> to get a fresh URL and QR (the previous link will stop working).
+                  {intakeLastUsedAt && <span> Last submission: {new Date(intakeLastUsedAt).toLocaleString()}</span>}
+                </p>
+              )}
+              {intakeUrlReveal && (
+                <div style={{ marginTop: '14px', display: 'flex', gap: '16px', flexWrap: 'wrap' as const, alignItems: 'flex-start' }}>
+                  <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: muted, marginBottom: '6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Magic link (copy once — it is not stored)</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                      <input readOnly value={intakeUrlReveal} style={{ ...inputStyle, flex: 1, fontSize: '12px' }} onFocus={e => e.currentTarget.select()} />
+                      <button type="button" onClick={copyIntakeUrl} style={{ fontSize: '13px', fontWeight: 600, padding: '0 14px', borderRadius: '8px', background: surface2, color: text, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Copy</button>
+                    </div>
+                  </div>
+                  {intakeQrDataUrl && (
+                    <div style={{ flexShrink: 0, textAlign: 'center' as const }}>
+                      <p style={{ fontSize: '11px', fontWeight: 700, color: muted, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>QR</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={intakeQrDataUrl} alt="QR code for task intake link" width={200} height={200} style={{ display: 'block', borderRadius: '8px', border: `1px solid ${border}` }} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* FOCUS ZONE */}
           <section style={{ ...uiStyles.zoneSection, marginBottom: denseMode ? '12px' : '20px' }}>
             <ZoneHeader
@@ -1241,6 +1387,7 @@ export default function TasksPage() {
                           {task.purchase_request && <span style={{ color: info, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Purchase</span>}
                           {task.hide_from_signage && task.source !== 'checklist' && <span style={{ color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Off signage</span>}
                           {task.source === 'checklist' && <span style={{ color: info, fontWeight: 700, whiteSpace: 'nowrap' as const }}>Checklist</span>}
+                          {task.intake_source === 'magic_link' && <span style={{ color: review, fontWeight: 700, whiteSpace: 'nowrap' as const }}>Intake</span>}
                           {task.recurring && <span style={{ whiteSpace: 'nowrap' as const }}>Recurring</span>}
                           {task.blocked_by && <span style={{ color: review, whiteSpace: 'nowrap' as const, fontWeight: 600 }}>Blocked</span>}
                         </div>
@@ -1349,6 +1496,17 @@ export default function TasksPage() {
                     {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                 </div>
+
+                {selectedTask.intake_source === 'magic_link' && (selectedTask.intake_submitter_name || selectedTask.intake_submitter_email) && (
+                  <div style={{ background: statusTone.review.background, borderRadius: '10px', padding: '12px 14px', marginBottom: '14px', border: `1px solid ${border}` }}>
+                    <p style={{ fontSize: '11px', color: muted, fontWeight: 700, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Submitted via magic link</p>
+                    {selectedTask.intake_submitter_name && <p style={{ fontSize: '13px', color: text, margin: '0 0 4px' }}>{selectedTask.intake_submitter_name}</p>}
+                    {selectedTask.intake_submitter_email && (
+                      <a href={`mailto:${selectedTask.intake_submitter_email}`} style={{ fontSize: '13px', color: info, textDecoration: 'none', wordBreak: 'break-all' as const }} onClick={e => e.stopPropagation()}>{selectedTask.intake_submitter_email}</a>
+                    )}
+                  </div>
+                )}
+
                 <div style={{ marginBottom: '14px' }}>
                   {selectedTask.status === 'complete' ? (
                     <button
