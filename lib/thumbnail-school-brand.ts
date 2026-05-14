@@ -57,11 +57,18 @@ function isUuidLike(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim())
 }
 
-function normCode(c: string | null | undefined): string {
+/** Leading-zero insensitive school code match (e.g. `702` and `0702` compare equal). */
+export function normalizeSchoolCode(c: string | null | undefined): string {
   if (c === null || c === undefined) return ''
   const t = String(c).trim()
   if (!t) return ''
   return t.replace(/^0+/, '') || '0'
+}
+
+export function schoolCodesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = normalizeSchoolCode(a)
+  const nb = normalizeSchoolCode(b)
+  return na !== '' && na === nb
 }
 
 function activeSchools(rows: ThumbnailSchoolRow[]): ThumbnailSchoolRow[] {
@@ -80,7 +87,7 @@ export function resolveSchoolFromPicker(rows: ThumbnailSchoolRow[], value: strin
     const byId = pool.find(r => r.id && String(r.id).trim() === v)
     if (byId) return byId
   }
-  const byCode = pool.find(r => r.code && normCode(r.code) === normCode(v))
+  const byCode = pool.find(r => r.code && schoolCodesMatch(r.code, v))
   if (byCode) return byCode
   const vl = v.toLowerCase()
   return pool.find(r => (r.name || '').trim().toLowerCase() === vl)

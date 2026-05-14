@@ -7,6 +7,17 @@ import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 
 interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string; supabase_user_id: string | null }
+interface SchoolListRow {
+  id: string
+  code: string
+  name: string
+  type: string
+  primary_color?: string | null
+  secondary_color?: string | null
+  accent_color?: string | null
+  text_color?: string | null
+  mascot?: string | null
+}
 interface NotificationPrefs {
   notify_assigned_email: boolean; notify_assigned_inapp: boolean
   notify_completed_email: boolean; notify_completed_inapp: boolean
@@ -71,13 +82,16 @@ export default function SettingsPage() {
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState('')
   const [editingTeamMember, setEditingTeamMember] = useState<string | null>(null)
-  const [schools, setSchools] = useState<{ id: string; code: string; name: string; type: string }[]>([])
+  const [schools, setSchools] = useState<SchoolListRow[]>([])
   const [schoolSearch, setSchoolSearch] = useState('')
   const [newSchoolCode, setNewSchoolCode] = useState('')
   const [newSchoolName, setNewSchoolName] = useState('')
   const [newSchoolType, setNewSchoolType] = useState('school')
   const [editingSchool, setEditingSchool] = useState<string | null>(null)
   const [editSchoolName, setEditSchoolName] = useState('')
+  const [schoolBrandingId, setSchoolBrandingId] = useState<string | null>(null)
+  const [brandForm, setBrandForm] = useState({ primary: '', secondary: '', accent: '', text: '', mascot: '' })
+  const [brandSaving, setBrandSaving] = useState(false)
   const [adminEmail, setAdminEmail] = useState('')
   const [adminEmailSaved, setAdminEmailSaved] = useState(false)
   const [changePw, setChangePw] = useState('')
@@ -130,7 +144,7 @@ export default function SettingsPage() {
     ])
     setCurrentUser(userRes.data)
     setTeam(teamRes.data || [])
-    setSchools(schoolsRes.data || [])
+    setSchools((schoolsRes.data as SchoolListRow[]) || [])
     setTemplates(tplRes.data || [])
     setTiers(tiersRes.data || [])
     const settings = settingsRes.data || []
@@ -434,7 +448,7 @@ export default function SettingsPage() {
 
   const addSchool = async () => {
     if (!newSchoolCode.trim() || !newSchoolName.trim()) return
-    let data: { id: string; code: string; name: string; type: string } | null = null
+    let data: SchoolListRow | null = null
     try {
       const res = await callAdminSettings('add_school', { code: newSchoolCode.trim(), name: newSchoolName.trim(), type: newSchoolType })
       data = res.data
@@ -462,9 +476,78 @@ export default function SettingsPage() {
       toast(e.message || 'Failed to remove school', 'error')
       return
     }
+    if (schoolBrandingId === id) setSchoolBrandingId(null)
     setSchools(prev => prev.filter(s => s.id !== id))
   }
-  const filteredSchools = schools.filter(s => !schoolSearch || s.name.toLowerCase().includes(schoolSearch.toLowerCase()) || s.code.includes(schoolSearch))
+  const filteredSchools = schools.filter(s => !schoolSearch || s.name.toLowerCase().includes(schoolSearch.toLowerCase()) || (s.code || '').includes(schoolSearch))
+
+  const openSchoolBranding = (school: SchoolListRow) => {
+    setEditingSchool(null)
+    setSchoolBrandingId(school.id)
+    setBrandForm({
+      primary: school.primary_color || '',
+      secondary: school.secondary_color || '',
+      accent: school.accent_color || '',
+      text: school.text_color || '',
+      mascot: school.mascot || '',
+    })
+  }
+
+  const normalizeHexField = (raw: string): string | null => {
+    const t = raw.trim()
+    if (!t) return null
+    const h = t.startsWith('#') ? t : `#${t}`
+    if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(h)) return null
+    return h.toLowerCase()
+  }
+
+  const saveSchoolBranding = async () => {
+    if (!schoolBrandingId) return
+    const primary = normalizeHexField(brandForm.primary)
+    const secondary = normalizeHexField(brandForm.secondary)
+    const accent = normalizeHexField(brandForm.accent)
+    const text = normalizeHexField(brandForm.text)
+    const pairs: [string, string | null][] = [
+      [brandForm.primary, primary],
+      [brandForm.secondary, secondary],
+      [brandForm.accent, accent],
+      [brandForm.text, text],
+    ]
+    for (const [raw, norm] of pairs) {
+      if (raw.trim() && norm === null) {
+        toast('Each color must be blank or a valid hex like #003087 or #abc', 'error')
+        return
+      }
+    }
+    setBrandSaving(true)
+    try {
+      await callAdminSettings('update_school', {
+        id: schoolBrandingId,
+        primary_color: primary,
+        secondary_color: secondary,
+        accent_color: accent,
+        text_color: text,
+        mascot: brandForm.mascot.trim() || null,
+      })
+    } catch (e: any) {
+      toast(e.message || 'Failed to save brand colors', 'error')
+      setBrandSaving(false)
+      return
+    }
+    setSchools(prev => prev.map(s => (s.id === schoolBrandingId
+      ? {
+          ...s,
+          primary_color: primary,
+          secondary_color: secondary,
+          accent_color: accent,
+          text_color: text,
+          mascot: brandForm.mascot.trim() || null,
+        }
+      : s)))
+    setSchoolBrandingId(null)
+    setBrandSaving(false)
+    toast('Brand colors saved', 'success')
+  }
 
   const saveAdminEmail = async () => {
     try {
@@ -477,7 +560,7 @@ export default function SettingsPage() {
     setTimeout(() => setAdminEmailSaved(false), 2000)
   }
 
-  const toggleSchoolType = async (school: { id: string; type: string }) => {
+  const toggleSchoolType = async (school: SchoolListRow) => {
     const newType = school.type === 'school' ? 'department' : 'school'
     try {
       await callAdminSettings('toggle_school_type', { id: school.id, type: newType })
@@ -1101,11 +1184,11 @@ export default function SettingsPage() {
 
         {/* Table */}
         <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 100px', padding: '10px 14px', borderBottom: `0.5px solid ${border}`, background: 'var(--surface-2)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 168px', padding: '10px 14px', borderBottom: `0.5px solid ${border}`, background: 'var(--surface-2)' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Code</span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Name</span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Type</span>
-            <span />
+            <span style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', textAlign: 'right' as const }}>Actions</span>
           </div>
           <div style={{ maxHeight: '400px', overflowY: 'auto' as const }}>
             {filteredSchools.length === 0 ? (
@@ -1113,22 +1196,62 @@ export default function SettingsPage() {
                 <p style={{ color: muted, fontSize: '14px', margin: 0 }}>{schoolSearch ? 'No matches' : 'No schools added yet'}</p>
               </div>
             ) : filteredSchools.map((school, i) => (
-              <div key={school.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 100px', padding: '10px 14px', borderBottom: i < filteredSchools.length - 1 ? `0.5px solid ${border}` : 'none', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px', color: muted, fontFamily: 'monospace' }}>{school.code}</span>
-                {editingSchool === school.id ? (
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <input value={editSchoolName} onChange={e => setEditSchoolName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') updateSchool(school.id); if (e.key === 'Escape') setEditingSchool(null) }} autoFocus style={{ ...inputStyle, fontSize: '14px', flex: 1, padding: '6px 10px' }} />
-                    <button onClick={() => updateSchool(school.id)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
-                    <button onClick={() => setEditingSchool(null)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                  </div>
-                ) : (
-                  <span style={{ fontSize: '14px', color: text }}>{school.name}</span>
-                )}
-                <button onClick={() => isManager && toggleSchoolType(school)} style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: school.type === 'school' ? 'rgba(34,197,94,0.1)' : 'rgba(96,165,250,0.1)', color: school.type === 'school' ? '#22c55e' : '#60a5fa', border: 'none', cursor: isManager ? 'pointer' : 'default', fontFamily: 'inherit' }}>{school.type}</button>
-                {isManager && editingSchool !== school.id && (
-                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                    <button onClick={() => { setEditingSchool(school.id); setEditSchoolName(school.name) }} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
-                    <button onClick={() => { if (confirm(`Remove "${school.name}"?`)) deleteSchool(school.id) }} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+              <div key={school.id} style={{ borderBottom: i < filteredSchools.length - 1 ? `0.5px solid ${border}` : 'none' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 90px 168px', padding: '10px 14px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: muted, fontFamily: 'monospace' }}>{school.code}</span>
+                  {editingSchool === school.id ? (
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <input value={editSchoolName} onChange={e => setEditSchoolName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') updateSchool(school.id); if (e.key === 'Escape') setEditingSchool(null) }} autoFocus style={{ ...inputStyle, fontSize: '14px', flex: 1, padding: '6px 10px' }} />
+                      <button type="button" onClick={() => updateSchool(school.id)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+                      <button type="button" onClick={() => setEditingSchool(null)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '14px', color: text }}>{school.name}</span>
+                  )}
+                  <button type="button" onClick={() => isManager && toggleSchoolType(school)} style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '4px', background: school.type === 'school' ? 'rgba(34,197,94,0.1)' : 'rgba(96,165,250,0.1)', color: school.type === 'school' ? '#22c55e' : '#60a5fa', border: 'none', cursor: isManager ? 'pointer' : 'default', fontFamily: 'inherit' }}>{school.type}</button>
+                  {isManager && editingSchool !== school.id && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={() => (schoolBrandingId === school.id ? setSchoolBrandingId(null) : openSchoolBranding(school))}
+                        style={{ fontSize: '12px', color: '#a78bfa', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {schoolBrandingId === school.id ? 'Close' : 'Colors'}
+                      </button>
+                      <button type="button" onClick={() => { setSchoolBrandingId(null); setEditingSchool(school.id); setEditSchoolName(school.name) }} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
+                      <button type="button" onClick={() => { if (confirm(`Remove "${school.name}"?`)) deleteSchool(school.id) }} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                    </div>
+                  )}
+                </div>
+                {schoolBrandingId === school.id && isManager && (
+                  <div style={{ padding: '12px 14px 16px', background: 'var(--surface-2)', borderTop: `0.5px solid ${border}` }}>
+                    <p style={{ fontSize: '12px', color: muted, margin: '0 0 10px' }}>Saved on the <strong>schools</strong> row for thumbnails (#RGB or #RRGGBB). Leave blank to clear.</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                      <div>
+                        <p style={{ fontSize: '11px', color: muted, margin: '0 0 4px' }}>Primary</p>
+                        <input value={brandForm.primary} onChange={e => setBrandForm(prev => ({ ...prev, primary: e.target.value }))} placeholder="#003087" style={{ ...inputStyle, fontSize: '13px', padding: '8px 10px', minHeight: '40px' }} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '11px', color: muted, margin: '0 0 4px' }}>Secondary</p>
+                        <input value={brandForm.secondary} onChange={e => setBrandForm(prev => ({ ...prev, secondary: e.target.value }))} placeholder="#e8a020" style={{ ...inputStyle, fontSize: '13px', padding: '8px 10px', minHeight: '40px' }} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '11px', color: muted, margin: '0 0 4px' }}>Accent</p>
+                        <input value={brandForm.accent} onChange={e => setBrandForm(prev => ({ ...prev, accent: e.target.value }))} placeholder="#ffffff" style={{ ...inputStyle, fontSize: '13px', padding: '8px 10px', minHeight: '40px' }} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '11px', color: muted, margin: '0 0 4px' }}>Text</p>
+                        <input value={brandForm.text} onChange={e => setBrandForm(prev => ({ ...prev, text: e.target.value }))} placeholder="#000000" style={{ ...inputStyle, fontSize: '13px', padding: '8px 10px', minHeight: '40px' }} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <p style={{ fontSize: '11px', color: muted, margin: '0 0 4px' }}>Mascot (thumbnail prompt)</p>
+                      <input value={brandForm.mascot} onChange={e => setBrandForm(prev => ({ ...prev, mascot: e.target.value }))} placeholder="Hawks" style={{ ...inputStyle, fontSize: '13px', padding: '8px 10px', minHeight: '40px', maxWidth: '320px' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button type="button" disabled={brandSaving} onClick={saveSchoolBranding} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: brandSaving ? 'var(--surface-2)' : '#1e6cb5', color: '#fff', border: 'none', cursor: brandSaving ? 'default' : 'pointer', fontFamily: 'inherit' }}>{brandSaving ? 'Saving…' : 'Save colors'}</button>
+                      <button type="button" disabled={brandSaving} onClick={() => setSchoolBrandingId(null)} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                    </div>
                   </div>
                 )}
               </div>

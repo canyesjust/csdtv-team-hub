@@ -15,7 +15,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isStudentInternRole } from '@/lib/roles'
-import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker } from '@/lib/thumbnail-school-brand'
+import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker, schoolCodesMatch } from '@/lib/thumbnail-school-brand'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -1045,7 +1045,7 @@ export default function ProductionDetailPage() {
     const paddedDept = dept.padStart(3, '0')
     const shortLabel = getSchoolName(dept) || dept || ''
     const matchingSchool =
-      schools.find(s => s.code === dept || s.code === paddedDept) ||
+      schools.find(s => schoolCodesMatch(s.code, dept) || schoolCodesMatch(s.code, paddedDept)) ||
       schools.find(s => s.name === shortLabel || s.name === dept) ||
       null
     const pickedFromDept = resolveSchoolFromPicker(schools, matchingSchool?.code || dept)

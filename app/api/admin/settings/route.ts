@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedTeamUser, isManagerRole } from '@/lib/server/auth'
 
+function normalizeOptionalHex(v: unknown): string | null {
+  if (v === null || v === undefined) return null
+  const s = String(v).trim()
+  if (!s) return null
+  const h = s.startsWith('#') ? s : `#${s}`
+  if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(h)) throw new Error('invalid_hex')
+  return h.toLowerCase()
+}
+
 export async function POST(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,8 +45,25 @@ export async function POST(request: Request) {
     }
 
     if (action === 'update_school') {
-      const { id, name } = payload || {}
-      const { error } = await supabase.from('schools').update({ name: String(name || '').trim() }).eq('id', id)
+      const p = payload || {}
+      const { id, name, primary_color, secondary_color, accent_color, text_color, mascot } = p
+      if (!id) return NextResponse.json({ error: 'Missing school id' }, { status: 400 })
+      const patch: Record<string, string | null> = {}
+      if (typeof name === 'string') patch.name = String(name || '').trim()
+      try {
+        if ('primary_color' in p) patch.primary_color = normalizeOptionalHex(primary_color)
+        if ('secondary_color' in p) patch.secondary_color = normalizeOptionalHex(secondary_color)
+        if ('accent_color' in p) patch.accent_color = normalizeOptionalHex(accent_color)
+        if ('text_color' in p) patch.text_color = normalizeOptionalHex(text_color)
+      } catch {
+        return NextResponse.json({ error: 'Invalid color (use #RGB or #RRGGBB, or leave blank)' }, { status: 400 })
+      }
+      if ('mascot' in p) {
+        const m = typeof mascot === 'string' ? mascot.trim() : ''
+        patch.mascot = m || null
+      }
+      if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+      const { error } = await supabase.from('schools').update(patch).eq('id', id)
       if (error) return NextResponse.json({ error: error.message }, { status: 400 })
       return NextResponse.json({ success: true })
     }

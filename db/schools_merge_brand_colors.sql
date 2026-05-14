@@ -1,5 +1,6 @@
 -- Merge school_brand_colors into schools (single source of truth), then drop school_brand_colors.
 -- Run once in Supabase SQL editor after backup. Safe to re-run: IF NOT EXISTS / guarded drops.
+-- Order and verification: see db/README-school-brand.md
 
 -- 1) Add brand columns missing on schools
 ALTER TABLE public.schools
