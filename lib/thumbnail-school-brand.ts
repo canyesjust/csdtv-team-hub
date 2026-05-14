@@ -1,12 +1,48 @@
 /** Resolve `school_brand_colors` rows for thumbnail prompts despite label drift (Mt. vs Mount, short vs full names). */
 
 export type ThumbnailBrandColorRow = {
+  id?: string
   school_code: string | null
   school_name: string | null
   primary_color: string | null
   secondary_color: string | null
   accent_color: string | null
+  text_color?: string | null
   mascot: string | null
+}
+
+function pickHex(v: string | null | undefined): string | null {
+  const t = (v || '').trim()
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(t) ? t : null
+}
+
+const DISTRICT_BRAND_HEX = { primary: '#003087', secondary: '#e8a020', accent: '#ffffff' } as const
+
+/**
+ * Map `school_brand_colors` columns to three BRAND COLORS slots for the thumbnail prompt.
+ * Many rows omit `primary_color` (e.g. Alta High); we promote secondary → primary so the model
+ * does not receive Canyons defaults by accident.
+ */
+export function promptBrandHexesFromRow(row: {
+  primary_color?: string | null
+  secondary_color?: string | null
+  accent_color?: string | null
+  text_color?: string | null
+}): { primary: string; secondary: string; accent: string } {
+  const p = pickHex(row.primary_color)
+  const s = pickHex(row.secondary_color)
+  const a = pickHex(row.accent_color)
+  const txt = pickHex(row.text_color)
+
+  if (p && s && a) return { primary: p, secondary: s, accent: a }
+  if (p && s) return { primary: p, secondary: s, accent: a || '#ffffff' }
+  if (p) return { primary: p, secondary: s || '#64748b', accent: a || '#ffffff' }
+
+  if (!p && s && a) return { primary: s, secondary: a, accent: txt || '#ffffff' }
+  if (!p && s && txt) return { primary: s, secondary: txt, accent: a || '#ffffff' }
+  if (!p && s) return { primary: s, secondary: '#334155', accent: '#ffffff' }
+
+  return { ...DISTRICT_BRAND_HEX }
 }
 
 function normCode(c: string | null | undefined): string {

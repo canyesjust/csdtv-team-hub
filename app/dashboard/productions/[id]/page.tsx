@@ -15,7 +15,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isStudentInternRole } from '@/lib/roles'
-import { findMatchingSchoolBrandColorRow } from '@/lib/thumbnail-school-brand'
+import { findMatchingSchoolBrandColorRow, promptBrandHexesFromRow } from '@/lib/thumbnail-school-brand'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -74,6 +74,7 @@ interface SchoolBrandColorRow {
   primary_color: string | null
   secondary_color: string | null
   accent_color: string | null
+  text_color?: string | null
   mascot: string | null
   active: boolean | null
 }
@@ -1151,14 +1152,27 @@ export default function ProductionDetailPage() {
       overrideName: thumbSchoolOverride,
       catalogName: selectedThumbSchool?.name ?? null,
     })
+    const brandRowForHex =
+      overrideRow ||
+      (selectedThumbSchool?.id?.startsWith('brand:')
+        ? schoolBrandColors.find(r => `brand:${r.id}` === selectedThumbSchool.id)
+        : undefined)
+
+    const hex = brandRowForHex
+      ? promptBrandHexesFromRow(brandRowForHex)
+      : {
+          primary: selectedThumbSchool?.primary_color?.trim() || '#003087',
+          secondary: selectedThumbSchool?.secondary_color?.trim() || '#e8a020',
+          accent: selectedThumbSchool?.accent_color?.trim() || '#ffffff',
+        }
 
     return {
       name: selectedThumbSchool?.name || overrideRow?.school_name || 'Canyons School District',
       short_name: selectedThumbSchool?.short_name || overrideRow?.school_name || 'Canyons',
       mascot: overrideRow?.mascot || selectedThumbSchool?.mascot || '',
-      primary_color: overrideRow?.primary_color || selectedThumbSchool?.primary_color || '#003087',
-      secondary_color: overrideRow?.secondary_color || selectedThumbSchool?.secondary_color || '#e8a020',
-      accent_color: overrideRow?.accent_color || selectedThumbSchool?.accent_color || '#ffffff',
+      primary_color: hex.primary,
+      secondary_color: hex.secondary,
+      accent_color: hex.accent,
     }
   }, [thumbSchoolCode, thumbSchoolOverride, selectedThumbSchool, schoolBrandColors])
 
