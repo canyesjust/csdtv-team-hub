@@ -1277,9 +1277,11 @@ export default function ProductionDetailPage() {
       '- Event title must be prominent and readable at mobile size.',
       '- No LIVE chip or LIVE badge under any condition.',
       '- Keep output production-ready: no placeholder geometry, no lorem ipsum.',
+      '- Do not depict people: no human faces, bodies, crowds, hands, or silhouettes that read as a person. Use abstract shapes, typography, patterns, and non-human symbols only. If a mascot name is given, suggest it with type or an abstract mark—never an illustrated human or humanoid character.',
+      '- Before returning the final SVG, resolve text overlap: treat each <text> block (including tspans and multi-line stacks) as a rectangle; ensure no overlap with other text, the CSDtv lockup zone, or key graphics. Adjust position, line breaks, letter-spacing, or font size until everything is clearly separated with comfortable margins from edges.',
       '',
       'OUTPUT CONTRACT',
-      '- Return only valid SVG markup, starting with <svg and ending with </svg>.',
+      '- Return only valid SVG markup, starting with <svg and ending with </svg>—one document, no commentary—after the overlap and no-humans checks above.',
     ].filter(Boolean)
     setThumbPrompt(lines.join('\n'))
   }, [thumbSchoolOverride, selectedThumbBrand, thumbEventName, thumbEventType, thumbDate, thumbTime, thumbDetail, thumbTone, thumbEventDescription, thumbLogistics, thumbConceptAnchor, thumbMascotMode])
