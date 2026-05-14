@@ -15,6 +15,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isStudentInternRole } from '@/lib/roles'
+import { findMatchingSchoolBrandColorRow } from '@/lib/thumbnail-school-brand'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -1049,11 +1050,28 @@ export default function ProductionDetailPage() {
     const eventDate = production.start_datetime ? new Date(production.start_datetime) : null
     const dateVal = eventDate ? `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}` : ''
     const timeVal = eventDate ? eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
-    const defaultSchool = getSchoolName(production.school_department) || production.school_department || 'Canyons School District'
-    const matchingSchool = schools.find(s => s.code === production.school_department || s.name === defaultSchool)
+    const dept = (production.school_department ?? '').toString().trim()
+    const paddedDept = dept.padStart(3, '0')
+    const shortLabel = getSchoolName(dept) || dept || ''
+    const matchingSchool =
+      schools.find(s => s.code === dept || s.code === paddedDept) ||
+      schools.find(s => s.name === shortLabel || s.name === dept) ||
+      null
+    const brandMatch = findMatchingSchoolBrandColorRow(schoolBrandColors, {
+      thumbSchoolCode: matchingSchool?.code || dept,
+      overrideName: shortLabel || dept,
+      catalogName: matchingSchool?.name ?? null,
+    })
+    const canonicalSchoolName =
+      brandMatch?.school_name || matchingSchool?.name || shortLabel || dept || 'Canyons School District'
+    const thumbCode =
+      matchingSchool?.code ||
+      (brandMatch?.school_code || '').trim() ||
+      (brandMatch?.school_name || '').trim() ||
+      'district'
 
-    setThumbSchoolCode(matchingSchool?.code || matchingSchool?.name || 'district')
-    setThumbSchoolOverride(defaultSchool)
+    setThumbSchoolCode(thumbCode === '' ? 'district' : thumbCode)
+    setThumbSchoolOverride(canonicalSchoolName)
     setThumbEventName(production.title || getTypeLabel(production))
     setThumbDate(dateVal)
     setThumbTime(timeVal)
@@ -1078,11 +1096,46 @@ export default function ProductionDetailPage() {
       setThumbEventType('recognition')
       setThumbTone('warm-community')
     }
-    const hasMascot = Boolean(matchingSchool?.mascot)
+    const hasMascot = Boolean(brandMatch?.mascot || matchingSchool?.mascot)
     setThumbMascotMode(hasMascot ? 'name' : 'none-applicable')
-  }, [production, schools, thumbDraftRestored])
+  }, [production, schools, schoolBrandColors, thumbDraftRestored])
 
-  const selectedThumbSchool = (() => {
+  const selectedThumbSchool = useMemo((): SchoolBrand | null => {
+    if (thumbSchoolCode === 'district') {
+      return {
+        id: 'district',
+        code: 'district',
+        name: 'Canyons School District',
+        short_name: 'Canyons',
+        mascot: '',
+        primary_color: '#003087',
+        secondary_color: '#e8a020',
+        accent_color: '#ffffff',
+      }
+    }
+    const fromSchools = schools.find(s => s.code === thumbSchoolCode || s.name === thumbSchoolCode)
+    if (fromSchools) return fromSchools
+    const fromBrand = schoolBrandColors.find(
+      r =>
+        (r.school_code && r.school_code === thumbSchoolCode) ||
+        (r.school_name || '').trim() === thumbSchoolCode,
+    )
+    if (fromBrand?.school_name) {
+      return {
+        id: `brand:${fromBrand.id}`,
+        code: fromBrand.school_code || thumbSchoolCode,
+        name: fromBrand.school_name,
+        short_name: (fromBrand.school_name.split(/\s+/)[0] || fromBrand.school_name).slice(0, 24),
+        mascot: fromBrand.mascot || '',
+        primary_color: fromBrand.primary_color,
+        secondary_color: fromBrand.secondary_color,
+        accent_color: fromBrand.accent_color,
+      }
+    }
+    return null
+  }, [thumbSchoolCode, schools, schoolBrandColors])
+
+  const selectedThumbBrand = useMemo(() => {
     if (thumbSchoolCode === 'district') {
       return {
         name: 'Canyons School District',
@@ -1091,30 +1144,23 @@ export default function ProductionDetailPage() {
         primary_color: '#003087',
         secondary_color: '#e8a020',
         accent_color: '#ffffff',
-      } as SchoolBrand
+      }
     }
-    return schools.find(s => s.code === thumbSchoolCode || s.name === thumbSchoolCode) || null
-  })()
-
-  const selectedThumbBrand = (() => {
-    const normalizedCode = (thumbSchoolCode || '').trim().toLowerCase()
-    const normalizedName = (thumbSchoolOverride || selectedThumbSchool?.name || '').trim().toLowerCase()
-    const override = schoolBrandColors.find(row => {
-      const rowCode = (row.school_code || '').trim().toLowerCase()
-      const rowName = (row.school_name || '').trim().toLowerCase()
-      return (!!normalizedCode && !!rowCode && rowCode === normalizedCode)
-        || (!!normalizedName && !!rowName && rowName === normalizedName)
+    const overrideRow = findMatchingSchoolBrandColorRow(schoolBrandColors, {
+      thumbSchoolCode,
+      overrideName: thumbSchoolOverride,
+      catalogName: selectedThumbSchool?.name ?? null,
     })
 
     return {
-      name: selectedThumbSchool?.name || override?.school_name || 'Canyons School District',
-      short_name: selectedThumbSchool?.short_name || override?.school_name || 'Canyons',
-      mascot: override?.mascot || selectedThumbSchool?.mascot || '',
-      primary_color: override?.primary_color || selectedThumbSchool?.primary_color || '#003087',
-      secondary_color: override?.secondary_color || selectedThumbSchool?.secondary_color || '#e8a020',
-      accent_color: override?.accent_color || selectedThumbSchool?.accent_color || '#ffffff',
+      name: selectedThumbSchool?.name || overrideRow?.school_name || 'Canyons School District',
+      short_name: selectedThumbSchool?.short_name || overrideRow?.school_name || 'Canyons',
+      mascot: overrideRow?.mascot || selectedThumbSchool?.mascot || '',
+      primary_color: overrideRow?.primary_color || selectedThumbSchool?.primary_color || '#003087',
+      secondary_color: overrideRow?.secondary_color || selectedThumbSchool?.secondary_color || '#e8a020',
+      accent_color: overrideRow?.accent_color || selectedThumbSchool?.accent_color || '#ffffff',
     }
-  })()
+  }, [thumbSchoolCode, thumbSchoolOverride, selectedThumbSchool, schoolBrandColors])
 
   useEffect(() => {
     if (!thumbSchoolOverride && selectedThumbSchool?.name) {
@@ -2321,9 +2367,21 @@ export default function ProductionDetailPage() {
                   onChange={e => {
                     const v = e.target.value
                     setThumbSchoolCode(v)
-                    const s = v === 'district' ? null : schools.find(x => x.code === v || x.name === v)
-                    if (v === 'district') setThumbSchoolOverride('Canyons School District')
-                    else if (s?.name) setThumbSchoolOverride(s.name)
+                    if (v === 'district') {
+                      setThumbSchoolOverride('Canyons School District')
+                      return
+                    }
+                    const s = schools.find(x => x.code === v || x.name === v)
+                    if (s?.name) {
+                      setThumbSchoolOverride(s.name)
+                      return
+                    }
+                    const brandRow = schoolBrandColors.find(
+                      r =>
+                        (r.school_code && r.school_code === v) ||
+                        (r.school_name || '').trim() === v,
+                    )
+                    if (brandRow?.school_name) setThumbSchoolOverride(brandRow.school_name)
                   }}
                   style={inputStyle}
                 >
