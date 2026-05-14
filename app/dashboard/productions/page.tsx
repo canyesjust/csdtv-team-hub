@@ -12,6 +12,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
+import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 
 interface Production {
@@ -103,24 +104,34 @@ const PRODUCTION_LIST_SELECT = `
   checklist_items(completed)
 `
 
+function parseProductionInstant(iso: string): Date {
+  const raw = iso.includes('T') ? iso : iso.replace(' ', 'T')
+  return new Date(raw)
+}
+
+/** Whole calendar days from local today (0 = today, -1 = yesterday). Ignores clock time within the day. */
 function daysFromToday(d: string | null): number | null {
   if (!d) return null
-  const eventDay = new Date(d)
-  eventDay.setHours(0, 0, 0, 0)
+  const event = parseProductionInstant(d)
+  if (Number.isNaN(event.getTime())) return null
+  const eventDay = new Date(event.getFullYear(), event.getMonth(), event.getDate())
   const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.round((eventDay.getTime() - today.getTime()) / 86400000)
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  return Math.round((eventDay.getTime() - todayDay.getTime()) / 86400000)
 }
 
 function isOverdueProd(p: Production): boolean {
   if (!p.start_datetime) return false
   if (p.status === 'Complete' || p.status === 'Abandoned') return false
-  return new Date(p.start_datetime).getTime() < Date.now()
+  if (p.status === 'In Progress') return false
+  const df = daysFromToday(p.start_datetime)
+  return df !== null && df < 0
 }
 
 function isPastProd(p: Production): boolean {
   if (!p.start_datetime) return false
-  return new Date(p.start_datetime).getTime() < Date.now()
+  const df = daysFromToday(p.start_datetime)
+  return df !== null && df < 0
 }
 
 /** Rows that inflate Focus chip counts — exclude only Complete and Abandoned (incl. approved past-due). */
@@ -192,6 +203,7 @@ function ProductionsPageContent() {
   const [completeRequestedIds, setCompleteRequestedIds] = useState<Set<string>>(() => new Set())
   /** Production IDs explicitly moved back to In Progress after a completion request. */
   const [requestedInProgressIds, setRequestedInProgressIds] = useState<Set<string>>(() => new Set())
+  const [overdueQuickActionId, setOverdueQuickActionId] = useState<string | null>(null)
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -211,14 +223,13 @@ function ProductionsPageContent() {
 
   // Sort: overdue first → upcoming soonest → no date → past most-recent
   const sortProductions = useCallback((data: Production[]): Production[] => {
-    const now = Date.now()
     return [...data].sort((a, b) => {
-      const aTs = a.start_datetime ? new Date(a.start_datetime).getTime() : null
-      const bTs = b.start_datetime ? new Date(b.start_datetime).getTime() : null
+      const aTs = a.start_datetime ? parseProductionInstant(a.start_datetime).getTime() : null
+      const bTs = b.start_datetime ? parseProductionInstant(b.start_datetime).getTime() : null
       const aOverdue = isOverdueProd(a)
       const bOverdue = isOverdueProd(b)
-      const aPast = aTs !== null && aTs < now
-      const bPast = bTs !== null && bTs < now
+      const aPast = a.start_datetime ? (daysFromToday(a.start_datetime) ?? 1) < 0 : false
+      const bPast = b.start_datetime ? (daysFromToday(b.start_datetime) ?? 1) < 0 : false
       if (aOverdue && !bOverdue) return -1
       if (!aOverdue && bOverdue) return 1
       if (aOverdue && bOverdue) return (bTs ?? 0) - (aTs ?? 0)
@@ -551,6 +562,79 @@ function ProductionsPageContent() {
     setDismissedConflicts(prev => { const n = new Set(prev); n.add(`${aId}-${bId}`); n.add(`${bId}-${aId}`); return n })
   }
 
+  const toStatusWire = (p: Production): ProductionStatusWire => ({
+    id: p.id,
+    production_number: p.production_number,
+    title: p.title,
+    request_type_label: p.request_type_label,
+    type: p.type,
+    organizer_name: p.organizer_name,
+    start_datetime: p.start_datetime,
+  })
+
+  const overdueStripInProgress = async (p: Production) => {
+    if (!currentUser?.email) {
+      toast('Missing profile email', 'error')
+      return
+    }
+    setOverdueQuickActionId(p.id)
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session?.access_token) {
+        toast('Not signed in', 'error')
+        return
+      }
+      const r = await hubRequestProductionInProgress({
+        supabase,
+        accessToken: session.access_token,
+        production: toStatusWire(p),
+        currentUserEmail: currentUser.email,
+        currentUserId: currentUser.id,
+      })
+      if (!r.ok) {
+        toast(r.message, 'error')
+        return
+      }
+      setProductions(prev => prev.map(x => (x.id === p.id ? { ...x, status: 'In Progress' } : x)))
+      setRequestedInProgressIds(prev => new Set(prev).add(p.id))
+      toast('Marked In Progress', 'success')
+    } finally {
+      setOverdueQuickActionId(null)
+    }
+  }
+
+  const overdueStripComplete = async (p: Production) => {
+    if (!currentUser?.email) {
+      toast('Missing profile email', 'error')
+      return
+    }
+    if (!window.confirm(`Send complete request for #${p.production_number} ${p.title}?`)) return
+    setOverdueQuickActionId(p.id)
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession()
+      if (!session?.access_token) {
+        toast('Not signed in', 'error')
+        return
+      }
+      const r = await hubRequestProductionComplete({
+        supabase,
+        accessToken: session.access_token,
+        production: toStatusWire(p),
+        currentUserEmail: currentUser.email,
+        currentUserId: currentUser.id,
+      })
+      if (!r.ok) {
+        toast(r.message, 'error')
+        return
+      }
+      setProductions(prev => prev.map(x => (x.id === p.id ? { ...x, status: 'Complete Requested' } : x)))
+      setCompleteRequestedIds(prev => new Set(prev).add(p.id))
+      toast('Complete request sent', 'success')
+    } finally {
+      setOverdueQuickActionId(null)
+    }
+  }
+
   const getTypeLabel = (p: Production) => p.request_type_label || p.type || 'Unknown'
   const getTypeColor = (p: Production) => TYPE_COLORS[getTypeLabel(p)] || '#64748b'
   const isLivestreamType = useCallback((p: Production) => {
@@ -689,7 +773,11 @@ function ProductionsPageContent() {
   const overdueProds = useMemo(() => filtered.filter(isOverdueProd), [filtered])
 
   const conflicts = useMemo(() => {
-    const upcoming = filtered.filter(p => p.start_datetime && p.status !== 'Complete' && p.status !== 'Abandoned' && new Date(p.start_datetime) >= new Date())
+    const upcoming = filtered.filter(p => {
+      if (!p.start_datetime || p.status === 'Complete' || p.status === 'Abandoned') return false
+      const df = daysFromToday(p.start_datetime)
+      return df !== null && df >= 0
+    })
     const all: { a: Production; b: Production }[] = []
     for (let i = 0; i < upcoming.length; i++) {
       for (let j = i + 1; j < upcoming.length; j++) {
@@ -1129,13 +1217,98 @@ function ProductionsPageContent() {
                       </span>
                     </button>
                     {overdueExpanded && (
-                      <div style={{ borderTop: `1px solid ${danger}30`, padding: '4px 10px 6px' }}>
-                        {overdueProds.slice(0, 8).map(p => (
-                          <div key={p.id} onClick={() => selectProduction(p.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '3px 0', cursor: 'pointer', gap: '8px' }}>
-                            <span style={{ fontSize: '11px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, minWidth: 0 }}><span style={{ fontWeight: 600, color: danger }}>#{p.production_number}</span>{' '}{p.title}</span>
-                            <span style={{ fontSize: '10px', color: danger, fontWeight: 600, flexShrink: 0 }}>{p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
-                          </div>
-                        ))}
+                      <div style={{ borderTop: `1px solid ${danger}30`, padding: '6px 10px 8px' }}>
+                        {overdueProds.slice(0, 8).map((p, idx) => {
+                          const busy = overdueQuickActionId === p.id
+                          const showInProg = p.status !== 'In Progress'
+                          const showComplete = p.status !== 'Complete' && !isCompleteRequested(p)
+                          const isLast = idx === Math.min(overdueProds.length, 8) - 1
+                          return (
+                            <div
+                              key={p.id}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column' as const,
+                                gap: '6px',
+                                padding: '6px 0',
+                                borderBottom: isLast ? 'none' : `1px solid ${danger}22`,
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => selectProduction(p.id)}
+                                  style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    display: 'block',
+                                    textAlign: 'left' as const,
+                                    background: 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
+                                    padding: 0,
+                                  }}
+                                >
+                                  <span style={{ fontSize: '11px', color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                                    <span style={{ fontWeight: 600, color: danger }}>#{p.production_number}</span>
+                                    {' '}
+                                    {p.title}
+                                  </span>
+                                </button>
+                                <span style={{ fontSize: '10px', color: danger, fontWeight: 600, flexShrink: 0, paddingTop: '2px' }}>
+                                  {p.start_datetime ? new Date(p.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                                </span>
+                              </div>
+                              {(showInProg || showComplete) && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px', alignItems: 'center' }}>
+                                  {showInProg && (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={e => { e.stopPropagation(); overdueStripInProgress(p) }}
+                                      style={{
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        padding: '4px 8px',
+                                        borderRadius: '6px',
+                                        border: `1px solid ${border}`,
+                                        background: warningBg,
+                                        color: warning,
+                                        cursor: busy ? 'not-allowed' : 'pointer',
+                                        fontFamily: 'inherit',
+                                        opacity: busy ? 0.6 : 1,
+                                      }}
+                                    >
+                                      In progress
+                                    </button>
+                                  )}
+                                  {showComplete && (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={e => { e.stopPropagation(); overdueStripComplete(p) }}
+                                      style={{
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        padding: '4px 8px',
+                                        borderRadius: '6px',
+                                        border: `1px solid ${border}`,
+                                        background: successBg,
+                                        color: success,
+                                        cursor: busy ? 'not-allowed' : 'pointer',
+                                        fontFamily: 'inherit',
+                                        opacity: busy ? 0.6 : 1,
+                                      }}
+                                    >
+                                      Request complete
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                         {overdueProds.length > 8 && <p style={{ fontSize: '10px', color: muted, margin: '4px 0 0', textAlign: 'center' as const }}>+{overdueProds.length - 8} more</p>}
                       </div>
                     )}

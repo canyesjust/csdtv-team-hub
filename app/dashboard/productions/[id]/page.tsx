@@ -15,6 +15,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isStudentInternRole } from '@/lib/roles'
+import { hubRequestProductionComplete, hubRequestProductionInProgress } from '@/lib/production-status-requests'
 import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker, schoolCodesMatch } from '@/lib/thumbnail-school-brand'
 
 interface Production {
@@ -752,28 +753,29 @@ export default function ProductionDetailPage() {
     setSendingComplete(true)
     try {
       const { data: { session } } = await supabase.auth.refreshSession()
-      if (!session) { setSendingComplete(false); return }
-      // Get admin assistant email from settings
-      const { data: settingData } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
-      const adminEmail = settingData?.value || ''
-      const recipients = [currentUser.email, adminEmail].filter(Boolean)
-      const prodTitle = `#${production.production_number} ${production.title}`
-      const body = `Production ${prodTitle} is marked as "Complete Requested" in CSDtv Team Hub.\n\nPlease mark this production as complete in the district productions system.\n\nType: ${production.request_type_label || 'Unknown'}\nOrganizer: ${production.organizer_name || 'N/A'}\nDate: ${production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}\n\n— CSDtv Team Hub`
-      for (const email of recipients) {
-        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ type: 'production_complete', recipientEmail: email, subject: sanitizeEmailSubject(`Complete requested: ${prodTitle}`), body }),
-        })
+      if (!session?.access_token) { setSendingComplete(false); return }
+      const wire = {
+        id: production.id,
+        production_number: production.production_number,
+        title: production.title,
+        request_type_label: production.request_type_label,
+        type: production.type,
+        organizer_name: production.organizer_name,
+        start_datetime: production.start_datetime,
       }
-      const { error: statusErr } = await supabase.from('productions').update({ status: 'Complete Requested' }).eq('id', uuid)
-      if (statusErr) {
-        toast(`Failed to set Complete Requested: ${statusErr.message}`, 'error')
+      const r = await hubRequestProductionComplete({
+        supabase,
+        accessToken: session.access_token,
+        production: wire,
+        currentUserEmail: currentUser.email,
+        currentUserId: currentUser.id,
+      })
+      if (!r.ok) {
+        toast(r.message, 'error')
         setSendingComplete(false)
         return
       }
       setProduction(prev => prev ? { ...prev, status: 'Complete Requested' } : prev)
-      await supabase.from('production_activity').insert({ production_id: uuid, user_id: currentUser.id, action: 'requested_complete', detail: 'Requested completion — email sent to admin' })
       setActivity(prev => [{ id: Date.now().toString(), production_id: uuid, user_id: currentUser.id, action: 'requested_complete', detail: 'Requested completion — email sent to admin', created_at: new Date().toISOString(), team: { name: currentUser.name } }, ...prev])
       toast('Complete request sent', 'success')
     } catch {
@@ -788,23 +790,32 @@ export default function ProductionDetailPage() {
     if (!production || !currentUser || !uuid) return
     try {
       const { data: { session } } = await supabase.auth.refreshSession()
-      if (!session) return
-      const { data: settingData } = await supabase.from('app_settings').select('value').eq('key', 'admin_assistant_email').single()
-      const adminEmail = settingData?.value || ''
-      const recipients = [currentUser.email, adminEmail].filter(Boolean)
-      const prodTitle = `#${production.production_number} ${production.title}`
-      const body = `Production ${prodTitle} is now in progress in CSDtv Team Hub.\n\nPlease update this production's status to "In Progress" in the district productions system.\n\nType: ${production.request_type_label || 'Unknown'}\nOrganizer: ${production.organizer_name || 'N/A'}\nDate: ${production.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}\n\n— CSDtv Team Hub`
-      for (const email of recipients) {
-        await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ type: 'production_in_progress', recipientEmail: email, subject: sanitizeEmailSubject(`Production in progress: ${prodTitle}`), body }),
-        })
+      if (!session?.access_token) return
+      const wire = {
+        id: production.id,
+        production_number: production.production_number,
+        title: production.title,
+        request_type_label: production.request_type_label,
+        type: production.type,
+        organizer_name: production.organizer_name,
+        start_datetime: production.start_datetime,
       }
-      await logActivity('requested_in_progress', 'Requested status change to In Progress — email sent to admin')
+      const r = await hubRequestProductionInProgress({
+        supabase,
+        accessToken: session.access_token,
+        production: wire,
+        currentUserEmail: currentUser.email,
+        currentUserId: currentUser.id,
+      })
+      if (!r.ok) {
+        toast(r.message, 'error')
+        return
+      }
+      setProduction(prev => prev ? { ...prev, status: 'In Progress' } : prev)
+      setActivity(prev => [{ id: Date.now().toString(), production_id: uuid, user_id: currentUser.id, action: 'requested_in_progress', detail: 'Marked In Progress in Team Hub — email sent to admin', created_at: new Date().toISOString(), team: { name: currentUser.name } }, ...prev])
       toast('In Progress request sent', 'success')
     } catch { toast('Failed to send request', 'error') }
-  }, [production, currentUser, uuid, supabase, logActivity])
+  }, [production, currentUser, uuid, supabase])
 
   const clearCompleteRequested = useCallback(async () => {
     if (!production || !currentUser || !uuid) return
