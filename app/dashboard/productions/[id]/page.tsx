@@ -15,7 +15,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isStudentInternRole } from '@/lib/roles'
-import { findMatchingSchoolForThumbnail, promptBrandHexesFromRow } from '@/lib/thumbnail-school-brand'
+import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker } from '@/lib/thumbnail-school-brand'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -1048,20 +1048,12 @@ export default function ProductionDetailPage() {
       schools.find(s => s.code === dept || s.code === paddedDept) ||
       schools.find(s => s.name === shortLabel || s.name === dept) ||
       null
-    const brandMatch = findMatchingSchoolForThumbnail(schools, {
-      thumbSchoolCode: matchingSchool?.code || dept,
-      overrideName: shortLabel || dept,
-      catalogName: matchingSchool?.name ?? null,
-    })
+    const pickedFromDept = resolveSchoolFromPicker(schools, matchingSchool?.code || dept)
     const canonicalSchoolName =
-      brandMatch?.name || matchingSchool?.name || shortLabel || dept || 'Canyons School District'
-    const thumbCode =
-      matchingSchool?.code ||
-      (brandMatch?.code || '').trim() ||
-      (brandMatch?.name || '').trim() ||
-      'district'
+      matchingSchool?.name || pickedFromDept?.name || shortLabel || dept || 'Canyons School District'
+    const thumbKey = matchingSchool?.id || pickedFromDept?.id || 'district'
 
-    setThumbSchoolCode(thumbCode === '' ? 'district' : thumbCode)
+    setThumbSchoolCode(thumbKey === '' ? 'district' : thumbKey)
     setThumbSchoolOverride(canonicalSchoolName)
     setThumbEventName(production.title || getTypeLabel(production))
     setThumbDate(dateVal)
@@ -1087,9 +1079,17 @@ export default function ProductionDetailPage() {
       setThumbEventType('recognition')
       setThumbTone('warm-community')
     }
-    const hasMascot = Boolean(brandMatch?.mascot || matchingSchool?.mascot)
+    const hasMascot = Boolean(matchingSchool?.mascot || pickedFromDept?.mascot)
     setThumbMascotMode(hasMascot ? 'name' : 'none-applicable')
   }, [production, schools, thumbDraftRestored])
+
+  // Picker options use `schools.id`. Legacy localStorage drafts may store code or name — normalize once a row is found.
+  useEffect(() => {
+    if (thumbSchoolCode === 'district' || !schools.length) return
+    if (schools.some(s => s.id === thumbSchoolCode)) return
+    const r = resolveSchoolFromPicker(schools, thumbSchoolCode)
+    if (r?.id) setThumbSchoolCode(r.id)
+  }, [schools, thumbSchoolCode])
 
   const selectedThumbSchool = useMemo((): SchoolBrand | null => {
     if (thumbSchoolCode === 'district') {
@@ -1104,7 +1104,25 @@ export default function ProductionDetailPage() {
         accent_color: '#ffffff',
       }
     }
-    return schools.find(s => s.code === thumbSchoolCode || s.name === thumbSchoolCode) || null
+    return (() => {
+      const resolved = resolveSchoolFromPicker(schools, thumbSchoolCode)
+      if (!resolved?.name) return null
+      return {
+        id: resolved.id || '',
+        code: resolved.code,
+        name: resolved.name,
+        short_name: resolved.short_name || resolved.name.split(/\s+/)[0] || resolved.name,
+        mascot: resolved.mascot || '',
+        primary_color: resolved.primary_color,
+        secondary_color: resolved.secondary_color,
+        accent_color: resolved.accent_color,
+        text_color: resolved.text_color,
+        link_url: resolved.link_url,
+        city: resolved.city,
+        type: resolved.type,
+        active: resolved.active,
+      } as SchoolBrand
+    })()
   }, [thumbSchoolCode, schools])
 
   const selectedThumbBrand = useMemo(() => {
@@ -1118,32 +1136,18 @@ export default function ProductionDetailPage() {
         accent_color: '#ffffff',
       }
     }
-    const matchedSchool = findMatchingSchoolForThumbnail(schools, {
-      thumbSchoolCode,
-      overrideName: thumbSchoolOverride,
-      catalogName: selectedThumbSchool?.name ?? null,
-    })
-    const sourceForHex =
-      matchedSchool ||
-      (selectedThumbSchool && selectedThumbSchool.code !== 'district' ? selectedThumbSchool : null)
-
-    const hex = sourceForHex
-      ? promptBrandHexesFromRow(sourceForHex)
-      : {
-          primary: selectedThumbSchool?.primary_color?.trim() || '#003087',
-          secondary: selectedThumbSchool?.secondary_color?.trim() || '#e8a020',
-          accent: selectedThumbSchool?.accent_color?.trim() || '#ffffff',
-        }
+    const row = selectedThumbSchool && selectedThumbSchool.code !== 'district' ? selectedThumbSchool : null
+    const hex = row ? promptBrandHexesFromRow(row) : NEUTRAL_BRAND_HEX
 
     return {
-      name: selectedThumbSchool?.name || matchedSchool?.name || 'Canyons School District',
-      short_name: selectedThumbSchool?.short_name || matchedSchool?.name || 'Canyons',
-      mascot: matchedSchool?.mascot ?? selectedThumbSchool?.mascot ?? '',
+      name: (thumbSchoolOverride || '').trim() || row?.name || 'Canyons School District',
+      short_name: row?.short_name || row?.name || 'Canyons',
+      mascot: row?.mascot || '',
       primary_color: hex.primary,
       secondary_color: hex.secondary,
       accent_color: hex.accent,
     }
-  }, [thumbSchoolCode, thumbSchoolOverride, selectedThumbSchool, schools])
+  }, [thumbSchoolCode, thumbSchoolOverride, selectedThumbSchool])
 
   useEffect(() => {
     if (!thumbSchoolOverride && selectedThumbSchool?.name) {
@@ -2354,14 +2358,14 @@ export default function ProductionDetailPage() {
                       setThumbSchoolOverride('Canyons School District')
                       return
                     }
-                    const s = schools.find(x => x.code === v || x.name === v)
+                    const s = schools.find(x => x.id === v)
                     if (s?.name) setThumbSchoolOverride(s.name)
                   }}
                   style={inputStyle}
                 >
                   <option value="district">Other / District</option>
                   {schools.map(s => (
-                    <option key={s.id} value={s.code || s.name}>{s.name}</option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
