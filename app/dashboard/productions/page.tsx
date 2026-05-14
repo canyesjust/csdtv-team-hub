@@ -25,6 +25,7 @@ interface Production {
   livestream_url: string | null
   youtube_link_email_sent_at: string | null
   start_datetime: string | null; end_datetime: string | null; filming_location: string | null
+  event_location: string | null
   school_year: string | null; synced_at: string | null
   additional_notes: string | null; video_description: string | null
   team_notes: string | null
@@ -37,6 +38,23 @@ interface CurrentUser { id: string; name: string; email: string; role?: string }
 
 interface PanelChecklist { id: string; title: string; completed: boolean; sort_order: number }
 interface PanelActivity { id: string; action: string; detail: string | null; created_at: string; team: { name: string } | null }
+
+interface EmailTemplate {
+  id: string
+  template_key: string | null
+  label: string
+  subject: string
+  body: string
+  sort_order: number
+  active: boolean
+}
+
+function templateUsesYoutubeLink(t: EmailTemplate | undefined): boolean {
+  if (!t) return false
+  const key = (t.template_key || '').toLowerCase()
+  if (key.includes('youtube')) return true
+  return t.body.includes('{{youtube_link}}') || t.subject.includes('{{youtube_link}}')
+}
 
 const STATUS_TONE_MAP: Record<string, keyof typeof statusTone | null> = {
   'In Progress': 'warning',
@@ -95,6 +113,7 @@ const PRODUCTION_LIST_SELECT = `
   start_datetime,
   end_datetime,
   filming_location,
+  event_location,
   school_year,
   synced_at,
   additional_notes,
@@ -204,6 +223,11 @@ function ProductionsPageContent() {
   /** Production IDs explicitly moved back to In Progress after a completion request. */
   const [requestedInProgressIds, setRequestedInProgressIds] = useState<Set<string>>(() => new Set())
   const [overdueQuickActionId, setOverdueQuickActionId] = useState<string | null>(null)
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([])
+  const [showPanelEmailModal, setShowPanelEmailModal] = useState(false)
+  const [panelEmailTemplate, setPanelEmailTemplate] = useState('')
+  const [panelEmailBody, setPanelEmailBody] = useState('')
+  const [panelEmailSubject, setPanelEmailSubject] = useState('')
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -220,6 +244,20 @@ function ProductionsPageContent() {
   const danger = statusTone.danger.color
   const dangerBg = statusTone.danger.background
   const info = statusTone.info.color
+
+  const panelEmailInputStyle = {
+    background: surface2,
+    border: `0.5px solid ${border}`,
+    borderRadius: '8px',
+    padding: '8px 12px',
+    fontSize: '13px',
+    color: text,
+    fontFamily: 'inherit' as const,
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    minHeight: '40px',
+  }
 
   // Sort: overdue first → upcoming soonest → no date → past most-recent
   const sortProductions = useCallback((data: Production[]): Production[] => {
@@ -258,7 +296,11 @@ function ProductionsPageContent() {
 
     if (userRes?.data && isStudentInternRole(userRes.data.role)) {
       const uid = userRes.data.id
-      const { data: memRows } = await supabase.from('production_members').select('production_id').eq('user_id', uid)
+      const [{ data: memRows }, tplRes] = await Promise.all([
+        supabase.from('production_members').select('production_id').eq('user_id', uid),
+        supabase.from('email_templates').select('*').order('sort_order'),
+      ])
+      setEmailTemplates((tplRes.data as EmailTemplate[]) || [])
       const ids = [...new Set((memRows || []).map(m => m.production_id).filter(Boolean))] as string[]
       if (ids.length === 0) {
         prodsData = []
@@ -268,12 +310,14 @@ function ProductionsPageContent() {
       }
       teamList = []
     } else {
-      const [pRes, tRes] = await Promise.all([
+      const [pRes, tRes, tplRes] = await Promise.all([
         supabase.from('productions').select(PRODUCTION_LIST_SELECT),
         supabase.from('team').select('id, name, avatar_color, email').eq('active', true).order('name'),
+        supabase.from('email_templates').select('*').order('sort_order'),
       ])
       prodsData = pRes.data as Production[] | null
       teamList = (tRes.data as TeamMember[]) || []
+      setEmailTemplates((tplRes.data as EmailTemplate[]) || [])
     }
 
     setTeam(teamList)
@@ -452,6 +496,113 @@ function ProductionsPageContent() {
       .select('id, action, detail, created_at, team:team(name)').single()
     if (data) setPanelActivity(prev => [data as any, ...prev].slice(0, 5))
   }, [selectedProdId, currentUser, supabase])
+
+  const panelProd = useMemo(
+    () => (selectedProdId ? productions.find(p => p.id === selectedProdId) ?? null : null),
+    [productions, selectedProdId],
+  )
+
+  const getPanelSyncedYoutubeLink = useCallback((): string => {
+    if (!panelProd) return ''
+    return (panelProd.livestream_url?.trim() || '').trim()
+  }, [panelProd])
+
+  const substitutePanelEmailVars = useCallback((str: string): string => {
+    if (!panelProd) return str
+    const name = panelProd.organizer_name?.split(' ')[0] || 'there'
+    const title = panelProd.title
+    const type = panelProd.request_type_label || panelProd.type || 'production'
+    const date = panelProd.start_datetime
+      ? new Date(panelProd.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+      : 'TBD'
+    const dateShort = panelProd.start_datetime
+      ? new Date(panelProd.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      : 'TBD'
+    const venue = panelProd.event_location || getSchoolName(panelProd.filming_location) || 'TBD'
+    const status = panelProd.status || ''
+    const ytLink = getPanelSyncedYoutubeLink()
+    return str
+      .replace(/\{\{name\}\}/g, name)
+      .replace(/\{\{title\}\}/g, title)
+      .replace(/\{\{type\}\}/g, type)
+      .replace(/\{\{date_short\}\}/g, dateShort)
+      .replace(/\{\{date\}\}/g, date)
+      .replace(/\{\{venue\}\}/g, venue)
+      .replace(/\{\{youtube_link\}\}/g, ytLink)
+      .replace(/\{\{status\}\}/g, status)
+  }, [panelProd, getPanelSyncedYoutubeLink])
+
+  useEffect(() => {
+    setShowPanelEmailModal(false)
+    setPanelEmailTemplate('')
+    setPanelEmailBody('')
+    setPanelEmailSubject('')
+  }, [selectedProdId])
+
+  useEffect(() => {
+    if (!panelEmailTemplate || !panelProd) return
+    const t = emailTemplates.find(x => x.id === panelEmailTemplate)
+    if (!t) return
+    setPanelEmailBody(substitutePanelEmailVars(t.body))
+    setPanelEmailSubject(sanitizeEmailSubject(substitutePanelEmailVars(t.subject)))
+  }, [panelProd?.livestream_url, panelEmailTemplate, panelProd, emailTemplates, substitutePanelEmailVars])
+
+  const selectPanelEmailTemplate = useCallback((templateId: string) => {
+    const t = emailTemplates.find(x => x.id === templateId)
+    if (!t || !panelProd) return
+    if (templateUsesYoutubeLink(t) && !getPanelSyncedYoutubeLink()) {
+      toast('This production does not have a video/livestream link from sync yet. Sync from the productions site first, or pick another template.', 'error')
+      return
+    }
+    setPanelEmailTemplate(templateId)
+    setPanelEmailBody(substitutePanelEmailVars(t.body))
+    setPanelEmailSubject(sanitizeEmailSubject(substitutePanelEmailVars(t.subject)))
+  }, [emailTemplates, panelProd, getPanelSyncedYoutubeLink, substitutePanelEmailVars])
+
+  const openPanelOrganizerEmail = useCallback(async () => {
+    if (!panelProd?.organizer_email || !panelEmailBody || !selectedProdId) return
+    const tpl = emailTemplates.find(t => t.id === panelEmailTemplate)
+    if (templateUsesYoutubeLink(tpl) && !getPanelSyncedYoutubeLink()) {
+      toast('No synced video/livestream link on this production yet. Run sync from the productions site before sending this template.', 'error')
+      return
+    }
+    const tplLabel = tpl?.label
+    await logPanelActivity('Emailed organizer', tplLabel ? `Template: ${tplLabel}` : 'Custom message')
+    if (templateUsesYoutubeLink(tpl) && getPanelSyncedYoutubeLink()) {
+      try {
+        const res = await fetch('/api/productions/youtube-link-email-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ productionId: selectedProdId }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (res.ok && body.sentAt) {
+          setProductions(prev => prev.map(p => (p.id === selectedProdId ? { ...p, youtube_link_email_sent_at: body.sentAt } : p)))
+          await logPanelActivity('YouTube link email', 'Logged send (mail client opened with tracked link)')
+        } else {
+          const fallbackAt = new Date().toISOString()
+          const { error } = await supabase.from('productions').update({ youtube_link_email_sent_at: fallbackAt }).eq('id', selectedProdId)
+          if (!error) {
+            setProductions(prev => prev.map(p => (p.id === selectedProdId ? { ...p, youtube_link_email_sent_at: fallbackAt } : p)))
+            await logPanelActivity('YouTube link email', 'Logged send (mail client opened with tracked link)')
+          } else {
+            toast('Could not save link-email timestamp on the production. The Live email filter uses Activity until fixed.', 'error')
+          }
+        }
+      } catch {
+        toast('Could not record link-email timestamp. Try again.', 'error')
+      }
+    }
+    const mailto = `mailto:${panelProd.organizer_email}?subject=${encodeURIComponent(sanitizeEmailSubject(panelEmailSubject))}&body=${encodeURIComponent(panelEmailBody)}`
+    window.location.href = mailto
+    setTimeout(() => {
+      setShowPanelEmailModal(false)
+      setPanelEmailTemplate('')
+      setPanelEmailBody('')
+      setPanelEmailSubject('')
+    }, 500)
+  }, [panelProd, panelEmailBody, panelEmailSubject, panelEmailTemplate, emailTemplates, selectedProdId, supabase, logPanelActivity, getPanelSyncedYoutubeLink])
 
   const togglePanelChecklistItem = async (item: PanelChecklist) => {
     const updated = !item.completed
@@ -1502,10 +1653,28 @@ function ProductionsPageContent() {
                       Open full details →
                     </Link>
                     {selectedProd.organizer_email && (
-                      <a href={`mailto:${selectedProd.organizer_email}?subject=${encodeURIComponent(`#${selectedProd.production_number} ${selectedProd.title}`)}`} style={{ fontSize: '12px', fontWeight: 600, color: text, textDecoration: 'none', padding: '8px 10px', background: surface2, border: `1px solid ${border}`, borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                        Email
-                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setShowPanelEmailModal(true)}
+                        style={{
+                          flex: 1,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '5px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: '8px 10px',
+                          borderRadius: '8px',
+                          background: statusTone.info.background,
+                          color: info,
+                          border: `1px solid ${border}`,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        ✉ Email organizer
+                      </button>
                     )}
                   </div>
 
@@ -1662,6 +1831,84 @@ function ProductionsPageContent() {
                 </div>
               )}
             </aside>
+
+            {showPanelEmailModal && selectedProd && (
+              <div
+                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+                onClick={e => { if (e.target === e.currentTarget) setShowPanelEmailModal(false) }}
+              >
+                <div style={{ background: 'var(--surface-1)', border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' as const, padding: '24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '17px', fontWeight: 600, color: text, margin: 0 }}>Email organizer</h2>
+                    <button type="button" onClick={() => setShowPanelEmailModal(false)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '20px', lineHeight: 1 }}>×</button>
+                  </div>
+
+                  <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>
+                    To: <strong style={{ color: text }}>{selectedProd.organizer_name || 'Organizer'}</strong> ({selectedProd.organizer_email})
+                  </p>
+
+                  {emailTemplates.length > 0 ? (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                      {emailTemplates.map(t => {
+                        const ytTemplateLocked = templateUsesYoutubeLink(t) && !getPanelSyncedYoutubeLink()
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            title={ytTemplateLocked ? 'Requires a synced livestream/video link on this production (from productions site sync)' : undefined}
+                            disabled={ytTemplateLocked}
+                            onClick={() => selectPanelEmailTemplate(t.id)}
+                            style={{
+                              fontSize: '12px',
+                              padding: '5px 12px',
+                              borderRadius: '6px',
+                              border: `0.5px solid ${panelEmailTemplate === t.id ? '#1e6cb5' : border}`,
+                              background: panelEmailTemplate === t.id ? 'rgba(30,108,181,0.12)' : cardBg,
+                              color: panelEmailTemplate === t.id ? '#5ba3e0' : muted,
+                              cursor: ytTemplateLocked ? 'not-allowed' : 'pointer',
+                              opacity: ytTemplateLocked ? 0.45 : 1,
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {t.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '12px', color: muted, margin: '0 0 14px', padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px', border: `0.5px solid ${border}` }}>
+                      No templates configured. <Link href="/dashboard/settings" style={{ color: '#5ba3e0' }}>Add templates in Settings</Link>.
+                    </p>
+                  )}
+
+                  {panelEmailTemplate && templateUsesYoutubeLink(emailTemplates.find(t => t.id === panelEmailTemplate)) && !getPanelSyncedYoutubeLink() && (
+                    <p style={{ fontSize: '12px', color: warning, margin: '0 0 12px', padding: '10px 12px', background: warningBg, borderRadius: '8px', border: `0.5px solid ${border}` }}>
+                      This template needs a video/livestream link from the district sync (livestream URL on this production). Sync from the productions site first.
+                    </p>
+                  )}
+
+                  <div style={{ marginBottom: '10px' }}>
+                    <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '4px' }}>Subject</label>
+                    <input value={panelEmailSubject} onChange={e => setPanelEmailSubject(e.target.value)} placeholder="Email subject..." style={{ ...panelEmailInputStyle }} />
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '4px' }}>Message</label>
+                    <textarea value={panelEmailBody} onChange={e => setPanelEmailBody(e.target.value)} placeholder="Pick a template or write your message..." style={{ ...panelEmailInputStyle, minHeight: '240px', resize: 'vertical' as const, lineHeight: 1.6, whiteSpace: 'pre-wrap' as const }} />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button type="button" onClick={openPanelOrganizerEmail} disabled={!panelEmailBody} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: panelEmailBody ? '#1e6cb5' : 'var(--surface-2)', color: panelEmailBody ? '#fff' : muted, border: 'none', cursor: panelEmailBody ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>
+                      ✉ Open in Outlook
+                    </button>
+                    <button type="button" onClick={() => setShowPanelEmailModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      Cancel
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0' }}>Opens your default email app so you can review and send. The send is logged to this production's activity when you click the button.</p>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
