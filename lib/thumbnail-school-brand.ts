@@ -1,14 +1,15 @@
-/** Resolve `school_brand_colors` rows for thumbnail prompts despite label drift (Mt. vs Mount, short vs full names). */
+/** Thumbnail helpers: match `schools` rows by code/name (handles Mt. vs Mount, etc.) and map hex columns for prompts. */
 
-export type ThumbnailBrandColorRow = {
+export type ThumbnailSchoolRow = {
   id?: string
-  school_code: string | null
-  school_name: string | null
-  primary_color: string | null
-  secondary_color: string | null
-  accent_color: string | null
+  code: string | null
+  name: string | null
+  primary_color?: string | null
+  secondary_color?: string | null
+  accent_color?: string | null
   text_color?: string | null
-  mascot: string | null
+  mascot?: string | null
+  active?: boolean | null
 }
 
 function pickHex(v: string | null | undefined): string | null {
@@ -19,8 +20,8 @@ function pickHex(v: string | null | undefined): string | null {
 const DISTRICT_BRAND_HEX = { primary: '#003087', secondary: '#e8a020', accent: '#ffffff' } as const
 
 /**
- * Map `school_brand_colors` columns to three BRAND COLORS slots for the thumbnail prompt.
- * Many rows omit `primary_color` (e.g. Alta High); we promote secondary → primary so the model
+ * Map school color columns to three BRAND COLORS slots for the thumbnail prompt.
+ * When `primary_color` is null (common), promotes secondary → primary so the model
  * does not receive Canyons defaults by accident.
  */
 export function promptBrandHexesFromRow(row: {
@@ -73,7 +74,6 @@ function significantTokens(s: string): string[] {
     .filter(t => t.length > 1 && !TOKEN_STOP.has(t))
 }
 
-/** Every token from the shorter label appears in the longer token list (substring ok). */
 function tokensSubsetMatch(a: string, b: string): boolean {
   const ta = significantTokens(a)
   const tb = significantTokens(b)
@@ -82,10 +82,10 @@ function tokensSubsetMatch(a: string, b: string): boolean {
   return short.every(t => long.some(l => l === t || l.includes(t) || t.includes(l)))
 }
 
-function findByFuzzyNames(rows: ThumbnailBrandColorRow[], names: string[]): ThumbnailBrandColorRow | undefined {
+function findByFuzzyNames(rows: ThumbnailSchoolRow[], names: string[]): ThumbnailSchoolRow | undefined {
   const cleaned = names.map(n => n.trim()).filter(Boolean)
   for (const row of rows) {
-    const rn = (row.school_name || '').trim()
+    const rn = (row.name || '').trim()
     if (!rn) continue
     for (const name of cleaned) {
       if (!name) continue
@@ -100,26 +100,31 @@ function findByFuzzyNames(rows: ThumbnailBrandColorRow[], names: string[]): Thum
   return undefined
 }
 
+function activeSchools(rows: ThumbnailSchoolRow[]): ThumbnailSchoolRow[] {
+  return rows.filter(r => r.active !== false)
+}
+
 /**
- * Match a `school_brand_colors` row for thumbnail BRAND COLORS.
- * @param thumbSchoolCode — `schools.code`, `"district"`, or dropdown value (`school_code` or `school_name` from brand table)
+ * Match a `schools` row for thumbnail BRAND COLORS / mascot.
+ * @param thumbSchoolCode — `schools.code`, `"district"`, or dropdown value (code or full name)
  * @param overrideName — "School override" field (often from `getSchoolName` / short labels)
- * @param catalogName — Full name from `schools` row when known
+ * @param catalogName — Full name from the selected school row when known
  */
-export function findMatchingSchoolBrandColorRow(
-  rows: ThumbnailBrandColorRow[],
+export function findMatchingSchoolForThumbnail(
+  rows: ThumbnailSchoolRow[],
   opts: { thumbSchoolCode: string; overrideName: string; catalogName: string | null },
-): ThumbnailBrandColorRow | undefined {
+): ThumbnailSchoolRow | undefined {
+  const pool = activeSchools(rows)
   const tc = (opts.thumbSchoolCode || '').trim()
   const override = (opts.overrideName || '').trim()
   const catalog = (opts.catalogName || '').trim()
 
   if (tc && tc !== 'district') {
-    const byRowCode = rows.find(r => r.school_code && normCode(r.school_code) === normCode(tc))
+    const byRowCode = pool.find(r => r.code && normCode(r.code) === normCode(tc))
     if (byRowCode) return byRowCode
-    const byValueAsName = rows.find(r => (r.school_name || '').trim() === tc)
+    const byValueAsName = pool.find(r => (r.name || '').trim() === tc)
     if (byValueAsName) return byValueAsName
   }
 
-  return findByFuzzyNames(rows, [override, catalog])
+  return findByFuzzyNames(pool, [override, catalog])
 }

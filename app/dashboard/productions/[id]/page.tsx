@@ -15,7 +15,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isStudentInternRole } from '@/lib/roles'
-import { findMatchingSchoolBrandColorRow, promptBrandHexesFromRow } from '@/lib/thumbnail-school-brand'
+import { findMatchingSchoolForThumbnail, promptBrandHexesFromRow } from '@/lib/thumbnail-school-brand'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -62,21 +62,14 @@ interface SchoolBrand {
   primary_color?: string | null
   secondary_color?: string | null
   accent_color?: string | null
+  text_color?: string | null
+  link_url?: string | null
+  city?: string | null
+  title_i?: string | null
+  mascot_name?: string | null
   type?: string | null
   school_type?: string | null
   active?: boolean | null
-}
-
-interface SchoolBrandColorRow {
-  id: string
-  school_code: string | null
-  school_name: string | null
-  primary_color: string | null
-  secondary_color: string | null
-  accent_color: string | null
-  text_color?: string | null
-  mascot: string | null
-  active: boolean | null
 }
 
 interface ProductionLink { id: string; title: string; url: string; created_at: string }
@@ -213,7 +206,6 @@ export default function ProductionDetailPage() {
   const [emailSubject, setEmailSubject] = useState('')
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [schools, setSchools] = useState<SchoolBrand[]>([])
-  const [schoolBrandColors, setSchoolBrandColors] = useState<SchoolBrandColorRow[]>([])
   const [thumbSchoolCode, setThumbSchoolCode] = useState('')
   const [thumbEventName, setThumbEventName] = useState('')
   const [thumbDate, setThumbDate] = useState('')
@@ -282,7 +274,7 @@ export default function ProductionDetailPage() {
     )
 
     // All related queries use the UUID as FK
-    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes, colorRes, camPkgRes] = await Promise.all([
+    const [checkRes, membersRes, teamRes, linksRes, actRes, userRes, kbRes, tplRes, schoolsRes, camPkgRes] = await Promise.all([
       supabase.from('checklist_items').select('*').eq('production_id', prodUUID).order('sort_order'),
       supabase.from('production_members').select('*, team:team(id, name, role, avatar_color)').eq('production_id', prodUUID),
       supabase.from('team').select('id, name, email, role, avatar_color').eq('active', true),
@@ -292,7 +284,6 @@ export default function ProductionDetailPage() {
       supabase.from('knowledge_base').select('id, title, category').order('title'),
       supabase.from('email_templates').select('*').order('sort_order'),
       supabase.from('schools').select('*').order('name'),
-      supabase.from('school_brand_colors').select('*').eq('active', true).order('school_name'),
       supabase.from('cost_camera_packages').select('option_id, label, cost').eq('active', true).order('display_order'),
     ])
 
@@ -307,7 +298,6 @@ export default function ProductionDetailPage() {
     setKbArticles(kbRes.data || [])
     setTemplates(tplRes.data || [])
     setSchools((schoolsRes.data as SchoolBrand[]) || [])
-    setSchoolBrandColors((colorRes.data as SchoolBrandColorRow[]) || [])
     const [vidRes, taskRes, sheetRes, allProdsRes] = await Promise.all([
       supabase
         .from('videos')
@@ -1058,17 +1048,17 @@ export default function ProductionDetailPage() {
       schools.find(s => s.code === dept || s.code === paddedDept) ||
       schools.find(s => s.name === shortLabel || s.name === dept) ||
       null
-    const brandMatch = findMatchingSchoolBrandColorRow(schoolBrandColors, {
+    const brandMatch = findMatchingSchoolForThumbnail(schools, {
       thumbSchoolCode: matchingSchool?.code || dept,
       overrideName: shortLabel || dept,
       catalogName: matchingSchool?.name ?? null,
     })
     const canonicalSchoolName =
-      brandMatch?.school_name || matchingSchool?.name || shortLabel || dept || 'Canyons School District'
+      brandMatch?.name || matchingSchool?.name || shortLabel || dept || 'Canyons School District'
     const thumbCode =
       matchingSchool?.code ||
-      (brandMatch?.school_code || '').trim() ||
-      (brandMatch?.school_name || '').trim() ||
+      (brandMatch?.code || '').trim() ||
+      (brandMatch?.name || '').trim() ||
       'district'
 
     setThumbSchoolCode(thumbCode === '' ? 'district' : thumbCode)
@@ -1099,7 +1089,7 @@ export default function ProductionDetailPage() {
     }
     const hasMascot = Boolean(brandMatch?.mascot || matchingSchool?.mascot)
     setThumbMascotMode(hasMascot ? 'name' : 'none-applicable')
-  }, [production, schools, schoolBrandColors, thumbDraftRestored])
+  }, [production, schools, thumbDraftRestored])
 
   const selectedThumbSchool = useMemo((): SchoolBrand | null => {
     if (thumbSchoolCode === 'district') {
@@ -1114,27 +1104,8 @@ export default function ProductionDetailPage() {
         accent_color: '#ffffff',
       }
     }
-    const fromSchools = schools.find(s => s.code === thumbSchoolCode || s.name === thumbSchoolCode)
-    if (fromSchools) return fromSchools
-    const fromBrand = schoolBrandColors.find(
-      r =>
-        (r.school_code && r.school_code === thumbSchoolCode) ||
-        (r.school_name || '').trim() === thumbSchoolCode,
-    )
-    if (fromBrand?.school_name) {
-      return {
-        id: `brand:${fromBrand.id}`,
-        code: fromBrand.school_code || thumbSchoolCode,
-        name: fromBrand.school_name,
-        short_name: (fromBrand.school_name.split(/\s+/)[0] || fromBrand.school_name).slice(0, 24),
-        mascot: fromBrand.mascot || '',
-        primary_color: fromBrand.primary_color,
-        secondary_color: fromBrand.secondary_color,
-        accent_color: fromBrand.accent_color,
-      }
-    }
-    return null
-  }, [thumbSchoolCode, schools, schoolBrandColors])
+    return schools.find(s => s.code === thumbSchoolCode || s.name === thumbSchoolCode) || null
+  }, [thumbSchoolCode, schools])
 
   const selectedThumbBrand = useMemo(() => {
     if (thumbSchoolCode === 'district') {
@@ -1147,19 +1118,17 @@ export default function ProductionDetailPage() {
         accent_color: '#ffffff',
       }
     }
-    const overrideRow = findMatchingSchoolBrandColorRow(schoolBrandColors, {
+    const matchedSchool = findMatchingSchoolForThumbnail(schools, {
       thumbSchoolCode,
       overrideName: thumbSchoolOverride,
       catalogName: selectedThumbSchool?.name ?? null,
     })
-    const brandRowForHex =
-      overrideRow ||
-      (selectedThumbSchool?.id?.startsWith('brand:')
-        ? schoolBrandColors.find(r => `brand:${r.id}` === selectedThumbSchool.id)
-        : undefined)
+    const sourceForHex =
+      matchedSchool ||
+      (selectedThumbSchool && selectedThumbSchool.code !== 'district' ? selectedThumbSchool : null)
 
-    const hex = brandRowForHex
-      ? promptBrandHexesFromRow(brandRowForHex)
+    const hex = sourceForHex
+      ? promptBrandHexesFromRow(sourceForHex)
       : {
           primary: selectedThumbSchool?.primary_color?.trim() || '#003087',
           secondary: selectedThumbSchool?.secondary_color?.trim() || '#e8a020',
@@ -1167,14 +1136,14 @@ export default function ProductionDetailPage() {
         }
 
     return {
-      name: selectedThumbSchool?.name || overrideRow?.school_name || 'Canyons School District',
-      short_name: selectedThumbSchool?.short_name || overrideRow?.school_name || 'Canyons',
-      mascot: overrideRow?.mascot || selectedThumbSchool?.mascot || '',
+      name: selectedThumbSchool?.name || matchedSchool?.name || 'Canyons School District',
+      short_name: selectedThumbSchool?.short_name || matchedSchool?.name || 'Canyons',
+      mascot: matchedSchool?.mascot ?? selectedThumbSchool?.mascot ?? '',
       primary_color: hex.primary,
       secondary_color: hex.secondary,
       accent_color: hex.accent,
     }
-  }, [thumbSchoolCode, thumbSchoolOverride, selectedThumbSchool, schoolBrandColors])
+  }, [thumbSchoolCode, thumbSchoolOverride, selectedThumbSchool, schools])
 
   useEffect(() => {
     if (!thumbSchoolOverride && selectedThumbSchool?.name) {
@@ -2386,16 +2355,7 @@ export default function ProductionDetailPage() {
                       return
                     }
                     const s = schools.find(x => x.code === v || x.name === v)
-                    if (s?.name) {
-                      setThumbSchoolOverride(s.name)
-                      return
-                    }
-                    const brandRow = schoolBrandColors.find(
-                      r =>
-                        (r.school_code && r.school_code === v) ||
-                        (r.school_name || '').trim() === v,
-                    )
-                    if (brandRow?.school_name) setThumbSchoolOverride(brandRow.school_name)
+                    if (s?.name) setThumbSchoolOverride(s.name)
                   }}
                   style={inputStyle}
                 >
@@ -2403,17 +2363,6 @@ export default function ProductionDetailPage() {
                   {schools.map(s => (
                     <option key={s.id} value={s.code || s.name}>{s.name}</option>
                   ))}
-                  {schoolBrandColors
-                    .filter(row => {
-                      const rowName = (row.school_name || '').trim()
-                      if (!rowName) return false
-                      return !schools.some(s => s.name.toLowerCase() === rowName.toLowerCase())
-                    })
-                    .map(row => (
-                      <option key={`brand-${row.id}`} value={row.school_code || row.school_name || ''}>
-                        {row.school_name}
-                      </option>
-                    ))}
                 </select>
               </div>
               <div>
