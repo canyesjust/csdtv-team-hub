@@ -6,8 +6,19 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const rawNext = searchParams.get('next') ?? '/dashboard'
-  // Sanitize redirect - only allow internal paths starting with /
-  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
+  // Sanitize redirect — allow /login?reset=true (must be encoded in the reset email link).
+  let next = '/dashboard'
+  try {
+    const decoded = decodeURIComponent(rawNext)
+    if (decoded.startsWith('/') && !decoded.startsWith('//')) {
+      const pathOnly = decoded.split('?')[0].split('#')[0]
+      if (pathOnly === '/login' || pathOnly.startsWith('/dashboard')) {
+        next = decoded
+      }
+    }
+  } catch {
+    next = '/dashboard'
+  }
 
   if (code) {
     const cookieStore = await cookies()

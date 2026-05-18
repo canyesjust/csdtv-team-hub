@@ -14,17 +14,33 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [resetMode, setResetMode] = useState(false)
+  const [resetMode, setResetMode] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('reset') === 'true'
+  })
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.search.includes('reset=true')) setResetMode(true)
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('reset') === 'true') setResetMode(true)
+    if (params.get('error') === 'auth') {
+      setError('This link has expired or was already used. Request a new password reset email and open only the newest link.')
+    }
   }, [])
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) router.push('/dashboard')
+      if (event === 'PASSWORD_RECOVERY') {
+        setResetMode(true)
+        return
+      }
+      const pendingReset = typeof window !== 'undefined'
+        && new URLSearchParams(window.location.search).get('reset') === 'true'
+      if (session && !pendingReset) {
+        router.push('/dashboard')
+      }
     })
     return () => subscription.unsubscribe()
   }, [supabase, router])
@@ -179,7 +195,10 @@ export default function LoginPage() {
               onClick={async () => {
                 if (!email) { setError('Enter your email first'); return }
                 setLoading(true); setError('')
-                const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth/callback?next=/login?reset=true` })
+                const resetNext = encodeURIComponent('/login?reset=true')
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/auth/callback?next=${resetNext}`,
+                })
                 if (error) setError(error.message)
                 else setMessage('Check your email for a password reset link.')
                 setLoading(false)
