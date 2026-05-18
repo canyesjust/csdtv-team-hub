@@ -59,6 +59,8 @@ const STATUS_TONE: Record<string, keyof typeof statusTone | null> = {
   complete: 'success',
 }
 
+const INTAKE_PANEL_OPEN_KEY = 'csdtv-tasks-intake-panel-open'
+
 const PRIORITY_TONE: Record<string, keyof typeof statusTone | null> = {
   'day of': 'danger',
   high: 'warning',
@@ -163,6 +165,31 @@ export default function TasksPage() {
   /** URL stored for task ops signage QR (`app_settings`). */
   const [signageTaskIntakeUrl, setSignageTaskIntakeUrl] = useState<string | null>(null)
   const [signageTaskIntakeBusy, setSignageTaskIntakeBusy] = useState(false)
+  const [intakePanelOpen, setIntakePanelOpen] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      if (localStorage.getItem(INTAKE_PANEL_OPEN_KEY) === '1') setIntakePanelOpen(true)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(INTAKE_PANEL_OPEN_KEY, intakePanelOpen ? '1' : '0')
+    } catch { /* ignore */ }
+  }, [intakePanelOpen])
+
+  useEffect(() => {
+    if (intakeRotateNotice) setIntakePanelOpen(true)
+  }, [intakeRotateNotice])
+
+  useEffect(() => {
+    if (!intakePanelLoading && intakeActive && intakeNeedsLegacyRotate && !intakeUrlReveal) {
+      setIntakePanelOpen(true)
+    }
+  }, [intakePanelLoading, intakeActive, intakeNeedsLegacyRotate, intakeUrlReveal])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -969,6 +996,23 @@ export default function TasksPage() {
     padding: '9px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
   }
 
+  const intakeNeedsAttention = intakeRotateNotice || (intakeActive && intakeNeedsLegacyRotate && !intakeUrlReveal)
+
+  const intakeCollapsedSummary = useMemo(() => {
+    if (intakePanelLoading) return 'Loading status…'
+    if (intakeRotateNotice) return 'Link rotated — share the new URL or QR'
+    if (intakeActive && intakeNeedsLegacyRotate && !intakeUrlReveal) return 'Rotate link once to show URL and QR'
+    if (intakeActive && intakeUrlReveal) {
+      const parts = ['Link active']
+      if (intakeLastUsedAt) {
+        parts.push(`Last used ${new Date(intakeLastUsedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`)
+      }
+      return parts.join(' · ')
+    }
+    if (intakeActive) return 'Link active'
+    return 'No intake link'
+  }, [intakePanelLoading, intakeRotateNotice, intakeActive, intakeNeedsLegacyRotate, intakeUrlReveal, intakeLastUsedAt])
+
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}><Loader /></div>
 
   const renderStatusPill = (status: string) => {
@@ -1076,24 +1120,52 @@ export default function TasksPage() {
           </header>
 
           {!isStudentInternUser && (
-            <section style={{ ...uiStyles.card, padding: denseMode ? '14px' : '18px', marginBottom: denseMode ? '12px' : '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <h2 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Public task intake</h2>
-                  <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>
-                    Anyone with your magic link can submit a task with the same fields as &ldquo;New task&rdquo;. Submissions are assigned to you until you reassign them. The link and QR stay on this page until you rotate or revoke. If you rotate the link, anyone using the old URL or QR should contact <strong style={{ color: text }}>CSDtv</strong> for the new one.
-                  </p>
+            <section style={{ ...uiStyles.card, padding: denseMode ? '12px 14px' : '14px 18px', marginBottom: denseMode ? '12px' : '20px' }}>
+              <button
+                type="button"
+                onClick={() => setIntakePanelOpen(v => !v)}
+                aria-expanded={intakePanelOpen}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap' as const,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  fontFamily: 'inherit',
+                  textAlign: 'left' as const,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flex: 1, minWidth: 0 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2" style={{ flexShrink: 0, marginTop: '3px', transform: intakePanelOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} aria-hidden><polyline points="9 18 15 12 9 6"/></svg>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: '0 0 2px' }}>Public task intake</h2>
+                    <p style={{ fontSize: '12px', color: intakeNeedsAttention ? warning : muted, margin: 0, lineHeight: 1.4 }}>{intakeCollapsedSummary}</p>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-                  <button type="button" disabled={intakeBusy} onClick={generateIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: intakeBusy ? 0.7 : 1 }}>
-                    {intakeActive ? 'Rotate link' : 'Create magic link'}
+                {!intakePanelOpen && intakeNeedsAttention && (
+                  <span style={{ ...statusBadge('warning', true), fontSize: '11px', flexShrink: 0 }}>Action needed</span>
+                )}
+              </button>
+
+              {intakePanelOpen && (
+              <>
+              <p style={{ fontSize: '12px', color: muted, margin: '12px 0 0', lineHeight: 1.45 }}>
+                Anyone with your magic link can submit a task with the same fields as &ldquo;New task&rdquo;. Submissions are assigned to you until you reassign them. The link and QR stay on this page until you rotate or revoke. If you rotate the link, anyone using the old URL or QR should contact <strong style={{ color: text }}>CSDtv</strong> for the new one.
+              </p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center', marginTop: '12px' }}>
+                <button type="button" disabled={intakeBusy} onClick={generateIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit', opacity: intakeBusy ? 0.7 : 1 }}>
+                  {intakeActive ? 'Rotate link' : 'Create magic link'}
+                </button>
+                {intakeActive && (
+                  <button type="button" disabled={intakeBusy} onClick={revokeIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: danger, border: `1px solid ${danger}`, cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                    Revoke link
                   </button>
-                  {intakeActive && (
-                    <button type="button" disabled={intakeBusy} onClick={revokeIntakeLink} style={{ fontSize: '13px', fontWeight: 600, padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: danger, border: `1px solid ${danger}`, cursor: intakeBusy ? 'default' : 'pointer', fontFamily: 'inherit' }}>
-                      Revoke link
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
               {intakePanelLoading && <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>Loading intake status…</p>}
               {!intakePanelLoading && intakeRotateNotice && (
@@ -1166,6 +1238,9 @@ export default function TasksPage() {
                     </div>
                   )}
                 </div>
+              )}
+
+              </>
               )}
             </section>
           )}
