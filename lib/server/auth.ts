@@ -1,5 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 type TeamUser = {
@@ -46,4 +46,26 @@ export async function getAuthenticatedTeamUser(): Promise<TeamUser | null> {
 
 export function isManagerRole(role: string | null | undefined): boolean {
   return (role || '').toLowerCase() === 'manager'
+}
+
+/** Linked team row exists for this auth user. */
+export async function getTeamRowForAuthUser(
+  supabase: SupabaseClient,
+  user: { id: string; email?: string | null },
+): Promise<{ id: string; role: string } | 'pending-link' | null> {
+  const { data: byUid } = await supabase
+    .from('team')
+    .select('id, role')
+    .eq('supabase_user_id', user.id)
+    .maybeSingle()
+  if (byUid) return { id: byUid.id, role: byUid.role }
+
+  if (!user.email) return null
+  const { data: byEmail } = await supabase
+    .from('team')
+    .select('id, role, supabase_user_id')
+    .eq('email', user.email)
+    .maybeSingle()
+  if (byEmail && !byEmail.supabase_user_id) return 'pending-link'
+  return null
 }

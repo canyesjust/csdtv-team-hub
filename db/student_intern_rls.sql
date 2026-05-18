@@ -28,7 +28,7 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm
     INNER JOIN public.team t ON t.id = pm.user_id
@@ -44,7 +44,7 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm2
     INNER JOIN public.team t ON t.id = pm2.user_id
@@ -60,7 +60,7 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm
     INNER JOIN public.team t ON t.id = pm.user_id
@@ -76,7 +76,7 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR (
     tasks.production_id IS NOT NULL
@@ -96,7 +96,7 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm
     INNER JOIN public.team t ON t.id = pm.user_id
@@ -112,7 +112,7 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR (
     comments.entity_type = 'task'
     AND EXISTS (
@@ -148,18 +148,18 @@ USING (
 DROP POLICY IF EXISTS knowledge_base_student_intern_restrictive_insert ON public.knowledge_base;
 CREATE POLICY knowledge_base_student_intern_restrictive_insert
 ON public.knowledge_base AS RESTRICTIVE FOR INSERT TO authenticated
-WITH CHECK (public.auth_team_role() IS DISTINCT FROM 'Student Intern');
+WITH CHECK (public.auth_team_role() IN ('Manager', 'Staff', 'Intern'));
 
 DROP POLICY IF EXISTS knowledge_base_student_intern_restrictive_update ON public.knowledge_base;
 CREATE POLICY knowledge_base_student_intern_restrictive_update
 ON public.knowledge_base AS RESTRICTIVE FOR UPDATE TO authenticated
-USING (public.auth_team_role() IS DISTINCT FROM 'Student Intern')
-WITH CHECK (public.auth_team_role() IS DISTINCT FROM 'Student Intern');
+USING (public.auth_team_role() IN ('Manager', 'Staff', 'Intern'))
+WITH CHECK (public.auth_team_role() IN ('Manager', 'Staff', 'Intern'));
 
 DROP POLICY IF EXISTS knowledge_base_student_intern_restrictive_delete ON public.knowledge_base;
 CREATE POLICY knowledge_base_student_intern_restrictive_delete
 ON public.knowledge_base AS RESTRICTIVE FOR DELETE TO authenticated
-USING (public.auth_team_role() IS DISTINCT FROM 'Student Intern');
+USING (public.auth_team_role() IN ('Manager', 'Staff', 'Intern'));
 
 -- ─── onboarding_tasks ───
 DROP POLICY IF EXISTS onboarding_tasks_student_intern_restrictive_select ON public.onboarding_tasks;
@@ -169,7 +169,7 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR onboarding_tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR public.auth_team_role() IN ('Manager', 'Staff')
 );
@@ -181,12 +181,12 @@ AS RESTRICTIVE
 FOR UPDATE
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR onboarding_tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR public.auth_team_role() IN ('Manager', 'Staff')
 )
 WITH CHECK (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR onboarding_tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR public.auth_team_role() IN ('Manager', 'Staff')
 );
@@ -199,9 +199,13 @@ AS RESTRICTIVE
 FOR SELECT
 TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR team.supabase_user_id = auth.uid()
   OR team.id = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
+  OR (
+    team.supabase_user_id IS NULL
+    AND lower(trim(team.email)) = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+  )
 );
 
 -- If staff need to read all team rows, the first clause passes for them. Student Intern: only rows matching the OR branches.
@@ -214,7 +218,7 @@ DROP POLICY IF EXISTS productions_student_intern_permissive_select ON public.pro
 CREATE POLICY productions_student_intern_permissive_select
 ON public.productions FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm
     JOIN public.team t ON t.id = pm.user_id
@@ -226,7 +230,7 @@ DROP POLICY IF EXISTS production_members_student_intern_permissive_select ON pub
 CREATE POLICY production_members_student_intern_permissive_select
 ON public.production_members FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm2
     JOIN public.team t ON t.id = pm2.user_id
@@ -238,7 +242,7 @@ DROP POLICY IF EXISTS checklist_items_student_intern_permissive_select ON public
 CREATE POLICY checklist_items_student_intern_permissive_select
 ON public.checklist_items FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm
     JOIN public.team t ON t.id = pm.user_id
@@ -250,7 +254,7 @@ DROP POLICY IF EXISTS tasks_student_intern_permissive_select ON public.tasks;
 CREATE POLICY tasks_student_intern_permissive_select
 ON public.tasks FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR (
     tasks.production_id IS NOT NULL
@@ -266,7 +270,7 @@ DROP POLICY IF EXISTS production_activity_student_intern_permissive_select ON pu
 CREATE POLICY production_activity_student_intern_permissive_select
 ON public.production_activity FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR EXISTS (
     SELECT 1 FROM public.production_members pm
     JOIN public.team t ON t.id = pm.user_id
@@ -278,7 +282,7 @@ DROP POLICY IF EXISTS comments_student_intern_permissive_select ON public.commen
 CREATE POLICY comments_student_intern_permissive_select
 ON public.comments FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR (
     comments.entity_type = 'task'
     AND EXISTS (
@@ -317,7 +321,7 @@ DROP POLICY IF EXISTS onboarding_tasks_student_intern_permissive_select ON publi
 CREATE POLICY onboarding_tasks_student_intern_permissive_select
 ON public.onboarding_tasks FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR onboarding_tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR public.auth_team_role() IN ('Manager', 'Staff')
 );
@@ -326,12 +330,12 @@ DROP POLICY IF EXISTS onboarding_tasks_student_intern_permissive_update ON publi
 CREATE POLICY onboarding_tasks_student_intern_permissive_update
 ON public.onboarding_tasks FOR UPDATE TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR onboarding_tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR public.auth_team_role() IN ('Manager', 'Staff')
 )
 WITH CHECK (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR onboarding_tasks.assigned_to = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
   OR public.auth_team_role() IN ('Manager', 'Staff')
 );
@@ -340,7 +344,26 @@ DROP POLICY IF EXISTS team_student_intern_permissive_select ON public.team;
 CREATE POLICY team_student_intern_permissive_select
 ON public.team FOR SELECT TO authenticated
 USING (
-  public.auth_team_role() IS DISTINCT FROM 'Student Intern'
+  public.auth_team_role() IN ('Manager', 'Staff', 'Intern')
   OR team.supabase_user_id = auth.uid()
   OR team.id = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
+  OR (
+    team.supabase_user_id IS NULL
+    AND lower(trim(team.email)) = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+  )
+);
+
+-- ─── team: self-link supabase_user_id on first login (email must match invite row) ───
+DROP POLICY IF EXISTS team_link_own_supabase_user ON public.team;
+CREATE POLICY team_link_own_supabase_user
+ON public.team
+FOR UPDATE
+TO authenticated
+USING (
+  lower(trim(email)) = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+  AND supabase_user_id IS NULL
+)
+WITH CHECK (
+  supabase_user_id = auth.uid()
+  AND lower(trim(email)) = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
 );

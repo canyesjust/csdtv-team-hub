@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
+import { MIN_PASSWORD_LENGTH } from '@/lib/auth-constants'
 
 interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string; supabase_user_id: string | null }
 interface SchoolListRow {
@@ -672,14 +673,14 @@ export default function SettingsPage() {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexWrap: 'wrap' as const }}>
           <div>
             <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>New password</p>
-            <input type="password" value={changePw} onChange={e => { setChangePw(e.target.value); setChangePwMsg('') }} placeholder="At least 6 characters" style={{ ...inputStyle, width: '200px', fontSize: '14px' }} />
+            <input type="password" value={changePw} onChange={e => { setChangePw(e.target.value); setChangePwMsg('') }} placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`} style={{ ...inputStyle, width: '200px', fontSize: '14px' }} />
           </div>
           <div>
             <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Confirm</p>
             <input type="password" value={changePw2} onChange={e => { setChangePw2(e.target.value); setChangePwMsg('') }} placeholder="••••••••" style={{ ...inputStyle, width: '200px', fontSize: '14px' }} />
           </div>
           <button onClick={async () => {
-            if (!changePw || changePw.length < 6) { setChangePwMsg('At least 6 characters'); return }
+            if (!changePw || changePw.length < MIN_PASSWORD_LENGTH) { setChangePwMsg(`At least ${MIN_PASSWORD_LENGTH} characters`); return }
             if (changePw !== changePw2) { setChangePwMsg('Passwords don\'t match'); return }
             setChangePwSaving(true)
             const { error } = await supabase.auth.updateUser({ password: changePw })

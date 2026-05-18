@@ -1,9 +1,23 @@
 'use client'
 
 import { createClient } from '@/lib/supabase'
-import { useEffect, useState } from 'react'
+import { MIN_PASSWORD_LENGTH, sanitizePostLoginPath } from '@/lib/auth-constants'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+
+function getPostLoginPath(): string {
+  if (typeof window === 'undefined') return '/dashboard'
+  return sanitizePostLoginPath(new URLSearchParams(window.location.search).get('redirect'))
+}
+
+function stripResetFromUrl() {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('reset')) return
+  url.searchParams.delete('reset')
+  window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+}
 
 export default function LoginPage() {
   const supabase = createClient()
@@ -20,26 +34,37 @@ export default function LoginPage() {
   })
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const inRecoveryRef = useRef(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    if (params.get('reset') === 'true') setResetMode(true)
+    if (params.get('reset') === 'true') {
+      setResetMode(true)
+      inRecoveryRef.current = true
+    }
+    if (params.get('reason') === 'not-on-team') {
+      setError('Your account is signed in but is not on the CSDtv team list. Contact your administrator to be invited.')
+    }
     if (params.get('error') === 'auth') {
       setError('This link has expired or was already used. Request a new password reset email and open only the newest link.')
     }
   }, [])
 
   useEffect(() => {
+    inRecoveryRef.current = resetMode
+  }, [resetMode])
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        inRecoveryRef.current = true
         setResetMode(true)
         return
       }
-      const pendingReset = typeof window !== 'undefined'
-        && new URLSearchParams(window.location.search).get('reset') === 'true'
-      if (session && !pendingReset) {
-        router.push('/dashboard')
+      if (session && !inRecoveryRef.current) {
+        stripResetFromUrl()
+        router.push(getPostLoginPath())
       }
     })
     return () => subscription.unsubscribe()
@@ -56,9 +81,10 @@ export default function LoginPage() {
   const handleMagicLink = async () => {
     setLoading(true)
     setError('')
+    const next = encodeURIComponent(getPostLoginPath())
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${next}` },
     })
     if (error) setError(error.message)
     else setMessage('Check your email for a login link.')
@@ -127,7 +153,7 @@ export default function LoginPage() {
             <div style={{ textAlign: 'center' as const, fontSize: '13px', color: '#8899bb', marginBottom: '1.5rem' }}>Create a password for your CSDtv account</div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#8899bb', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>New password</label>
-              <input type="password" placeholder="At least 6 characters" value={newPassword} onChange={e => setNewPassword(e.target.value)} style={{ width: '100%', background: '#1a2540', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', color: '#f0f4ff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
+              <input type="password" placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`} value={newPassword} onChange={e => setNewPassword(e.target.value)} style={{ width: '100%', background: '#1a2540', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', color: '#f0f4ff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#8899bb', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Confirm password</label>
@@ -136,7 +162,7 @@ export default function LoginPage() {
                 setLoading(true); setError('')
                 const { error } = await supabase.auth.updateUser({ password: newPassword })
                 if (error) setError(error.message)
-                else { setMessage('Password set! Redirecting...'); setTimeout(() => router.push('/dashboard'), 1500) }
+                else { setMessage('Password set! Redirecting...'); inRecoveryRef.current = false; setResetMode(false); stripResetFromUrl(); setTimeout(() => router.push(getPostLoginPath()), 1500) }
                 setLoading(false)
               }} style={{ width: '100%', background: '#1a2540', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 14px', fontSize: '14px', color: '#f0f4ff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }} />
             </div>
@@ -145,12 +171,12 @@ export default function LoginPage() {
             {message && <div style={{ fontSize: '14px', color: '#2ecc71', marginBottom: '1rem' }}>{message}</div>}
             <button onClick={async () => {
               if (!newPassword) { setError('Enter a password'); return }
-              if (newPassword.length < 6) { setError('Password must be at least 6 characters'); return }
+              if (newPassword.length < MIN_PASSWORD_LENGTH) { setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`); return }
               if (newPassword !== confirmPassword) { setError('Passwords don\'t match'); return }
               setLoading(true); setError('')
               const { error } = await supabase.auth.updateUser({ password: newPassword })
               if (error) setError(error.message)
-              else { setMessage('Password set! Redirecting...'); setTimeout(() => router.push('/dashboard'), 1500) }
+              else { setMessage('Password set! Redirecting...'); inRecoveryRef.current = false; setResetMode(false); stripResetFromUrl(); setTimeout(() => router.push(getPostLoginPath()), 1500) }
               setLoading(false)
             }} disabled={loading || !newPassword || newPassword !== confirmPassword} style={{ width: '100%', background: newPassword && newPassword === confirmPassword ? '#1e6cb5' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: 500, color: newPassword && newPassword === confirmPassword ? '#fff' : '#4a5a7a', cursor: newPassword && newPassword === confirmPassword ? 'pointer' : 'default', fontFamily: 'inherit', opacity: loading ? 0.7 : 1 }}>
               {loading ? 'Setting password...' : 'Set password'}

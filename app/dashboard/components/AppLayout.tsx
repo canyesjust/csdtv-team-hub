@@ -98,6 +98,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [showSearch, setShowSearch] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [userId, setUserId] = useState<string | null>(null)
+  const [accessState, setAccessState] = useState<'loading' | 'ready' | 'not-on-team' | 'link-error'>('loading')
+  const [linkErrorMsg, setLinkErrorMsg] = useState('')
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([])
 
   const studentInternNav = useMemo(
@@ -166,45 +168,72 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const loadUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.push('/login'); return }
-
-      // Auto-link supabase_user_id for new users who logged in via magic link
-      // Check if there's a team record for this email with no supabase_user_id
-      const { data: teamByEmail } = await supabase
-        .from('team')
-        .select('id, name, role, avatar_color, supabase_user_id')
-        .eq('email', session.user.email!)
-        .single()
-
-      if (teamByEmail && !teamByEmail.supabase_user_id) {
-        // Link this auth user to their team record
-        await supabase
-          .from('team')
-          .update({ supabase_user_id: session.user.id })
-          .eq('id', teamByEmail.id)
-        setUserName(teamByEmail.name)
-        setUserRole(teamByEmail.role)
-        setUserColor(teamByEmail.avatar_color || '#e8a020')
-        setUserId(teamByEmail.id)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login')
         return
       }
 
-      // Normal lookup by supabase_user_id
-      const { data } = await supabase
+      const applyTeam = (row: { id: string; name: string; role: string; avatar_color: string | null }) => {
+        setUserName(row.name)
+        setUserRole(row.role)
+        setUserColor(row.avatar_color || '#e8a020')
+        setUserId(row.id)
+        setAccessState('ready')
+      }
+
+      const email = user.email
+      if (!email) {
+        setAccessState('not-on-team')
+        return
+      }
+
+      const { data: teamByEmail, error: emailLookupErr } = await supabase
+        .from('team')
+        .select('id, name, role, avatar_color, supabase_user_id')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (emailLookupErr) {
+        setLinkErrorMsg(emailLookupErr.message)
+        setAccessState('link-error')
+        return
+      }
+
+      if (teamByEmail && !teamByEmail.supabase_user_id) {
+        const { error: linkErr } = await supabase
+          .from('team')
+          .update({ supabase_user_id: user.id })
+          .eq('id', teamByEmail.id)
+          .is('supabase_user_id', null)
+        if (linkErr) {
+          setLinkErrorMsg(linkErr.message)
+          setAccessState('link-error')
+          return
+        }
+        applyTeam(teamByEmail)
+        return
+      }
+
+      const { data: byUid, error: uidErr } = await supabase
         .from('team')
         .select('id, name, role, avatar_color')
-        .eq('supabase_user_id', session.user.id)
-        .single()
-      if (data) {
-        setUserName(data.name)
-        setUserRole(data.role)
-        setUserColor(data.avatar_color || '#e8a020')
-        setUserId(data.id)
+        .eq('supabase_user_id', user.id)
+        .maybeSingle()
+
+      if (uidErr) {
+        setLinkErrorMsg(uidErr.message)
+        setAccessState('link-error')
+        return
       }
+      if (!byUid) {
+        setAccessState('not-on-team')
+        return
+      }
+      applyTeam(byUid)
     }
     loadUser()
-  }, [supabase])
+  }, [supabase, router])
 
   useEffect(() => {
     if (!userId) return
@@ -224,6 +253,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
     router.push('/login')
   }, [supabase, router])
+
+  if (accessState === 'loading') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, color: muted, fontFamily: 'var(--font-sans)' }}>
+        Loading…
+      </div>
+    )
+  }
+
+  if (accessState === 'not-on-team' || accessState === 'link-error') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, color: text, fontFamily: 'var(--font-sans)', padding: '2rem' }}>
+        <div style={{ maxWidth: '420px', textAlign: 'center' as const, background: sidebar, border: `0.5px solid ${border}`, borderRadius: '16px', padding: '2rem' }}>
+          <p style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
+            {accessState === 'link-error' ? 'Could not link your account' : 'Not on the team roster'}
+          </p>
+          <p style={{ fontSize: '14px', color: muted, marginBottom: '1.5rem', lineHeight: 1.5 }}>
+            {accessState === 'link-error'
+              ? (linkErrorMsg || 'Your team record could not be linked. Try again or contact your administrator.')
+              : 'You are signed in, but no CSDtv team record matches this account. Ask your administrator to invite you with this email address.'}
+          </p>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{ background: '#1e6cb5', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === href

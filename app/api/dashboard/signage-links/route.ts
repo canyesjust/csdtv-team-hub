@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,9 @@ export async function GET() {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (!canPublishTaskSignageIntake(teamUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const key = process.env.SIGNAGE_TASKS_KEY
