@@ -42,16 +42,26 @@ export function PrerollCountdownCard({ scheduledStart }: { scheduledStart: strin
 
 export function PrerollAgendaPreviewCard({ state }: { state: PublicChannelState }) {
   const highlights = useMemo(() => {
-    const pool = [
-      ...(state.current_item
-        ? [{ id: state.current_item.id, item_number: state.current_item.item_number, title: state.current_item.title, type: state.current_item.type }]
-        : []),
-      ...state.upcoming_items,
-    ]
+    const pool =
+      state.agenda_preview_items.length > 0
+        ? state.agenda_preview_items
+        : [
+            ...(state.current_item
+              ? [
+                  {
+                    id: state.current_item.id,
+                    item_number: state.current_item.item_number,
+                    title: state.current_item.title,
+                    type: state.current_item.type,
+                  },
+                ]
+              : []),
+            ...state.upcoming_items,
+          ]
     const action = pool.filter(i => i.type === 'action')
     const rest = pool.filter(i => i.type !== 'action')
-    return [...action, ...rest].slice(0, 4)
-  }, [state])
+    return [...action, ...rest]
+  }, [state.agenda_preview_items, state.current_item, state.upcoming_items])
 
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
@@ -61,7 +71,18 @@ export function PrerollAgendaPreviewCard({ state }: { state: PublicChannelState 
       {highlights.length === 0 ? (
         <p style={{ margin: 0, fontSize: '20px', color: '#c5d0e8' }}>Agenda details available soon.</p>
       ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            maxHeight: 'min(58vh, 560px)',
+            overflowY: 'auto',
+          }}
+        >
           {highlights.map(h => (
             <li key={h.id} style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.06)', borderRadius: '8px' }}>
               <span style={{ fontSize: '13px', color: '#8899bb', marginRight: '10px' }}>{h.item_number}</span>

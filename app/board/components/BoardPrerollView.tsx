@@ -58,11 +58,16 @@ export default function BoardPrerollView({
 
   const meetingTitle = state.meeting?.title || 'Board Meeting'
   const channelName = state.channel_name || initialChannelName || `Channel ${channelNumber}`
-  const ticker = [
-    ...state.completed_items.map(c => ({ item_number: c.number, title: c.title })),
-    ...(state.current_item ? [{ item_number: state.current_item.item_number, title: state.current_item.title }] : []),
-    ...state.upcoming_items,
-  ]
+  const ticker =
+    state.agenda_preview_items.length > 0
+      ? state.agenda_preview_items
+      : [
+          ...state.completed_items.map(c => ({ item_number: c.number, title: c.title })),
+          ...(state.current_item
+            ? [{ item_number: state.current_item.item_number, title: state.current_item.title }]
+            : []),
+          ...state.upcoming_items,
+        ]
 
   return (
     <div

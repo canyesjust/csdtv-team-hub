@@ -45,6 +45,24 @@ export type PublicAgendaItem = {
   documents: { title: string; source_url: string | null }[]
 }
 
+export type PublicAgendaItemSummary = {
+  id: string
+  item_number: string
+  title: string
+  type: string
+}
+
+function toAgendaItemSummaries(
+  items: { id: string; item_number: string; title: string; type: string }[],
+): PublicAgendaItemSummary[] {
+  return items.map(i => ({
+    id: i.id,
+    item_number: i.item_number,
+    title: i.title,
+    type: i.type,
+  }))
+}
+
 export type PublicActiveQr = {
   url: string
   label: string
@@ -81,7 +99,9 @@ export type PublicChannelState = {
     playlist: PublicPlaylistState | null
   } | null
   current_item: PublicAgendaItem | null
-  upcoming_items: { id: string; item_number: string; title: string; type: string }[]
+  upcoming_items: PublicAgendaItemSummary[]
+  /** Full broadcastable agenda for pre-roll preview (not limited to "up next"). */
+  agenda_preview_items: PublicAgendaItemSummary[]
   completed_items: { id: string; number: string; title: string; started_at_offset_seconds: number }[]
   timer: {
     label: string
@@ -178,6 +198,7 @@ export async function buildPublicChannelState(
     state: null,
     current_item: null,
     upcoming_items: [],
+    agenda_preview_items: [],
     completed_items: [],
     timer: null,
     live_started_at: null,
@@ -231,9 +252,10 @@ export async function buildPublicChannelState(
     current_item = { ...currentRow, ...extras }
   }
 
-  const upcoming_items = items
-    .slice(currentIdx >= 0 ? currentIdx + 1 : 0, currentIdx >= 0 ? currentIdx + 4 : 3)
-    .map(i => ({ id: i.id, item_number: i.item_number, title: i.title, type: i.type }))
+  const agenda_preview_items = toAgendaItemSummaries(items)
+  const upcoming_items = toAgendaItemSummaries(
+    items.slice(currentIdx >= 0 ? currentIdx + 1 : 0, currentIdx >= 0 ? currentIdx + 4 : 3),
+  )
 
   const { data: events } = await service
     .from('meeting_event_log')
@@ -363,6 +385,7 @@ export async function buildPublicChannelState(
     },
     current_item,
     upcoming_items,
+    agenda_preview_items,
     completed_items,
     timer: timerPayload,
     live_started_at,
