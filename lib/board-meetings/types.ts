@@ -65,6 +65,7 @@ export type OutputChannel = {
 
 export type ControlAgendaItem = {
   id: string
+  sort_order: number
   section_number: number
   section_title: string
   item_number: string
