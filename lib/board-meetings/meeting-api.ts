@@ -54,6 +54,69 @@ export type BoardMeetingProductionCheck =
   | { error: string; status?: number }
   | { productionId: string }
 
+/** Resolved production UUID + board meeting row for control/motion routes. */
+export type BoardMeetingRouteContext = {
+  productionId: string
+  boardMeetingId: string
+  title: string
+}
+
+const BOARD_MEETING_REQUEST_TYPE = 4
+
+/**
+ * Resolves a route param (production UUID or production number) to a board meeting.
+ */
+export async function resolveBoardMeetingRouteContext(
+  service: SupabaseClient,
+  routeProductionId: string,
+): Promise<BoardMeetingRouteContext | null> {
+  const prod = await lookupBoardMeetingProduction(service, routeProductionId)
+  if (!prod) return null
+
+  const { data: bm, error: bmError } = await service
+    .from('board_meetings')
+    .select('id, production_id')
+    .eq('production_id', prod.id)
+    .maybeSingle()
+
+  if (bmError || !bm) return null
+
+  return {
+    productionId: bm.production_id,
+    boardMeetingId: bm.id,
+    title: prod.title,
+  }
+}
+
+async function lookupBoardMeetingProduction(
+  service: SupabaseClient,
+  routeProductionId: string,
+): Promise<{ id: string; title: string } | null> {
+  const { data: byId, error: byIdError } = await service
+    .from('productions')
+    .select('id, title, request_type_number')
+    .eq('id', routeProductionId)
+    .maybeSingle()
+
+  if (!byIdError && byId?.request_type_number === BOARD_MEETING_REQUEST_TYPE) {
+    return { id: byId.id, title: byId.title || 'Board Meeting' }
+  }
+
+  if (/^\d+$/.test(routeProductionId)) {
+    const { data: byNumber, error: byNumberError } = await service
+      .from('productions')
+      .select('id, title, request_type_number')
+      .eq('production_number', Number(routeProductionId))
+      .maybeSingle()
+
+    if (!byNumberError && byNumber?.request_type_number === BOARD_MEETING_REQUEST_TYPE) {
+      return { id: byNumber.id, title: byNumber.title || 'Board Meeting' }
+    }
+  }
+
+  return null
+}
+
 export async function assertBoardMeetingProduction(
   service: SupabaseClient,
   productionId: string,

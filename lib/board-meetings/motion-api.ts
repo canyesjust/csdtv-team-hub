@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/service'
 import { loadAttendance } from '@/lib/board-meetings/attendance-control'
+import { resolveBoardMeetingRouteContext } from '@/lib/board-meetings/meeting-api'
 import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting-cache'
 import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
 import {
@@ -119,14 +120,10 @@ export async function loadMotionScreenBundle(
   service: SupabaseClient,
   productionId: string,
 ): Promise<MotionScreenBundle | null> {
-  const { data: meeting } = await service
-    .from('board_meetings')
-    .select('id, production_id, title')
-    .eq('production_id', productionId)
-    .maybeSingle()
+  const routeCtx = await resolveBoardMeetingRouteContext(service, productionId)
+  if (!routeCtx) return null
 
-  if (!meeting) return null
-  const meetingId = meeting.id
+  const meetingId = routeCtx.boardMeetingId
 
   const [{ data: state }, motions, people, attendance] = await Promise.all([
     service
@@ -193,7 +190,11 @@ export async function loadMotionScreenBundle(
     : null
 
   return {
-    meeting: { id: meeting.id, production_id: meeting.production_id, title: meeting.title },
+    meeting: {
+      id: routeCtx.boardMeetingId,
+      production_id: routeCtx.productionId,
+      title: routeCtx.title,
+    },
     current_agenda_item: currentItem,
     current_agenda_item_id: state?.current_agenda_item_id || null,
     active_motion: active,

@@ -42,7 +42,7 @@ export default async function MotionScreenPage({ params }: Props) {
 
   return (
     <div className="control-page">
-      <MotionScreenClient productionId={productionId} initialBundle={bundle} />
+      <MotionScreenClient productionId={bundle.meeting.production_id} initialBundle={bundle} />
     </div>
   )
 }
