@@ -40,12 +40,9 @@ export default function MotionAndVoteCard(props: Props) {
 function StateA({ isLive, onOpen }: { isLive: boolean; onOpen: () => void }) {
   return (
     <div className="cs-card">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div className="cs-eyebrow" style={{ marginBottom: 0 }}>Motion & vote</div>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>idle</span>
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, minHeight: 28 }}>
-        No motion on floor
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <span className="cs-eyebrow" style={{ marginBottom: 0 }}>Motion &amp; vote</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>no motion on floor</span>
       </div>
       <button
         type="button"
