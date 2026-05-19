@@ -324,6 +324,7 @@ export async function buildPublicChannelState(
     active: true,
     channel_number: channel.channel_number,
     channel_name: channel.channel_name,
+    result_overlay,
     meeting: {
       title: prod?.title || 'Board Meeting',
       type: prod?.request_type_label ?? null,

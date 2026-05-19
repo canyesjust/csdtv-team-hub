@@ -210,8 +210,9 @@ export async function loadMotionScreenBundle(
   const lifecycle = surface.motion_lifecycle
   const agendaItems = surface.agenda_items || []
 
-  const currentItem = surface.current_agenda_item_id
-    ? agendaItems.find(i => i.id === surface.current_agenda_item_id) ?? null
+  const currentAgendaItemId = surface.broadcast_state?.current_agenda_item_id ?? null
+  const currentItem = currentAgendaItemId
+    ? agendaItems.find(i => i.id === currentAgendaItemId) ?? null
     : null
   const consentItems = currentItem?.consent_block
     ? agendaItems.filter(i => i.consent_block === currentItem.consent_block)
@@ -305,7 +306,7 @@ export async function openMotion(
     buildSuggestedMotionText(
       {
         id: item.id,
-        item_number: '',
+        item_number: item.item_number ?? '',
         title: item.title,
         consent_block: item.consent_block,
         type: item.type,

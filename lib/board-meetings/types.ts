@@ -70,6 +70,7 @@ export type ControlAgendaItem = {
   item_number: string
   title: string
   type: string
+  action_requested?: boolean
   is_broadcastable: boolean
   consent_block?: string | null
 }
