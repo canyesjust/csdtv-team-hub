@@ -50,10 +50,14 @@ export type AgendaItemBundle = {
   }[]
 }
 
+export type BoardMeetingProductionCheck =
+  | { error: string; status?: number }
+  | { productionId: string }
+
 export async function assertBoardMeetingProduction(
   service: SupabaseClient,
   productionId: string,
-): Promise<{ error?: string; status?: number } | { productionId: string }> {
+): Promise<BoardMeetingProductionCheck> {
   const { data, error } = await service
     .from('productions')
     .select('id, request_type_number')
