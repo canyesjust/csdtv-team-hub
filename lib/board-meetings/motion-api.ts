@@ -6,7 +6,6 @@ import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import type { ActiveMotion, MotionScreenBundle } from '@/lib/board-meetings/types'
 import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
-
 function enrichActiveMotion(
   motion: ActiveMotion | null,
   rows: EnrichedMotion[],
@@ -30,6 +29,25 @@ function enrichActiveMotion(
   }
 }
 
+function formatLiveElapsed(liveStartedAt: string | null | undefined): string | null {
+  if (!liveStartedAt) return null
+  const ms = Date.now() - new Date(liveStartedAt).getTime()
+  if (ms < 0) return null
+  const totalSec = Math.floor(ms / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function buildVotesMap(motion: EnrichedMotion | undefined): Record<string, string> {
+  if (!motion?.votes) return {}
+  const map: Record<string, string> = {}
+  for (const v of motion.votes) {
+    map[v.person_id] = v.vote
+  }
+  return map
+}
+
 export async function loadMotionScreenBundle(
   productionId: string,
   serviceClient?: SupabaseClient,
@@ -44,11 +62,13 @@ export async function loadMotionScreenBundle(
   const surface = await buildControlSurfaceBundle(service, resolvedId)
   if (!surface) return null
 
+  const attendance = await loadAttendance(service, surface.board_meeting.id)
   const motions = await listMotionsEnriched(service, surface.board_meeting.id)
   const lifecycle = surface.motion_lifecycle
 
-  const currentId = surface.broadcast_state?.current_agenda_item_id
-  const currentItem = (surface.agenda_items || []).find(i => i.id === currentId) ?? null
+  const currentItem = surface.current_agenda_item_id
+    ? (surface.agenda_items || []).find(i => i.id === surface.current_agenda_item_id) ?? null
+    : null
   const consentItems = currentItem?.consent_block
     ? surface.agenda_items.filter(i => i.consent_block === currentItem.consent_block)
     : []
@@ -66,6 +86,20 @@ export async function loadMotionScreenBundle(
     active_motion = { ...active_motion, status: 'drafting' }
   }
 
+  const activeRow = active_motion ? motions.find(m => m.id === active_motion!.id) : undefined
+  const tally = activeRow
+    ? {
+        yea: activeRow.tally.yea,
+        nay: activeRow.tally.nay,
+        abstain: activeRow.tally.abstain,
+        absent: activeRow.tally.absent,
+      }
+    : { yea: 0, nay: 0, abstain: 0, absent: 0 }
+
+  const voting_members = attendance.records
+    .filter(r => r.status !== 'absent')
+    .map(r => ({ id: r.person_id, display_name: r.name }))
+
   return {
     meeting: {
       id: surface.board_meeting.id,
@@ -78,9 +112,16 @@ export async function loadMotionScreenBundle(
     parent_motion: enrichActiveMotion(lifecycle?.parent_motion ?? null, motions),
     lifecycle_state: lifecycle?.state ?? 'no_motion',
     current_agenda_item: currentItem,
+    current_agenda_item_id: currentItem?.id ?? null,
+    suggested_motion_text: currentItem ? `Move to approve ${currentItem.title}` : null,
+    live_elapsed: formatLiveElapsed(surface.broadcast_state?.live_started_at),
+    voting_members,
+    votes: buildVotesMap(activeRow),
+    tally,
+    quorum_size: attendance.quorum.threshold,
     consent_is_lead: !!(currentItem?.consent_block && consentItems[0]?.id === currentItem.id),
     consent_range: consentRange,
-    attendance: (surface.attendance?.records || []).map(r => ({
+    attendance: attendance.records.map(r => ({
       person_id: r.person_id,
       name: r.name,
       status: r.status,

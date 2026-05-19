@@ -20,7 +20,11 @@ export default function MotionScreenView(props: Props) {
   const active = bundle.active_motion
   const parent = bundle.parent_motion
 
-  if (active?.motion_type === 'substitute' && parent) {
+  if (
+    active?.motion_type === 'substitute' &&
+    parent &&
+    (active.status === 'voting' || active.status === 'passed' || active.status === 'failed')
+  ) {
     return <SubstituteVotingState {...props} active={active} parent={parent} />
   }
 

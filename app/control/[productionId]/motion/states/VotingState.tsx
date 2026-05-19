@@ -1,74 +1,111 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import type { ActiveMotion } from '@/lib/board-meetings/types'
-import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
-import type { VoterRow } from '@/app/dashboard/board-meetings/[productionId]/control/components/VoteInterface'
-import MotionScreenFrame from '../components/MotionScreenFrame'
-import TallyRow from '../components/TallyRow'
+import MotionTopBar from '../components/MotionTopBar'
+import MotionContextBar from '../components/MotionContextBar'
+import MotionTextCard from '../components/MotionTextCard'
 import VoteGrid from '../components/VoteGrid'
-import { tallyFromActiveMotion, type MotionScreenStateProps } from '../motion-screen-types'
+import TallyRow from '../components/TallyRow'
+import type { MotionScreenBundle, ActiveMotion } from '@/lib/board-meetings/types'
 
-export default function VotingState(props: MotionScreenStateProps & { active: ActiveMotion }) {
-  const { bundle, busy, onAction, onPushResult, active } = props
-  const disabled = !bundle.can_control || !bundle.is_live || busy
+type Props = {
+  bundle: MotionScreenBundle
+  active: ActiveMotion
+  busy: boolean
+  error: string | null
+  onAction: (action: string, body?: unknown) => Promise<void>
+  onMinimize: () => void
+  onPushResult: () => Promise<void>
+}
 
-  const [voteMode, setVoteMode] = useState<VoteMode>(active.vote_type ?? 'voice')
-  const [voteDraft, setVoteDraft] = useState<Record<string, VoteValue | null>>({})
+export default function VotingState({
+  bundle,
+  active,
+  busy,
+  error,
+  onAction,
+  onMinimize,
+  onPushResult,
+}: Props) {
+  const tally = bundle.tally
+  const isVoice = active.vote_type === 'voice'
+  const willPass = tally.yea > tally.nay && tally.yea >= (bundle.quorum_size || 4)
 
-  const voters: VoterRow[] = useMemo(
-    () =>
-      bundle.attendance.map(p => ({
-        person_id: p.person_id,
-        name: p.name,
-        eligible: p.status !== 'absent',
-        default_vote: p.status === 'absent' ? 'absent' : 'yea',
-      })),
-    [bundle.attendance],
-  )
+  const onRecordVote = (
+    personId: string,
+    vote: 'yea' | 'nay' | 'abstain' | 'absent' | 'recused',
+  ) => onAction('record-vote', { person_id: personId, vote })
 
-  const tally = tallyFromActiveMotion(active)
-  const showTally = !!tally && ['passed', 'failed', 'voting'].includes(active.status)
+  const onSubstitute = () =>
+    onAction('propose-substitute', { agenda_item_id: bundle.current_agenda_item_id })
+  const onCancel = () => onAction('withdraw')
 
   return (
-    <MotionScreenFrame {...props} active={active}>
-      <div className="cs-card cs-motion-card--info">
-        <p className="cs-eyebrow">Voting</p>
-        <p style={{ margin: 0, fontSize: 14, color: 'var(--semantic-info-text)' }}>
-          Record votes, then push the result to the overlay.
-        </p>
-      </div>
-      <VoteGrid
-        voteMode={voteMode}
-        setVoteMode={setVoteMode}
-        voters={voters}
-        voteDraft={voteDraft}
-        onChange={(id, v) => setVoteDraft(d => ({ ...d, [id]: v }))}
-        disabled={disabled}
+    <div className="motion-screen">
+      <MotionTopBar onMinimize={onMinimize} liveElapsed={bundle.live_elapsed} />
+
+      <MotionContextBar
+        agendaItem={bundle.current_agenda_item}
+        statusPill={{ label: 'VOTING IN PROGRESS', variant: 'warning', icon: 'circle-check' }}
       />
-      {showTally && tally ? <TallyRow tally={tally} result={active.result ?? null} /> : null}
+
+      <div className="ms-body">
+        <MotionTextCard
+          text={active.text}
+          moverName={active.mover_name}
+          seconderName={active.seconder_name}
+          voteType={active.vote_type}
+          onChangeVoteType={t => onAction('set-vote-type', { vote_type: t })}
+          onEditText={t => onAction('set-text', { text: t })}
+        />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+            VOTES · TAP A CARD TO CHANGE
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {isVoice ? 'Voice vote: all present default to yea' : 'Roll call: tap each member'}
+          </div>
+        </div>
+
+        <VoteGrid
+          members={bundle.voting_members}
+          votes={bundle.votes}
+          mover={active.mover_id}
+          seconder={active.seconder_id}
+          onRecordVote={onRecordVote}
+        />
+
+        <TallyRow
+          yea={tally.yea}
+          nay={tally.nay}
+          abstain={tally.abstain}
+          absent={tally.absent}
+          projection={willPass ? 'Motion will pass' : 'Motion will fail'}
+          projectionVariant={willPass ? 'success' : 'danger'}
+          quorumNote={`simple majority · ${Math.floor(bundle.voting_members.length / 2 + 1)} needed`}
+        />
+      </div>
+
       <div className="ms-actions">
         <button
           type="button"
           className="cs-touchbtn cs-touchbtn-primary"
-          disabled={disabled}
-          onClick={async () => {
-            const payload = voters.map(v => {
-              const vote =
-                voteDraft[v.person_id] ??
-                (voteMode === 'voice' ? (v.eligible ? 'yea' : 'absent') : null)
-              return { person_id: v.person_id, vote: vote || 'absent' }
-            })
-            if (voteMode === 'roll_call' && payload.some(p => !p.vote)) return
-            await onAction('record-vote', { votes: payload })
-          }}
+          onClick={onPushResult}
+          disabled={busy}
         >
-          Record vote
-        </button>
-        <button type="button" className="cs-touchbtn" disabled={disabled || !showTally} onClick={onPushResult}>
           Push result to overlay
         </button>
+        <button type="button" className="cs-touchbtn" onClick={onSubstitute} disabled={busy}>
+          Substitute motion
+        </button>
+        <button type="button" className="cs-touchbtn" onClick={onCancel} disabled={busy}>
+          Cancel motion
+        </button>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
+          Result shows on overlay for 8s then auto-dismisses
+        </span>
+        {error && <span style={{ color: 'var(--semantic-danger-text)', fontSize: 12 }}>{error}</span>}
       </div>
-    </MotionScreenFrame>
+    </div>
   )
 }

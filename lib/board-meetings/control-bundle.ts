@@ -69,7 +69,13 @@ export async function buildControlSurfaceBundle(
       .in('event_type', LIVE_EVENT_TYPES)
       .order('occurred_at', { ascending: false })
       .limit(1),
-    service.from('lower_third_people').select('id, display_name, primary_title, is_active').eq('is_active', true).order('display_name'),
+    service
+      .from('lower_third_people')
+      .select(
+        'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active',
+      )
+      .eq('is_active', true)
+      .order('display_name'),
   ])
 
   const { data: prod } = await service

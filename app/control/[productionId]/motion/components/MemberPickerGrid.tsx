@@ -1,46 +1,56 @@
 'use client'
 
-export type MemberOption = { person_id: string; name: string }
+import type { MotionVotingMember } from '@/lib/board-meetings/types'
 
-export default function MemberPickerGrid({
-  label,
-  members,
-  excludeId,
-  disabled,
-  onSelect,
-}: {
-  label: string
-  members: MemberOption[]
-  excludeId?: string
-  disabled?: boolean
-  onSelect: (personId: string) => void
-}) {
-  const filtered = excludeId ? members.filter(m => m.person_id !== excludeId) : members
+type Props = {
+  members: MotionVotingMember[]
+  moverId?: string | null
+  seconderId?: string | null
+  onPick: (personId: string) => void
+}
 
+export default function MemberPickerGrid({ members, moverId, seconderId, onPick }: Props) {
   return (
-    <div>
-      <p className="cs-eyebrow">{label}</p>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))',
-          gap: 10,
-          marginTop: 10,
-        }}
-      >
-        {filtered.map(m => (
+    <div
+      className="ms-member-grid"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+        gap: 10,
+      }}
+    >
+      {members.map(m => {
+        const isMover = m.id === moverId
+        const isSeconder = m.id === seconderId
+        const role = isMover ? 'Mover' : isSeconder ? 'Seconder' : null
+        return (
           <button
-            key={m.person_id}
+            key={m.id}
             type="button"
-            disabled={disabled}
-            onClick={() => onSelect(m.person_id)}
-            className="cs-touchbtn"
-            style={{ textAlign: 'center' }}
+            className={`cs-touchbtn${isMover || isSeconder ? ' cs-touchbtn-primary' : ''}`}
+            onClick={() => onPick(m.id)}
+            style={{
+              minHeight: 72,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              textAlign: 'center',
+              borderColor: isMover
+                ? 'var(--semantic-success-border)'
+                : isSeconder
+                  ? 'var(--semantic-info-border)'
+                  : undefined,
+            }}
           >
-            {m.name}
+            <span style={{ fontSize: 15, fontWeight: 600 }}>{m.display_name}</span>
+            {role && (
+              <span style={{ fontSize: 10, letterSpacing: '0.06em', opacity: 0.9 }}>{role.toUpperCase()}</span>
+            )}
           </button>
-        ))}
-      </div>
+        )
+      })}
     </div>
   )
 }

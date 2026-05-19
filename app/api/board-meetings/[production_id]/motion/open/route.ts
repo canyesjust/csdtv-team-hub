@@ -11,15 +11,18 @@ export async function POST(
   const { production_id } = await params
   return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
     const body = await request.json()
-    if (!body.motion_text?.trim()) return controlError('motion_text required')
+    const motionText =
+      (body.motion_text ?? body.text)?.trim() ||
+      (body.agenda_item_id ? 'Motion on agenda item' : '')
+    if (!motionText) return controlError('motion_text required')
     try {
       const motion = await openMotion(service, boardMeetingId, teamUserId, {
         agenda_item_id: body.agenda_item_id ?? null,
         consent_block: body.consent_block ?? null,
         motion_type: body.motion_type || 'main',
         parent_motion_id: body.parent_motion_id ?? null,
-        motion_text: body.motion_text,
-        moved_by_person_id: body.moved_by_person_id ?? null,
+        motion_text: motionText,
+        moved_by_person_id: body.moved_by_person_id ?? body.mover_id ?? null,
         seconded_by_person_id: body.seconded_by_person_id ?? null,
       })
       return NextResponse.json({ motion })

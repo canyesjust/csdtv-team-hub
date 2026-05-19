@@ -11,10 +11,11 @@ export async function POST(
   const { production_id, motionId } = await params
   return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
     const body = await request.json()
-    if (!body.motion_text?.trim()) return controlError('motion_text required')
+    const text = (body.text ?? body.motion_text)?.trim()
+    if (!text) return controlError('motion text required')
     try {
       await updateMotion(service, boardMeetingId, motionId, teamUserId, {
-        motion_text: body.motion_text,
+        motion_text: text,
       })
       return NextResponse.json({ ok: true })
     } catch (e) {

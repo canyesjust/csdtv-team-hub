@@ -1,127 +1,73 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import type { ActiveMotion } from '@/lib/board-meetings/types'
-import MemberPickerGrid from '../components/MemberPickerGrid'
-import MotionScreenFrame from '../components/MotionScreenFrame'
+import MotionTopBar from '../components/MotionTopBar'
+import MotionContextBar from '../components/MotionContextBar'
 import MotionTextCard from '../components/MotionTextCard'
-import type { MotionScreenStateProps } from '../motion-screen-types'
+import type { MotionScreenBundle, ActiveMotion } from '@/lib/board-meetings/types'
 
-export default function OpenForDiscussionState(
-  props: MotionScreenStateProps & { active: ActiveMotion },
-) {
-  const { bundle, busy, onAction, onMinimize, active } = props
-  const disabled = !bundle.can_control || !bundle.is_live || busy
+type Props = {
+  bundle: MotionScreenBundle
+  active: ActiveMotion
+  busy: boolean
+  error: string | null
+  onAction: (action: string, body?: unknown) => Promise<void>
+  onMinimize: () => void
+}
 
-  const [motionText, setMotionText] = useState(active.text ?? '')
-  const [editStep, setEditStep] = useState<'mover' | 'seconder' | null>(null)
-
-  useEffect(() => {
-    setMotionText(active.text ?? '')
-  }, [active.id, active.text])
-
-  useEffect(() => {
-    if (!active.mover_id) setEditStep('mover')
-    else if (!active.seconder_id) setEditStep('seconder')
-    else setEditStep(null)
-  }, [active.id, active.mover_id, active.seconder_id])
-
-  const members = useMemo(
-    () => bundle.attendance.filter(p => p.status !== 'absent').map(p => ({ person_id: p.person_id, name: p.name })),
-    [bundle.attendance],
-  )
-
-  const hasMover = !!active.mover_id
-  const hasSeconder = !!active.seconder_id
-  const showMoverGrid = !hasMover || editStep === 'mover'
-  const showSeconderGrid = hasMover && (!hasSeconder || editStep === 'seconder')
-  const ready = hasMover && hasSeconder
+export default function OpenForDiscussionState({ bundle, active, busy, error, onAction, onMinimize }: Props) {
+  const onOpenVote = () => onAction('open-vote')
+  const onProposeSubstitute = () =>
+    onAction('propose-substitute', { agenda_item_id: bundle.current_agenda_item_id })
+  const onWithdraw = () => onAction('withdraw')
 
   return (
-    <MotionScreenFrame {...props} active={active}>
-      <MotionTextCard
-        text={motionText}
-        disabled={disabled}
-        onChange={setMotionText}
-        onSave={() => onAction('set-text', { motion_text: motionText })}
+    <div className="motion-screen">
+      <MotionTopBar onMinimize={onMinimize} liveElapsed={bundle.live_elapsed} />
+
+      <MotionContextBar
+        agendaItem={bundle.current_agenda_item}
+        statusPill={{ label: 'OPEN FOR DISCUSSION', variant: 'info', icon: 'message-circle' }}
       />
 
-      {hasMover && !showMoverGrid ? (
-        <div className="cs-card">
-          <p className="cs-eyebrow">Moved by</p>
-          <p style={{ margin: '6px 0 8px', fontSize: 18, fontWeight: 700 }}>{active.mover_name}</p>
-          <button type="button" className="cs-touchbtn" disabled={disabled} onClick={() => setEditStep('mover')}>
-            Change mover
-          </button>
-        </div>
-      ) : null}
-
-      {hasMover && hasSeconder && !showSeconderGrid ? (
-        <div className="cs-card">
-          <p className="cs-eyebrow">Seconded by</p>
-          <p style={{ margin: '6px 0 8px', fontSize: 18, fontWeight: 700 }}>{active.seconder_name}</p>
-          <button type="button" className="cs-touchbtn" disabled={disabled} onClick={() => setEditStep('seconder')}>
-            Change seconder
-          </button>
-        </div>
-      ) : null}
-
-      {showMoverGrid ? (
-        <MemberPickerGrid
-          label="Who made the motion?"
-          members={members}
-          disabled={disabled}
-          onSelect={async id => {
-            await onAction('set-mover', { person_id: id })
-            setEditStep('seconder')
-          }}
+      <div className="ms-body">
+        <MotionTextCard
+          text={active.text}
+          moverName={active.mover_name}
+          seconderName={active.seconder_name}
+          voteType={active.vote_type}
+          readonly
         />
-      ) : null}
 
-      {showSeconderGrid ? (
-        <MemberPickerGrid
-          label="Who seconded?"
-          members={members}
-          excludeId={active.mover_id || undefined}
-          disabled={disabled}
-          onSelect={async id => {
-            await onAction('set-seconder', { person_id: id })
-            setEditStep(null)
+        <div
+          style={{
+            padding: '14px 16px',
+            background: 'var(--surface-1)',
+            border: '0.5px solid var(--border-subtle)',
+            borderRadius: 12,
+            textAlign: 'center',
           }}
-        />
-      ) : null}
-
-      {ready && editStep === null ? (
-        <div className="ms-actions">
-          <button
-            type="button"
-            className="cs-touchbtn cs-touchbtn-primary"
-            disabled={disabled}
-            onClick={async () => {
-              await onAction('set-vote-type', { vote_mode: active.vote_type })
-              await onAction('open-vote', { vote_mode: active.vote_type })
-            }}
-          >
-            Open vote
-          </button>
-          {active.motion_type === 'main' ? (
-            <button type="button" className="cs-touchbtn" disabled={disabled} onClick={() => onAction('propose-substitute', {})}>
-              Propose substitute
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="cs-touchbtn cs-touchbtn-danger"
-            disabled={disabled}
-            onClick={async () => {
-              await onAction('withdraw')
-              onMinimize()
-            }}
-          >
-            Withdraw
-          </button>
+        >
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>
+            Motion is on the floor.
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            Board may discuss, propose a substitute, or move to vote.
+          </div>
         </div>
-      ) : null}
-    </MotionScreenFrame>
+      </div>
+
+      <div className="ms-actions">
+        <button type="button" className="cs-touchbtn cs-touchbtn-primary" onClick={onOpenVote} disabled={busy}>
+          Open vote →
+        </button>
+        <button type="button" className="cs-touchbtn" onClick={onProposeSubstitute} disabled={busy}>
+          Propose substitute
+        </button>
+        <button type="button" className="cs-touchbtn" onClick={onWithdraw} disabled={busy}>
+          Withdraw motion
+        </button>
+        {error && <span style={{ color: 'var(--semantic-danger-text)', fontSize: 12 }}>{error}</span>}
+      </div>
+    </div>
   )
 }

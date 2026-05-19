@@ -1,75 +1,145 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import type { ActiveMotion } from '@/lib/board-meetings/types'
-import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
-import type { VoterRow } from '@/app/dashboard/board-meetings/[productionId]/control/components/VoteInterface'
+import MotionTopBar from '../components/MotionTopBar'
+import MotionContextBar from '../components/MotionContextBar'
+import MotionTextCard from '../components/MotionTextCard'
 import HeldMotionCard from '../components/HeldMotionCard'
-import MotionScreenFrame from '../components/MotionScreenFrame'
-import TallyRow from '../components/TallyRow'
 import VoteGrid from '../components/VoteGrid'
-import { tallyFromActiveMotion, type MotionScreenStateProps } from '../motion-screen-types'
+import TallyRow from '../components/TallyRow'
+import type { MotionScreenBundle, ActiveMotion } from '@/lib/board-meetings/types'
 
-export default function SubstituteVotingState(
-  props: MotionScreenStateProps & { active: ActiveMotion; parent: ActiveMotion },
-) {
-  const { bundle, busy, onAction, onPushResult, active, parent } = props
-  const disabled = !bundle.can_control || !bundle.is_live || busy
+type Props = {
+  bundle: MotionScreenBundle
+  active: ActiveMotion
+  parent: ActiveMotion
+  busy: boolean
+  error: string | null
+  onAction: (action: string, body?: unknown) => Promise<void>
+  onMinimize: () => void
+  onPushResult: () => Promise<void>
+}
 
-  const [voteMode, setVoteMode] = useState<VoteMode>(active.vote_type ?? 'voice')
-  const [voteDraft, setVoteDraft] = useState<Record<string, VoteValue | null>>({})
+export default function SubstituteVotingState({
+  bundle,
+  active,
+  parent,
+  busy,
+  error,
+  onAction,
+  onMinimize,
+  onPushResult,
+}: Props) {
+  const tally = bundle.tally
+  const willPass =
+    tally.yea > tally.nay && tally.yea >= Math.ceil(bundle.voting_members.length / 2 + 0.5)
+  const isTie = tally.yea === tally.nay
 
-  const voters: VoterRow[] = useMemo(
-    () =>
-      bundle.attendance.map(p => ({
-        person_id: p.person_id,
-        name: p.name,
-        eligible: p.status !== 'absent',
-        default_vote: p.status === 'absent' ? 'absent' : 'yea',
-      })),
-    [bundle.attendance],
-  )
+  const projection = willPass
+    ? 'Substitute passes · main is replaced'
+    : isTie
+      ? 'Substitute fails · tie · Main returns to floor'
+      : 'Substitute fails · Main returns to floor'
 
-  const tally = tallyFromActiveMotion(active)
-  const showTally = !!tally && ['passed', 'failed', 'voting'].includes(active.status)
+  const onRecordVote = (
+    personId: string,
+    vote: 'yea' | 'nay' | 'abstain' | 'absent' | 'recused',
+  ) => onAction('record-vote', { person_id: personId, vote })
+
+  const onWithdrawSub = () => onAction('withdraw')
+  const onCancelBoth = () => onAction('cancel-thread')
 
   return (
-    <MotionScreenFrame {...props} active={active}>
-      <HeldMotionCard label="Main motion (held)" motionText={parent.text ?? ''} />
-      <div className="cs-card">
-        <p className="cs-eyebrow">Substitute motion — voting</p>
+    <div className="motion-screen">
+      <MotionTopBar onMinimize={onMinimize} liveElapsed={bundle.live_elapsed} />
+
+      <MotionContextBar
+        agendaItem={bundle.current_agenda_item}
+        statusPill={{ label: 'VOTING ON SUBSTITUTE', variant: 'warning', icon: 'replace' }}
+      />
+
+      <div className="ms-body">
+        <HeldMotionCard motion={parent} note="Returns if substitute fails" />
+
+        <div
+          style={{
+            padding: '14px 16px',
+            background: 'var(--surface-1)',
+            border: '0.5px solid var(--semantic-warning-border)',
+            borderRadius: 12,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: 'var(--semantic-warning-text)',
+              letterSpacing: '0.05em',
+              fontWeight: 500,
+              marginBottom: 6,
+            }}
+          >
+            ⤴ SUBSTITUTE MOTION
+          </div>
+          <MotionTextCard
+            text={active.text}
+            moverName={active.mover_name}
+            seconderName={active.seconder_name}
+            voteType={active.vote_type}
+            onChangeVoteType={t => onAction('set-vote-type', { vote_type: t })}
+            onEditText={t => onAction('set-text', { text: t })}
+            embedded
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+            VOTES ON SUBSTITUTE · TAP A CARD TO CHANGE
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {bundle.voting_members.length} voting members
+          </div>
+        </div>
+
         <VoteGrid
-          voteMode={voteMode}
-          setVoteMode={setVoteMode}
-          voters={voters}
-          voteDraft={voteDraft}
-          onChange={(id, v) => setVoteDraft(d => ({ ...d, [id]: v }))}
-          disabled={disabled}
+          members={bundle.voting_members}
+          votes={bundle.votes}
+          mover={active.mover_id}
+          seconder={active.seconder_id}
+          parentMover={parent.mover_id}
+          parentSeconder={parent.seconder_id}
+          onRecordVote={onRecordVote}
+        />
+
+        <TallyRow
+          yea={tally.yea}
+          nay={tally.nay}
+          abstain={tally.abstain}
+          absent={tally.absent}
+          projection={projection}
+          projectionVariant={willPass ? 'success' : 'danger'}
+          quorumNote={isTie ? 'Tied votes fail without chair break' : ''}
         />
       </div>
-      {showTally && tally ? <TallyRow tally={tally} result={active.result ?? null} /> : null}
+
       <div className="ms-actions">
         <button
           type="button"
           className="cs-touchbtn cs-touchbtn-primary"
-          disabled={disabled}
-          onClick={async () => {
-            const payload = voters.map(v => {
-              const vote =
-                voteDraft[v.person_id] ??
-                (voteMode === 'voice' ? (v.eligible ? 'yea' : 'absent') : null)
-              return { person_id: v.person_id, vote: vote || 'absent' }
-            })
-            if (voteMode === 'roll_call' && payload.some(p => !p.vote)) return
-            await onAction('record-vote', { votes: payload })
-          }}
+          onClick={onPushResult}
+          disabled={busy}
         >
-          Record substitute vote
-        </button>
-        <button type="button" className="cs-touchbtn" disabled={disabled || !showTally} onClick={onPushResult}>
           Push result to overlay
         </button>
+        <button type="button" className="cs-touchbtn" onClick={onWithdrawSub} disabled={busy}>
+          Withdraw substitute
+        </button>
+        <button type="button" className="cs-touchbtn cs-touchbtn-danger" onClick={onCancelBoth} disabled={busy}>
+          Cancel both motions
+        </button>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
+          Push result → screen closes · overlay 8s · {willPass ? 'main is replaced' : 'main returns'}
+        </span>
+        {error && <span style={{ color: 'var(--semantic-danger-text)', fontSize: 12 }}>{error}</span>}
       </div>
-    </MotionScreenFrame>
+    </div>
   )
 }

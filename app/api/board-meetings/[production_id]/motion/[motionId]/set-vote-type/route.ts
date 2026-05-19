@@ -12,7 +12,7 @@ export async function POST(
   const { production_id, motionId } = await params
   return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
     const body = await request.json()
-    const voteMode = body.vote_mode as VoteMode
+    const voteMode = (body.vote_type ?? body.vote_mode) as VoteMode
     if (voteMode !== 'voice' && voteMode !== 'roll_call') {
       return controlError('vote_mode must be voice or roll_call')
     }

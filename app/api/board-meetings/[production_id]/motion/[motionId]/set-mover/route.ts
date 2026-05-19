@@ -11,12 +11,12 @@ export async function POST(
   const { production_id, motionId } = await params
   return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
     const body = await request.json()
-    if (!body.person_id || typeof body.person_id !== 'string') {
+    if (body.person_id !== null && (typeof body.person_id !== 'string' || !body.person_id)) {
       return controlError('person_id required')
     }
     try {
       await updateMotion(service, boardMeetingId, motionId, teamUserId, {
-        moved_by_person_id: body.person_id,
+        moved_by_person_id: body.person_id ?? null,
       })
       return NextResponse.json({ ok: true })
     } catch (e) {

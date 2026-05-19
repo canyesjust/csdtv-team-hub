@@ -124,6 +124,9 @@ export async function pushVoteResult(
   if (!['passed', 'failed', 'voting'].includes(motion.status)) {
     throw new Error('Motion must be voted before pushing a result')
   }
+  if (motion.status === 'voting') {
+    await finalizeMotionFromVotes(service, boardMeetingId, motionId, operatorId)
+  }
   await showVoteResult(service, boardMeetingId, motionId, operatorId, durationSeconds)
 }
 
@@ -326,6 +329,199 @@ export async function openVote(
 
   await setActiveMotion(service, boardMeetingId, motionId, operatorId)
   await logMeetingEvent(service, boardMeetingId, 'vote_opened', operatorId, { motion_id: motionId, vote_mode: voteMode })
+}
+
+export async function confirmOpenDiscussion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (!motion.moved_by_person_id || !motion.seconded_by_person_id) {
+    throw new Error('Select mover and seconder before opening for discussion')
+  }
+  await logMeetingEvent(service, boardMeetingId, 'motion_discussion_opened', operatorId, { motion_id: motionId })
+}
+
+export async function recordMotionVote(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+  personId: string,
+  vote: VoteValue,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (!['open_for_discussion', 'voting', 'passed', 'failed'].includes(motion.status)) {
+    throw new Error('Motion is not open for voting')
+  }
+
+  const attendance = await loadAttendance(service, boardMeetingId)
+  const att = attendance.records.find(r => r.person_id === personId)
+  if (!att) throw new Error('Voter must have an attendance record')
+
+  const now = new Date()
+  if (
+    !isEligibleToVote(att.status, now, att.arrived_at, att.left_at) &&
+    vote !== 'absent' &&
+    vote !== 'recused'
+  ) {
+    vote = 'absent'
+  }
+
+  if (motion.status === 'open_for_discussion') {
+    await service
+      .from('meeting_motions')
+      .update({ status: 'voting', updated_at: now.toISOString() })
+      .eq('id', motionId)
+  }
+
+  const { data: prev } = await service
+    .from('meeting_motion_votes')
+    .select('id')
+    .eq('motion_id', motionId)
+    .eq('person_id', personId)
+    .is('superseded_by_vote_id', null)
+    .maybeSingle()
+
+  const { data: inserted, error } = await service
+    .from('meeting_motion_votes')
+    .insert({
+      motion_id: motionId,
+      person_id: personId,
+      vote,
+      recorded_by: operatorId,
+    })
+    .select('id')
+    .single()
+  if (error || !inserted) throw new Error(error?.message || 'Failed to record vote')
+
+  if (prev) {
+    await service
+      .from('meeting_motion_votes')
+      .update({ superseded_by_vote_id: inserted.id })
+      .eq('id', prev.id)
+  }
+
+  const { data: activeVotes } = await service
+    .from('meeting_motion_votes')
+    .select('vote')
+    .eq('motion_id', motionId)
+    .is('superseded_by_vote_id', null)
+
+  const tally = computeTally(activeVotes || [])
+  await service
+    .from('meeting_motions')
+    .update({
+      tally_yea: tally.yea,
+      tally_nay: tally.nay,
+      tally_abstain: tally.abstain,
+      tally_absent: tally.absent,
+      tally_recused: tally.recused,
+      updated_at: now.toISOString(),
+    })
+    .eq('id', motionId)
+
+  await logMeetingEvent(service, boardMeetingId, 'vote_recorded_incremental', operatorId, {
+    motion_id: motionId,
+    person_id: personId,
+    vote,
+  })
+}
+
+async function finalizeMotionFromVotes(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (motion.status === 'passed' || motion.status === 'failed') return
+
+  const attendance = await loadAttendance(service, boardMeetingId)
+  const { data: activeVotes } = await service
+    .from('meeting_motion_votes')
+    .select('vote')
+    .eq('motion_id', motionId)
+    .is('superseded_by_vote_id', null)
+
+  const tally = computeTally(activeVotes || [])
+  const { result } = computeMotionResult(tally, attendance.quorum.threshold)
+  const finalStatus = result === 'passed' ? 'passed' : 'failed'
+  const voteTime = new Date().toISOString()
+
+  await service
+    .from('meeting_motions')
+    .update({
+      status: finalStatus,
+      result,
+      tally_yea: tally.yea,
+      tally_nay: tally.nay,
+      tally_abstain: tally.abstain,
+      tally_absent: tally.absent,
+      tally_recused: tally.recused,
+      voted_at: voteTime,
+      resolved_at: voteTime,
+      updated_at: voteTime,
+    })
+    .eq('id', motionId)
+
+  if (motion.motion_type === 'substitute' && motion.parent_motion_id) {
+    if (result === 'passed') {
+      await service
+        .from('meeting_motions')
+        .update({
+          status: 'replaced',
+          replaced_by_motion_id: motionId,
+          resolved_at: voteTime,
+          updated_at: voteTime,
+        })
+        .eq('id', motion.parent_motion_id)
+      await service
+        .from('meeting_motions')
+        .update({ status: 'open_for_discussion', updated_at: voteTime })
+        .eq('id', motionId)
+      await setActiveMotion(service, boardMeetingId, motionId, operatorId)
+    } else {
+      await service
+        .from('meeting_motions')
+        .update({ status: 'open_for_discussion', updated_at: voteTime })
+        .eq('id', motion.parent_motion_id)
+      await setActiveMotion(service, boardMeetingId, motion.parent_motion_id, operatorId)
+    }
+  } else {
+    await setActiveMotion(service, boardMeetingId, null, operatorId)
+  }
+}
+
+export async function cancelMotionThread(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+) {
+  const { data: state } = await service
+    .from('meeting_broadcast_state')
+    .select('active_motion_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  const activeId = state?.active_motion_id
+  if (!activeId) return
+
+  const motion = await loadMotion(service, activeId, boardMeetingId)
+  if (!motion) return
+
+  if (motion.motion_type === 'substitute' && motion.parent_motion_id) {
+    await withdrawMotion(service, boardMeetingId, activeId, operatorId)
+    await withdrawMotion(service, boardMeetingId, motion.parent_motion_id, operatorId)
+    return
+  }
+
+  await withdrawMotion(service, boardMeetingId, activeId, operatorId)
 }
 
 export async function recordVotes(

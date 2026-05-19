@@ -93,6 +93,11 @@ export type ActiveMotion = {
   tally_abstain?: number
 }
 
+export type MotionVotingMember = {
+  id: string
+  display_name: string
+}
+
 export type MotionScreenBundle = {
   meeting: {
     id: string
@@ -105,6 +110,13 @@ export type MotionScreenBundle = {
   parent_motion: ActiveMotion | null
   lifecycle_state: MotionLifecycleState['state']
   current_agenda_item: ControlAgendaItem | null
+  current_agenda_item_id: string | null
+  suggested_motion_text: string | null
+  live_elapsed: string | null
+  voting_members: MotionVotingMember[]
+  votes: Record<string, string>
+  tally: { yea: number; nay: number; abstain: number; absent: number }
+  quorum_size: number
   consent_is_lead: boolean
   consent_range: string | null
   attendance: { person_id: string; name: string; status: string }[]
