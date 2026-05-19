@@ -5,6 +5,13 @@ import { ensureBroadcastState, logMeetingEvent } from '@/lib/board-meetings/broa
 const BUILTIN_KEYS = new Set(['document_current_item', 'youtube_live', 'archive', 'submit_comment'])
 const DEFAULT_QR_DURATION = 12
 
+export type QrStateFields = {
+  active_qr_url: string | null
+  active_qr_label: string | null
+  active_qr_started_at: string | null
+  active_qr_duration_seconds: number | null
+}
+
 export function isValidHttpUrl(url: string): boolean {
   try {
     const u = new URL(url)
@@ -14,20 +21,13 @@ export function isValidHttpUrl(url: string): boolean {
   }
 }
 
-export function getActiveQrRemainingSeconds(state: {
-  active_qr_started_at: string | null
-  active_qr_duration_seconds: number | null
-}): number {
+export function getActiveQrRemainingSeconds(state: Pick<QrStateFields, 'active_qr_started_at' | 'active_qr_duration_seconds'>): number {
   if (!state.active_qr_started_at || !state.active_qr_duration_seconds) return 0
   const end = new Date(state.active_qr_started_at).getTime() + state.active_qr_duration_seconds * 1000
   return Math.max(0, Math.floor((end - Date.now()) / 1000))
 }
 
-export function isQrActive(state: {
-  active_qr_url: string | null
-  active_qr_started_at: string | null
-  active_qr_duration_seconds: number | null
-}): boolean {
+export function isQrActive(state: QrStateFields): boolean {
   if (!state.active_qr_url || !state.active_qr_started_at) return false
   return getActiveQrRemainingSeconds(state) > 0
 }

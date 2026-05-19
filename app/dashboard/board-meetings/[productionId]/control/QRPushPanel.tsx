@@ -2,14 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from '@/lib/toast'
-import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
+import { getActiveQrRemainingSeconds, isQrActive, type QrStateFields } from '@/lib/board-meetings/qr-control'
 
-type BroadcastState = {
-  active_qr_url?: string | null
-  active_qr_label?: string | null
-  active_qr_started_at?: string | null
-  active_qr_duration_seconds?: number | null
-}
+type BroadcastState = Partial<QrStateFields>
 
 type Props = {
   productionId: string
@@ -34,18 +29,27 @@ export default function QRPushPanel({
   const [customUrl, setCustomUrl] = useState('')
   const [customLabel, setCustomLabel] = useState('')
 
-  const qrActive = broadcastState ? isQrActive(broadcastState as Parameters<typeof isQrActive>[0]) : false
+  const qrFields: QrStateFields | null = broadcastState
+    ? {
+        active_qr_url: broadcastState.active_qr_url ?? null,
+        active_qr_label: broadcastState.active_qr_label ?? null,
+        active_qr_started_at: broadcastState.active_qr_started_at ?? null,
+        active_qr_duration_seconds: broadcastState.active_qr_duration_seconds ?? null,
+      }
+    : null
+
+  const qrActive = qrFields ? isQrActive(qrFields) : false
 
   useEffect(() => {
-    if (!broadcastState || !qrActive) {
+    if (!qrFields || !qrActive) {
       setRemaining(0)
       return
     }
-    const tick = () => setRemaining(getActiveQrRemainingSeconds(broadcastState as Parameters<typeof getActiveQrRemainingSeconds>[0]))
+    const tick = () => setRemaining(getActiveQrRemainingSeconds(qrFields))
     tick()
     const t = setInterval(tick, 500)
     return () => clearInterval(t)
-  }, [broadcastState, qrActive])
+  }, [qrFields, qrActive])
 
   const post = useCallback(async (path: string, body?: Record<string, unknown>) => {
     setBusy(true)

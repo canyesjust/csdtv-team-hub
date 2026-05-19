@@ -109,7 +109,7 @@ export default function BoardDaisView({ channelNumber }: { channelNumber: number
                   {item.presenters[0].title ? ` — ${item.presenters[0].title}` : ''}
                 </p>
               )}
-              {item.documents?.length > 0 && (
+              {(item.documents?.length ?? 0) > 0 && (
                 <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '18px', color: '#94a3b8' }}>
                   {item.documents.map((d, i) => (
                     <li key={i} style={{ marginBottom: '6px' }}>📄 {d.title}</li>

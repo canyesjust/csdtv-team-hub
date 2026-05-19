@@ -15,6 +15,12 @@ export type PublicAgendaItem = {
   documents: { title: string; source_url: string | null }[]
 }
 
+export type PublicActiveQr = {
+  url: string
+  label: string
+  remaining_seconds: number
+}
+
 export type PublicChannelState = {
   active: boolean
   channel_number: number
@@ -35,11 +41,7 @@ export type PublicChannelState = {
     mode_message: string | null
     mode_started_at: string | null
     mode_duration_seconds: number | null
-    active_qr: {
-      url: string
-      label: string
-      remaining_seconds: number
-    } | null
+    active_qr: PublicActiveQr | null
   } | null
   current_item: PublicAgendaItem | null
   upcoming_items: { id: string; item_number: string; title: string; type: string }[]
@@ -200,7 +202,7 @@ export async function buildPublicChannelState(
     }
   }
 
-  let active_qr: PublicChannelState['state'] extends { active_qr: infer Q } ? Q : never = null
+  let active_qr: PublicActiveQr | null = null
   if (bstate && isQrActive(bstate)) {
     active_qr = {
       url: bstate.active_qr_url!,
