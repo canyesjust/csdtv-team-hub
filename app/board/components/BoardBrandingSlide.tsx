@@ -1,6 +1,6 @@
 import { CANYONS_LOGO_SRC, CSDTV_LOGO_SRC } from '@/app/board/branding-assets'
 
-type Variant = 'overlay' | 'fullscreen' | 'dais'
+type Variant = 'overlay' | 'overlay-corner' | 'fullscreen' | 'dais'
 
 type Props = {
   variant?: Variant
@@ -15,6 +15,15 @@ export default function BoardBrandingSlide({
   screenName,
   statusLine = null,
 }: Props) {
+  if (variant === 'overlay-corner') {
+    return (
+      <div style={overlayCornerWrap}>
+        <img src={CANYONS_LOGO_SRC} alt="Canyons School District" style={cornerCanyonsLogo} />
+        <img src={CSDTV_LOGO_SRC} alt="CSDtv" style={cornerCsdtvLogo} />
+      </div>
+    )
+  }
+
   if (variant === 'dais') {
     return (
       <div style={daisWrap}>
@@ -45,6 +54,29 @@ export default function BoardBrandingSlide({
       ) : null}
     </div>
   )
+}
+
+const overlayCornerWrap: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  gap: '10px',
+}
+
+const cornerCanyonsLogo: React.CSSProperties = {
+  width: 'min(200px, 40vw)',
+  height: 'auto',
+  maxHeight: '72px',
+  objectFit: 'contain',
+  display: 'block',
+}
+
+const cornerCsdtvLogo: React.CSSProperties = {
+  width: 'min(140px, 32vw)',
+  height: 'auto',
+  maxHeight: '48px',
+  objectFit: 'contain',
+  display: 'block',
 }
 
 const overlayWrap: React.CSSProperties = {

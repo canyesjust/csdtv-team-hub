@@ -4,7 +4,6 @@ import { formatElapsed } from '@/lib/board-meetings/time-format'
 
 type Props = {
   canControl: boolean
-  isLive: boolean
   agendaOverlayOn: boolean
   busy?: boolean
   elapsedStartedAt?: string | null
@@ -12,7 +11,6 @@ type Props = {
   onBack: () => void
   onAdvance: () => void
   onToggleOverlay: () => void
-  onGoLive: () => void
   onStartElapsed: () => void
   onResetElapsed: () => void
   onClearElapsed: () => void
@@ -20,7 +18,6 @@ type Props = {
 
 export default function TransportCard({
   canControl,
-  isLive,
   agendaOverlayOn,
   busy,
   elapsedStartedAt,
@@ -28,7 +25,6 @@ export default function TransportCard({
   onBack,
   onAdvance,
   onToggleOverlay,
-  onGoLive,
   onStartElapsed,
   onResetElapsed,
   onClearElapsed,
@@ -92,17 +88,6 @@ export default function TransportCard({
           Overlay {agendaOverlayOn ? 'on' : 'off'}
         </button>
       </div>
-      {!isLive && (
-        <button
-          type="button"
-          className="cs-touchbtn cs-touchbtn-primary"
-          disabled={disabled}
-          onClick={onGoLive}
-          style={{ width: '100%', minHeight: 44 }}
-        >
-          Go live
-        </button>
-      )}
     </div>
   )
 }

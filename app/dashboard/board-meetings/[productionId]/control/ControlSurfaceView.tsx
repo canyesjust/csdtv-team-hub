@@ -34,6 +34,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
   const status = broadcast_state?.status || 'draft'
   const mode = broadcast_state?.mode || 'normal'
   const isLive = status === 'live'
+  const isPrepared = status === 'prepared'
   const elapsedStartedAt = broadcast_state?.elapsed_started_at ?? null
   const [clockNowMs, setClockNowMs] = useState(() => Date.now())
 
@@ -71,6 +72,10 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             <span className="cs-live-pill">
               <span className="cs-pulse-dot cs-onair-pulse" aria-hidden="true" />
               LIVE
+            </span>
+          ) : isPrepared ? (
+            <span className="cs-attendance-text" style={{ fontWeight: 600 }}>
+              Pre-show
             </span>
           ) : null}
 
@@ -125,7 +130,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
 
           <TransportCard
             canControl={canControl}
-            isLive={isLive}
             agendaOverlayOn={broadcast_state?.agenda_overlay_visible !== false}
             busy={busy}
             elapsedStartedAt={elapsedStartedAt}
@@ -133,7 +137,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             onBack={() => onAction('go-back')}
             onAdvance={() => onAction('advance')}
             onToggleOverlay={() => onAction('toggle-overlay')}
-            onGoLive={() => onAction('go-live')}
             onStartElapsed={() => onAction('reset-elapsed')}
             onResetElapsed={() => onAction('reset-elapsed')}
             onClearElapsed={() => onAction('clear-elapsed')}
@@ -157,7 +160,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <QRPushPanel
-              canControl={canControl && isLive}
+              canControl={canControl}
               activeQR={activeQR}
               hasCurrentDocument={hasCurrentDocument}
               hasYoutube={hasYoutube}
@@ -168,7 +171,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             <MotionAndVoteCard
               lifecycle={motion_lifecycle}
               resultOverlay={result_overlay}
-              isLive={isLive}
+              canControl={canControl}
               onOpenMotion={goToMotion}
               onContinueMotion={goToMotion}
               onPushResult={
@@ -200,7 +203,13 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
         <div className="cs-eyebrow" style={{ marginBottom: 8 }}>UTILITIES</div>
         <div className="cs-utilities-grid">
           <UtilityPanel title="Pre-roll" summary={summarizePreRoll(bundle.playlist_state)} icon="playlist">
-            <PreRollPanel canControl={canControl} state={bundle.playlist_state} meetingPlaylist={bundle.meeting_playlist} onAction={onAction} />
+            <PreRollPanel
+              canControl={canControl}
+              isLive={isLive}
+              state={bundle.playlist_state}
+              meetingPlaylist={bundle.meeting_playlist}
+              onAction={onAction}
+            />
           </UtilityPanel>
           <UtilityPanel
             title="Modes & timers"

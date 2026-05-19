@@ -184,7 +184,8 @@ export async function setCurrentItem(
   if (retryError) throw new Error(retryError.message)
 }
 
-export async function goLive(
+/** Stop pre-roll and start the live meeting (overlay/dais agenda, etc.). */
+export async function endPrerollAndStartMeeting(
   service: SupabaseClient,
   boardMeetingId: string,
   operatorId: string,
@@ -195,7 +196,7 @@ export async function goLive(
     .eq('id', boardMeetingId)
     .single()
 
-  if (!bm?.agenda_locked) throw new Error('Agenda must be locked before going live')
+  if (!bm?.agenda_locked) throw new Error('Agenda must be locked before ending preroll')
   if (bm.broadcast_status === 'archived' || bm.broadcast_status === 'cancelled') {
     throw new Error('Meeting is not active')
   }

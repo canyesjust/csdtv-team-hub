@@ -90,7 +90,7 @@ Breakpoints:
 |------------|----------------|
 | **Current item** | Read-only display of item number + title |
 | **Transport** | `go-back`, `advance`, `toggle-overlay` (label: **Agenda overlay** on/off — only hides agenda card on overlay, not lower thirds) |
-| **Meeting lifecycle** | `go-live` when not live; `end-meeting` when live |
+| **Meeting lifecycle** | `end-preroll` when not live (stops pre-roll, starts meeting); `end-meeting` when live |
 | **Lower third** | See § Lower third |
 | **QR code** | `QRPushPanel` — push URL to overlay; live only |
 

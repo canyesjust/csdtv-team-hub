@@ -5,7 +5,7 @@ import type { MotionLifecycleState, ResultOverlayState } from '@/lib/board-meeti
 type Props = {
   lifecycle: MotionLifecycleState | null
   resultOverlay: ResultOverlayState | null
-  isLive: boolean
+  canControl: boolean
   onOpenMotion: () => void
   onContinueMotion: () => void
   onPushResult?: () => void
@@ -14,7 +14,7 @@ type Props = {
 }
 
 export default function MotionAndVoteCard(props: Props) {
-  const { lifecycle, resultOverlay, isLive, onOpenMotion, onContinueMotion, onPushResult, onHoldResult, onDismissResult } = props
+  const { lifecycle, resultOverlay, canControl, onOpenMotion, onContinueMotion, onPushResult, onHoldResult, onDismissResult } = props
 
   if (resultOverlay?.active) {
     return <StateC overlay={resultOverlay} onHold={onHoldResult} onDismiss={onDismissResult} />
@@ -34,10 +34,10 @@ export default function MotionAndVoteCard(props: Props) {
     return <StateB lifecycle={lifecycle} onContinue={onContinueMotion} />
   }
 
-  return <StateA isLive={isLive} onOpen={onOpenMotion} />
+  return <StateA canControl={canControl} onOpen={onOpenMotion} />
 }
 
-function StateA({ isLive, onOpen }: { isLive: boolean; onOpen: () => void }) {
+function StateA({ canControl, onOpen }: { canControl: boolean; onOpen: () => void }) {
   return (
     <div className="cs-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -47,7 +47,7 @@ function StateA({ isLive, onOpen }: { isLive: boolean; onOpen: () => void }) {
       <button
         type="button"
         onClick={onOpen}
-        disabled={!isLive}
+        disabled={!canControl}
         className="cs-touchbtn"
         style={{ width: '100%', minHeight: 44 }}
       >

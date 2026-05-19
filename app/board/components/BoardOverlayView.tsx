@@ -155,18 +155,9 @@ export default function BoardOverlayView({
   if (showBrandingHold) {
     return (
       <>
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            fontFamily: 'system-ui, sans-serif',
-            textAlign: 'center',
-          }}
-        >
-          <div className="obs-overlay-graphic" style={overlayPanelStyle({ padding: '36px 32px', borderRadius: '8px' })}>
-            <BoardBrandingSlide variant="overlay" screenName={screenName} statusLine={null} />
+        <div style={stackAnchor}>
+          <div className="obs-overlay-graphic" style={overlayPanelStyle({ padding: '16px 20px', borderRadius: '8px' })}>
+            <BoardBrandingSlide variant="overlay-corner" />
           </div>
         </div>
         {showTimer && timer ? <TimerBadge timer={timer} /> : null}

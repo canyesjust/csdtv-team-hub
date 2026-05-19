@@ -566,6 +566,23 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
 
     const payload = body as Record<string, unknown> | undefined
 
+    if (action === 'end-preroll') {
+      beginOptimisticAction()
+      flushSync(() => {
+        setBundle(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            board_meeting: { ...prev.board_meeting, broadcast_status: 'live' },
+            broadcast_state: patchBroadcastState(prev.broadcast_state, { status: 'live' }),
+          }
+        })
+      })
+      postOptimisticInBackground('end-preroll')
+      void loadUtilities()
+      return
+    }
+
     if (OPTIMISTIC_ACTIONS.has(action)) {
       const channelId =
         action === 'toggle-channel' ? (payload?.output_channel_id as string | undefined) : undefined

@@ -145,7 +145,7 @@ export default function BoardLiveView({
           </section>
         )}
 
-        {mode === 'normal' && isLive && item && !state.state?.agenda_branding_hold && (
+        {mode === 'normal' && (isLive || isPrepared) && item && !state.state?.agenda_branding_hold && (
           <section style={card}>
             <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Now discussing</p>
             <ItemHeader item={item} />
