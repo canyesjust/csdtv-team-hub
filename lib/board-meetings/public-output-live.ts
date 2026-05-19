@@ -81,11 +81,9 @@ export function mergePublicChannelState(
     ...prev,
     active: live.active ?? prev.active,
     meeting:
-      live.meeting && prev.meeting
+      live.meeting !== undefined && prev.meeting
         ? { ...prev.meeting, ...live.meeting }
-        : live.meeting !== undefined
-          ? live.meeting
-          : prev.meeting,
+        : prev.meeting,
     result_overlay: live.result_overlay !== undefined ? live.result_overlay : prev.result_overlay,
     current_item: mergedItem,
     upcoming_items: live.upcoming_items !== undefined ? live.upcoming_items : prev.upcoming_items,
@@ -119,7 +117,6 @@ export async function buildPublicChannelLivePatch(
     current_item: null,
     upcoming_items: [],
     timer: null,
-    meeting: null,
   }
 
   const { data: assignment } = await service
