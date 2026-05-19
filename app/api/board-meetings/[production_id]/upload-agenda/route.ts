@@ -62,6 +62,12 @@ export async function POST(
     }
 
     await replaceAgendaItemsFromExtraction(service, bm.id, extracted)
+
+    const livestream = extracted.meeting?.livestream_url?.trim()
+    if (livestream) {
+      await service.from('productions').update({ livestream_url: livestream }).eq('id', production_id)
+    }
+
     const items = enrichExtractedItems(extracted)
 
     return NextResponse.json({

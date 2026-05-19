@@ -60,7 +60,7 @@ export async function replaceAgendaItemsFromExtraction(
     action_requested: !!it.action_requested,
     is_broadcastable: it.is_broadcastable !== false,
     consent_block: it.consent_block ?? null,
-    notes: null as string | null,
+    notes: it.notes ?? null,
     subitems: it.subitems != null ? JSON.parse(JSON.stringify(it.subitems)) : null,
     needs_review: !!it.needs_review,
     review_notes: it.review_notes ?? null,
@@ -117,19 +117,36 @@ export async function replaceAgendaItemsFromExtraction(
   if (upErr) throw new Error(upErr.message)
 }
 
+function combineDateAndTime(dateStr: string | undefined, timeStr: string | undefined): string | null {
+  if (!dateStr || !timeStr) return null
+  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timeStr.trim())
+  if (!timeMatch) return null
+  const hours = Number(timeMatch[1])
+  const minutes = Number(timeMatch[2])
+  const base = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(base.getTime())) return null
+  base.setHours(hours, minutes, 0, 0)
+  return base.toISOString()
+}
+
 function schedulePatchFromMeeting(meeting: ExtractedAgendaResponse['meeting'] | undefined): Record<string, string | null> {
   if (!meeting) return {}
   const out: Record<string, string | null> = {}
-  if (meeting.scheduled_public_start) {
-    try {
-      out.scheduled_public_start = new Date(meeting.scheduled_public_start).toISOString()
-    } catch { /* ignore */ }
-  }
-  if (meeting.closed_session_start) {
-    try {
-      out.closed_session_start = new Date(meeting.closed_session_start).toISOString()
-    } catch { /* ignore */ }
-  }
+
+  const publicStart =
+    combineDateAndTime(meeting.date, meeting.scheduled_public_start ?? undefined) ||
+    (meeting.scheduled_public_start && /^\d{4}-\d{2}-\d{2}/.test(meeting.scheduled_public_start)
+      ? new Date(meeting.scheduled_public_start).toISOString()
+      : null)
+  if (publicStart) out.scheduled_public_start = publicStart
+
+  const closedStart =
+    combineDateAndTime(meeting.date, meeting.closed_session_start ?? undefined) ||
+    (meeting.closed_session_start && /^\d{4}-\d{2}-\d{2}/.test(meeting.closed_session_start)
+      ? new Date(meeting.closed_session_start).toISOString()
+      : null)
+  if (closedStart) out.closed_session_start = closedStart
+
   return out
 }
 
@@ -153,7 +170,7 @@ export async function insertAgendaItemTree(
       action_requested: !!it.action_requested,
       is_broadcastable: it.is_broadcastable !== false,
       consent_block: it.consent_block ?? null,
-      notes: null,
+      notes: it.notes ?? null,
       subitems: it.subitems != null ? JSON.parse(JSON.stringify(it.subitems)) : null,
       needs_review: !!it.needs_review,
       review_notes: it.review_notes ?? null,

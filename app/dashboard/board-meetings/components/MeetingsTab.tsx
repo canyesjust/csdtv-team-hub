@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../components/Loader'
@@ -17,10 +17,59 @@ type MeetingRow = {
   } | null
 }
 
+function parseProductionInstant(iso: string): Date {
+  const raw = iso.includes('T') ? iso : iso.replace(' ', 'T')
+  return new Date(raw)
+}
+
+/** Whole calendar days from local today (0 = today, -1 = yesterday). Ignores clock time within the day. */
+function daysFromToday(d: string | null): number | null {
+  if (!d) return null
+  const event = parseProductionInstant(d)
+  if (Number.isNaN(event.getTime())) return null
+  const eventDay = new Date(event.getFullYear(), event.getMonth(), event.getDate())
+  const today = new Date()
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  return Math.round((eventDay.getTime() - todayDay.getTime()) / 86400000)
+}
+
+function isPastMeeting(row: MeetingRow): boolean {
+  if (!row.start_datetime) return false
+  const df = daysFromToday(row.start_datetime)
+  return df !== null && df < 0
+}
+
+function meetingInstant(row: MeetingRow): number | null {
+  if (!row.start_datetime) return null
+  const t = parseProductionInstant(row.start_datetime).getTime()
+  return Number.isNaN(t) ? null : t
+}
+
+function sortUpcoming(a: MeetingRow, b: MeetingRow): number {
+  const aTs = meetingInstant(a)
+  const bTs = meetingInstant(b)
+  if (aTs === null && bTs === null) return b.production_number - a.production_number
+  if (aTs === null) return 1
+  if (bTs === null) return -1
+  if (aTs !== bTs) return aTs - bTs
+  return b.production_number - a.production_number
+}
+
+function sortPast(a: MeetingRow, b: MeetingRow): number {
+  const aTs = meetingInstant(a)
+  const bTs = meetingInstant(b)
+  if (aTs === null && bTs === null) return b.production_number - a.production_number
+  if (aTs === null) return 1
+  if (bTs === null) return -1
+  if (aTs !== bTs) return bTs - aTs
+  return b.production_number - a.production_number
+}
+
 export default function MeetingsTab() {
   const supabase = createClient()
   const [rows, setRows] = useState<MeetingRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [pastExpanded, setPastExpanded] = useState(false)
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
   const border = 'var(--border-subtle)'
@@ -31,7 +80,6 @@ export default function MeetingsTab() {
       .from('productions')
       .select('id, production_number, title, start_datetime, status')
       .eq('request_type_number', 4)
-      .order('start_datetime', { ascending: false, nullsFirst: false })
 
     const list = prods || []
     if (list.length === 0) {
@@ -58,6 +106,18 @@ export default function MeetingsTab() {
 
   useEffect(() => { load() }, [load])
 
+  const { upcoming, past } = useMemo(() => {
+    const upcomingRows: MeetingRow[] = []
+    const pastRows: MeetingRow[] = []
+    for (const row of rows) {
+      if (isPastMeeting(row)) pastRows.push(row)
+      else upcomingRows.push(row)
+    }
+    upcomingRows.sort(sortUpcoming)
+    pastRows.sort(sortPast)
+    return { upcoming: upcomingRows, past: pastRows }
+  }, [rows])
+
   if (loading) return <Loader />
 
   if (rows.length === 0) {
@@ -68,58 +128,115 @@ export default function MeetingsTab() {
     )
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {rows.map(r => (
-        <div
-          key={r.id}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            padding: '14px 16px',
-            background: cardBg,
-            border: `0.5px solid ${border}`,
-            borderRadius: '10px',
-            minHeight: '44px',
-          }}
-        >
-          <Link href={`/dashboard/productions/${r.production_number}`} style={{ flex: 1, textDecoration: 'none', color: text }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '15px' }}>#{r.production_number} {r.title}</div>
-            <div style={{ fontSize: '13px', color: muted, marginTop: '4px' }}>
-              {r.start_datetime
-                ? new Date(r.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-                : 'Date TBD'}
-              {r.board_meeting ? ` · ${r.board_meeting.broadcast_status}${r.board_meeting.agenda_locked ? ' · agenda locked' : ''}` : ' · not started'}
-            </div>
-          </div>
-          </Link>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-            {r.board_meeting && ['prepared', 'live'].includes(r.board_meeting.broadcast_status) && (
-              <Link
-                href={`/dashboard/board-meetings/${r.id}/control`}
-                style={{ fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
-              >
-                Control →
-              </Link>
-            )}
-            {r.board_meeting?.broadcast_status === 'archived' && (
-              <Link
-                href={`/board/meeting/${r.production_number}/archive`}
-                target="_blank"
-                style={{ fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
-              >
-                Archive →
-              </Link>
-            )}
-            <Link href={`/dashboard/productions/${r.production_number}`} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none' }}>
-              Open →
-            </Link>
+  const meetingCard = (r: MeetingRow) => (
+    <div
+      key={r.id}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+        padding: '14px 16px',
+        background: cardBg,
+        border: `0.5px solid ${border}`,
+        borderRadius: '10px',
+        minHeight: '44px',
+      }}
+    >
+      <Link href={`/dashboard/productions/${r.production_number}`} style={{ flex: 1, textDecoration: 'none', color: text }}>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '15px' }}>#{r.production_number} {r.title}</div>
+          <div style={{ fontSize: '13px', color: muted, marginTop: '4px' }}>
+            {r.start_datetime
+              ? new Date(r.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+              : 'Date TBD'}
+            {r.board_meeting ? ` · ${r.board_meeting.broadcast_status}${r.board_meeting.agenda_locked ? ' · agenda locked' : ''}` : ' · not started'}
           </div>
         </div>
-      ))}
+      </Link>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+        {r.board_meeting && ['prepared', 'live'].includes(r.board_meeting.broadcast_status) && (
+          <Link
+            href={`/dashboard/board-meetings/${r.id}/control`}
+            style={{ fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
+          >
+            Control →
+          </Link>
+        )}
+        {r.board_meeting?.broadcast_status === 'archived' && (
+          <Link
+            href={`/board/meeting/${r.production_number}/archive`}
+            target="_blank"
+            style={{ fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
+          >
+            Archive →
+          </Link>
+        )}
+        <Link href={`/dashboard/productions/${r.production_number}`} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none' }}>
+          Open →
+        </Link>
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {upcoming.length === 0 && past.length > 0 && (
+        <div style={{ padding: '12px 16px', fontSize: '13px', color: muted, background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px' }}>
+          No upcoming board meetings.
+        </div>
+      )}
+      {upcoming.map(meetingCard)}
+      {past.length > 0 && (
+        <section style={{ marginTop: upcoming.length > 0 ? '4px' : 0 }}>
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setPastExpanded(v => !v)}
+              aria-expanded={pastExpanded}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+                padding: '12px 16px',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: text }}>
+                  Past meetings ({past.length})
+                </span>
+                <span style={{ display: 'block', fontSize: '12px', color: muted, marginTop: '2px', lineHeight: 1.35 }}>
+                  {pastExpanded ? 'Hide older meetings' : 'Show past meetings'}
+                </span>
+              </span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke={muted}
+                strokeWidth="2.5"
+                style={{ transform: pastExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', flexShrink: 0 }}
+                aria-hidden
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+            {pastExpanded && (
+              <div style={{ borderTop: `0.5px solid ${border}`, padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {past.map(meetingCard)}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   )
 }

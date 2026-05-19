@@ -1,5 +1,9 @@
 /** Shape returned from extract-agenda edge function */
-export type ExtractedAgendaPresenter = { name: string; title?: string | null }
+export type ExtractedAgendaPresenter = {
+  name: string
+  title?: string | null
+  affiliation?: string | null
+}
 export type ExtractedAgendaDocument = { title: string; filename: string; source_url?: string | null }
 
 export type ExtractedAgendaItem = {
@@ -16,6 +20,7 @@ export type ExtractedAgendaItem = {
   presenters?: ExtractedAgendaPresenter[]
   documents?: ExtractedAgendaDocument[]
   subitems?: unknown[] | null
+  notes?: string | null
   needs_review?: boolean
   review_notes?: string | null
 }
@@ -26,8 +31,12 @@ export type ExtractedAgendaResponse = {
     date?: string
     scheduled_public_start?: string | null
     closed_session_start?: string | null
+    location_name?: string | null
+    location_address?: string | null
+    livestream_url?: string | null
+    audio_archive_url?: string | null
   }
-  sections?: { number: number; title: string; broadcastable?: boolean }[]
+  sections?: { number: number; title: string; broadcastable?: boolean; start_time?: string | null }[]
   agenda_items: ExtractedAgendaItem[]
 }
 
@@ -61,6 +70,7 @@ export function enrichExtractedItems(extracted: ExtractedAgendaResponse): Extrac
       action_requested: !!it.action_requested,
       is_broadcastable: it.is_broadcastable !== false,
       needs_review: !!it.needs_review,
+      notes: it.notes ?? null,
     }
   })
 }
