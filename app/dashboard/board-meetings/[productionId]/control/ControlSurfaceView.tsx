@@ -12,7 +12,6 @@ import UtilityPanel from './components/UtilityPanel'
 import PreRollPanel from './components/PreRollPanel'
 import ModesTimersPanel from './components/ModesTimersPanel'
 import OutputChannelsPanel from './components/OutputChannelsPanel'
-import EventLogPanel from './components/EventLogPanel'
 import AttendancePanel from './components/AttendancePanel'
 import ModeBanner from './components/ModeBanner'
 import type { ControlBundle } from '@/lib/board-meetings/types'
@@ -178,9 +177,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           <UtilityPanel title="Output channels" summary={summarizeChannels(bundle.channel_assignments, bundle.channels)} icon="broadcast">
             <OutputChannelsPanel canControl={canControl} channels={bundle.channels} assignments={bundle.channel_assignments} onAction={onAction} />
           </UtilityPanel>
-          <UtilityPanel title="Recent events" summary={summarizeEvents(bundle.recent_events)} icon="history">
-            <EventLogPanel events={bundle.recent_events || []} />
-          </UtilityPanel>
         </div>
       </div>
 
@@ -230,10 +226,3 @@ function summarizeChannels(assignments: ControlBundle['channel_assignments'], ch
   return `${active} of ${total} assigned`
 }
 
-function summarizeEvents(events: ControlBundle['recent_events']): string {
-  if (!events || events.length === 0) return 'No events yet'
-  const last = events[0]
-  const time = last?.created_at ? new Date(last.created_at).toLocaleTimeString() : ''
-  const label = last?.event_type || ''
-  return `${time} — ${label}`
-}

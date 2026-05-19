@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logMeetingEvent } from '@/lib/board-meetings/broadcast-control'
+import { clearLockedAgendaCache } from '@/lib/board-meetings/control-meeting-cache'
 
 export async function unlockAgenda(
   service: SupabaseClient,
@@ -31,6 +32,8 @@ export async function unlockAgenda(
     .eq('id', bm.id)
 
   if (error) throw new Error(error.message)
+
+  clearLockedAgendaCache(bm.id)
   return { id: bm.id }
 }
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildControlSurfaceBundle } from '@/lib/board-meetings/control-bundle'
-import { loadAttendance, isEligibleToVote } from '@/lib/board-meetings/attendance-control'
+import { isEligibleToVote } from '@/lib/board-meetings/attendance-control'
 import type { AttendanceStatus } from '@/lib/board-meetings/motion-types'
 import {
   cancelMotionThread as cancelMotionThreadControl,
@@ -23,6 +23,7 @@ import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
 import { createServiceClient } from '@/lib/supabase/service'
 import type {
   ActiveMotion,
+  ControlAgendaItem,
   MotionScreenBundle,
   VoteRecord,
   VotingMember,
@@ -72,7 +73,7 @@ function formatLiveElapsed(liveStartedAt: string | null | undefined): string | n
 
 function buildSuggestedMotionText(
   currentItem: MotionScreenBundle['current_agenda_item'],
-  agendaItems: NonNullable<Awaited<ReturnType<typeof buildControlSurfaceBundle>>>['agenda_items'],
+  agendaItems: ControlAgendaItem[],
 ): string | null {
   if (!currentItem) return null
   if (currentItem.consent_block) {
@@ -202,11 +203,14 @@ export async function loadMotionScreenBundle(
   if ('error' in prodCheck) return null
 
   const resolvedId = prodCheck.productionId
-  const surface = await buildControlSurfaceBundle(service, resolvedId)
-  if (!surface) return null
+  const built = await buildControlSurfaceBundle(service, resolvedId)
+  if (!built) return null
 
-  const attendance = await loadAttendance(service, surface.board_meeting.id)
-  const motions = await listMotionsEnriched(service, surface.board_meeting.id)
+  const surface = built.bundle
+  const motions = built.motions
+  const attendance = surface.attendance
+  if (!attendance) return null
+
   const lifecycle = surface.motion_lifecycle
   const agendaItems = surface.agenda_items || []
 

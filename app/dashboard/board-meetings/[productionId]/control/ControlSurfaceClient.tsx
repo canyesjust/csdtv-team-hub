@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
@@ -21,28 +21,109 @@ const MOTION_ACTIONS = new Set([
   'propose-substitute',
 ])
 
-export default function ControlSurfaceClient({ productionId }: { productionId: string }) {
+const REALTIME_DEBOUNCE_MS = 200
+
+type Props = {
+  productionId: string
+  initialBundle?: ControlBundle | null
+}
+
+function useDebouncedCallback<T extends (...args: never[]) => void>(fn: T, delayMs: number): T {
+  const fnRef = useRef(fn)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  fnRef.current = fn
+
+  return useCallback(
+    ((...args: Parameters<T>) => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => fnRef.current(...args), delayMs)
+    }) as T,
+    [delayMs],
+  )
+}
+
+export default function ControlSurfaceClient({ productionId, initialBundle = null }: Props) {
   const supabase = createClient()
-  const [bundle, setBundle] = useState<ControlBundle | null>(null)
-  const [resultOverlay, setResultOverlay] = useState<ResultOverlayState | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [bundle, setBundle] = useState<ControlBundle | null>(initialBundle)
+  const [resultOverlay, setResultOverlay] = useState<ResultOverlayState | null>(
+    initialBundle?.result_overlay ?? null,
+  )
+  const [loading, setLoading] = useState(!initialBundle)
   const [busy, setBusy] = useState(false)
   const [attendanceOpen, setAttendanceOpen] = useState(false)
+  const utilitiesLoadedRef = useRef(!!initialBundle?.meeting_playlist)
+  const stableWhenLockedRef = useRef<{
+    agenda_items: ControlBundle['agenda_items']
+    lower_third_people: ControlBundle['lower_third_people']
+  } | null>(null)
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/board-meetings/${productionId}/control`)
-    const body = await res.json()
-    if (!res.ok) {
-      toast(body.error || 'Failed to load control data', 'error')
-      setLoading(false)
-      return
+  const applyBundle = useCallback((body: ControlBundle) => {
+    if (body.board_meeting.agenda_locked) {
+      if (!stableWhenLockedRef.current) {
+        stableWhenLockedRef.current = {
+          agenda_items: body.agenda_items,
+          lower_third_people: body.lower_third_people,
+        }
+      }
+      const stable = stableWhenLockedRef.current
+      setBundle({
+        ...body,
+        agenda_items: stable.agenda_items,
+        items: stable.agenda_items,
+        lower_third_people: stable.lower_third_people,
+      })
+    } else {
+      stableWhenLockedRef.current = null
+      setBundle(body)
     }
-    setBundle(body)
     setResultOverlay(body.result_overlay ?? null)
-    setLoading(false)
+    if (body.meeting_playlist) utilitiesLoadedRef.current = true
+  }, [])
+
+  const load = useCallback(
+    async (opts?: { full?: boolean }) => {
+      const q = opts?.full ? '?full=1' : ''
+      const res = await fetch(`/api/board-meetings/${productionId}/control${q}`)
+      const body = await res.json()
+      if (!res.ok) {
+        toast(body.error || 'Failed to load control data', 'error')
+        setLoading(false)
+        return
+      }
+      applyBundle(body)
+      setLoading(false)
+    },
+    [productionId, applyBundle],
+  )
+
+  const loadDebounced = useDebouncedCallback(() => {
+    void load({ full: true })
+  }, REALTIME_DEBOUNCE_MS)
+
+  const loadUtilities = useCallback(async () => {
+    if (utilitiesLoadedRef.current) return
+    const res = await fetch(`/api/board-meetings/${productionId}/control/utilities`)
+    if (!res.ok) return
+    const utilities = await res.json()
+    utilitiesLoadedRef.current = true
+    setBundle(prev =>
+      prev
+        ? {
+            ...prev,
+            meeting_playlist: utilities.meeting_playlist ?? prev.meeting_playlist,
+            timer_templates: utilities.timer_templates ?? prev.timer_templates,
+          }
+        : prev,
+    )
   }, [productionId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (!initialBundle) {
+      void load({ full: true })
+    } else {
+      void loadUtilities()
+    }
+  }, [initialBundle, load, loadUtilities])
 
   useEffect(() => {
     if (!resultOverlay?.active || resultOverlay.held) return
@@ -82,42 +163,56 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
     channel = channel.on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` },
-      () => { load() },
+      () => {
+        loadDebounced()
+      },
     )
 
     channel = channel
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_timers', filter: `board_meeting_id=eq.${meetingId}` },
-        () => { load() },
+        () => {
+          loadDebounced()
+        },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` },
-        () => { load() },
+        () => {
+          loadDebounced()
+        },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` },
-        () => { load() },
+        () => {
+          loadDebounced()
+        },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_playlists', filter: `board_meeting_id=eq.${meetingId}` },
-        () => { load() },
+        () => {
+          loadDebounced()
+        },
       )
 
     for (const motionId of motionIds) {
       channel = channel.on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_motion_votes', filter: `motion_id=eq.${motionId}` },
-        () => { load() },
+        () => {
+          loadDebounced()
+        },
       )
     }
 
     channel.subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [bundle?.board_meeting?.id, supabase, load, motionIds])
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [bundle?.board_meeting?.id, supabase, loadDebounced, motionIds])
 
   const assignedIds = useMemo(
     () => new Set((bundle?.channel_assignments || []).map(a => a.output_channel_id)),
@@ -173,7 +268,7 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
               ? { ...prev, held: true, seconds_remaining: prev.total_duration }
               : prev,
           )
-          await load()
+          await load({ full: true })
         }
         return
       }
@@ -185,19 +280,19 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
           toast((d as { error?: string }).error || 'Action failed', 'error')
         } else {
           setResultOverlay(null)
-          await load()
+          await load({ full: true })
         }
         return
       }
 
       if (MOTION_ACTIONS.has(action) || action.startsWith('motion/')) {
         const path = action.startsWith('motion/') ? action.slice('motion/'.length) : action
-        if (await postMotion(path, payload)) await load()
+        if (await postMotion(path, payload)) await load({ full: true })
         return
       }
 
       if (action === 'clear-qr') {
-        if (await postControl('dismiss-qr')) await load()
+        if (await postControl('dismiss-qr')) await load({ full: true })
         return
       }
 
@@ -212,7 +307,7 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
         if (!res.ok) {
           const d = await res.json()
           toast(d.error || 'Channel update failed', 'error')
-        } else await load()
+        } else await load({ full: true })
         return
       }
 
@@ -226,11 +321,11 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
         if (!res.ok) {
           const d = await res.json()
           toast(d.error || 'Playlist action failed', 'error')
-        } else await load()
+        } else await load({ full: true })
         return
       }
 
-      if (await postControl(action, payload)) await load()
+      if (await postControl(action, payload)) await load({ full: true })
     } finally {
       setBusy(false)
     }

@@ -8,6 +8,12 @@ import { buildPublicLowerThirdPayload } from '@/lib/board-meetings/lower-third-c
 import { loadAttendance } from '@/lib/board-meetings/attendance-control'
 import { loadMeetingPlaylistBundle } from '@/lib/board-meetings/playlist-playback'
 import { mediaPublicUrl } from '@/lib/board-meetings/media-library'
+import { getCachedOutputChannels, getCachedTimerTemplates } from '@/lib/board-meetings/control-static-cache'
+import {
+  getAgendaItemsForControl,
+  getCachedBoardMemberPeople,
+} from '@/lib/board-meetings/control-meeting-cache'
+import { loadControlUtilities } from '@/lib/board-meetings/control-utilities'
 import type {
   ActiveMotion,
   ControlBundle,
@@ -18,29 +24,56 @@ import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 
+export type BuildControlBundleOptions = {
+  /** Faster path: skip full playlist items and defer heavy utilities payload. */
+  slim?: boolean
+}
+
+export type ControlBundleBuild = {
+  bundle: ControlBundle
+  motions: EnrichedMotion[]
+}
+
+async function loadPlaylistStateOnly(service: SupabaseClient, boardMeetingId: string) {
+  const { data: playlist } = await service
+    .from('meeting_playlists')
+    .select('playback_state, held_item_id, current_item_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  if (!playlist) return null
+  return {
+    playback_state: playlist.playback_state,
+    held_item_id: playlist.held_item_id,
+    current_item_id: playlist.current_item_id,
+  }
+}
+
 export async function buildControlSurfaceBundle(
   service: SupabaseClient,
   productionId: string,
-): Promise<ControlBundle | null> {
+  options: BuildControlBundleOptions = {},
+): Promise<ControlBundleBuild | null> {
+  const slim = options.slim ?? false
+
   const { data: bm } = await service.from('board_meetings').select('*').eq('production_id', productionId).maybeSingle()
   if (!bm) return null
 
   const [
-    { data: items },
+    agenda_items,
     { data: state },
     { data: assignments },
     { data: timers },
-    { data: events },
-    { data: channels },
-    { data: templates },
+    channels,
+    timer_templates,
     { data: liveEvents },
-    { data: people },
+    people,
+    { data: prod },
+    attendance,
+    motions,
+    playlistBundle,
   ] = await Promise.all([
-    service
-      .from('board_meeting_agenda_items')
-      .select('id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested, consent_block')
-      .eq('board_meeting_id', bm.id)
-      .order('sort_order', { ascending: true }),
+    getAgendaItemsForControl(service, bm.id, !!bm.agenda_locked),
     service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', bm.id).maybeSingle(),
     service
       .from('channel_assignments')
@@ -54,14 +87,8 @@ export async function buildControlSurfaceBundle(
       .is('ended_at', null)
       .order('started_at', { ascending: false })
       .limit(1),
-    service
-      .from('meeting_event_log')
-      .select('id, event_type, event_data, occurred_at')
-      .eq('board_meeting_id', bm.id)
-      .order('occurred_at', { ascending: false })
-      .limit(50),
-    service.from('output_channels').select('id, channel_number, channel_name, view_type, tier').eq('is_active', true).order('channel_number'),
-    service.from('timer_templates').select('*').order('sort_order', { ascending: true }),
+    getCachedOutputChannels(service),
+    slim ? Promise.resolve([]) : getCachedTimerTemplates(service),
     service
       .from('meeting_event_log')
       .select('occurred_at')
@@ -69,34 +96,39 @@ export async function buildControlSurfaceBundle(
       .in('event_type', LIVE_EVENT_TYPES)
       .order('occurred_at', { ascending: false })
       .limit(1),
+    getCachedBoardMemberPeople(service),
     service
-      .from('lower_third_people')
-      .select(
-        'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active',
-      )
-      .eq('is_active', true)
-      .eq('category', 'board_member')
-      .order('display_name'),
+      .from('productions')
+      .select('production_number, livestream_url, title')
+      .eq('id', productionId)
+      .maybeSingle(),
+    loadAttendance(service, bm.id),
+    listMotionsEnriched(service, bm.id, { openOnly: true }),
+    slim ? Promise.resolve(null) : loadMeetingPlaylistBundle(service, bm.id),
   ])
 
-  const { data: prod } = await service
-    .from('productions')
-    .select('production_number, livestream_url, title')
-    .eq('id', productionId)
-    .maybeSingle()
-
-  const attendance = await loadAttendance(service, bm.id)
-  const motions = await listMotionsEnriched(service, bm.id)
-  const lowerThirdActive = await buildPublicLowerThirdPayload(service, state?.active_lower_third_person_id)
-
-  const playlistBundle = await loadMeetingPlaylistBundle(service, bm.id)
-  const playlist_state = playlistBundle
-    ? {
-        playback_state: playlistBundle.playlist.playback_state,
-        held_item_id: playlistBundle.playlist.held_item_id,
-        current_item_id: playlistBundle.playlist.current_item_id,
-      }
-    : null
+  const [lowerThirdActive, playlist_state, current_documents] = await Promise.all([
+    buildPublicLowerThirdPayload(service, state?.active_lower_third_person_id),
+    slim
+      ? loadPlaylistStateOnly(service, bm.id)
+      : Promise.resolve(
+          playlistBundle
+            ? {
+                playback_state: playlistBundle.playback_state,
+                held_item_id: playlistBundle.held_item_id,
+                current_item_id: playlistBundle.current_item_id,
+              }
+            : null,
+        ),
+    state?.current_agenda_item_id
+      ? service
+          .from('board_meeting_agenda_documents')
+          .select('title, source_url')
+          .eq('agenda_item_id', state.current_agenda_item_id)
+          .order('sort_order')
+          .then(({ data }) => data || [])
+      : Promise.resolve([]),
+  ])
 
   const liveEvent = liveEvents?.[0]
   const modeEndsAt =
@@ -107,17 +139,6 @@ export async function buildControlSurfaceBundle(
   const motion_lifecycle = buildMotionLifecycle(state, motions)
   const result_overlay = buildResultOverlay(state, motions)
 
-  let current_documents: { source_url: string | null; title: string }[] = []
-  if (state?.current_agenda_item_id) {
-    const { data: docs } = await service
-      .from('board_meeting_agenda_documents')
-      .select('title, source_url')
-      .eq('agenda_item_id', state.current_agenda_item_id)
-      .order('sort_order')
-    current_documents = docs || []
-  }
-
-  const agenda_items = (items || []).filter(i => i.is_broadcastable)
   const broadcast_state = {
     ...(state || {}),
     status: bm.broadcast_status,
@@ -138,7 +159,17 @@ export async function buildControlSurfaceBundle(
     active_lower_third_person_id: state?.active_lower_third_person_id ?? null,
   }
 
-  return {
+  const meeting_playlist = playlistBundle
+    ? {
+        playlist: playlistBundle.playlist,
+        items: playlistBundle.items.map(it => {
+          const asset = it.media_asset_id ? playlistBundle.assets.get(it.media_asset_id) : null
+          return { ...it, asset_url: asset ? mediaPublicUrl(service, asset.storage_path) : null }
+        }),
+      }
+    : null
+
+  const bundle: ControlBundle = {
     meeting: {
       title: prod?.title || 'Board Meeting',
       production_number: prod?.production_number ?? null,
@@ -162,27 +193,20 @@ export async function buildControlSurfaceBundle(
     channels: channels || [],
     output_channels: channels || [],
     active_timer: timers?.[0] ?? null,
-    recent_events: (events || []).map(e => ({
-      event_type: e.event_type,
-      created_at: e.occurred_at,
-      occurred_at: e.occurred_at,
-    })),
-    timer_templates: templates || [],
-    meeting_playlist: playlistBundle
-      ? {
-          playlist: playlistBundle.playlist,
-          items: playlistBundle.items.map(it => {
-            const asset = it.media_asset_id ? playlistBundle.assets.get(it.media_asset_id) : null
-            return { ...it, asset_url: asset ? mediaPublicUrl(service, asset.storage_path) : null }
-          }),
-        }
-      : null,
+    recent_events: [],
+    timer_templates: timer_templates || [],
+    meeting_playlist,
     board_meeting: bm,
     production: prod,
     active_lower_third: lowerThirdActive,
     current_documents,
   }
+
+  return { bundle, motions }
 }
+
+/** Full utilities payload for background hydration after slim SSR. */
+export { loadControlUtilities }
 
 const CLOSED_MOTION_STATUSES = new Set(['withdrawn', 'tabled', 'superseded', 'replaced'])
 
@@ -232,7 +256,7 @@ function mapLifecycleState(
 
 function buildMotionLifecycle(
   state: Record<string, unknown> | null,
-  motions: Awaited<ReturnType<typeof listMotionsEnriched>>,
+  motions: EnrichedMotion[],
 ): MotionLifecycleState {
   const openMotions = motions
     .filter(m => !CLOSED_MOTION_STATUSES.has(m.status))
@@ -260,7 +284,7 @@ function buildMotionLifecycle(
 
 function buildResultOverlay(
   state: Record<string, unknown> | null,
-  motions: Awaited<ReturnType<typeof listMotionsEnriched>>,
+  motions: EnrichedMotion[],
 ): ResultOverlayState | null {
   if (!state || !isVoteResultActive(state as Parameters<typeof isVoteResultActive>[0])) {
     return null

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { clearBoardMemberPeopleCache } from '@/lib/board-meetings/control-meeting-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,5 +68,6 @@ export async function POST(request: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  clearBoardMemberPeopleCache()
   return NextResponse.json({ person: data })
 }

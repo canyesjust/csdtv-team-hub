@@ -816,15 +816,25 @@ export async function reopenMotion(
   await logMeetingEvent(service, boardMeetingId, 'motion_reopened', operatorId, { motion_id: motionId })
 }
 
+const CLOSED_MOTION_STATUSES_DB = ['withdrawn', 'tabled', 'superseded', 'replaced'] as const
+
 export async function listMotionsEnriched(
   service: SupabaseClient,
   boardMeetingId: string,
+  opts?: { openOnly?: boolean },
 ): Promise<EnrichedMotion[]> {
-  const { data: motions } = await service
+  let query = service
     .from('meeting_motions')
     .select('*')
     .eq('board_meeting_id', boardMeetingId)
     .order('opened_at', { ascending: true })
+
+  if (opts?.openOnly) {
+    const closed = CLOSED_MOTION_STATUSES_DB.map(s => `"${s}"`).join(',')
+    query = query.not('status', 'in', `(${closed})`)
+  }
+
+  const { data: motions } = await query
 
   if (!motions?.length) return [] as EnrichedMotion[]
 

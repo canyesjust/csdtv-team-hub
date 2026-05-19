@@ -4,6 +4,10 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
 import { ensureBoardMeetingRow } from '@/lib/board-meetings/persist-agenda'
 import { syncAgendaPresentersToPeopleLibrary } from '@/lib/board-meetings/people-import'
+import {
+  clearBoardMemberPeopleCache,
+  getAgendaItemsForControl,
+} from '@/lib/board-meetings/control-meeting-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +44,8 @@ export async function POST(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const peopleSync = await syncAgendaPresentersToPeopleLibrary(service, bm.id, teamUser.id)
+    clearBoardMemberPeopleCache()
+    await getAgendaItemsForControl(service, bm.id, true)
 
     return NextResponse.json({ success: true, people_sync: peopleSync })
   } catch (e) {

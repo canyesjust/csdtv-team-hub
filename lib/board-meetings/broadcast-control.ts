@@ -417,9 +417,14 @@ export async function endActiveTimer(
   })
 }
 
-export async function loadControlBundle(service: SupabaseClient, productionId: string) {
+export async function loadControlBundle(
+  service: SupabaseClient,
+  productionId: string,
+  options?: { slim?: boolean },
+) {
   const { buildControlSurfaceBundle } = await import('@/lib/board-meetings/control-bundle')
-  return buildControlSurfaceBundle(service, productionId)
+  const built = await buildControlSurfaceBundle(service, productionId, options)
+  return built?.bundle ?? null
 }
 
 /**

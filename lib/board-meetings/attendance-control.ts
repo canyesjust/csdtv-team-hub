@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AttendanceStatus } from '@/lib/board-meetings/motion-types'
 import { logMeetingEvent } from '@/lib/board-meetings/broadcast-control'
+import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting-cache'
 
 export type AttendanceRecord = {
   id: string
@@ -13,15 +14,15 @@ export type AttendanceRecord = {
 }
 
 export async function loadBoardMembers(service: SupabaseClient) {
-  const { data } = await service
-    .from('lower_third_people')
-    .select('id, display_name, primary_title')
-    .eq('category', 'board_member')
-    .eq('is_active', true)
-    .order('display_name')
-  return data || []
+  const people = await getCachedBoardMemberPeople(service)
+  return people.map(p => ({
+    id: p.id,
+    display_name: p.display_name,
+    primary_title: p.primary_title,
+  }))
 }
 
+/** Attendance status only — board member list comes from cache. */
 export async function loadAttendance(service: SupabaseClient, boardMeetingId: string) {
   const members = await loadBoardMembers(service)
   const { data: rows } = await service

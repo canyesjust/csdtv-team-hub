@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
 import MotionScreenView from './MotionScreenView'
@@ -23,17 +23,25 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     if (res.ok) setBundle(await res.json())
   }, [productionId])
 
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refreshDebounced = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    refreshTimerRef.current = setTimeout(() => {
+      void refresh()
+    }, 200)
+  }, [refresh])
+
   useEffect(() => {
     const meetingId = initialBundle.meeting.id
     const channel = supabase
       .channel(`motion-screen-${meetingId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` }, refresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motion_votes' }, refresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` }, refresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motion_votes' }, refreshDebounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [initialBundle.meeting.id, refresh, supabase])
+  }, [initialBundle.meeting.id, refreshDebounced, supabase])
 
   const onAction = useCallback(async (action: string, body?: unknown) => {
     setBusy(true)
