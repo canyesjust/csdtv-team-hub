@@ -175,7 +175,8 @@ export default function BoardDaisView({
             ) : mode === 'technical_difficulties' ? (
               <StatusHero label="Technical difficulties" accent={C.red} />
             ) : item ? (
-              <>
+              <div style={nowBlock}>
+                <p style={nowLabel}>Now</p>
                 <div style={itemBadgeRow}>
                   <span style={itemBadge}>{item.item_number}</span>
                   {item.type && <span style={typePill}>{item.type.replace('_', ' ')}</span>}
@@ -206,7 +207,7 @@ export default function BoardDaisView({
                     ))}
                   </div>
                 )}
-              </>
+              </div>
             ) : (
               <p style={waitingText}>Standing by for agenda item…</p>
             )}
@@ -230,17 +231,17 @@ export default function BoardDaisView({
             )}
 
             {state.upcoming_items.length > 0 && (
-              <GlassCard>
-                <p style={cardLabel}>Up next</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
-                  {state.upcoming_items.slice(0, 3).map(u => (
+              <div style={upNextCard}>
+                <p style={upNextLabel}>Up next</p>
+                <div style={upNextList}>
+                  {state.upcoming_items.slice(0, 2).map(u => (
                     <div key={u.id} style={upNextRow}>
                       <span style={upNextNum}>{u.item_number}</span>
                       <span style={upNextTitle}>{u.title}</span>
                     </div>
                   ))}
                 </div>
-              </GlassCard>
+              </div>
             )}
           </aside>
         </main>
@@ -425,6 +426,8 @@ function MotionCard({
 
 const shell: React.CSSProperties = {
   minHeight: '100vh',
+  display: 'flex',
+  flexDirection: 'column',
   background: `linear-gradient(165deg, ${C.bg0} 0%, ${C.bg1} 45%, #060b14 100%)`,
   color: C.text,
   fontFamily: font,
@@ -524,13 +527,32 @@ const mainGrid: React.CSSProperties = {
   position: 'relative',
   zIndex: 1,
   display: 'grid',
-  gridTemplateColumns: 'minmax(0, 1.65fr) minmax(280px, 1fr)',
+  gridTemplateColumns: 'minmax(0, 2.2fr) minmax(240px, 0.9fr)',
   gap: '36px',
-  alignItems: 'start',
+  alignItems: 'stretch',
   flex: 1,
+  minHeight: 0,
 }
 
 const heroCol: React.CSSProperties = { minWidth: 0 }
+
+const nowBlock: React.CSSProperties = {
+  marginTop: '4px',
+  padding: '28px 32px 32px',
+  borderRadius: '20px',
+  background: 'linear-gradient(145deg, rgba(56, 189, 248, 0.08) 0%, rgba(255, 255, 255, 0.02) 55%)',
+  border: '1px solid rgba(56, 189, 248, 0.22)',
+  boxShadow: '0 0 48px rgba(56, 189, 248, 0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+}
+
+const nowLabel: React.CSSProperties = {
+  margin: '0 0 14px',
+  fontSize: '12px',
+  fontWeight: 800,
+  letterSpacing: '0.2em',
+  textTransform: 'uppercase',
+  color: C.accent,
+}
 
 const meetingLabel: React.CSSProperties = {
   margin: '0 0 20px',
@@ -568,9 +590,9 @@ const typePill: React.CSSProperties = {
 
 const itemTitle: React.CSSProperties = {
   margin: '0 0 18px',
-  fontSize: 'clamp(32px, 4.2vw, 52px)',
+  fontSize: 'clamp(36px, 4.8vw, 58px)',
   fontWeight: 700,
-  lineHeight: 1.08,
+  lineHeight: 1.06,
   letterSpacing: '-0.03em',
   color: C.text,
 }
@@ -605,7 +627,12 @@ const docIcon: React.CSSProperties = {
 }
 const docTitle: React.CSSProperties = { fontSize: '16px', color: C.textSoft }
 
-const sideCol: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '16px' }
+const sideCol: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px',
+  alignSelf: 'stretch',
+}
 
 const cardLabel: React.CSSProperties = {
   margin: 0,
@@ -652,17 +679,51 @@ const timerBig: React.CSSProperties = {
   textShadow: `0 0 30px ${C.accentGlow}`,
 }
 
+const upNextCard: React.CSSProperties = {
+  marginTop: 'auto',
+  padding: '14px 16px',
+  borderRadius: '12px',
+  background: 'rgba(255, 255, 255, 0.02)',
+  border: `1px solid ${C.glassBorder}`,
+  opacity: 0.85,
+}
+
+const upNextLabel: React.CSSProperties = {
+  margin: 0,
+  fontSize: '10px',
+  fontWeight: 700,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  color: C.textDim,
+}
+
+const upNextList: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  marginTop: '10px',
+}
+
 const upNextRow: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '4px',
-  padding: '12px 14px',
-  borderRadius: '12px',
-  background: C.glassHi,
-  border: `1px solid ${C.glassBorder}`,
+  gap: '2px',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  background: 'transparent',
+  border: 'none',
 }
-const upNextNum: React.CSSProperties = { fontSize: '12px', fontWeight: 700, color: C.accent, fontFamily: mono }
-const upNextTitle: React.CSSProperties = { fontSize: '16px', color: C.text, lineHeight: 1.3, fontWeight: 500 }
+const upNextNum: React.CSSProperties = { fontSize: '10px', fontWeight: 600, color: C.textDim, fontFamily: mono }
+const upNextTitle: React.CSSProperties = {
+  fontSize: '13px',
+  color: C.textSoft,
+  lineHeight: 1.35,
+  fontWeight: 400,
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+}
 
 const motionText: React.CSSProperties = {
   margin: '0 0 12px',
