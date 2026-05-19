@@ -9,7 +9,11 @@
   --semantic-warning-bg: rgba(245, 158, 11, 0.12);
   --semantic-warning-border: rgba(245, 158, 11, 0.35);
   --semantic-warning-text: #f59e0b;
+<<<<<<< HEAD
   --semantic-info-bg: rgba(30, 108, 181, 0.15);
+=======
+  --semantic-info-bg: rgba(30, 108, 181, 0.18);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   --semantic-info-border: rgba(30, 108, 181, 0.45);
   --semantic-info-text: #5fa6ed;
   --eyebrow-letter-spacing: 0.05em;
@@ -17,6 +21,7 @@
   --touch-target-min: 44px;
 }
 
+<<<<<<< HEAD
 .control-page {
   display: flex;
   flex-direction: column;
@@ -32,19 +37,102 @@
   background: var(--bg-main);
   color: var(--text-primary);
   overflow: hidden;
+=======
+.control-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--bg-main, #0a0f1e);
+  color: var(--text-primary, #f8fafc);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
 
 .cs-header {
   flex: 0 0 auto;
   padding: 14px 20px;
+<<<<<<< HEAD
   border-bottom: 0.5px solid var(--border-subtle);
   background: var(--bg-topbar);
+=======
+  border-bottom: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-topbar, #0f1729);
+}
+
+.cs-header-breadcrumbs {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--brand-primary, #1e6cb5);
+  margin-bottom: 8px;
+}
+
+.cs-header-breadcrumbs a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cs-header-breadcrumbs a:hover {
+  text-decoration: underline;
+}
+
+.cs-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cs-header-title {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.cs-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cs-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--semantic-danger-bg);
+  color: var(--semantic-danger-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cs-quorum-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-2, #1a2236);
+  color: var(--text-primary, #f8fafc);
+  font-size: 12px;
+}
+
+.cs-quorum-pill.cs-quorum-met {
+  color: var(--semantic-success-text);
+  border-color: var(--semantic-success-border);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
 
 .cs-main {
   flex: 1 1 auto;
   display: grid;
+<<<<<<< HEAD
   grid-template-columns: 240px 1fr;
+=======
+  grid-template-columns: 260px 1fr;
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   gap: 12px;
   padding: 14px 16px;
   min-height: 0;
@@ -57,6 +145,62 @@
   gap: 6px;
   overflow-y: auto;
   min-height: 0;
+<<<<<<< HEAD
+=======
+  padding-right: 4px;
+}
+
+.cs-agenda-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  line-height: 1.35;
+}
+
+.cs-agenda-item:hover {
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-agenda-item.cs-agenda-item-onair {
+  border-color: var(--semantic-danger-border);
+  background: var(--semantic-danger-bg);
+}
+
+.cs-agenda-item.cs-agenda-item-done {
+  opacity: 0.5;
+}
+
+.cs-agenda-num {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted, #6b7385);
+  white-space: nowrap;
+  min-width: 36px;
+  padding-top: 1px;
+}
+
+.cs-agenda-item-onair .cs-agenda-num {
+  color: var(--semantic-danger-text);
+}
+
+.cs-agenda-title {
+  font-size: 12px;
+  color: var(--text-primary, #f8fafc);
+  flex: 1;
+}
+
+.cs-agenda-item-onair .cs-agenda-title {
+  font-weight: 500;
+  color: var(--semantic-danger-text);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
 
 .cs-onair {
@@ -70,12 +214,18 @@
 .cs-utilities {
   flex: 0 0 auto;
   padding: 14px 16px;
+<<<<<<< HEAD
   border-top: 0.5px solid var(--border-subtle);
   background: var(--bg-topbar);
+=======
+  border-top: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-topbar, #0f1729);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
 
 .cs-utilities-grid {
   display: grid;
+<<<<<<< HEAD
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
@@ -83,24 +233,93 @@
 .cs-card {
   background: var(--surface-1);
   border: 0.5px solid var(--border-subtle);
+=======
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.cs-utility-panel {
+  padding: 10px 12px;
+  background: var(--surface-1, #131b2e);
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+}
+
+.cs-utility-panel:hover {
+  background: var(--surface-2, #1a2236);
+}
+
+.cs-utility-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-utility-panel-title {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cs-utility-panel-summary {
+  font-size: 11px;
+  color: var(--text-muted, #6b7385);
+  margin-top: 2px;
+}
+
+.cs-utility-panel-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.cs-card {
+  background: var(--surface-1, #131b2e);
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   border-radius: 12px;
   padding: 14px 16px;
 }
 
 .cs-eyebrow {
   font-size: var(--eyebrow-font-size);
+<<<<<<< HEAD
   color: var(--text-muted);
+=======
+  color: var(--text-muted, #6b7385);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   letter-spacing: var(--eyebrow-letter-spacing);
   margin-bottom: 6px;
 }
 
+<<<<<<< HEAD
+=======
+.cs-onair-title {
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 500;
+  color: var(--text-primary, #f8fafc);
+}
+
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 .cs-touchbtn {
   min-height: var(--touch-target-min);
   padding: 12px 16px;
   border-radius: 10px;
+<<<<<<< HEAD
   border: 0.5px solid var(--border-subtle);
   background: var(--surface-2);
   color: var(--text-primary);
+=======
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-2, #1a2236);
+  color: var(--text-primary, #f8fafc);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -109,6 +328,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+<<<<<<< HEAD
 }
 
 .cs-touchbtn:hover { background: var(--surface-1); }
@@ -120,12 +340,37 @@
   color: #fff;
 }
 
+=======
+  transition: background 120ms;
+}
+
+.cs-touchbtn:hover:not(:disabled) {
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-touchbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cs-touchbtn-primary {
+  background: var(--brand-primary, #1e6cb5);
+  border-color: var(--brand-primary, #1e6cb5);
+  color: #fff;
+}
+
+.cs-touchbtn-primary:hover:not(:disabled) {
+  background: #2179c9;
+}
+
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 .cs-touchbtn-danger {
   background: var(--semantic-danger-bg);
   border-color: var(--semantic-danger-border);
   color: var(--semantic-danger-text);
 }
 
+<<<<<<< HEAD
 .control-agenda-btn {
   display: flex;
   align-items: flex-start;
@@ -175,6 +420,70 @@
   margin: 0;
   font-size: 15px;
   line-height: 1.35;
+=======
+.cs-touchbtn-small {
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+.cs-lower-third-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+@media (max-width: 1400px) {
+  .cs-lower-third-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+.cs-lower-third-btn {
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-2, #1a2236);
+  color: var(--text-primary, #f8fafc);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 56px;
+  text-align: left;
+}
+
+.cs-lower-third-btn:hover {
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-lower-third-btn.cs-lower-third-active {
+  background: var(--semantic-info-bg);
+  border-color: var(--semantic-info-border);
+  color: var(--semantic-info-text);
+}
+
+.cs-lower-third-btn-title {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cs-lower-third-btn-sub {
+  font-size: 10px;
+  color: var(--text-muted, #6b7385);
+  margin-top: 2px;
+}
+
+.cs-lower-third-active .cs-lower-third-btn-sub {
+  color: var(--semantic-info-text);
+  opacity: 0.85;
+}
+
+.cs-end-meeting-row {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  justify-content: flex-end;
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
 
 @media (max-width: 1100px) {
@@ -184,23 +493,39 @@
 @media (max-width: 760px) {
   .cs-main { grid-template-columns: 1fr; }
   .cs-utilities-grid { grid-template-columns: repeat(2, 1fr); }
+<<<<<<< HEAD
 }
 
 /* ===== Motion screen ===== */
 
+=======
+  .cs-lower-third-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 .motion-screen {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+<<<<<<< HEAD
   background: var(--bg-main);
   color: var(--text-primary);
+=======
+  background: var(--bg-main, #0a0f1e);
+  color: var(--text-primary, #f8fafc);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
 
 .ms-topbar {
   flex: 0 0 auto;
   padding: 12px 20px;
+<<<<<<< HEAD
   border-bottom: 0.5px solid var(--border-subtle);
   background: var(--bg-topbar);
+=======
+  border-bottom: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-topbar, #0f1729);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -209,8 +534,13 @@
 .ms-context {
   flex: 0 0 auto;
   padding: 14px 20px;
+<<<<<<< HEAD
   border-bottom: 0.5px solid var(--border-subtle);
   background: var(--surface-1);
+=======
+  border-bottom: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-1, #131b2e);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -231,8 +561,13 @@
 .ms-actions {
   flex: 0 0 auto;
   padding: 12px 18px 18px;
+<<<<<<< HEAD
   border-top: 0.5px solid var(--border-subtle);
   background: var(--bg-topbar);
+=======
+  border-top: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-topbar, #0f1729);
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
   display: flex;
   gap: 10px;
   align-items: center;

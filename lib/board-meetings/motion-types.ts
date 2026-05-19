@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 export type AttendanceStatus = 'present' | 'absent' | 'remote' | 'left_early' | 'arrived_late'
 export type MotionStatus =
   | 'open_for_discussion'
@@ -93,4 +94,79 @@ export type PublicActiveVoteResult = {
   held?: boolean
   started_at?: string
   total_duration?: number
+=======
+export type ActiveMotion = {
+  id: string
+  motion_type: 'main' | 'substitute' | 'amendment'
+  text: string | null
+  agenda_item_id: string | null
+  mover_id: string | null
+  mover_name: string | null
+  seconder_id: string | null
+  seconder_name: string | null
+  vote_type: 'voice' | 'roll_call'
+  status: string
+  parent_motion_id: string | null
+  created_at: string
+}
+
+export type VotingMember = {
+  id: string
+  display_name: string
+  district: string | null
+  officer_position: string | null
+  initials: string
+}
+
+export type VoteRecord = {
+  vote: 'yea' | 'nay' | 'abstain' | 'absent' | 'recused'
+  attendance: 'present' | 'absent' | 'remote'
+  recorded_at: string | null
+}
+
+export type AgendaItem = {
+  id: string
+  item_number: string
+  title: string
+  type?: string | null
+}
+
+export type MotionScreenBundle = {
+  meeting: { id: string; production_id: string; title: string }
+  current_agenda_item: AgendaItem | null
+  current_agenda_item_id: string | null
+  active_motion: ActiveMotion | null
+  parent_motion: ActiveMotion | null
+  voting_members: VotingMember[]
+  votes: Record<string, VoteRecord>
+  tally: { yea: number; nay: number; abstain: number; absent: number }
+  quorum_size: number
+  suggested_motion_text: string
+  live_elapsed: string | null
+}
+
+export type MotionLifecycleState = {
+  state: 'no_motion' | 'drafting' | 'open_for_discussion' | 'voting' | 'voted' | 'closed'
+  active_motion: {
+    id: string
+    motion_type: 'main' | 'substitute' | 'amendment'
+    text: string | null
+    mover_name: string | null
+    seconder_name: string | null
+  } | null
+  recorded_votes_count: number
+}
+
+export type ResultOverlayState = {
+  active: boolean
+  motion_id: string
+  passed: boolean
+  yea_count: number
+  nay_count: number
+  abstain_count: number
+  started_at: string
+  total_duration: number
+  seconds_remaining: number
+  held: boolean
+>>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
