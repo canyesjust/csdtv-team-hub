@@ -23,7 +23,7 @@ export default function MotionTextCard({
           width: '100%',
           boxSizing: 'border-box',
           marginTop: 8,
-          padding: 12px,
+          padding: 12,
           borderRadius: 10,
           border: '0.5px solid var(--border-subtle)',
           background: 'var(--surface-2)',

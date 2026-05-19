@@ -4,29 +4,29 @@ import { loadAttendance } from '@/lib/board-meetings/attendance-control'
 import { listMotionsEnriched } from '@/lib/board-meetings/motion-control'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
-import type { ControlBundle } from '@/lib/board-meetings/types'
+import type { ActiveMotion, MotionScreenBundle } from '@/lib/board-meetings/types'
 import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
-import type { MotionUi } from '@/app/control/[productionId]/motion/motion-screen-types'
 
-export type MotionScreenBundle = {
-  bundle: ControlBundle
-  motions: MotionUi[]
-  attendance: { person_id: string; name: string; status: string }[]
-}
-
-function mapMotionUi(m: EnrichedMotion): MotionUi {
+function enrichActiveMotion(
+  motion: ActiveMotion | null,
+  rows: EnrichedMotion[],
+): ActiveMotion | null {
+  if (!motion) return null
+  const row = rows.find(m => m.id === motion.id)
+  if (!row) return motion
   return {
-    id: m.id,
-    motion_text: m.motion_text,
-    status: m.status,
-    motion_type: m.motion_type,
-    parent_motion_id: m.parent_motion_id,
-    result: m.result,
-    tally_yea: m.tally.yea,
-    tally_nay: m.tally.nay,
-    tally_abstain: m.tally.abstain,
-    moved_by: m.moved_by ? { id: m.moved_by.id, display_name: m.moved_by.display_name } : null,
-    seconded_by: m.seconded_by ? { id: m.seconded_by.id, display_name: m.seconded_by.display_name } : null,
+    ...motion,
+    result: row.result,
+    tally_yea: row.tally.yea,
+    tally_nay: row.tally.nay,
+    tally_abstain: row.tally.abstain,
+    vote_type: (row.vote_mode || motion.vote_type) as ActiveMotion['vote_type'],
+    status: row.status,
+    text: row.motion_text,
+    mover_id: row.moved_by_person_id,
+    mover_name: row.moved_by?.display_name ?? null,
+    seconder_id: row.seconded_by_person_id,
+    seconder_name: row.seconded_by?.display_name ?? null,
   }
 }
 
@@ -41,21 +41,47 @@ export async function loadMotionScreenBundle(
   if ('error' in prodCheck) return null
 
   const resolvedId = prodCheck.productionId
-  const bundle = await buildControlSurfaceBundle(service, resolvedId)
-  if (!bundle) return null
+  const surface = await buildControlSurfaceBundle(service, resolvedId)
+  if (!surface) return null
 
-  const [motions, attendance] = await Promise.all([
-    listMotionsEnriched(service, bundle.board_meeting.id),
-    loadAttendance(service, bundle.board_meeting.id),
-  ])
+  const motions = await listMotionsEnriched(service, surface.board_meeting.id)
+  const lifecycle = surface.motion_lifecycle
+
+  const currentId = surface.broadcast_state?.current_agenda_item_id
+  const currentItem = (surface.agenda_items || []).find(i => i.id === currentId) ?? null
+  const consentItems = currentItem?.consent_block
+    ? surface.agenda_items.filter(i => i.consent_block === currentItem.consent_block)
+    : []
+  const consentRange =
+    consentItems.length > 1
+      ? `${consentItems[0].item_number} – ${consentItems[consentItems.length - 1].item_number}`
+      : null
+
+  const status = surface.broadcast_state?.status ?? surface.board_meeting.broadcast_status
+  const canControl =
+    surface.board_meeting.agenda_locked && status !== 'archived' && status !== 'cancelled'
 
   return {
-    bundle,
-    motions: motions.map(mapMotionUi),
-    attendance: attendance.records.map(r => ({
+    meeting: {
+      id: surface.board_meeting.id,
+      production_id: resolvedId,
+      title: surface.meeting?.title ?? null,
+      broadcast_status: status,
+      agenda_locked: surface.board_meeting.agenda_locked,
+    },
+    active_motion: enrichActiveMotion(lifecycle?.active_motion ?? null, motions),
+    parent_motion: enrichActiveMotion(lifecycle?.parent_motion ?? null, motions),
+    lifecycle_state: lifecycle?.state ?? 'no_motion',
+    current_agenda_item: currentItem,
+    consent_is_lead: !!(currentItem?.consent_block && consentItems[0]?.id === currentItem.id),
+    consent_range: consentRange,
+    attendance: (surface.attendance?.records || []).map(r => ({
       person_id: r.person_id,
       name: r.name,
       status: r.status,
     })),
+    can_control: canControl,
+    is_live: status === 'live',
+    result_on_overlay: surface.result_overlay?.active ?? false,
   }
 }

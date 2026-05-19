@@ -76,6 +76,30 @@ export type ActiveMotion = {
   status: string
   parent_motion_id: string | null
   created_at: string
+  result?: 'passed' | 'failed' | null
+  tally_yea?: number
+  tally_nay?: number
+  tally_abstain?: number
+}
+
+export type MotionScreenBundle = {
+  meeting: {
+    id: string
+    production_id: string
+    title: string | null
+    broadcast_status: string
+    agenda_locked: boolean
+  }
+  active_motion: ActiveMotion | null
+  parent_motion: ActiveMotion | null
+  lifecycle_state: MotionLifecycleState['state']
+  current_agenda_item: ControlAgendaItem | null
+  consent_is_lead: boolean
+  consent_range: string | null
+  attendance: { person_id: string; name: string; status: string }[]
+  can_control: boolean
+  is_live: boolean
+  result_on_overlay: boolean
 }
 
 export type MotionLifecycleState = {
