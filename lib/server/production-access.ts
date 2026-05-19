@@ -1,5 +1,6 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { isManagerRole } from '@/lib/server/auth'
+import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 /** Managers and staff may update any production; others must be on the production team. */
 export async function teamUserCanUpdateProduction(
@@ -18,8 +19,5 @@ export async function teamUserCanUpdateProduction(
 }
 
 export function getServiceSupabase(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key)
+  return getServiceSupabaseClient()
 }

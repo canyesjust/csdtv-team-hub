@@ -9,6 +9,7 @@ import Link from 'next/link'
 import Loader from '../../components/Loader'
 import CommentsSection from '../../components/CommentsSection'
 import StudentCrewTab from '../../components/StudentCrewTab'
+import BoardMeetingTab from './components/BoardMeetingTab'
 import { toast } from '@/lib/toast'
 import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
@@ -164,7 +165,7 @@ export default function ProductionDetailPage() {
   const [generatingSheet, setGeneratingSheet] = useState(false)
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'thumbnail'|'callsheet'|'studentcrew'>('checklist')
+  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'thumbnail'|'callsheet'|'studentcrew'|'boardmeeting'>('checklist')
   const [selectedMember, setSelectedMember] = useState<string|null>(null)
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
@@ -329,6 +330,7 @@ export default function ProductionDetailPage() {
   useEffect(() => { loadData() }, [loadData])
 
   const getTypeLabel = (prod: Production) => prod.request_type_label || prod.type || 'Unknown'
+  const isBoardMeetingProduction = production?.request_type_number === 4
 
   const formatOutsourcedUsd = (n: number) =>
     `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -1577,6 +1579,7 @@ export default function ProductionDetailPage() {
         {tabBtn('thumbnail', 'Thumbnail')}
         {tabBtn('callsheet', 'Call sheet', callSheet ? 1 : 0)}
         {tabBtn('studentcrew', 'Student Crew')}
+        {isBoardMeetingProduction && tabBtn('boardmeeting', 'Board Meeting')}
       </div>
 
       {/* CHECKLIST TAB */}
@@ -2623,6 +2626,10 @@ export default function ProductionDetailPage() {
           productionTitle={production.title}
           isManager={currentUser?.role === 'Manager'}
         />
+      )}
+
+      {activeTab === 'boardmeeting' && uuid && production && isBoardMeetingProduction && (
+        <BoardMeetingTab productionId={uuid} />
       )}
 
       {/* EMAIL ORGANIZER MODAL */}

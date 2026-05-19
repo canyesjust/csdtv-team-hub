@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
   { section: 'Work', items: [
     { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
+    { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
     { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
     { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
     { label: 'Board update', href: '/dashboard/board-update', icon: 'mail' },
@@ -43,6 +44,7 @@ const BOTTOM_NAV = [
 ]
 
 const MORE_ITEMS = [
+  { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
   { label: 'Board update', href: '/dashboard/board-update', icon: 'mail' },
   { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
   { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
@@ -72,6 +74,7 @@ const PATHS: Record<string, React.ReactNode> = {
   contact: <><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
   mail: <><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></>,
   notes: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></>,
+  board: <><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></>,
   students: <><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.66 4 3 6 3s6-1.34 6-3v-5"/></>,
 }
 
@@ -110,6 +113,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           section: 'Work',
           items: [
             { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
+            { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
             { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
             { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
           ],
@@ -132,6 +136,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { label: 'More', href: '#more', icon: 'more' },
       ] as typeof BOTTOM_NAV,
       moreItems: [
+        { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
         { label: 'Equipment scan', href: '/dashboard/equipment/scan', icon: 'equipment' },
         { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
         { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
