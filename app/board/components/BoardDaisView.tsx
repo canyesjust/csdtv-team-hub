@@ -5,6 +5,7 @@ import type { PublicChannelState } from '@/lib/board-meetings/public-output-stat
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 
 const LS_KEY = 'board-dais-person'
@@ -94,8 +95,10 @@ export default function BoardDaisView({
   const item = state.current_item
   const timer = state.timer
   const mode = state.state?.mode
+  const brandingHold = !!(state.agenda_branding_hold || state.state?.agenda_branding_hold)
   const voteResult = state.state?.active_vote_result
   const motion = state.state?.active_motion
+  const screenName = state.meeting?.title || initialChannelName || `Channel ${channelNumber}`
 
   return (
     <>
@@ -154,18 +157,20 @@ export default function BoardDaisView({
 
         <main style={mainGrid}>
           <section style={heroCol}>
-            <p style={meetingLabel}>{state.meeting?.title || 'Board meeting'}</p>
+            {!brandingHold ? (
+              <p style={meetingLabel}>{state.meeting?.title || 'Board meeting'}</p>
+            ) : null}
 
             {mode === 'recess' ? (
               <StatusHero label="Recess" accent={C.accent} />
             ) : mode === 'technical_difficulties' ? (
               <StatusHero label="Technical difficulties" accent={C.red} />
-            ) : state.state?.agenda_branding_hold ? (
-              <div style={nowBlock}>
-                <p style={nowLabel}>On air</p>
-                <h1 style={itemTitle}>CSDtv logo slide</h1>
-                <p style={waitingText}>Agenda update — standing by</p>
-              </div>
+            ) : brandingHold ? (
+              <BoardBrandingSlide
+                variant="dais"
+                screenName={screenName}
+                statusLine="Agenda update"
+              />
             ) : item ? (
               <div style={nowBlock}>
                 <p style={nowLabel}>Now</p>
@@ -222,7 +227,7 @@ export default function BoardDaisView({
               </GlassCard>
             )}
 
-            {state.upcoming_items.length > 0 && (
+            {!brandingHold && state.upcoming_items.length > 0 && (
               <div style={upNextCard}>
                 <p style={upNextLabel}>Up next</p>
                 <div style={upNextList}>

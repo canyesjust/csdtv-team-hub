@@ -18,7 +18,7 @@ import type {
 /** Volatile overlay fields — no event log, completed list, or presenter/doc lookups. */
 export type PublicChannelLivePatch = Pick<
   PublicChannelState,
-  'active' | 'result_overlay' | 'state' | 'current_item' | 'timer' | 'upcoming_items' | 'elapsed_started_at'
+  'active' | 'result_overlay' | 'state' | 'current_item' | 'timer' | 'upcoming_items' | 'elapsed_started_at' | 'agenda_branding_hold'
 > & {
   meeting?: Pick<NonNullable<PublicChannelState['meeting']>, 'broadcast_status'> | null
 }
@@ -90,6 +90,8 @@ export function mergePublicChannelState(
     timer: live.timer !== undefined ? live.timer : prev.timer,
     elapsed_started_at:
       live.elapsed_started_at !== undefined ? live.elapsed_started_at : prev.elapsed_started_at,
+    agenda_branding_hold:
+      live.agenda_branding_hold !== undefined ? live.agenda_branding_hold : prev.agenda_branding_hold,
     state:
       live.state && prev.state
         ? { ...prev.state, ...live.state }
@@ -120,6 +122,7 @@ export async function buildPublicChannelLivePatch(
     upcoming_items: [],
     timer: null,
     elapsed_started_at: null,
+    agenda_branding_hold: false,
   }
 
   const { data: assignment } = await service
@@ -251,5 +254,6 @@ export async function buildPublicChannelLivePatch(
     upcoming_items,
     timer: timerPayload,
     elapsed_started_at: (bstate?.elapsed_started_at as string | null | undefined) ?? null,
+    agenda_branding_hold: !!bstate?.agenda_branding_hold,
   }
 }

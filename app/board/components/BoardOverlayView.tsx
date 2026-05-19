@@ -5,6 +5,7 @@ import type { PublicChannelState } from '@/lib/board-meetings/public-output-stat
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
 import {
@@ -106,7 +107,7 @@ export default function BoardOverlayView({
     !!voteResult &&
     (!!voteResult.held || !!state.result_overlay?.held || (voteResult.remaining_seconds ?? 0) > 0)
   const showMotion = !showVoteResult && !!activeMotion
-  const brandingHold = !!b?.agenda_branding_hold
+  const brandingHold = !!(state.agenda_branding_hold || b?.agenda_branding_hold)
   const showItem =
     b?.overlay_visible && mode === 'normal' && item && !showVoteResult && !showMotion && !brandingHold
   const showBrandingHold = brandingHold && mode === 'normal' && !showVoteResult && !showMotion
@@ -154,7 +155,20 @@ export default function BoardOverlayView({
   if (showBrandingHold) {
     return (
       <>
-        <BoardIdleBranding screenName={screenName} variant="overlay" statusLine={null} />
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontFamily: 'system-ui, sans-serif',
+            textAlign: 'center',
+          }}
+        >
+          <div className="obs-overlay-graphic" style={overlayPanelStyle({ padding: '36px 32px', borderRadius: '8px' })}>
+            <BoardBrandingSlide variant="overlay" screenName={screenName} statusLine={null} />
+          </div>
+        </div>
         {showTimer && timer ? <TimerBadge timer={timer} /> : null}
         {qr && <QrOverlay url={qr.url} label={qr.label} />}
         {showLowerThird && lowerThird ? (

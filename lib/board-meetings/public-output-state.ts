@@ -94,6 +94,8 @@ export type PublicChannelState = {
   live_started_at: string | null
   /** Meeting elapsed clock for dais / displays (independent of go-live). */
   elapsed_started_at: string | null
+  /** When true, outputs show CSDtv branding instead of the current agenda item. */
+  agenda_branding_hold: boolean
 }
 
 async function loadItemExtras(
@@ -180,6 +182,7 @@ export async function buildPublicChannelState(
     timer: null,
     live_started_at: null,
     elapsed_started_at: null,
+    agenda_branding_hold: false,
   }
 
   const { data: assignment } = await service
@@ -364,5 +367,6 @@ export async function buildPublicChannelState(
     timer: timerPayload,
     live_started_at,
     elapsed_started_at: (bstate?.elapsed_started_at as string | null | undefined) ?? null,
+    agenda_branding_hold: !!bstate?.agenda_branding_hold,
   }
 }

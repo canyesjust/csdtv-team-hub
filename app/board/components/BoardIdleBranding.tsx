@@ -1,7 +1,7 @@
-import { OVERLAY_PANEL_BG_ALT, OVERLAY_TEXT_MUTED, OVERLAY_TEXT_PRIMARY } from '@/app/board/overlay-graphics'
+import { overlayPanelStyle, OVERLAY_PANEL_BG_ALT } from '@/app/board/overlay-graphics'
+import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 
-export const CANYONS_LOGO_SRC = encodeURI('/images/Logos/Canyons Color Long Medium.webp')
-export const CSDTV_LOGO_SRC = encodeURI('/images/Logos/csdtvlogo outlined.webp')
+export { CANYONS_LOGO_SRC, CSDTV_LOGO_SRC } from '@/app/board/branding-assets'
 
 type BoardIdleBrandingProps = {
   screenName: string
@@ -40,8 +40,8 @@ export default function BoardIdleBranding({
         background: 'linear-gradient(160deg, #0a1628 0%, #0a0f1e 100%)',
       }
 
-  const card: React.CSSProperties = isOverlay
-    ? {
+  const cardStyle = isOverlay
+    ? overlayPanelStyle({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -52,60 +52,17 @@ export default function BoardIdleBranding({
         opacity: 1,
         isolation: 'isolate',
         borderRadius: '8px',
-      }
-    : {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        maxWidth: '420px',
-        width: '100%',
-      }
-
-  const muted = isOverlay ? OVERLAY_TEXT_MUTED : '#8899bb'
-  const broughtBy = isOverlay ? '#cbd5e1' : '#a8b8d8'
+      })
+    : undefined
 
   return (
     <div style={page}>
-      <div className={isOverlay ? 'obs-overlay-graphic' : undefined} style={card}>
-        <img
-          src={CANYONS_LOGO_SRC}
-          alt="Canyons School District"
-          style={{ width: 'min(280px, 72vw)', height: 'auto', maxHeight: '120px', objectFit: 'contain', marginBottom: '20px' }}
+      <div className={isOverlay ? 'obs-overlay-graphic' : undefined} style={cardStyle}>
+        <BoardBrandingSlide
+          variant={isOverlay ? 'overlay' : 'fullscreen'}
+          screenName={screenName}
+          statusLine={statusLine}
         />
-        <p
-          style={{
-            margin: '0 0 14px',
-            fontSize: '13px',
-            fontWeight: 500,
-            letterSpacing: '0.12em',
-            textTransform: 'lowercase',
-            color: broughtBy,
-          }}
-        >
-          brought to you by
-        </p>
-        <img
-          src={CSDTV_LOGO_SRC}
-          alt="CSDtv"
-          style={{ width: 'min(200px, 55vw)', height: 'auto', maxHeight: '72px', objectFit: 'contain', marginBottom: '28px' }}
-        />
-        <p
-          style={{
-            margin: 0,
-            fontSize: '15px',
-            fontWeight: 600,
-            letterSpacing: '0.04em',
-            color: isOverlay ? OVERLAY_TEXT_PRIMARY : '#f0f4ff',
-            lineHeight: 1.35,
-          }}
-        >
-          {screenName}
-        </p>
-        {statusLine ? (
-          <p style={{ margin: '8px 0 0', fontSize: '12px', color: muted, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            {statusLine}
-          </p>
-        ) : null}
       </div>
     </div>
   )
