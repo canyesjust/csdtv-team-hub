@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import QRPushPanel from './QRPushPanel'
+import AttendancePanel from './components/AttendancePanel'
+import MotionVotePanel from './components/MotionVotePanel'
 
 type ControlBundle = {
   board_meeting: { id: string; broadcast_status: string; agenda_locked: boolean }
@@ -16,6 +18,8 @@ type ControlBundle = {
     item_number: string
     title: string
     is_broadcastable: boolean
+    type: string
+    consent_block?: string | null
   }[]
   production?: { production_number: number; livestream_url: string | null; title: string } | null
   current_documents?: { source_url: string | null; title: string }[]
@@ -28,6 +32,10 @@ type ControlBundle = {
     active_qr_label?: string | null
     active_qr_started_at?: string | null
     active_qr_duration_seconds?: number | null
+    active_motion_id?: string | null
+    active_vote_result_motion_id?: string | null
+    vote_result_started_at?: string | null
+    vote_result_duration_seconds?: number | null
   } | null
   channel_assignments: { output_channel_id: string }[]
   active_timer: { id: string; label: string; duration_seconds: number; started_at: string } | null
@@ -73,6 +81,16 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_timers', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
+        () => { load() },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
+        () => { load() },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
         () => { load() },
       )
       .subscribe()
@@ -155,6 +173,9 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
             Status: <strong>{status}</strong>
             {mode !== 'normal' && ` · ${mode.replace('_', ' ')}`}
           </p>
+          <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
+            <AttendancePanel productionId={productionId} disabled={!canControl} />
+          </div>
         </div>
         <Link href={`/dashboard/board-meetings/${productionId}/buttons`} style={{ color: 'var(--brand-primary)', fontSize: '14px' }}>
           Companion buttons →
@@ -284,6 +305,17 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
             ))}
           </ul>
         </section>
+
+        <div style={{ gridColumn: '1 / -1' }}>
+          <MotionVotePanel
+            productionId={productionId}
+            currentItem={currentItem}
+            allItems={bundle.items}
+            broadcastState={bundle.broadcast_state}
+            disabled={!canControl || status !== 'live'}
+            onUpdated={load}
+          />
+        </div>
       </div>
     </div>
   )

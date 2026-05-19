@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import { enrichAgendaWithMotions } from '@/lib/board-meetings/archive-motions'
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 const ADVANCE_EVENT_TYPES = ['agenda_item_advanced', 'advance', 'jump_to']
@@ -99,7 +100,7 @@ export async function buildArchivePayload(service: SupabaseClient, productionNum
 
   const recessCount = (events || []).filter(e => e.event_type === 'recess').length
 
-  const agenda = items.map(it => {
+  const agendaBase = items.map(it => {
     const offset = firstAdvanceByItem.get(it.id)
     return {
       id: it.id,
@@ -109,12 +110,15 @@ export async function buildArchivePayload(service: SupabaseClient, productionNum
       title: it.title,
       type: it.type,
       action_requested: it.action_requested,
+      consent_block: it.consent_block ?? null,
       started_at_offset_seconds: offset ?? null,
       started_at_human: offset != null ? formatOffsetSeconds(offset) : null,
       presenters: presByItem.get(it.id) || [],
       documents: docsByItem.get(it.id) || [],
     }
   })
+
+  const { agenda, motionSummary } = await enrichAgendaWithMotions(service, bm.id, agendaBase, t0)
 
   const presenterNames = new Set<string>()
   for (const p of allPres || []) presenterNames.add(p.name)
@@ -137,6 +141,10 @@ export async function buildArchivePayload(service: SupabaseClient, productionNum
       action_items_count: items.filter(i => i.type === 'action').length,
       presenters_count: presenterNames.size,
       recess_count: recessCount,
+      motions_count: motionSummary.motions_count,
+      passed_count: motionSummary.passed_count,
+      failed_count: motionSummary.failed_count,
+      substitute_motions_count: motionSummary.substitute_motions_count,
     },
     not_board_meeting: false,
   }

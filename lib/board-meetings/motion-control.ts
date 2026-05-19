@@ -1,0 +1,609 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { logMeetingEvent } from '@/lib/board-meetings/broadcast-control'
+import {
+  computeQuorum,
+  ensureDefaultAttendance,
+  isEligibleToVote,
+  loadAttendance,
+  loadBoardMembers,
+} from '@/lib/board-meetings/attendance-control'
+import type { MotionResult, VoteMode, VoteTally, VoteValue } from '@/lib/board-meetings/motion-types'
+
+const VOTE_RESULT_DEFAULT_SECONDS = 8
+
+export function computeTally(votes: { vote: VoteValue }[]): VoteTally {
+  const tally: VoteTally = { yea: 0, nay: 0, abstain: 0, absent: 0, recused: 0 }
+  for (const v of votes) {
+    if (v.vote === 'yea') tally.yea++
+    else if (v.vote === 'nay') tally.nay++
+    else if (v.vote === 'abstain') tally.abstain++
+    else if (v.vote === 'absent') tally.absent++
+    else if (v.vote === 'recused') tally.recused++
+  }
+  return tally
+}
+
+export function computeMotionResult(
+  tally: VoteTally,
+  quorumThreshold: number,
+): { result: MotionResult; quorum_met_at_vote: boolean } {
+  const deciding = tally.yea + tally.nay
+  const quorum_met_at_vote = deciding >= quorumThreshold
+  const passed = quorum_met_at_vote && tally.yea > tally.nay
+  return { result: passed ? 'passed' : 'failed', quorum_met_at_vote }
+}
+
+export function getVoteResultRemainingSeconds(bstate: {
+  active_vote_result_motion_id?: string | null
+  vote_result_started_at?: string | null
+  vote_result_duration_seconds?: number | null
+}): number {
+  if (!bstate.active_vote_result_motion_id || !bstate.vote_result_started_at) return 0
+  const dur = bstate.vote_result_duration_seconds ?? VOTE_RESULT_DEFAULT_SECONDS
+  const end = new Date(bstate.vote_result_started_at).getTime() + dur * 1000
+  return Math.max(0, Math.ceil((end - Date.now()) / 1000))
+}
+
+export function isVoteResultActive(bstate: {
+  active_vote_result_motion_id?: string | null
+  vote_result_started_at?: string | null
+  vote_result_duration_seconds?: number | null
+}): boolean {
+  return getVoteResultRemainingSeconds(bstate) > 0
+}
+
+async function loadMotion(service: SupabaseClient, motionId: string, boardMeetingId: string) {
+  const { data } = await service
+    .from('meeting_motions')
+    .select('*')
+    .eq('id', motionId)
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+  return data
+}
+
+async function setActiveMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string | null,
+  operatorId: string,
+) {
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_motion_id: motionId,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+}
+
+async function showVoteResult(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+  durationSeconds = VOTE_RESULT_DEFAULT_SECONDS,
+) {
+  const now = new Date().toISOString()
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_vote_result_motion_id: motionId,
+      vote_result_started_at: now,
+      vote_result_duration_seconds: durationSeconds,
+      active_motion_id: null,
+      updated_at: now,
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+  await logMeetingEvent(service, boardMeetingId, 'vote_result_displayed', operatorId, {
+    motion_id: motionId,
+    duration_seconds: durationSeconds,
+  })
+}
+
+export async function dismissVoteResult(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  motionId?: string,
+) {
+  const { data: state } = await service
+    .from('meeting_broadcast_state')
+    .select('active_vote_result_motion_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  const mid = motionId || state?.active_vote_result_motion_id
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_vote_result_motion_id: null,
+      vote_result_started_at: null,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+
+  if (mid) {
+    await logMeetingEvent(service, boardMeetingId, 'vote_result_dismissed', operatorId, {
+      motion_id: mid,
+      ended_early: true,
+    })
+  }
+}
+
+export async function openMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  input: {
+    agenda_item_id?: string | null
+    consent_block?: string | null
+    motion_type: string
+    parent_motion_id?: string | null
+    motion_text: string
+    moved_by_person_id: string
+    seconded_by_person_id: string
+  },
+) {
+  if (input.moved_by_person_id === input.seconded_by_person_id) {
+    throw new Error('Mover and seconder must be different people')
+  }
+
+  await ensureDefaultAttendance(service, boardMeetingId)
+
+  const { data: motion, error } = await service
+    .from('meeting_motions')
+    .insert({
+      board_meeting_id: boardMeetingId,
+      agenda_item_id: input.agenda_item_id ?? null,
+      consent_block: input.consent_block ?? null,
+      motion_type: input.motion_type,
+      parent_motion_id: input.parent_motion_id ?? null,
+      motion_text: input.motion_text.trim(),
+      moved_by_person_id: input.moved_by_person_id,
+      seconded_by_person_id: input.seconded_by_person_id,
+      status: 'open_for_discussion',
+      opened_by: operatorId,
+    })
+    .select('*')
+    .single()
+
+  if (error || !motion) throw new Error(error?.message || 'Failed to open motion')
+
+  await setActiveMotion(service, boardMeetingId, motion.id, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'motion_opened', operatorId, {
+    motion_id: motion.id,
+    motion_type: input.motion_type,
+    parent_motion_id: input.parent_motion_id ?? null,
+  })
+
+  return motion
+}
+
+export async function openVote(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+  voteMode: VoteMode,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (!['open_for_discussion', 'voting'].includes(motion.status)) {
+    throw new Error('Motion is not open for voting')
+  }
+
+  await service
+    .from('meeting_motions')
+    .update({ status: 'voting', vote_mode: voteMode, updated_at: new Date().toISOString() })
+    .eq('id', motionId)
+
+  await setActiveMotion(service, boardMeetingId, motionId, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'vote_opened', operatorId, { motion_id: motionId, vote_mode: voteMode })
+}
+
+export async function recordVotes(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+  votes: { person_id: string; vote: VoteValue }[],
+  opts?: { re_record?: boolean },
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (!opts?.re_record && !['open_for_discussion', 'voting'].includes(motion.status)) {
+    throw new Error('Motion is not open for voting')
+  }
+
+  const attendance = await loadAttendance(service, boardMeetingId)
+  const attByPerson = new Map(attendance.records.map(r => [r.person_id, r]))
+  const now = new Date()
+  const voteTime = now.toISOString()
+
+  for (const v of votes) {
+    if (!attByPerson.has(v.person_id)) {
+      throw new Error('All voters must have attendance records; mark attendance first')
+    }
+    const att = attByPerson.get(v.person_id)!
+    if (
+      !isEligibleToVote(att.status, now, att.arrived_at, att.left_at) &&
+      v.vote !== 'absent' &&
+      v.vote !== 'recused'
+    ) {
+      // Allow explicit absent/recused; otherwise coerce absent for ineligible
+    }
+  }
+
+  if (opts?.re_record) {
+    const { data: oldVotes } = await service
+      .from('meeting_motion_votes')
+      .select('id')
+      .eq('motion_id', motionId)
+      .is('superseded_by_vote_id', null)
+
+    const previousIds = (oldVotes || []).map(v => v.id)
+
+    for (const v of votes) {
+      const { data: inserted, error } = await service
+        .from('meeting_motion_votes')
+        .insert({
+          motion_id: motionId,
+          person_id: v.person_id,
+          vote: v.vote,
+          recorded_by: operatorId,
+        })
+        .select('id')
+        .single()
+      if (error || !inserted) throw new Error(error?.message || 'Failed to record vote')
+
+      const { data: prev } = await service
+        .from('meeting_motion_votes')
+        .select('id')
+        .eq('motion_id', motionId)
+        .eq('person_id', v.person_id)
+        .is('superseded_by_vote_id', null)
+        .neq('id', inserted.id)
+        .maybeSingle()
+
+      if (prev) {
+        await service
+          .from('meeting_motion_votes')
+          .update({ superseded_by_vote_id: inserted.id })
+          .eq('id', prev.id)
+      }
+    }
+
+    await logMeetingEvent(service, boardMeetingId, 'vote_re_recorded', operatorId, {
+      motion_id: motionId,
+      previous_vote_ids: previousIds,
+    })
+  } else {
+    for (const v of votes) {
+      const { error } = await service.from('meeting_motion_votes').insert({
+        motion_id: motionId,
+        person_id: v.person_id,
+        vote: v.vote,
+        recorded_by: operatorId,
+      })
+      if (error) throw new Error(error.message)
+    }
+  }
+
+  const { data: activeVotes } = await service
+    .from('meeting_motion_votes')
+    .select('vote')
+    .eq('motion_id', motionId)
+    .is('superseded_by_vote_id', null)
+
+  const tally = computeTally(activeVotes || [])
+  const { result, quorum_met_at_vote } = computeMotionResult(tally, attendance.quorum.threshold)
+  const finalStatus = result === 'passed' ? 'passed' : 'failed'
+
+  await service
+    .from('meeting_motions')
+    .update({
+      status: finalStatus,
+      result,
+      tally_yea: tally.yea,
+      tally_nay: tally.nay,
+      tally_abstain: tally.abstain,
+      tally_absent: tally.absent,
+      tally_recused: tally.recused,
+      voted_at: voteTime,
+      resolved_at: voteTime,
+      updated_at: voteTime,
+    })
+    .eq('id', motionId)
+
+  // Substitute resolution
+  if (motion.motion_type === 'substitute' && motion.parent_motion_id) {
+    if (result === 'passed') {
+      await service
+        .from('meeting_motions')
+        .update({
+          status: 'replaced',
+          replaced_by_motion_id: motionId,
+          resolved_at: voteTime,
+          updated_at: voteTime,
+        })
+        .eq('id', motion.parent_motion_id)
+
+      await logMeetingEvent(service, boardMeetingId, 'motion_replaced', operatorId, {
+        motion_id: motion.parent_motion_id,
+        replaced_by_motion_id: motionId,
+      })
+
+      await service
+        .from('meeting_motions')
+        .update({ status: 'open_for_discussion', updated_at: voteTime })
+        .eq('id', motionId)
+
+      await setActiveMotion(service, boardMeetingId, motionId, operatorId)
+    } else {
+      await service
+        .from('meeting_motions')
+        .update({ status: 'open_for_discussion', updated_at: voteTime })
+        .eq('id', motion.parent_motion_id)
+      await setActiveMotion(service, boardMeetingId, motion.parent_motion_id, operatorId)
+    }
+  } else {
+    await setActiveMotion(service, boardMeetingId, null, operatorId)
+  }
+
+  await showVoteResult(service, boardMeetingId, motionId, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'vote_recorded', operatorId, {
+    motion_id: motionId,
+    result,
+    tally,
+    quorum_met_at_vote,
+  })
+
+  return { motion_id: motionId, result, tally, quorum_met_at_vote }
+}
+
+export async function withdrawMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+
+  await service
+    .from('meeting_motions')
+    .update({ status: 'withdrawn', resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', motionId)
+
+  const { data: state } = await service
+    .from('meeting_broadcast_state')
+    .select('active_motion_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  if (state?.active_motion_id === motionId) {
+    await setActiveMotion(service, boardMeetingId, null, operatorId)
+  }
+
+  await logMeetingEvent(service, boardMeetingId, 'motion_withdrawn', operatorId, { motion_id: motionId })
+}
+
+export async function tableMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+) {
+  await service
+    .from('meeting_motions')
+    .update({ status: 'tabled', updated_at: new Date().toISOString() })
+    .eq('id', motionId)
+    .eq('board_meeting_id', boardMeetingId)
+
+  const { data: state } = await service
+    .from('meeting_broadcast_state')
+    .select('active_motion_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  if (state?.active_motion_id === motionId) {
+    await setActiveMotion(service, boardMeetingId, null, operatorId)
+  }
+
+  await logMeetingEvent(service, boardMeetingId, 'motion_tabled', operatorId, { motion_id: motionId })
+}
+
+export async function reopenMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (motion.status !== 'tabled') throw new Error('Only tabled motions can be reopened')
+
+  await service
+    .from('meeting_motions')
+    .update({ status: 'open_for_discussion', updated_at: new Date().toISOString() })
+    .eq('id', motionId)
+
+  await setActiveMotion(service, boardMeetingId, motionId, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'motion_reopened', operatorId, { motion_id: motionId })
+}
+
+export async function listMotionsEnriched(service: SupabaseClient, boardMeetingId: string) {
+  const { data: motions } = await service
+    .from('meeting_motions')
+    .select('*')
+    .eq('board_meeting_id', boardMeetingId)
+    .order('opened_at', { ascending: true })
+
+  if (!motions?.length) return []
+
+  const personIds = new Set<string>()
+  for (const m of motions) {
+    if (m.moved_by_person_id) personIds.add(m.moved_by_person_id)
+    if (m.seconded_by_person_id) personIds.add(m.seconded_by_person_id)
+  }
+
+  const { data: people } = personIds.size
+    ? await service.from('lower_third_people').select('id, display_name, primary_title').in('id', [...personIds])
+    : { data: [] }
+  const peopleMap = new Map((people || []).map(p => [p.id, p]))
+
+  const motionIds = motions.map(m => m.id)
+  const { data: votes } = await service
+    .from('meeting_motion_votes')
+    .select('id, motion_id, person_id, vote, recorded_at, superseded_by_vote_id')
+    .in('motion_id', motionIds)
+    .is('superseded_by_vote_id', null)
+
+  const votePersonIds = new Set((votes || []).map(v => v.person_id))
+  for (const id of votePersonIds) personIds.add(id)
+
+  let votePeopleMap = peopleMap
+  if (votePersonIds.size > personIds.size - (people?.length || 0)) {
+    const { data: vp } = await service
+      .from('lower_third_people')
+      .select('id, display_name, primary_title')
+      .in('id', [...votePersonIds])
+    votePeopleMap = new Map((vp || []).map(p => [p.id, p]))
+  }
+
+  const votesByMotion = new Map<string, typeof votes>()
+  for (const v of votes || []) {
+    const list = votesByMotion.get(v.motion_id) || []
+    list.push(v)
+    votesByMotion.set(v.motion_id, list)
+  }
+
+  return motions.map(m => ({
+    ...m,
+    moved_by: m.moved_by_person_id ? votePeopleMap.get(m.moved_by_person_id) : null,
+    seconded_by: m.seconded_by_person_id ? votePeopleMap.get(m.seconded_by_person_id) : null,
+    votes: (votesByMotion.get(m.id) || []).map(v => ({
+      person_id: v.person_id,
+      vote: v.vote,
+      person: votePeopleMap.get(v.person_id) || null,
+    })),
+    tally: {
+      yea: m.tally_yea ?? 0,
+      nay: m.tally_nay ?? 0,
+      abstain: m.tally_abstain ?? 0,
+      absent: m.tally_absent ?? 0,
+      recused: m.tally_recused ?? 0,
+    },
+  }))
+}
+
+export async function buildPublicMotionPayload(
+  service: SupabaseClient,
+  motionId: string,
+  boardMeetingId: string,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) return null
+
+  const ids = [motion.moved_by_person_id, motion.seconded_by_person_id].filter(Boolean) as string[]
+  let parentText: string | null = null
+  if (motion.parent_motion_id) {
+    const parent = await loadMotion(service, motion.parent_motion_id, boardMeetingId)
+    parentText = parent?.motion_text ?? null
+  }
+
+  const { data: people } = ids.length
+    ? await service.from('lower_third_people').select('id, display_name').in('id', ids)
+    : { data: [] }
+  const pmap = new Map((people || []).map(p => [p.id, p.display_name]))
+
+  let consentBlockLabel: string | null = null
+  if (motion.consent_block) {
+    const { data: blockItems } = await service
+      .from('board_meeting_agenda_items')
+      .select('item_number')
+      .eq('board_meeting_id', boardMeetingId)
+      .eq('consent_block', motion.consent_block)
+      .order('sort_order')
+    if (blockItems?.length) {
+      consentBlockLabel = `Items ${blockItems[0].item_number} through ${blockItems[blockItems.length - 1].item_number}`
+    }
+  }
+
+  return {
+    id: motion.id,
+    motion_text: motion.motion_text,
+    moved_by_name: motion.moved_by_person_id ? pmap.get(motion.moved_by_person_id) || '' : '',
+    seconded_by_name: motion.seconded_by_person_id ? pmap.get(motion.seconded_by_person_id) || '' : '',
+    motion_type: motion.motion_type,
+    status: motion.status,
+    is_consent_block: !!motion.consent_block,
+    consent_block_label: consentBlockLabel,
+    parent_motion_text: parentText,
+  }
+}
+
+export async function buildPublicVoteResultPayload(
+  service: SupabaseClient,
+  motionId: string,
+  boardMeetingId: string,
+  remainingSeconds: number,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion || !motion.result) return null
+
+  const { data: votes } = await service
+    .from('meeting_motion_votes')
+    .select('person_id, vote')
+    .eq('motion_id', motionId)
+    .is('superseded_by_vote_id', null)
+
+  const personIds = (votes || []).map(v => v.person_id)
+  const { data: people } = personIds.length
+    ? await service.from('lower_third_people').select('id, display_name').in('id', personIds)
+    : { data: [] }
+  const pmap = new Map((people || []).map(p => [p.id, p.display_name]))
+
+  return {
+    motion_id: motion.id,
+    result: motion.result,
+    motion_text: motion.motion_text,
+    tally: {
+      yea: motion.tally_yea ?? 0,
+      nay: motion.tally_nay ?? 0,
+      abstain: motion.tally_abstain ?? 0,
+      absent: motion.tally_absent ?? 0,
+      recused: motion.tally_recused ?? 0,
+    },
+    votes: (votes || []).map(v => ({
+      person_name: pmap.get(v.person_id) || 'Unknown',
+      vote: v.vote,
+    })),
+    remaining_seconds: remainingSeconds,
+  }
+}
+
+export async function getEligibleVotersForMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+) {
+  await ensureDefaultAttendance(service, boardMeetingId)
+  const attendance = await loadAttendance(service, boardMeetingId)
+  const now = new Date()
+  return attendance.records
+    .filter(r => isEligibleToVote(r.status, now, r.arrived_at, r.left_at) || r.status !== 'absent')
+    .map(r => ({
+      person_id: r.person_id,
+      name: r.name,
+      title: r.title,
+      status: r.status,
+      default_vote: (r.status === 'absent' ? 'absent' : 'yea') as VoteValue,
+      eligible: isEligibleToVote(r.status, now, r.arrived_at, r.left_at),
+    }))
+}
+
+export { loadBoardMembers, loadAttendance, computeQuorum }

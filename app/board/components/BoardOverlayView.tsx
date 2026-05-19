@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import type { PublicActiveMotion, PublicActiveVoteResult, PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 
 function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {
@@ -98,7 +98,11 @@ export default function BoardOverlayView({ channelNumber }: { channelNumber: num
   const b = state.state
   const item = state.current_item
   const mode = b?.mode || 'normal'
-  const showItem = b?.overlay_visible && mode === 'normal' && item
+  const voteResult = b?.active_vote_result
+  const activeMotion = b?.active_motion
+  const showVoteResult = !!voteResult && (voteResult.remaining_seconds ?? 0) > 0
+  const showMotion = !showVoteResult && !!activeMotion
+  const showItem = b?.overlay_visible && mode === 'normal' && item && !showVoteResult && !showMotion
   const timer = state.timer
   const showTimer = timer?.show_on_broadcast && (timer.remaining_seconds ?? 0) > 0
   const qr = b?.active_qr
@@ -123,6 +127,8 @@ export default function BoardOverlayView({ channelNumber }: { channelNumber: num
 
   return (
     <div style={root}>
+      {showVoteResult && voteResult ? <VoteResultCard result={voteResult} /> : null}
+      {showMotion && activeMotion ? <MotionCard motion={activeMotion} /> : null}
       {showItem && item ? (
         <div
           style={{
@@ -144,6 +150,62 @@ export default function BoardOverlayView({ channelNumber }: { channelNumber: num
         <TimerBadge timer={timer} />
       ) : null}
       {qr && <QrOverlay url={qr.url} label={qr.label} />}
+    </div>
+  )
+}
+
+function MotionCard({ motion }: { motion: PublicActiveMotion }) {
+  const text = motion.motion_text.length > 200 ? `${motion.motion_text.slice(0, 200)}…` : motion.motion_text
+  return (
+    <div
+      style={{
+        maxWidth: '720px',
+        background: 'rgba(10, 15, 30, 0.92)',
+        borderLeft: '4px solid #f59e0b',
+        padding: '16px 20px',
+        borderRadius: '4px',
+        color: '#f0f4ff',
+        marginBottom: '12px',
+      }}
+    >
+      <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fbbf24' }}>
+        {motion.motion_type === 'substitute' ? 'Substitute motion' : 'Motion on floor'}
+        {motion.is_consent_block && motion.consent_block_label ? ` · ${motion.consent_block_label}` : ''}
+      </p>
+      <p style={{ margin: '0 0 10px', fontSize: '20px', fontWeight: 600, lineHeight: 1.35 }}>{text}</p>
+      <p style={{ margin: 0, fontSize: '14px', color: '#94a3b8' }}>
+        Moved by {motion.moved_by_name}, seconded by {motion.seconded_by_name}
+      </p>
+    </div>
+  )
+}
+
+function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
+  const passed = result.result === 'passed'
+  const yeaNames = result.votes.filter(v => v.vote === 'yea').map(v => v.person_name)
+  const nayNames = result.votes.filter(v => v.vote === 'nay').map(v => v.person_name)
+  return (
+    <div
+      style={{
+        maxWidth: '800px',
+        background: 'rgba(10, 15, 30, 0.95)',
+        padding: '24px 28px',
+        borderRadius: '8px',
+        color: '#f0f4ff',
+        border: `3px solid ${passed ? '#22c55e' : '#ef4444'}`,
+      }}
+    >
+      <p style={{ margin: '0 0 8px', fontSize: '14px', opacity: 0.85 }}>{result.motion_text.slice(0, 120)}</p>
+      <p style={{ margin: '0 0 8px', fontSize: '36px', fontWeight: 800, color: passed ? '#4ade80' : '#f87171' }}>
+        MOTION {passed ? 'PASSED' : 'FAILED'}
+      </p>
+      <p style={{ margin: '0 0 16px', fontSize: '28px', fontWeight: 700 }}>
+        {result.tally.yea} — {result.tally.nay}
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+        <div><strong>Yea:</strong> {yeaNames.join(', ') || '—'}</div>
+        <div><strong>Nay:</strong> {nayNames.join(', ') || '—'}</div>
+      </div>
     </div>
   )
 }

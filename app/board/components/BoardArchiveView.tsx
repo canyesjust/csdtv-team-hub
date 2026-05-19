@@ -22,12 +22,23 @@ type ArchivePayload = {
     started_at_offset_seconds: number | null
     presenters: { name: string; title: string | null }[]
     documents: { title: string; source_url: string | null }[]
+    motion?: {
+      motion_text: string
+      result: string | null
+      tally: { yea: number; nay: number }
+      moved_by: { name: string } | null
+      votes: { person: { name: string }; vote: string }[]
+    } | null
+    consolidated_consent_motion?: { motion_text: string; result: string | null } | null
   }[]
   summary: {
     total_duration_seconds: number
     action_items_count: number
     presenters_count: number
     recess_count: number
+    motions_count?: number
+    passed_count?: number
+    failed_count?: number
   }
   not_board_meeting?: boolean
 }
@@ -97,6 +108,12 @@ export default function BoardArchiveView({ productionNumber }: { productionNumbe
           <SummaryCard label="Duration" value={durationMin > 0 ? `~${durationMin} min` : '—'} />
           <SummaryCard label="Action items" value={String(data.summary.action_items_count)} />
           <SummaryCard label="Presenters" value={String(data.summary.presenters_count)} />
+          {(data.summary.motions_count ?? 0) > 0 && (
+            <>
+              <SummaryCard label="Motions" value={String(data.summary.motions_count)} />
+              <SummaryCard label="Passed" value={String(data.summary.passed_count ?? 0)} />
+            </>
+          )}
         </div>
 
         <h2 style={{ fontSize: '18px', marginBottom: '16px', color: '#0f172a' }}>Agenda timeline</h2>
@@ -123,6 +140,36 @@ export default function BoardArchiveView({ productionNumber }: { productionNumbe
                     <a href={yt} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '8px', fontSize: '13px', fontWeight: 600, color: '#1e6cb5' }}>
                       Jump to this point on YouTube
                     </a>
+                  )}
+                  {it.consolidated_consent_motion && (
+                    <p style={{ margin: '12px 0 0', fontSize: '14px', color: '#166534', background: '#ecfdf5', padding: '10px', borderRadius: '8px' }}>
+                      Approved as part of consolidated consent vote ({it.consolidated_consent_motion.result}).
+                    </p>
+                  )}
+                  {it.motion && (
+                    <div style={{ marginTop: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <p style={{ margin: '0 0 6px', fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{it.motion.motion_text}</p>
+                      {it.motion.moved_by && (
+                        <p style={{ margin: '0 0 6px', fontSize: '13px', color: '#64748b' }}>Moved by {it.motion.moved_by.name}</p>
+                      )}
+                      {it.motion.result && (
+                        <p style={{ margin: '0 0 8px', fontSize: '14px', fontWeight: 700, textTransform: 'capitalize', color: it.motion.result === 'passed' ? '#166534' : '#991b1b' }}>
+                          {it.motion.result} {it.motion.tally.yea}–{it.motion.tally.nay}
+                        </p>
+                      )}
+                      {it.motion.votes.length > 0 && (
+                        <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                          <tbody>
+                            {it.motion.votes.map((v, vi) => (
+                              <tr key={vi}>
+                                <td style={{ padding: '2px 8px 2px 0', color: '#475569' }}>{v.person.name}</td>
+                                <td style={{ padding: '2px 0', fontWeight: 600, textTransform: 'uppercase' }}>{v.vote}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

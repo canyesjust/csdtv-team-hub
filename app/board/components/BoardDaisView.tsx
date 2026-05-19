@@ -109,6 +109,20 @@ export default function BoardDaisView({ channelNumber }: { channelNumber: number
                   {item.presenters[0].title ? ` — ${item.presenters[0].title}` : ''}
                 </p>
               )}
+              {state.state?.active_vote_result && (state.state.active_vote_result.remaining_seconds ?? 0) > 0 ? (
+                <div style={{ marginBottom: '20px', padding: '16px', borderRadius: '12px', background: state.state.active_vote_result.result === 'passed' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)', border: '2px solid rgba(255,255,255,0.2)' }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '20px', fontWeight: 800, textTransform: 'uppercase' }}>
+                    {state.state.active_vote_result.result === 'passed' ? 'Motion passed' : 'Motion failed'} {state.state.active_vote_result.tally.yea}–{state.state.active_vote_result.tally.nay}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '18px', color: '#e2e8f0' }}>{state.state.active_vote_result.motion_text}</p>
+                </div>
+              ) : state.state?.active_motion ? (
+                <div style={{ marginBottom: '20px', padding: '16px', borderRadius: '12px', background: 'rgba(245,158,11,0.15)', border: '2px solid rgba(251,191,36,0.4)' }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '16px', fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase' }}>Motion on floor</p>
+                  <p style={{ margin: '0 0 8px', fontSize: '22px', color: '#f8fafc' }}>{state.state.active_motion.motion_text}</p>
+                  <p style={{ margin: 0, fontSize: '16px', color: '#94a3b8' }}>{state.state.active_motion.moved_by_name} · {state.state.active_motion.seconded_by_name}</p>
+                </div>
+              ) : null}
               {(item.documents?.length ?? 0) > 0 && (
                 <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: '18px', color: '#94a3b8' }}>
                   {item.documents.map((d, i) => (

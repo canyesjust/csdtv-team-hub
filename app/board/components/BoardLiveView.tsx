@@ -2,6 +2,36 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+
+function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
+  const vr = state?.active_vote_result
+  const motion = state?.active_motion
+  if (vr && (vr.remaining_seconds ?? 0) > 0) {
+    const passed = vr.result === 'passed'
+    return (
+      <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: passed ? '#ecfdf5' : '#fef2f2', border: `1px solid ${passed ? '#86efac' : '#fecaca'}` }}>
+        <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: passed ? '#166534' : '#991b1b' }}>
+          {passed ? 'Motion passed' : 'Motion failed'} · {vr.tally.yea}–{vr.tally.nay}
+        </p>
+        <p style={{ margin: 0, fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{vr.motion_text}</p>
+      </div>
+    )
+  }
+  if (motion) {
+    return (
+      <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: '#fffbeb', border: '1px solid #fde68a' }}>
+        <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#92400e' }}>
+          {motion.status === 'voting' ? 'Vote in progress' : 'Motion on floor'}
+        </p>
+        <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{motion.motion_text}</p>
+        <p style={{ margin: 0, fontSize: '13px', color: '#78716c' }}>
+          {motion.moved_by_name} · seconded by {motion.seconded_by_name}
+        </p>
+      </div>
+    )
+  }
+  return null
+}
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -126,6 +156,7 @@ export default function BoardLiveView({ channelNumber }: { channelNumber: number
                 View document
               </a>
             )}
+            <MotionFloorBlock state={state.state} />
           </section>
         )}
 

@@ -1,0 +1,44 @@
+import { NextResponse } from 'next/server'
+import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
+import { listMotionsEnriched, openMotion } from '@/lib/board-meetings/motion-control'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ production_id: string }> },
+) {
+  const { production_id } = await params
+  return withControlContext(production_id, async ({ service, boardMeetingId }) => {
+    const motions = await listMotionsEnriched(service, boardMeetingId)
+    return NextResponse.json({ motions })
+  })
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ production_id: string }> },
+) {
+  const { production_id } = await params
+  return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
+    const body = await request.json()
+    if (!body.motion_text?.trim()) return controlError('motion_text required')
+    if (!body.moved_by_person_id || !body.seconded_by_person_id) {
+      return controlError('moved_by_person_id and seconded_by_person_id required')
+    }
+    try {
+      const motion = await openMotion(service, boardMeetingId, teamUserId, {
+        agenda_item_id: body.agenda_item_id ?? null,
+        consent_block: body.consent_block ?? null,
+        motion_type: body.motion_type || 'main',
+        parent_motion_id: body.parent_motion_id ?? null,
+        motion_text: body.motion_text,
+        moved_by_person_id: body.moved_by_person_id,
+        seconded_by_person_id: body.seconded_by_person_id,
+      })
+      return NextResponse.json({ motion })
+    } catch (e) {
+      return controlError(e instanceof Error ? e.message : 'Failed to open motion')
+    }
+  })
+}

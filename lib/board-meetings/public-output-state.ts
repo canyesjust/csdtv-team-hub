@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
+import {
+  buildPublicMotionPayload,
+  buildPublicVoteResultPayload,
+  getVoteResultRemainingSeconds,
+  isVoteResultActive,
+} from '@/lib/board-meetings/motion-control'
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 const ADVANCE_EVENT_TYPES = ['agenda_item_advanced', 'advance', 'jump_to']
@@ -18,6 +24,27 @@ export type PublicAgendaItem = {
 export type PublicActiveQr = {
   url: string
   label: string
+  remaining_seconds: number
+}
+
+export type PublicActiveMotion = {
+  id: string
+  motion_text: string
+  moved_by_name: string
+  seconded_by_name: string
+  motion_type: string
+  status: string
+  is_consent_block: boolean
+  consent_block_label: string | null
+  parent_motion_text: string | null
+}
+
+export type PublicActiveVoteResult = {
+  motion_id: string
+  result: string
+  motion_text: string
+  tally: { yea: number; nay: number; abstain: number; absent: number; recused: number }
+  votes: { person_name: string; vote: string }[]
   remaining_seconds: number
 }
 
@@ -42,6 +69,8 @@ export type PublicChannelState = {
     mode_started_at: string | null
     mode_duration_seconds: number | null
     active_qr: PublicActiveQr | null
+    active_motion: PublicActiveMotion | null
+    active_vote_result: PublicActiveVoteResult | null
   } | null
   current_item: PublicAgendaItem | null
   upcoming_items: { id: string; item_number: string; title: string; type: string }[]
@@ -211,6 +240,21 @@ export async function buildPublicChannelState(
     }
   }
 
+  let active_motion: PublicActiveMotion | null = null
+  let active_vote_result: PublicActiveVoteResult | null = null
+
+  if (bstate?.active_vote_result_motion_id && isVoteResultActive(bstate)) {
+    const remaining = getVoteResultRemainingSeconds(bstate)
+    active_vote_result = await buildPublicVoteResultPayload(
+      service,
+      bstate.active_vote_result_motion_id,
+      bm.id,
+      remaining,
+    )
+  } else if (bstate?.active_motion_id) {
+    active_motion = await buildPublicMotionPayload(service, bstate.active_motion_id, bm.id)
+  }
+
   return {
     active: true,
     channel_number: channel.channel_number,
@@ -232,6 +276,8 @@ export async function buildPublicChannelState(
       mode_started_at: bstate?.mode_started_at ?? null,
       mode_duration_seconds: bstate?.mode_duration_seconds ?? null,
       active_qr,
+      active_motion,
+      active_vote_result,
     },
     current_item,
     upcoming_items,

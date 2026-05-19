@@ -174,6 +174,9 @@ export async function endMeeting(
       active_qr_label: null,
       active_qr_started_at: null,
       active_qr_duration_seconds: null,
+      active_motion_id: null,
+      active_vote_result_motion_id: null,
+      vote_result_started_at: null,
     })
     .eq('board_meeting_id', boardMeetingId)
 
@@ -427,7 +430,7 @@ export async function loadControlBundle(service: SupabaseClient, productionId: s
   ] = await Promise.all([
     service
       .from('board_meeting_agenda_items')
-      .select('id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested')
+      .select('id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested, consent_block')
       .eq('board_meeting_id', bm.id)
       .order('sort_order', { ascending: true }),
     service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', bm.id).maybeSingle(),

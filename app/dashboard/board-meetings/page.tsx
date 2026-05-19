@@ -43,8 +43,11 @@ export default function BoardMeetingsPage() {
   return (
     <div>
       <h1 style={{ fontSize: '22px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Board Meetings</h1>
-      <p style={{ fontSize: '14px', color: muted, margin: '0 0 20px' }}>
+      <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>
         Agenda extraction, people library, and output channels for live board broadcasts.
+      </p>
+      <p style={{ margin: '0 0 20px' }}>
+        <a href="/dashboard/voting-records" style={{ color: 'var(--brand-primary)', fontSize: '14px' }}>Voting records →</a>
       </p>
 
       <div style={{ display: 'flex', borderBottom: `0.5px solid ${border}`, marginBottom: '20px', overflowX: 'auto', background: cardBg, borderRadius: '10px 10px 0 0', padding: '0 6px' }}>
