@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import {
@@ -20,25 +21,10 @@ export default function BoardPrerollView({
   channelNumber: number
   initialChannelName?: string
 }) {
-  const [state, setState] = useState<PublicChannelState | null>(null)
+  const state = useBoardChannelState(channelNumber, { livePriority: true })
   const [fadeKey, setFadeKey] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch(`/api/board/output/${channelNumber}/state`, { cache: 'no-store' })
-        if (!res.ok) return
-        const data = await res.json()
-        if (!cancelled) setState(data)
-      } catch { /* ignore */ }
-    }
-    load()
-    const t = setInterval(load, 1500)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [channelNumber])
 
   const playlist = state?.state?.playlist
   const itemKey = playlist?.replace_now_asset?.started_at

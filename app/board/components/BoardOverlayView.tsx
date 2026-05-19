@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
@@ -69,22 +70,7 @@ export default function BoardOverlayView({
   channelNumber: number
   initialChannelName?: string
 }) {
-  const [state, setState] = useState<PublicChannelState | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch(`/api/board/output/${channelNumber}/state`, { cache: 'no-store' })
-        if (!res.ok) return
-        const data = await res.json()
-        if (!cancelled) setState(data)
-      } catch { /* ignore */ }
-    }
-    load()
-    const t = setInterval(load, 1500)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [channelNumber])
+  const state = useBoardChannelState(channelNumber, { livePriority: true })
 
   const stackAnchor: React.CSSProperties = {
     position: 'absolute',

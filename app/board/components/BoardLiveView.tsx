@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
@@ -72,23 +73,8 @@ export default function BoardLiveView({
   channelNumber: number
   initialChannelName?: string
 }) {
-  const [state, setState] = useState<PublicChannelState | null>(null)
+  const state = useBoardChannelState(channelNumber, { livePriority: true })
   const [expandedPast, setExpandedPast] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch(`/api/board/output/${channelNumber}/state`, { cache: 'no-store' })
-        if (!res.ok) return
-        const data = await res.json()
-        if (!cancelled) setState(data)
-      } catch { /* ignore */ }
-    }
-    load()
-    const t = setInterval(load, 2000)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [channelNumber])
 
   const meeting = state?.meeting
   const mode = state?.state?.mode || 'normal'
