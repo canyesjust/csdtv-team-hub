@@ -1,20 +1,28 @@
 'use client'
 
+import Link from 'next/link'
 import type { MotionLifecycleState, ResultOverlayState } from '@/lib/board-meetings/types'
 
 type Props = {
   lifecycle: MotionLifecycleState | null
   resultOverlay: ResultOverlayState | null
   canControl: boolean
-  onOpenMotion: () => void
-  onContinueMotion: () => void
   onPushResult?: () => void
   onHoldResult: () => void
   onDismissResult: () => void
+  motionHref: string
 }
 
 export default function MotionAndVoteCard(props: Props) {
-  const { lifecycle, resultOverlay, canControl, onOpenMotion, onContinueMotion, onPushResult, onHoldResult, onDismissResult } = props
+  const {
+    lifecycle,
+    resultOverlay,
+    canControl,
+    onPushResult,
+    onHoldResult,
+    onDismissResult,
+    motionHref,
+  } = props
 
   if (resultOverlay?.active) {
     return <StateC overlay={resultOverlay} onHold={onHoldResult} onDismiss={onDismissResult} />
@@ -22,49 +30,57 @@ export default function MotionAndVoteCard(props: Props) {
 
   if (lifecycle?.state === 'voted') {
     return (
-      <StateVotedPending
-        lifecycle={lifecycle}
-        onPushResult={onPushResult}
-        onContinue={onContinueMotion}
-      />
+      <StateVotedPending lifecycle={lifecycle} motionHref={motionHref} onPushResult={onPushResult} />
     )
   }
 
   if (lifecycle && !['no_motion', 'closed', 'pushed'].includes(lifecycle.state)) {
-    return <StateB lifecycle={lifecycle} onContinue={onContinueMotion} />
+    return <StateB lifecycle={lifecycle} motionHref={motionHref} />
   }
 
-  return <StateA canControl={canControl} onOpen={onOpenMotion} />
+  return <StateA canControl={canControl} motionHref={motionHref} />
 }
 
-function StateA({ canControl, onOpen }: { canControl: boolean; onOpen: () => void }) {
+function StateA({ canControl, motionHref }: { canControl: boolean; motionHref: string }) {
   return (
     <div className="cs-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         <span className="cs-eyebrow" style={{ marginBottom: 0 }}>Motion &amp; vote</span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>no motion on floor</span>
       </div>
-      <button
-        type="button"
-        onClick={onOpen}
-        disabled={!canControl}
+      <Link
+        href={motionHref}
         className="cs-touchbtn"
-        style={{ width: '100%', minHeight: 44 }}
+        aria-disabled={!canControl}
+        onClick={e => {
+          if (!canControl) e.preventDefault()
+        }}
+        style={{
+          width: '100%',
+          minHeight: 44,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textDecoration: 'none',
+          opacity: canControl ? 1 : 0.5,
+          pointerEvents: canControl ? 'auto' : 'none',
+          cursor: canControl ? 'pointer' : 'not-allowed',
+        }}
       >
         Open motion screen →
-      </button>
+      </Link>
     </div>
   )
 }
 
 function StateVotedPending({
   lifecycle,
+  motionHref,
   onPushResult,
-  onContinue,
 }: {
   lifecycle: MotionLifecycleState
+  motionHref: string
   onPushResult?: () => void
-  onContinue: () => void
 }) {
   const motion = lifecycle.active_motion
   const text = motion?.text || 'Motion'
@@ -99,15 +115,15 @@ function StateVotedPending({
             Push result to overlay
           </button>
         ) : null}
-        <button type="button" onClick={onContinue} className="cs-touchbtn" style={{ width: '100%', minHeight: 44 }}>
+        <Link href={motionHref} className="cs-touchbtn" style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
           Open motion screen →
-        </button>
+        </Link>
       </div>
     </div>
   )
 }
 
-function StateB({ lifecycle, onContinue }: { lifecycle: MotionLifecycleState; onContinue: () => void }) {
+function StateB({ lifecycle, motionHref }: { lifecycle: MotionLifecycleState; motionHref: string }) {
   const status = lifecycle.state
   const statusLabel =
     status === 'drafting' ? 'DRAFTING'
@@ -143,13 +159,16 @@ function StateB({ lifecycle, onContinue }: { lifecycle: MotionLifecycleState; on
         {status === 'voting' ? ` · ${voteCount} votes recorded` : ''}
         {isSubstitute ? ' · main held' : ''}
       </div>
-      <button
-        type="button"
-        onClick={onContinue}
+      <Link
+        href={motionHref}
         className="cs-touchbtn"
         style={{
           width: '100%',
           minHeight: 44,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textDecoration: 'none',
           background: 'var(--semantic-warning-bg)',
           color: 'var(--semantic-warning-text)',
           borderColor: 'var(--semantic-warning-border)',
@@ -157,7 +176,7 @@ function StateB({ lifecycle, onContinue }: { lifecycle: MotionLifecycleState; on
         }}
       >
         Continue motion →
-      </button>
+      </Link>
     </div>
   )
 }

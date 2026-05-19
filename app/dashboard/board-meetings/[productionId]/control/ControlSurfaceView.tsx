@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import AgendaPanel from './components/AgendaPanel'
 import OnAirCard from './components/OnAirCard'
 import TransportCard from './components/TransportCard'
@@ -28,7 +27,6 @@ type Props = {
 }
 
 export default function ControlSurfaceView({ productionId, bundle, canControl, onAction, busy, attendanceOpen, onAttendanceOpenChange }: Props) {
-  const router = useRouter()
   const { meeting, broadcast_state, agenda_items, motion_lifecycle, attendance, lower_third_active, result_overlay } = bundle
   const meetingTitle = meeting?.title || 'Board Meeting'
   const status = broadcast_state?.status || 'draft'
@@ -44,7 +42,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
     return () => clearInterval(id)
   }, [elapsedStartedAt])
 
-  const goToMotion = () => router.push(`/control/${productionId}/motion`)
   const prodNum = meeting?.production_number
 
   const quorumMet = attendance?.quorum?.quorum_met
@@ -172,8 +169,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
               lifecycle={motion_lifecycle}
               resultOverlay={result_overlay}
               canControl={canControl}
-              onOpenMotion={goToMotion}
-              onContinueMotion={goToMotion}
+              motionHref={`/control/${productionId}/motion`}
               onPushResult={
                 motion_lifecycle?.active_motion?.id
                   ? () => onAction(`motion/${motion_lifecycle.active_motion!.id}/push-result`)

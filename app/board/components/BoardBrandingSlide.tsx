@@ -46,11 +46,7 @@ export default function BoardBrandingSlide({
     <div style={isOverlay ? overlayWrap : fullscreenWrap}>
       <img src={CANYONS_LOGO_SRC} alt="Canyons School District" style={canyonsLogo} />
       <p style={{ ...broughtByText, color: broughtBy }}>brought to you by</p>
-      <img
-        src={CSDTV_LOGO_SRC}
-        alt="CSDtv"
-        style={isOverlay ? { ...csdtvLogo, filter: 'brightness(0) invert(1)' } : csdtvLogo}
-      />
+      <img src={CSDTV_LOGO_SRC} alt="CSDtv" style={csdtvLogo} />
       {screenName ? (
         <p style={{ ...screenNameText, color: titleColor }}>{screenName}</p>
       ) : null}
@@ -91,7 +87,6 @@ const cornerCsdtvLogo: React.CSSProperties = {
   maxHeight: '48px',
   objectFit: 'contain',
   display: 'block',
-  filter: 'brightness(0) invert(1)',
 }
 
 const overlayWrap: React.CSSProperties = {

@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import { getServerSession } from '@/lib/auth'
+import { loadMotionScreenBundle } from '@/lib/board-meetings/motion-api'
 import MotionScreenClient from './MotionScreenClient'
 
 type Props = {
@@ -7,23 +9,13 @@ type Props = {
 
 export default async function MotionScreenPage({ params }: Props) {
   const { productionId } = await params
+  const session = await getServerSession()
+  if (!session?.user) redirect('/login')
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || ''
-  const res = await fetch(`${baseUrl}/api/board-meetings/${productionId}/motion/bundle`, {
-    cache: 'no-store',
-    headers: { 'x-internal-fetch': '1' },
-  }).catch(() => null)
-
-  if (!res || !res.ok) {
-    redirect(`/control/${productionId}`)
-  }
-
-  const bundle = await res.json()
+  const bundle = await loadMotionScreenBundle(productionId).catch(() => null)
   if (!bundle?.meeting) {
     redirect(`/control/${productionId}`)
   }
 
-  return (
-    <MotionScreenClient productionId={productionId} initialBundle={bundle} />
-  )
+  return <MotionScreenClient productionId={productionId} initialBundle={bundle} />
 }
