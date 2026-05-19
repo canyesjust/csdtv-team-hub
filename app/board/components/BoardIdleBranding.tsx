@@ -16,18 +16,27 @@ export default function BoardIdleBranding({
 }: BoardIdleBrandingProps) {
   const isOverlay = variant === 'overlay'
 
-  const page: React.CSSProperties = {
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '32px 24px',
-    boxSizing: 'border-box',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    textAlign: 'center',
-    background: isOverlay ? 'transparent' : 'linear-gradient(160deg, #0a1628 0%, #0a0f1e 100%)',
-  }
+  const page: React.CSSProperties = isOverlay
+    ? {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        textAlign: 'center',
+      }
+    : {
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '32px 24px',
+        boxSizing: 'border-box',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        textAlign: 'center',
+        background: 'linear-gradient(160deg, #0a1628 0%, #0a0f1e 100%)',
+      }
 
   const card: React.CSSProperties = isOverlay
     ? {
@@ -37,7 +46,8 @@ export default function BoardIdleBranding({
         maxWidth: '420px',
         width: '100%',
         padding: '36px 32px',
-        background: 'transparent',
+        background: 'rgba(15, 23, 42, 0.95)',
+        borderRadius: '8px',
       }
     : {
         display: 'flex',

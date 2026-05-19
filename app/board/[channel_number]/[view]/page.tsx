@@ -1,20 +1,17 @@
 import { notFound } from 'next/navigation'
 import BoardPlaceholder from '@/app/board/components/BoardPlaceholder'
-import BoardOverlayView from '@/app/board/components/BoardOverlayView'
-import OverlayTransparentShell from '@/app/board/components/OverlayTransparentShell'
 import BoardPrerollView from '@/app/board/components/BoardPrerollView'
 import BoardLiveView from '@/app/board/components/BoardLiveView'
 import BoardDaisView from '@/app/board/components/BoardDaisView'
 import { getOutputChannelByNumber, type BoardViewSlug } from '@/lib/board-meetings/public-channel'
 
-const VIEW_LABELS: Record<BoardViewSlug, string> = {
-  overlay: 'Overlay',
+const VIEW_LABELS: Record<Exclude<BoardViewSlug, 'overlay'>, string> = {
   preroll: 'Pre-roll',
   live: 'Second screen',
   dais: 'Dais',
 }
 
-const VALID_VIEWS = new Set<string>(['overlay', 'preroll', 'live', 'dais'])
+const VALID_VIEWS = new Set<string>(['preroll', 'live', 'dais'])
 
 export default async function BoardPublicViewPage({
   params,
@@ -26,19 +23,12 @@ export default async function BoardPublicViewPage({
   if (!Number.isFinite(num) || num < 1) notFound()
   if (!VALID_VIEWS.has(view)) notFound()
 
-  const slug = view as BoardViewSlug
+  const slug = view as Exclude<BoardViewSlug, 'overlay'>
   const channel = await getOutputChannelByNumber(num)
   if (!channel) notFound()
 
   const channelName = channel.channel_name
 
-  if (slug === 'overlay') {
-    return (
-      <OverlayTransparentShell>
-        <BoardOverlayView channelNumber={num} initialChannelName={channelName} />
-      </OverlayTransparentShell>
-    )
-  }
   if (slug === 'preroll') {
     return <BoardPrerollView channelNumber={num} initialChannelName={channelName} />
   }
