@@ -44,6 +44,10 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
   const quorumMet = attendance?.quorum?.quorum_met
   const presentCount = attendance?.quorum?.present_count
 
+  const activeQR = resolveActiveQR(broadcast_state)
+  const hasCurrentDocument = (bundle.current_documents || []).some(d => !!d.source_url)
+  const hasYoutube = !!bundle.production?.livestream_url
+
   return (
     <div className="control-surface">
       <div className="cs-header">
@@ -133,9 +137,12 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <QRPushPanel
               canControl={canControl && isLive}
-              activeQR={broadcast_state?.active_qr_url}
-              onPush={(url, label) => onAction('push-qr', { custom_url: url, custom_label: label })}
-              onClear={() => onAction('clear-qr')}
+              activeQR={activeQR}
+              hasCurrentDocument={hasCurrentDocument}
+              hasYoutube={hasYoutube}
+              onPush={(payload) => onAction('push-qr', payload)}
+              onExtend={(seconds) => onAction('extend-qr', { additional_seconds: seconds })}
+              onDismiss={() => onAction('clear-qr')}
             />
             <MotionAndVoteCard
               lifecycle={motion_lifecycle}
@@ -202,6 +209,16 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
 function getCurrentAgendaItem(items: ControlBundle['agenda_items'], currentId: string | undefined | null) {
   if (!currentId) return null
   return (items || []).find(i => i.id === currentId) || null
+}
+
+function resolveActiveQR(state: ControlBundle['broadcast_state']) {
+  if (!state?.active_qr_url) return null
+  return {
+    url: state.active_qr_url,
+    label: state.active_qr_label ?? null,
+    startedAt: state.active_qr_started_at ?? null,
+    durationSeconds: state.active_qr_duration_seconds ?? null,
+  }
 }
 
 function formatElapsed(ms: number): string {
