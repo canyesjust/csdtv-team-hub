@@ -87,6 +87,29 @@ type Props = {
   busy: boolean
 }
 
+const COLOR = {
+  bg: 'var(--bg-main, #0a0f1e)',
+  bgTopbar: 'var(--bg-topbar, #0f1729)',
+  surface1: 'var(--surface-1, #131b2e)',
+  surface2: 'var(--surface-2, #1a2236)',
+  textPrimary: 'var(--text-primary, #f8fafc)',
+  textMuted: 'var(--text-muted, #6b7385)',
+  borderSubtle: 'var(--border-subtle, rgba(255, 255, 255, 0.08))',
+  brandPrimary: 'var(--brand-primary, #1e6cb5)',
+  dangerBg: 'rgba(239, 68, 68, 0.12)',
+  dangerBorder: 'rgba(239, 68, 68, 0.35)',
+  dangerText: '#ef4444',
+  successBg: 'rgba(34, 197, 94, 0.12)',
+  successBorder: 'rgba(34, 197, 94, 0.35)',
+  successText: '#22c55e',
+  warningBg: 'rgba(245, 158, 11, 0.12)',
+  warningBorder: 'rgba(245, 158, 11, 0.35)',
+  warningText: '#f59e0b',
+  infoBg: 'rgba(30, 108, 181, 0.18)',
+  infoBorder: 'rgba(30, 108, 181, 0.45)',
+  infoText: '#5fa6ed',
+}
+
 export default function ControlSurfaceView({ productionId, bundle, canControl, onAction, busy }: Props) {
   const router = useRouter()
   const { meeting, broadcast_state, agenda_items, motion_lifecycle, attendance, result_overlay } = bundle
@@ -112,31 +135,57 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
   const goToMotion = () => router.push(`/control/${productionId}/motion`)
 
   return (
-    <div className="control-surface">
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100dvh',
+      background: COLOR.bg,
+      color: COLOR.textPrimary,
+    }}>
 
-      <div className="cs-header">
-        <div className="cs-header-breadcrumbs">
-          <Link href="/dashboard/board-meetings">← Board Meetings</Link>
-          <Link href={`/dashboard/productions/${productionId}?tab=boardmeeting`}>← Board Meeting tab</Link>
-          <Link href={`/dashboard/board-meetings/${productionId}/buttons`}>Companion buttons →</Link>
+      <div style={{
+        flex: '0 0 auto',
+        padding: '14px 20px',
+        borderBottom: `0.5px solid ${COLOR.borderSubtle}`,
+        background: COLOR.bgTopbar,
+      }}>
+        <div style={{ display: 'flex', gap: 14, fontSize: 11, color: COLOR.brandPrimary, marginBottom: 8 }}>
+          <Link href="/dashboard/board-meetings" style={{ color: 'inherit', textDecoration: 'none' }}>← Board Meetings</Link>
+          <Link href={`/dashboard/productions/${productionId}?tab=boardmeeting`} style={{ color: 'inherit', textDecoration: 'none' }}>← Board Meeting tab</Link>
+          <Link href={`/dashboard/board-meetings/${productionId}/buttons`} style={{ color: 'inherit', textDecoration: 'none' }}>Companion buttons →</Link>
         </div>
-        <div className="cs-header-row">
-          <div className="cs-header-title">Control surface · {meetingTitle}</div>
-          <div className="cs-header-right">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 16, fontWeight: 500 }}>Control surface · {meetingTitle}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {isLive && (
-              <span className="cs-live-pill">
-                <span className="cs-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: 'currentColor' }} />
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '4px 10px', borderRadius: 999,
+                background: COLOR.dangerBg, color: COLOR.dangerText,
+                fontSize: 11, fontWeight: 500,
+              }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%', background: 'currentColor',
+                  animation: 'cs-pulse-fade 1.6s ease-in-out infinite',
+                }} />
                 LIVE{liveElapsed ? ` · ${liveElapsed}` : ''}
               </span>
             )}
-            <span className={'cs-quorum-pill' + (attendance.quorum_met ? ' cs-quorum-met' : '')}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px', borderRadius: 8,
+              border: `0.5px solid ${attendance.quorum_met ? COLOR.successBorder : COLOR.borderSubtle}`,
+              background: COLOR.surface2,
+              color: attendance.quorum_met ? COLOR.successText : COLOR.textPrimary,
+              fontSize: 12,
+            }}>
               {attendance.present_count}/{attendance.quorum_size} quorum {attendance.quorum_met ? '✓' : ''}
             </span>
             <button
               type="button"
-              className="cs-touchbtn cs-touchbtn-small"
               onClick={() => onAction('open-attendance')}
               disabled={!canControl}
+              style={smallBtn(canControl)}
             >
               Mark attendance
             </button>
@@ -144,48 +193,99 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
         </div>
       </div>
 
-      {mode !== 'normal' && (
-        <ModeBanner mode={mode} />
-      )}
+      {mode !== 'normal' && <ModeBanner mode={mode} />}
 
-      <div className="cs-main">
+      <div style={{
+        flex: '1 1 auto',
+        display: 'grid',
+        gridTemplateColumns: '260px 1fr',
+        gap: 12,
+        padding: '14px 16px',
+        minHeight: 0,
+        overflow: 'hidden',
+      }}>
 
-        <div className="cs-agenda">
-          <div className="cs-eyebrow" style={{ paddingLeft: 4 }}>AGENDA</div>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          overflowY: 'auto',
+          minHeight: 0,
+          paddingRight: 4,
+        }}>
+          <div style={eyebrow({ paddingLeft: 4 })}>AGENDA</div>
           {broadcastableItems.map((item, idx) => {
             const isOnAir = item.id === currentItemId
             const isDone = currentIndex !== -1 && idx < currentIndex
-            const cls = 'cs-agenda-item'
-              + (isOnAir ? ' cs-agenda-item-onair' : '')
-              + (isDone ? ' cs-agenda-item-done' : '')
             return (
               <button
                 key={item.id}
                 type="button"
-                className={cls}
                 onClick={() => onAction('jump-to', { agenda_item_id: item.id })}
                 disabled={!canControl || busy}
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  alignItems: 'flex-start',
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: `0.5px solid ${isOnAir ? COLOR.dangerBorder : COLOR.borderSubtle}`,
+                  background: isOnAir ? COLOR.dangerBg : 'transparent',
+                  cursor: canControl && !busy ? 'pointer' : 'default',
+                  textAlign: 'left',
+                  color: 'inherit',
+                  fontFamily: 'inherit',
+                  lineHeight: 1.35,
+                  opacity: isDone ? 0.5 : 1,
+                  width: '100%',
+                }}
               >
-                <span className="cs-agenda-num">{isOnAir ? '● ' : isDone ? '✓ ' : ''}{item.item_number}</span>
-                <span className="cs-agenda-title">{item.title}</span>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: isOnAir ? COLOR.dangerText : COLOR.textMuted,
+                  whiteSpace: 'nowrap',
+                  minWidth: 36,
+                  paddingTop: 1,
+                  flexShrink: 0,
+                }}>
+                  {isOnAir ? '● ' : isDone ? '✓ ' : ''}{item.item_number}
+                </span>
+                <span style={{
+                  fontSize: 12,
+                  color: isOnAir ? COLOR.dangerText : COLOR.textPrimary,
+                  flex: 1,
+                  fontWeight: isOnAir ? 500 : 400,
+                }}>
+                  {item.title}
+                </span>
               </button>
             )
           })}
         </div>
 
-        <div className="cs-onair">
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          overflowY: 'auto',
+          minHeight: 0,
+        }}>
 
-          <div className="cs-card">
-            <div className="cs-eyebrow" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {isLive && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--semantic-danger-text)' }} />}
+          <div style={card()}>
+            <div style={{
+              ...eyebrow(),
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              {isLive && <span style={{ width: 7, height: 7, borderRadius: '50%', background: COLOR.dangerText }} />}
               ON AIR{currentItem ? ` · ITEM ${currentItem.item_number}` : ''}
               {currentItem?.type && (
                 <span style={{
                   marginLeft: 6,
                   padding: '2px 8px',
                   borderRadius: 8,
-                  background: 'var(--semantic-info-bg)',
-                  color: 'var(--semantic-info-text)',
+                  background: COLOR.infoBg,
+                  color: COLOR.infoText,
                   fontSize: 10,
                   letterSpacing: '0.04em',
                 }}>
@@ -193,54 +293,54 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
                 </span>
               )}
             </div>
-            <div className="cs-onair-title">
+            <div style={{ fontSize: 24, lineHeight: 1.2, fontWeight: 500 }}>
               {currentItem ? currentItem.title : 'No item on air'}
             </div>
           </div>
 
-          <div className="cs-card">
-            <div className="cs-eyebrow">Transport</div>
+          <div style={card()}>
+            <div style={eyebrow()}>Transport</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 1.4fr', gap: 8 }}>
               <button
                 type="button"
-                className="cs-touchbtn"
                 onClick={() => onAction('go-back')}
                 disabled={!canControl || busy || currentIndex <= 0}
+                style={touchBtn()}
               >
                 ← Back
               </button>
               <button
                 type="button"
-                className="cs-touchbtn cs-touchbtn-primary"
                 onClick={() => onAction('advance')}
                 disabled={!canControl || busy}
+                style={touchBtnPrimary()}
               >
                 Advance →
               </button>
               <button
                 type="button"
-                className="cs-touchbtn"
                 onClick={() => onAction('toggle-overlay')}
                 disabled={!canControl || busy}
+                style={touchBtn()}
               >
                 Agenda overlay {broadcast_state?.agenda_overlay_visible !== false
-                  ? <span style={{ color: 'var(--semantic-success-text)', fontWeight: 500 }}>on</span>
-                  : <span style={{ color: 'var(--text-muted, #6b7385)' }}>off</span>}
+                  ? <span style={{ color: COLOR.successText, fontWeight: 500, marginLeft: 4 }}>on</span>
+                  : <span style={{ color: COLOR.textMuted, marginLeft: 4 }}>off</span>}
               </button>
             </div>
           </div>
 
-          <div className="cs-card">
+          <div style={card()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-              <div className="cs-eyebrow" style={{ marginBottom: 0 }}>Lower third</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)' }}>On air:</span>
+              <div style={eyebrow({ marginBottom: 0 })}>Lower third</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: COLOR.textMuted }}>On air:</span>
                 {activeLowerThirdPerson ? (
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     padding: '4px 10px', borderRadius: 999,
-                    background: 'var(--semantic-info-bg)',
-                    color: 'var(--semantic-info-text)',
+                    background: COLOR.infoBg,
+                    color: COLOR.infoText,
                     fontSize: 11, fontWeight: 500,
                   }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
@@ -248,60 +348,115 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
                     {activeLowerThirdPerson.district ? ` · ${activeLowerThirdPerson.district}` : ''}
                   </span>
                 ) : (
-                  <span style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)', fontStyle: 'italic' }}>None</span>
+                  <span style={{ fontSize: 11, color: COLOR.textMuted, fontStyle: 'italic' }}>None</span>
                 )}
                 {activeLowerThirdPerson && (
                   <button
                     type="button"
-                    className="cs-touchbtn cs-touchbtn-small"
                     onClick={() => onAction('clear-lower-third')}
                     disabled={!canControl || busy}
-                    style={{ minHeight: 30, padding: '4px 10px', fontSize: 11 }}
+                    style={{
+                      ...smallBtn(canControl),
+                      minHeight: 28,
+                      padding: '4px 10px',
+                      fontSize: 11,
+                    }}
                   >
                     Clear
                   </button>
                 )}
               </div>
             </div>
-            <div className="cs-lower-third-grid">
-              {boardMembers.map(p => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={'cs-lower-third-btn' + (p.id === activeLowerThirdId ? ' cs-lower-third-active' : '')}
-                  onClick={() => onAction('set-lower-third', { person_id: p.id })}
-                  disabled={!canControl || busy}
-                >
-                  <div className="cs-lower-third-btn-title">{p.display_name}</div>
-                  <div className="cs-lower-third-btn-sub">
-                    {p.officer_position ? p.officer_position : (p.district || p.title || '')}
-                  </div>
-                </button>
-              ))}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 6,
+            }}>
+              {boardMembers.map(p => {
+                const isActive = p.id === activeLowerThirdId
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => onAction('set-lower-third', { person_id: p.id })}
+                    disabled={!canControl || busy}
+                    style={{
+                      padding: '10px 8px',
+                      borderRadius: 8,
+                      border: `0.5px solid ${isActive ? COLOR.infoBorder : COLOR.borderSubtle}`,
+                      background: isActive ? COLOR.infoBg : COLOR.surface2,
+                      color: isActive ? COLOR.infoText : COLOR.textPrimary,
+                      fontFamily: 'inherit',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      cursor: canControl && !busy ? 'pointer' : 'default',
+                      minHeight: 56,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 500 }}>{p.display_name}</div>
+                    <div style={{
+                      fontSize: 10,
+                      color: isActive ? COLOR.infoText : COLOR.textMuted,
+                      opacity: isActive ? 0.85 : 1,
+                      marginTop: 2,
+                    }}>
+                      {p.officer_position ? p.officer_position : (p.district || p.title || '')}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
             {staffAndOther.length > 0 && (
               <details style={{ marginTop: 10 }}>
                 <summary style={{
                   fontSize: 11,
-                  color: 'var(--text-muted, #6b7385)',
+                  color: COLOR.textMuted,
                   cursor: 'pointer',
                   padding: '4px 0',
                 }}>
                   Staff & other ({staffAndOther.length})
                 </summary>
-                <div className="cs-lower-third-grid" style={{ marginTop: 8 }}>
-                  {staffAndOther.map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={'cs-lower-third-btn' + (p.id === activeLowerThirdId ? ' cs-lower-third-active' : '')}
-                      onClick={() => onAction('set-lower-third', { person_id: p.id })}
-                      disabled={!canControl || busy}
-                    >
-                      <div className="cs-lower-third-btn-title">{p.display_name}</div>
-                      <div className="cs-lower-third-btn-sub">{p.title || p.affiliation || ''}</div>
-                    </button>
-                  ))}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 6,
+                  marginTop: 8,
+                }}>
+                  {staffAndOther.map(p => {
+                    const isActive = p.id === activeLowerThirdId
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => onAction('set-lower-third', { person_id: p.id })}
+                        disabled={!canControl || busy}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: 8,
+                          border: `0.5px solid ${isActive ? COLOR.infoBorder : COLOR.borderSubtle}`,
+                          background: isActive ? COLOR.infoBg : COLOR.surface2,
+                          color: isActive ? COLOR.infoText : COLOR.textPrimary,
+                          fontFamily: 'inherit',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          cursor: canControl && !busy ? 'pointer' : 'default',
+                          minHeight: 56,
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{p.display_name}</div>
+                        <div style={{
+                          fontSize: 10,
+                          color: isActive ? COLOR.infoText : COLOR.textMuted,
+                          opacity: isActive ? 0.85 : 1,
+                          marginTop: 2,
+                        }}>
+                          {p.title || p.affiliation || ''}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </details>
             )}
@@ -327,16 +482,27 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           </div>
 
           {isLive && (
-            <div className="cs-end-meeting-row">
+            <div style={{
+              marginTop: 6,
+              paddingTop: 10,
+              borderTop: `0.5px solid ${COLOR.borderSubtle}`,
+              display: 'flex',
+              justifyContent: 'flex-end',
+            }}>
               <button
                 type="button"
-                className="cs-touchbtn cs-touchbtn-danger"
                 onClick={() => {
                   if (confirm('End the meeting? This cannot be undone.')) {
                     onAction('end-meeting')
                   }
                 }}
                 disabled={!canControl || busy}
+                style={{
+                  ...touchBtn(),
+                  background: COLOR.dangerBg,
+                  borderColor: COLOR.dangerBorder,
+                  color: COLOR.dangerText,
+                }}
               >
                 End meeting
               </button>
@@ -346,9 +512,18 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
         </div>
       </div>
 
-      <div className="cs-utilities">
-        <div className="cs-eyebrow" style={{ marginBottom: 8 }}>UTILITIES</div>
-        <div className="cs-utilities-grid">
+      <div style={{
+        flex: '0 0 auto',
+        padding: '14px 16px',
+        borderTop: `0.5px solid ${COLOR.borderSubtle}`,
+        background: COLOR.bgTopbar,
+      }}>
+        <div style={eyebrow({ marginBottom: 8 })}>UTILITIES</div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 8,
+        }}>
           <UtilityPanel
             title="Pre-roll"
             summary={bundle.playlist_state?.playback_state || 'Idle'}
@@ -369,14 +544,21 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
         </div>
       </div>
 
+      <style jsx global>{`
+        @keyframes cs-pulse-fade {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+
     </div>
   )
 }
 
 function ModeBanner({ mode }: { mode: string }) {
   const isRecess = mode === 'recess'
-  const bg = isRecess ? 'var(--semantic-warning-bg)' : 'var(--semantic-danger-bg)'
-  const fg = isRecess ? 'var(--semantic-warning-text)' : 'var(--semantic-danger-text)'
+  const bg = isRecess ? COLOR.warningBg : COLOR.dangerBg
+  const fg = isRecess ? COLOR.warningText : COLOR.dangerText
   const label = mode.replace('_', ' ').toUpperCase()
   return (
     <div style={{
@@ -396,19 +578,37 @@ function ModeBanner({ mode }: { mode: string }) {
 function UtilityPanel({ title, summary, highlight }: { title: string; summary: string; highlight?: boolean }) {
   const [open, setOpen] = useState(false)
   return (
-    <button type="button" className="cs-utility-panel" onClick={() => setOpen(o => !o)} style={highlight ? { borderColor: 'var(--semantic-warning-border)' } : undefined}>
-      <div className="cs-utility-panel-header">
+    <button
+      type="button"
+      onClick={() => setOpen(o => !o)}
+      style={{
+        padding: '10px 12px',
+        background: COLOR.surface1,
+        borderRadius: 8,
+        border: `0.5px solid ${highlight ? COLOR.warningBorder : COLOR.borderSubtle}`,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        textAlign: 'left',
+        color: 'inherit',
+        width: '100%',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <div>
-          <div className="cs-utility-panel-title">{title}</div>
-          <div className="cs-utility-panel-summary">{summary}</div>
+          <div style={{ fontSize: 12, fontWeight: 500 }}>{title}</div>
+          <div style={{ fontSize: 11, color: COLOR.textMuted, marginTop: 2 }}>{summary}</div>
         </div>
-        <span style={{ fontSize: 14, color: 'var(--text-muted, #6b7385)' }}>{open ? '▴' : '▾'}</span>
+        <span style={{ fontSize: 14, color: COLOR.textMuted }}>{open ? '▴' : '▾'}</span>
       </div>
       {open && (
-        <div className="cs-utility-panel-body">
-          <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)' }}>
-            Panel content goes here. Wire up the existing panel components or build inline.
-          </div>
+        <div style={{
+          marginTop: 10,
+          paddingTop: 10,
+          borderTop: `0.5px solid ${COLOR.borderSubtle}`,
+          fontSize: 11,
+          color: COLOR.textMuted,
+        }}>
+          Panel content goes here. Wire up the existing panel components or build inline.
         </div>
       )}
     </button>
@@ -426,15 +626,15 @@ function QRPushPanel({ canControl, busy, activeQR, onPush, onClear }: {
   const [label, setLabel] = useState('')
 
   return (
-    <div className="cs-card">
+    <div style={card()}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div className="cs-eyebrow" style={{ marginBottom: 0 }}>QR code</div>
+        <div style={eyebrow({ marginBottom: 0 })}>QR code</div>
         {activeQR && (
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
             padding: '3px 8px', borderRadius: 999,
-            background: 'var(--semantic-info-bg)',
-            color: 'var(--semantic-info-text)',
+            background: COLOR.infoBg,
+            color: COLOR.infoText,
             fontSize: 10, fontWeight: 500,
           }}>
             on air
@@ -446,41 +646,24 @@ function QRPushPanel({ canControl, busy, activeQR, onPush, onClear }: {
         placeholder="https://..."
         value={url}
         onChange={e => setUrl(e.target.value)}
-        style={{
-          width: '100%',
-          background: 'var(--surface-2, #1a2236)',
-          border: '0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-          borderRadius: 8,
-          padding: '8px 10px',
-          color: 'var(--text-primary, #f8fafc)',
-          fontSize: 12,
-          marginBottom: 6,
-          fontFamily: 'inherit',
-        }}
+        style={inputStyle()}
       />
       <input
         type="text"
         placeholder="Label"
         value={label}
         onChange={e => setLabel(e.target.value)}
-        style={{
-          width: '100%',
-          background: 'var(--surface-2, #1a2236)',
-          border: '0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-          borderRadius: 8,
-          padding: '8px 10px',
-          color: 'var(--text-primary, #f8fafc)',
-          fontSize: 12,
-          marginBottom: 8,
-          fontFamily: 'inherit',
-        }}
+        style={inputStyle()}
       />
       <button
         type="button"
-        className="cs-touchbtn"
         onClick={() => onPush(url, label)}
         disabled={!canControl || busy || !url}
-        style={{ width: '100%', minHeight: 40 }}
+        style={{
+          ...touchBtn(),
+          width: '100%',
+          minHeight: 40,
+        }}
       >
         Push QR
       </button>
@@ -488,15 +671,95 @@ function QRPushPanel({ canControl, busy, activeQR, onPush, onClear }: {
         <button
           type="button"
           onClick={onClear}
-          className="cs-touchbtn cs-touchbtn-small"
           disabled={!canControl || busy}
-          style={{ width: '100%', marginTop: 6 }}
+          style={{
+            ...smallBtn(canControl),
+            width: '100%',
+            marginTop: 6,
+          }}
         >
           Clear QR
         </button>
       )}
     </div>
   )
+}
+
+function card(): React.CSSProperties {
+  return {
+    background: COLOR.surface1,
+    border: `0.5px solid ${COLOR.borderSubtle}`,
+    borderRadius: 12,
+    padding: '14px 16px',
+  }
+}
+
+function eyebrow(extra: React.CSSProperties = {}): React.CSSProperties {
+  return {
+    fontSize: 11,
+    color: COLOR.textMuted,
+    letterSpacing: '0.05em',
+    marginBottom: 6,
+    ...extra,
+  }
+}
+
+function touchBtn(): React.CSSProperties {
+  return {
+    minHeight: 44,
+    padding: '12px 16px',
+    borderRadius: 10,
+    border: `0.5px solid ${COLOR.borderSubtle}`,
+    background: COLOR.surface2,
+    color: COLOR.textPrimary,
+    fontFamily: 'inherit',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  }
+}
+
+function touchBtnPrimary(): React.CSSProperties {
+  return {
+    ...touchBtn(),
+    background: COLOR.brandPrimary,
+    borderColor: COLOR.brandPrimary,
+    color: '#fff',
+  }
+}
+
+function smallBtn(enabled: boolean): React.CSSProperties {
+  return {
+    minHeight: 32,
+    padding: '6px 12px',
+    borderRadius: 8,
+    border: `0.5px solid ${COLOR.borderSubtle}`,
+    background: COLOR.surface2,
+    color: COLOR.textPrimary,
+    fontFamily: 'inherit',
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: enabled ? 'pointer' : 'not-allowed',
+    opacity: enabled ? 1 : 0.5,
+  }
+}
+
+function inputStyle(): React.CSSProperties {
+  return {
+    width: '100%',
+    background: COLOR.surface2,
+    border: `0.5px solid ${COLOR.borderSubtle}`,
+    borderRadius: 8,
+    padding: '8px 10px',
+    color: COLOR.textPrimary,
+    fontSize: 12,
+    marginBottom: 6,
+    fontFamily: 'inherit',
+  }
 }
 
 function formatElapsed(ms: number): string {

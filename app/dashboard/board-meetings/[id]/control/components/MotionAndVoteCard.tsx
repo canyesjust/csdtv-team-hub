@@ -37,6 +37,23 @@ type Props = {
   onDismissResult: () => void
 }
 
+const COLOR = {
+  surface1: 'var(--surface-1, #131b2e)',
+  surface2: 'var(--surface-2, #1a2236)',
+  textPrimary: 'var(--text-primary, #f8fafc)',
+  textMuted: 'var(--text-muted, #6b7385)',
+  borderSubtle: 'var(--border-subtle, rgba(255, 255, 255, 0.08))',
+  dangerBg: 'rgba(239, 68, 68, 0.12)',
+  dangerBorder: 'rgba(239, 68, 68, 0.35)',
+  dangerText: '#ef4444',
+  successBg: 'rgba(34, 197, 94, 0.12)',
+  successBorder: 'rgba(34, 197, 94, 0.35)',
+  successText: '#22c55e',
+  warningBg: 'rgba(245, 158, 11, 0.12)',
+  warningBorder: 'rgba(245, 158, 11, 0.35)',
+  warningText: '#f59e0b',
+}
+
 export default function MotionAndVoteCard(props: Props) {
   const { lifecycle, resultOverlay, isLive, onOpenMotion, onContinueMotion, onHoldResult, onDismissResult } = props
 
@@ -47,7 +64,6 @@ export default function MotionAndVoteCard(props: Props) {
   const lifecycleActive = lifecycle
     && lifecycle.state !== 'no_motion'
     && lifecycle.state !== 'closed'
-    && lifecycle.state !== 'voted'
     && lifecycle.active_motion !== null
 
   if (lifecycleActive) {
@@ -57,22 +73,43 @@ export default function MotionAndVoteCard(props: Props) {
   return <StateA isLive={isLive} onOpen={onOpenMotion} />
 }
 
+function cardStyle(borderColor?: string, bg?: string): React.CSSProperties {
+  return {
+    background: bg || COLOR.surface1,
+    border: `0.5px solid ${borderColor || COLOR.borderSubtle}`,
+    borderRadius: 12,
+    padding: '14px 16px',
+  }
+}
+
 function StateA({ isLive, onOpen }: { isLive: boolean; onOpen: () => void }) {
   return (
-    <div className="cs-card">
+    <div style={cardStyle()}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div className="cs-eyebrow" style={{ marginBottom: 0 }}>Motion & vote</div>
-        <span style={{ fontSize: 10, color: 'var(--text-muted, #6b7385)' }}>idle</span>
+        <div style={{ fontSize: 11, color: COLOR.textMuted, letterSpacing: '0.05em' }}>Motion & vote</div>
+        <span style={{ fontSize: 10, color: COLOR.textMuted }}>idle</span>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)', marginBottom: 12, minHeight: 28 }}>
+      <div style={{ fontSize: 11, color: COLOR.textMuted, marginBottom: 12, minHeight: 28 }}>
         No motion on floor
       </div>
       <button
         type="button"
         onClick={onOpen}
         disabled={!isLive}
-        className="cs-touchbtn"
-        style={{ width: '100%' }}
+        style={{
+          width: '100%',
+          minHeight: 44,
+          padding: '12px 16px',
+          borderRadius: 10,
+          border: `0.5px solid ${COLOR.borderSubtle}`,
+          background: COLOR.surface2,
+          color: COLOR.textPrimary,
+          fontFamily: 'inherit',
+          fontSize: 13,
+          fontWeight: 500,
+          cursor: isLive ? 'pointer' : 'not-allowed',
+          opacity: isLive ? 1 : 0.5,
+        }}
       >
         Open motion screen →
       </button>
@@ -85,6 +122,7 @@ function StateB({ lifecycle, onContinue }: { lifecycle: MotionLifecycleState; on
   const statusLabel = status === 'drafting' ? 'DRAFTING'
     : status === 'open_for_discussion' ? 'DISCUSSION'
     : status === 'voting' ? 'VOTING'
+    : status === 'voted' ? 'VOTED'
     : status.toUpperCase()
   const motion = lifecycle.active_motion!
   const isSubstitute = motion.motion_type === 'substitute'
@@ -94,22 +132,22 @@ function StateB({ lifecycle, onContinue }: { lifecycle: MotionLifecycleState; on
   const voteCount = lifecycle.recorded_votes_count || 0
 
   return (
-    <div className="cs-card" style={{ borderColor: 'var(--semantic-warning-border)' }}>
+    <div style={cardStyle(COLOR.warningBorder)}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: 11, color: 'var(--semantic-warning-text)', letterSpacing: '0.05em', fontWeight: 500 }}>
+        <div style={{ fontSize: 11, color: COLOR.warningText, letterSpacing: '0.05em', fontWeight: 500 }}>
           {isSubstitute ? 'Substitute motion' : 'Motion in progress'}
         </div>
         <span style={{
           fontSize: 10, padding: '2px 6px', borderRadius: 999,
-          background: 'var(--semantic-warning-bg)',
-          color: 'var(--semantic-warning-text)',
+          background: COLOR.warningBg,
+          color: COLOR.warningText,
           fontWeight: 500,
         }}>{statusLabel}</span>
       </div>
-      <div style={{ fontSize: 11, marginBottom: 4, lineHeight: 1.35, color: 'var(--text-primary, #f8fafc)' }}>
+      <div style={{ fontSize: 11, marginBottom: 4, lineHeight: 1.35, color: COLOR.textPrimary }}>
         {truncate(text, 80)}
       </div>
-      <div style={{ fontSize: 10, color: 'var(--text-muted, #6b7385)', marginBottom: 10 }}>
+      <div style={{ fontSize: 10, color: COLOR.textMuted, marginBottom: 10 }}>
         {moverName} / {seconderName}
         {status === 'voting' ? ` · ${voteCount} votes recorded` : ''}
         {isSubstitute ? ' · main held' : ''}
@@ -117,12 +155,18 @@ function StateB({ lifecycle, onContinue }: { lifecycle: MotionLifecycleState; on
       <button
         type="button"
         onClick={onContinue}
-        className="cs-touchbtn"
         style={{
           width: '100%',
-          background: 'var(--semantic-warning-bg)',
-          color: 'var(--semantic-warning-text)',
-          borderColor: 'var(--semantic-warning-border)',
+          minHeight: 44,
+          padding: '12px 16px',
+          borderRadius: 10,
+          border: `0.5px solid ${COLOR.warningBorder}`,
+          background: COLOR.warningBg,
+          color: COLOR.warningText,
+          fontFamily: 'inherit',
+          fontSize: 13,
+          fontWeight: 500,
+          cursor: 'pointer',
         }}
       >
         Continue motion →
@@ -139,13 +183,13 @@ function StateC({ overlay, onHold, onDismiss }: { overlay: ResultOverlayState; o
   const remaining = overlay.seconds_remaining ?? 0
   const totalDuration = overlay.total_duration ?? 8
   const progressPct = Math.max(0, Math.min(100, (remaining / totalDuration) * 100))
-  const bg = passed ? 'var(--semantic-success-bg)' : 'var(--semantic-danger-bg)'
-  const borderColor = passed ? 'var(--semantic-success-border)' : 'var(--semantic-danger-border)'
-  const fg = passed ? 'var(--semantic-success-text)' : 'var(--semantic-danger-text)'
+  const bg = passed ? COLOR.successBg : COLOR.dangerBg
+  const borderColor = passed ? COLOR.successBorder : COLOR.dangerBorder
+  const fg = passed ? COLOR.successText : COLOR.dangerText
   const heading = passed ? 'Motion passes' : 'Motion fails'
 
   return (
-    <div className="cs-card" style={{ background: bg, borderColor }}>
+    <div style={cardStyle(borderColor, bg)}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ fontSize: 11, color: fg, letterSpacing: '0.05em', fontWeight: 500 }}>
           Result on overlay
@@ -168,20 +212,36 @@ function StateC({ overlay, onHold, onDismiss }: { overlay: ResultOverlayState; o
           type="button"
           onClick={onHold}
           disabled={overlay.held}
-          className="cs-touchbtn cs-touchbtn-small"
+          style={smallBtn(!overlay.held)}
         >
           {overlay.held ? 'Held' : 'Hold'}
         </button>
         <button
           type="button"
           onClick={onDismiss}
-          className="cs-touchbtn cs-touchbtn-small"
+          style={smallBtn(true)}
         >
           Dismiss
         </button>
       </div>
     </div>
   )
+}
+
+function smallBtn(enabled: boolean): React.CSSProperties {
+  return {
+    minHeight: 36,
+    padding: '8px 14px',
+    borderRadius: 8,
+    border: `0.5px solid ${COLOR.borderSubtle}`,
+    background: COLOR.surface2,
+    color: COLOR.textPrimary,
+    fontFamily: 'inherit',
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: enabled ? 'pointer' : 'not-allowed',
+    opacity: enabled ? 1 : 0.5,
+  }
 }
 
 function truncate(s: string, n: number) {
