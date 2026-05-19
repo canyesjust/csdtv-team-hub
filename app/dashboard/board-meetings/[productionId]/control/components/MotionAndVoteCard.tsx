@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { MotionLifecycleState, ResultOverlayState } from '@/lib/board-meetings/types'
 
 type Props = {
@@ -42,33 +42,27 @@ export default function MotionAndVoteCard(props: Props) {
 }
 
 function StateA({ canControl, motionHref }: { canControl: boolean; motionHref: string }) {
+  const router = useRouter()
   return (
     <div className="cs-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         <span className="cs-eyebrow" style={{ marginBottom: 0 }}>Motion &amp; vote</span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>no motion on floor</span>
       </div>
-      <Link
-        href={motionHref}
+      <button
+        type="button"
         className="cs-touchbtn"
-        aria-disabled={!canControl}
-        onClick={e => {
-          if (!canControl) e.preventDefault()
-        }}
+        disabled={!canControl}
+        onClick={() => router.push(motionHref)}
         style={{
           width: '100%',
           minHeight: 44,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          textDecoration: 'none',
           opacity: canControl ? 1 : 0.5,
-          pointerEvents: canControl ? 'auto' : 'none',
           cursor: canControl ? 'pointer' : 'not-allowed',
         }}
       >
         Open motion screen →
-      </Link>
+      </button>
     </div>
   )
 }
@@ -82,6 +76,7 @@ function StateVotedPending({
   motionHref: string
   onPushResult?: () => void
 }) {
+  const router = useRouter()
   const motion = lifecycle.active_motion
   const text = motion?.text || 'Motion'
   const moverName = motion?.mover_name || '—'
@@ -115,15 +110,21 @@ function StateVotedPending({
             Push result to overlay
           </button>
         ) : null}
-        <Link href={motionHref} className="cs-touchbtn" style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
+        <button
+          type="button"
+          className="cs-touchbtn"
+          onClick={() => router.push(motionHref)}
+          style={{ width: '100%', minHeight: 44 }}
+        >
           Open motion screen →
-        </Link>
+        </button>
       </div>
     </div>
   )
 }
 
 function StateB({ lifecycle, motionHref }: { lifecycle: MotionLifecycleState; motionHref: string }) {
+  const router = useRouter()
   const status = lifecycle.state
   const statusLabel =
     status === 'drafting' ? 'DRAFTING'
@@ -159,16 +160,13 @@ function StateB({ lifecycle, motionHref }: { lifecycle: MotionLifecycleState; mo
         {status === 'voting' ? ` · ${voteCount} votes recorded` : ''}
         {isSubstitute ? ' · main held' : ''}
       </div>
-      <Link
-        href={motionHref}
+      <button
+        type="button"
         className="cs-touchbtn"
+        onClick={() => router.push(motionHref)}
         style={{
           width: '100%',
           minHeight: 44,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          textDecoration: 'none',
           background: 'var(--semantic-warning-bg)',
           color: 'var(--semantic-warning-text)',
           borderColor: 'var(--semantic-warning-border)',
@@ -176,7 +174,7 @@ function StateB({ lifecycle, motionHref }: { lifecycle: MotionLifecycleState; mo
         }}
       >
         Continue motion →
-      </Link>
+      </button>
     </div>
   )
 }

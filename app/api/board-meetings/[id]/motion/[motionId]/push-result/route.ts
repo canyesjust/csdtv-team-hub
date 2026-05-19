@@ -1,12 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
 import { pushResult } from '@/lib/board-meetings/motion-api'
 
-export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string; motionId: string }> }) {
-  const { motionId } = await ctx.params
-  try {
-    const result = await pushResult(motionId)
-    return NextResponse.json(result)
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
-  }
+export const dynamic = 'force-dynamic'
+
+export async function POST(_req: Request, ctx: { params: Promise<{ id: string; motionId: string }> }) {
+  const { id, motionId } = await ctx.params
+  return withControlContext(id, async c => {
+    try {
+      const result = await pushResult(c, motionId)
+      return NextResponse.json(result)
+    } catch (e) {
+      return controlError(e instanceof Error ? e.message : 'Failed to push result', 500)
+    }
+  })
 }

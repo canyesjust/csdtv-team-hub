@@ -28,9 +28,11 @@ export default function MotionScreenView(props: Props) {
     return <DraftingState {...props} active={null} />
   }
 
+  if (active.status === 'drafting') {
+    return <DraftingState {...props} active={active} />
+  }
+
   switch (active.status) {
-    case 'drafting':
-      return <DraftingState {...props} active={active} />
     case 'open_for_discussion':
       return <OpenForDiscussionState {...props} active={active} />
     case 'voting':
