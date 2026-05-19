@@ -36,7 +36,9 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (user && pathname.startsWith('/dashboard')) {
+  const requiresTeam = pathname.startsWith('/dashboard') || pathname.startsWith('/control')
+
+  if (user && requiresTeam) {
     const teamAccess = await getTeamRowForAuthUser(supabase, user)
     if (teamAccess === null) {
       const loginUrl = new URL('/login', request.url)
@@ -52,8 +54,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // If no user and trying to access dashboard, redirect to login
-  if (!user && pathname.startsWith('/dashboard')) {
+  // If no user and trying to access dashboard or control surface, redirect to login
+  if (!user && requiresTeam) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
@@ -63,5 +65,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/board/:path*'],
+  matcher: ['/dashboard/:path*', '/board/:path*', '/control/:path*'],
 }

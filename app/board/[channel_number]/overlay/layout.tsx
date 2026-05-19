@@ -1,5 +1,10 @@
 import './overlay-transparent.css'
+import OverlayTransparentMount from './OverlayTransparentMount'
 
 export default function OverlayLayout({ children }: { children: React.ReactNode }) {
-  return <div className="broadcast-overlay-root">{children}</div>
+  return (
+    <OverlayTransparentMount>
+      <div className="broadcast-overlay-root">{children}</div>
+    </OverlayTransparentMount>
+  )
 }

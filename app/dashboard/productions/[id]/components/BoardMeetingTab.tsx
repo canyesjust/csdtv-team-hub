@@ -513,7 +513,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
           {meeting && ['prepared', 'live'].includes(meeting.broadcast_status) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
               <Link
-                href={`/dashboard/board-meetings/${productionId}/control`}
+                href={`/control/${productionId}`}
                 style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}
               >
                 Open control surface

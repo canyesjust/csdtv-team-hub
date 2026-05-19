@@ -323,7 +323,7 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
             <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('go-back')}>← Back</button>
             <button type="button" style={primaryBtn} disabled={!canControl || busy} onClick={() => post('advance')}>Advance →</button>
             <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('toggle-overlay')}>
-              Overlay {bundle.broadcast_state?.overlay_visible ? 'on' : 'off'}
+              Agenda overlay {bundle.broadcast_state?.overlay_visible ? 'on' : 'off'}
             </button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>

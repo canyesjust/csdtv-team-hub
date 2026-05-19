@@ -40,7 +40,7 @@ export default function CompanionButtonsPage({ params }: { params: Promise<{ pro
   return (
     <div style={{ padding: '20px', maxWidth: '640px', margin: '0 auto' }}>
       <div style={{ marginBottom: '20px' }}>
-        <Link href={`/dashboard/board-meetings/${productionId}/control`} style={{ color: 'var(--brand-primary)', fontSize: '14px' }}>
+        <Link href={`/control/${productionId}`} style={{ color: 'var(--brand-primary)', fontSize: '14px' }}>
           ← Control surface
         </Link>
         <h1 style={{ margin: '12px 0 0', fontSize: '22px', color: text }}>Companion buttons</h1>

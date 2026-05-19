@@ -115,7 +115,7 @@ export default function BoardOverlayView({
   const showTimer = timer?.show_on_broadcast && (timer.remaining_seconds ?? 0) > 0
   const qr = b?.active_qr
   const lowerThird = b?.active_lower_third
-  const showLowerThird = !!lowerThird && b?.overlay_visible !== false && mode !== 'technical_difficulties'
+  const showLowerThird = !!lowerThird && mode !== 'technical_difficulties'
   const showIdleBranding =
     mode === 'normal' && !showVoteResult && !showMotion && !showItem && !showTimer && !qr && !lowerThird
 

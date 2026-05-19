@@ -1,19 +1,27 @@
-/* These rules only fire when an element with .broadcast-overlay-root is in the DOM,
-   which only happens when the overlay route is rendered. Other /board routes are unaffected. */
+/* Scoped to overlay route only (when .broadcast-overlay-root is in the DOM). */
+html.dark:has(.broadcast-overlay-root),
+html.light:has(.broadcast-overlay-root),
 html:has(.broadcast-overlay-root),
-body:has(.broadcast-overlay-root) {
+html.dark:has(.broadcast-overlay-root) body,
+html.light:has(.broadcast-overlay-root) body,
+html:has(.broadcast-overlay-root) body {
   background: transparent !important;
   background-color: transparent !important;
+  background-image: none !important;
   margin: 0 !important;
   padding: 0 !important;
+}
+
+html:has(.broadcast-overlay-root) body {
   overflow: hidden;
 }
 
 .broadcast-overlay-root {
-  background: transparent;
+  background: transparent !important;
   width: 100vw;
   height: 100vh;
   position: fixed;
   inset: 0;
-  overflow: hidden;
+  overflow: visible;
+  z-index: 0;
 }

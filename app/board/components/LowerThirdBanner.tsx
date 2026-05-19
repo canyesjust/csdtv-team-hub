@@ -31,7 +31,7 @@ export default function LowerThirdBanner({
         borderLeft: `4px solid ${isOverlay ? '#3b82f6' : '#1e6cb5'}`,
         color: isOverlay ? '#f0f4ff' : '#0f172a',
         boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-        zIndex: 15,
+        zIndex: 50,
         fontFamily: 'system-ui, sans-serif',
       }}
     >

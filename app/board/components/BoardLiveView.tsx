@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
+import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
 
 function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
   const vr = state?.active_vote_result
@@ -107,6 +108,7 @@ export default function BoardLiveView({
 
   const item = state.current_item
   const doc = item?.documents?.[0]
+  const lowerThird = state.state?.active_lower_third
 
   return (
     <div style={page}>
@@ -233,6 +235,7 @@ export default function BoardLiveView({
           )}
         </footer>
       </main>
+      {lowerThird ? <LowerThirdBanner person={lowerThird} variant="live" /> : null}
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
     </div>
   )

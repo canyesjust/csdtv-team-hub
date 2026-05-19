@@ -164,7 +164,7 @@ export default function MeetingsTab() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
         {r.board_meeting && ['prepared', 'live'].includes(r.board_meeting.broadcast_status) && (
           <Link
-            href={`/dashboard/board-meetings/${r.id}/control`}
+            href={`/control/${r.id}`}
             style={{ fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
           >
             Control →
