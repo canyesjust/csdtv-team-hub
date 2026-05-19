@@ -40,7 +40,7 @@ function QrOverlay({ url, label }: { url: string; label: string }) {
   return (
     <div
       style={{
-        position: 'fixed',
+        position: 'absolute',
         bottom: '32px',
         right: '32px',
         background: 'rgba(10, 15, 30, 0.92)',
@@ -254,7 +254,7 @@ function TimerBadge({ timer }: { timer: NonNullable<PublicChannelState['timer']>
   return (
     <div
       style={{
-        position: 'fixed',
+        position: 'absolute',
         top: '24px',
         right: '24px',
         background: 'rgba(10, 15, 30, 0.92)',

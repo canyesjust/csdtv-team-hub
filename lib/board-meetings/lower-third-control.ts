@@ -36,13 +36,13 @@ export async function buildPublicLowerThirdPayload(
 ): Promise<PublicActiveLowerThird | null> {
   if (!personId) return null
 
-  const { data: person } = await service
+  const { data: person, error } = await service
     .from('lower_third_people')
     .select('id, display_name, primary_title, affiliation, officer_position, photo_path, is_active')
     .eq('id', personId)
     .maybeSingle()
 
-  if (!person || !person.is_active) return null
+  if (error || !person) return null
 
   return {
     person_id: person.id,
@@ -67,11 +67,10 @@ export async function setActiveLowerThird(
     .maybeSingle()
 
   if (!person) throw new Error('Person not found')
-  if (!person.is_active) throw new Error('Person is not active in the library')
 
   await ensureBroadcastState(service, boardMeetingId, operatorId)
 
-  await service
+  const { data: updated, error: updateError } = await service
     .from('meeting_broadcast_state')
     .update({
       active_lower_third_person_id: personId,
@@ -79,6 +78,19 @@ export async function setActiveLowerThird(
       updated_by: operatorId,
     })
     .eq('board_meeting_id', boardMeetingId)
+    .select('id, active_lower_third_person_id')
+    .single()
+
+  if (updateError) {
+    throw new Error(
+      updateError.message.includes('active_lower_third_person_id')
+        ? 'Lower third column missing — run db/board_meetings_lower_third.sql migration'
+        : updateError.message,
+    )
+  }
+  if (updated?.active_lower_third_person_id !== personId) {
+    throw new Error('Failed to save active lower third on broadcast state')
+  }
 
   await logMeetingEvent(service, boardMeetingId, 'lower_third_set', operatorId, {
     person_id: personId,
@@ -91,7 +103,7 @@ export async function clearActiveLowerThird(
   boardMeetingId: string,
   operatorId: string,
 ) {
-  await service
+  const { error: updateError } = await service
     .from('meeting_broadcast_state')
     .update({
       active_lower_third_person_id: null,
@@ -99,6 +111,10 @@ export async function clearActiveLowerThird(
       updated_by: operatorId,
     })
     .eq('board_meeting_id', boardMeetingId)
+    .select('id')
+    .single()
+
+  if (updateError) throw new Error(updateError.message)
 
   await logMeetingEvent(service, boardMeetingId, 'lower_third_cleared', operatorId)
 }

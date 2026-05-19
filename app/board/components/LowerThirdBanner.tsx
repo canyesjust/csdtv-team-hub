@@ -18,7 +18,7 @@ export default function LowerThirdBanner({
   return (
     <div
       style={{
-        position: 'fixed',
+        position: isOverlay ? 'absolute' : 'fixed',
         left: '32px',
         bottom: '32px',
         display: 'flex',

@@ -26,10 +26,12 @@ export async function withControlContext(
     return NextResponse.json({ error: prodCheck.error }, { status: prodCheck.status || 400 })
   }
 
+  const resolvedProductionId = prodCheck.productionId
+
   const { data: bm } = await service
     .from('board_meetings')
     .select('id, broadcast_status, agenda_locked')
-    .eq('production_id', productionId)
+    .eq('production_id', resolvedProductionId)
     .maybeSingle()
 
   if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
@@ -37,7 +39,7 @@ export async function withControlContext(
   return handler({
     service,
     teamUserId: teamUser.id,
-    productionId,
+    productionId: resolvedProductionId,
     boardMeetingId: bm.id,
   })
 }

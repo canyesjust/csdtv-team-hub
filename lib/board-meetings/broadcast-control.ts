@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { buildPublicLowerThirdPayload } from '@/lib/board-meetings/lower-third-control'
 import { loadMeetingPlaylistBundle, stopPlaylistOnGoLive } from '@/lib/board-meetings/playlist-playback'
 import { mediaPublicUrl } from '@/lib/board-meetings/media-library'
 
@@ -491,11 +492,17 @@ export async function loadControlBundle(service: SupabaseClient, productionId: s
     current_documents = docs || []
   }
 
+  const active_lower_third = await buildPublicLowerThirdPayload(
+    service,
+    state?.active_lower_third_person_id,
+  )
+
   return {
     board_meeting: bm,
     production: prod,
     items: items || [],
     broadcast_state: state,
+    active_lower_third,
     current_documents,
     channel_assignments: assignments || [],
     active_timer: timers?.[0] ?? null,

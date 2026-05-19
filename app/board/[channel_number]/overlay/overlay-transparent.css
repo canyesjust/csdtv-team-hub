@@ -25,3 +25,14 @@ html:has(.broadcast-overlay-root) body {
   overflow: visible;
   z-index: 0;
 }
+
+.broadcast-overlay-stage {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.broadcast-overlay-stage > * {
+  pointer-events: auto;
+}
