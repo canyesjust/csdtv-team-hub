@@ -1,153 +1,165 @@
 'use client'
 
-import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getVoteResultRemainingSeconds, isVoteResultActive } from '@/lib/board-meetings/motion-control'
-import { toast } from '@/lib/toast'
+import type { MotionLifecycleState, ResultOverlayState } from '@/lib/board-meetings/types'
 
-type MotionSummary = {
-  id: string
-  motion_text: string
-  status: string
+type Props = {
+  lifecycle: MotionLifecycleState | null
+  resultOverlay: ResultOverlayState | null
+  isLive: boolean
+  onOpenMotion: () => void
+  onContinueMotion: () => void
+  onHoldResult: () => void
+  onDismissResult: () => void
 }
 
-type BroadcastState = {
-  active_motion_id?: string | null
-  active_vote_result_motion_id?: string | null
-  vote_result_started_at?: string | null
-  vote_result_duration_seconds?: number | null
-} | null
+export default function MotionAndVoteCard(props: Props) {
+  const { lifecycle, resultOverlay, isLive, onOpenMotion, onContinueMotion, onHoldResult, onDismissResult } = props
 
-export default function MotionAndVoteCard({
-  productionId,
-  broadcastState,
-  disabled,
-  onUpdated,
-}: {
-  productionId: string
-  broadcastState: BroadcastState
-  disabled?: boolean
-  onUpdated: () => void
-}) {
-  const [motions, setMotions] = useState<MotionSummary[]>([])
-  const [busy, setBusy] = useState(false)
-  const [tick, setTick] = useState(0)
-
-  const loadMotions = useCallback(async () => {
-    const res = await fetch(`/api/board-meetings/${productionId}/motions`)
-    const body = await res.json()
-    if (res.ok) setMotions(body.motions || [])
-  }, [productionId])
-
-  useEffect(() => { loadMotions() }, [loadMotions])
-
-  useEffect(() => {
-    loadMotions()
-  }, [broadcastState?.active_motion_id, broadcastState?.active_vote_result_motion_id, loadMotions])
-
-  useEffect(() => {
-    if (!isVoteResultActive(broadcastState || {})) return
-    const t = setInterval(() => setTick(n => n + 1), 500)
-    return () => clearInterval(t)
-  }, [broadcastState, tick])
-
-  const activeMotion = useMemo(() => {
-    const id = broadcastState?.active_motion_id
-    if (id) return motions.find(m => m.id === id)
-    return motions.find(m => ['open_for_discussion', 'voting'].includes(m.status))
-  }, [broadcastState?.active_motion_id, motions])
-
-  const resultRemaining = useMemo(
-    () => getVoteResultRemainingSeconds(broadcastState || {}),
-    [broadcastState, tick],
-  )
-
-  const showResult = isVoteResultActive(broadcastState || {})
-
-  const post = async (path: string) => {
-    setBusy(true)
-    try {
-      const res = await fetch(`/api/board-meetings/${productionId}/motion/${path}`, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) {
-        toast(data.error || 'Action failed', 'error')
-        return
-      }
-      onUpdated()
-      await loadMotions()
-    } finally {
-      setBusy(false)
-    }
+  if (resultOverlay && resultOverlay.active) {
+    return <StateC overlay={resultOverlay} onHold={onHoldResult} onDismiss={onDismissResult} />
   }
 
-  if (showResult) {
-    return (
-      <div className="cs-card cs-motion-card cs-motion-card--success">
-        <p className="cs-eyebrow">Motion &amp; vote</p>
-        <p style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600, color: 'var(--semantic-success-text)' }}>
-          Result on overlay · {resultRemaining}s
-        </p>
-        <div className="control-btn-row">
-          <button type="button" className="cs-touchbtn" disabled={disabled || busy} onClick={() => post('result/hold')}>
-            Hold
-          </button>
-          <button
-            type="button"
-            className="cs-touchbtn cs-touchbtn-danger"
-            disabled={disabled || busy}
-            onClick={() => post('result/dismiss')}
-          >
-            Dismiss
-          </button>
-        </div>
-      </div>
-    )
+  if (lifecycle && !['no_motion', 'closed', 'pushed'].includes(lifecycle.state)) {
+    return <StateB lifecycle={lifecycle} onContinue={onContinueMotion} />
   }
 
-  if (activeMotion) {
-    return (
-      <div className="cs-card cs-motion-card cs-motion-card--warning">
-        <p className="cs-eyebrow">Motion &amp; vote</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span className="cs-pulse-dot" aria-hidden />
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--semantic-warning-text)' }}>
-            Motion in progress
-          </p>
-        </div>
-        <p style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>
-          {activeMotion.motion_text.slice(0, 120)}
-          {activeMotion.motion_text.length > 120 ? '…' : ''}
-        </p>
-        <Link
-          href={`/control/${productionId}/motion`}
-          className="cs-touchbtn cs-touchbtn-primary"
-          style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
-        >
-          Continue motion →
-        </Link>
-      </div>
-    )
-  }
+  return <StateA isLive={isLive} onOpen={onOpenMotion} />
+}
 
+function StateA({ isLive, onOpen }: { isLive: boolean; onOpen: () => void }) {
   return (
-    <div className="cs-card cs-motion-card cs-motion-card--info">
-      <p className="cs-eyebrow">Motion &amp; vote</p>
-      <p style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--text-muted)' }}>
-        Open the motion screen to make a motion, run a vote, and push results to the overlay.
-      </p>
-      <Link
-        href={`/control/${productionId}/motion`}
-        className="cs-touchbtn cs-touchbtn-primary"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          textDecoration: 'none',
-          pointerEvents: disabled ? 'none' : undefined,
-          opacity: disabled ? 0.5 : 1,
-        }}
+    <div className="cs-card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div className="cs-eyebrow" style={{ marginBottom: 0 }}>Motion & vote</div>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>idle</span>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, minHeight: 28 }}>
+        No motion on floor
+      </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        disabled={!isLive}
+        className="cs-touchbtn"
+        style={{ width: '100%', minHeight: 44 }}
       >
         Open motion screen →
-      </Link>
+      </button>
     </div>
   )
+}
+
+function StateB({ lifecycle, onContinue }: { lifecycle: MotionLifecycleState; onContinue: () => void }) {
+  const status = lifecycle.state
+  const statusLabel =
+    status === 'drafting' ? 'DRAFTING'
+      : status === 'open_for_discussion' ? 'DISCUSSION'
+        : status === 'voting' ? 'VOTING'
+          : status === 'voted' ? 'VOTED'
+            : status.toUpperCase()
+  const motion = lifecycle.active_motion
+  const isSubstitute = motion?.motion_type === 'substitute'
+  const text = motion?.text || 'Motion'
+  const moverName = motion?.mover_name || '—'
+  const seconderName = motion?.seconder_name || '—'
+  const voteCount = lifecycle.recorded_votes_count || 0
+
+  return (
+    <div className="cs-card" style={{ borderColor: 'var(--semantic-warning-border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: 'var(--semantic-warning-text)', letterSpacing: '0.05em', fontWeight: 500 }}>
+          {isSubstitute ? 'Substitute motion' : 'Motion in progress'}
+        </div>
+        <span style={{
+          fontSize: 10, padding: '2px 6px', borderRadius: 999,
+          background: 'var(--semantic-warning-bg)',
+          color: 'var(--semantic-warning-text)',
+          fontWeight: 500,
+        }}>{statusLabel}</span>
+      </div>
+      <div style={{ fontSize: 11, marginBottom: 4, lineHeight: 1.35, color: 'var(--text-primary)' }}>
+        {truncate(text, 60)}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
+        {moverName} / {seconderName}
+        {status === 'voting' ? ` · ${voteCount} votes recorded` : ''}
+        {isSubstitute ? ' · main held' : ''}
+      </div>
+      <button
+        type="button"
+        onClick={onContinue}
+        className="cs-touchbtn"
+        style={{
+          width: '100%',
+          minHeight: 44,
+          background: 'var(--semantic-warning-bg)',
+          color: 'var(--semantic-warning-text)',
+          borderColor: 'var(--semantic-warning-border)',
+          fontWeight: 500,
+        }}
+      >
+        Continue motion →
+      </button>
+    </div>
+  )
+}
+
+function StateC({ overlay, onHold, onDismiss }: { overlay: ResultOverlayState; onHold: () => void; onDismiss: () => void }) {
+  const passed = overlay.passed
+  const yeas = overlay.yea_count ?? 0
+  const nays = overlay.nay_count ?? 0
+  const abs = overlay.abstain_count ?? 0
+  const remaining = overlay.seconds_remaining ?? 0
+  const totalDuration = overlay.total_duration ?? 8
+  const progressPct = Math.max(0, Math.min(100, (remaining / totalDuration) * 100))
+  const bg = passed ? 'var(--semantic-success-bg)' : 'var(--semantic-danger-bg)'
+  const borderColor = passed ? 'var(--semantic-success-border)' : 'var(--semantic-danger-border)'
+  const fg = passed ? 'var(--semantic-success-text)' : 'var(--semantic-danger-text)'
+  const heading = passed ? 'Motion passes' : 'Motion fails'
+
+  return (
+    <div className="cs-card" style={{ background: bg, borderColor }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: fg, letterSpacing: '0.05em', fontWeight: 500 }}>
+          Result on overlay
+        </div>
+        <span style={{ fontSize: 14, fontWeight: 500, color: fg }}>
+          {overlay.held ? 'held' : `${remaining}s`}
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: fg }}>{heading}</span>
+      </div>
+      <div style={{ fontSize: 11, color: fg, opacity: 0.8, marginBottom: 8 }}>
+        {yeas} yea · {nays} nay · {abs} abs
+      </div>
+      <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ width: `${progressPct}%`, height: '100%', background: fg, transition: 'width 1s linear' }} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <button
+          type="button"
+          onClick={onHold}
+          disabled={overlay.held}
+          className="cs-touchbtn"
+          style={{ padding: '10px 4px', fontSize: 11, minHeight: 40 }}
+        >
+          {overlay.held ? 'Held' : 'Hold'}
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="cs-touchbtn"
+          style={{ padding: '10px 4px', fontSize: 11, minHeight: 40 }}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function truncate(s: string, n: number) {
+  if (!s) return ''
+  return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s
 }

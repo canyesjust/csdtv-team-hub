@@ -50,17 +50,85 @@ function PersonButton({
   )
 }
 
-export default function LowerThirdPanel({
-  productionId,
-  broadcastState,
-  disabled,
-  onUpdated,
-}: {
+type CallbackProps = {
+  active: { person_id: string; display_name: string; primary_title: string | null } | null
+  people: LowerThirdPerson[]
+  canControl: boolean
+  onSet: (personId: string) => void
+  onClear: () => void
+}
+
+type LegacyProps = {
   productionId: string
   broadcastState: BroadcastState
   disabled: boolean
   onUpdated: () => void
-}) {
+}
+
+export default function LowerThirdPanel(props: CallbackProps | LegacyProps) {
+  if ('onSet' in props) {
+    return <LowerThirdPanelControlled {...props} />
+  }
+  return <LowerThirdPanelLegacy {...props} />
+}
+
+function LowerThirdPanelControlled({ active, people, canControl, onSet, onClear }: CallbackProps) {
+  const activeId = active?.person_id ?? null
+  const disabled = !canControl
+  const boardMembers = useMemo(() => boardMembersInOrder(people), [people])
+  const btn: React.CSSProperties = {
+    fontSize: '13px',
+    padding: '10px 12px',
+    minHeight: '44px',
+    borderRadius: '8px',
+    border: '0.5px solid var(--border-subtle)',
+    background: 'var(--surface-2)',
+    color: 'var(--text-primary)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontFamily: 'inherit',
+    opacity: disabled ? 0.5 : 1,
+    textAlign: 'left',
+    width: '100%',
+  }
+
+  return (
+    <div>
+      {active ? (
+        <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--text-muted)' }}>
+          On air: <strong style={{ color: 'var(--text-primary)' }}>{active.display_name}</strong>
+        </p>
+      ) : (
+        <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--text-muted)' }}>No lower third selected</p>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 6, marginBottom: 10 }}>
+        {boardMembers.map((person, i) => {
+          if (!person) return null
+          return (
+            <PersonButton
+              key={person.id}
+              person={person}
+              activeId={activeId}
+              disabled={disabled}
+              busy={false}
+              onSelect={onSet}
+              btn={btn}
+            />
+          )
+        })}
+      </div>
+      <button type="button" className="cs-touchbtn" disabled={disabled || !activeId} onClick={onClear} style={{ width: '100%' }}>
+        Clear lower third
+      </button>
+    </div>
+  )
+}
+
+function LowerThirdPanelLegacy({
+  productionId,
+  broadcastState,
+  disabled,
+  onUpdated,
+}: LegacyProps) {
   const [people, setPeople] = useState<LowerThirdPerson[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)

@@ -1,13 +1,24 @@
-'use client'
-
-import { use } from 'react'
+import { redirect } from 'next/navigation'
 import MotionScreenClient from './MotionScreenClient'
+import { getServerSession } from '@/lib/auth'
+import { loadMotionScreenBundle } from '@/lib/board-meetings/motion-api'
 
-export default function MotionScreenPage({ params }: { params: Promise<{ productionId: string }> }) {
-  const { productionId } = use(params)
+type Props = {
+  params: Promise<{ productionId: string }>
+}
+
+export default async function MotionScreenPage({ params }: Props) {
+  const { productionId } = await params
+  const session = await getServerSession()
+  if (!session?.user) redirect('/login')
+
+  const bundle = await loadMotionScreenBundle(productionId)
+  if (!bundle) redirect(`/control/${productionId}`)
+
   return (
-    <div className="motion-screen">
-      <MotionScreenClient productionId={productionId} />
-    </div>
+    <MotionScreenClient
+      productionId={productionId}
+      initialBundle={bundle}
+    />
   )
 }

@@ -7,18 +7,24 @@ import Loader from '@/app/dashboard/components/Loader'
 import { toast } from '@/lib/toast'
 import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
 import type { VoterRow } from '@/app/dashboard/board-meetings/[productionId]/control/components/VoteInterface'
-import type { ControlBundle } from '@/app/dashboard/board-meetings/[productionId]/control/control-surface-types'
+import type { ControlBundle } from '@/lib/board-meetings/types'
+import type { MotionScreenBundle } from '@/lib/board-meetings/motion-api'
 import MotionScreenView from './MotionScreenView'
 import { isVoteResultActive } from '@/lib/board-meetings/motion-control'
 import { tallyFromMotion, type MotionScreenModel, type MotionUi } from './motion-screen-types'
 
-export default function MotionScreenClient({ productionId }: { productionId: string }) {
+type Props = {
+  productionId: string
+  initialBundle: MotionScreenBundle
+}
+
+export default function MotionScreenClient({ productionId, initialBundle }: Props) {
   const router = useRouter()
   const supabase = createClient()
-  const [bundle, setBundle] = useState<ControlBundle | null>(null)
-  const [motions, setMotions] = useState<MotionUi[]>([])
-  const [attendance, setAttendance] = useState<{ person_id: string; name: string; status: string }[]>([])
-  const [loading, setLoading] = useState(true)
+  const [bundle, setBundle] = useState<ControlBundle | null>(initialBundle.bundle)
+  const [motions, setMotions] = useState<MotionUi[]>(initialBundle.motions)
+  const [attendance, setAttendance] = useState(initialBundle.attendance)
+  const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [motionText, setMotionText] = useState('')
   const [voteMode, setVoteMode] = useState<VoteMode>('voice')

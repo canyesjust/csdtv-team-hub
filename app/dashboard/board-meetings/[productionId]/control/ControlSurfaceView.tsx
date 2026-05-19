@@ -1,310 +1,234 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, type CSSProperties, type ReactNode } from 'react'
-import QRPushPanel from './QRPushPanel'
-import AttendancePanel from './components/AttendancePanel'
-import MotionAndVoteCard from './components/MotionAndVoteCard'
-import PlaylistLiveControls from './components/PlaylistLiveControls'
+import { useRouter } from 'next/navigation'
+import AgendaPanel from './components/AgendaPanel'
+import OnAirCard from './components/OnAirCard'
+import TransportCard from './components/TransportCard'
 import LowerThirdPanel from './components/LowerThirdPanel'
-import type { ControlBundle } from './control-surface-types'
+import QRPushPanel from './components/QRPushPanel'
+import MotionAndVoteCard from './components/MotionAndVoteCard'
+import UtilityPanel from './components/UtilityPanel'
+import PreRollPanel from './components/PreRollPanel'
+import ModesTimersPanel from './components/ModesTimersPanel'
+import OutputChannelsPanel from './components/OutputChannelsPanel'
+import EventLogPanel from './components/EventLogPanel'
+import AttendancePanel from './components/AttendancePanel'
+import ModeBanner from './components/ModeBanner'
+import type { ControlBundle } from '@/lib/board-meetings/types'
 
-function CollapsiblePanel({
-  title,
-  summary,
-  defaultOpen = false,
-  children,
-}: {
-  title: string
-  summary?: string
-  defaultOpen?: boolean
-  children: ReactNode
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  const text = 'var(--text-primary)'
-  const muted = 'var(--text-muted)'
-  const border = 'var(--border-subtle)'
-  const headerBg = 'var(--surface-2)'
-
-  return (
-    <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          padding: '12px 14px',
-          minHeight: '48px',
-          background: headerBg,
-          border: 'none',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          textAlign: 'left',
-        }}
-      >
-        <span style={{ fontSize: '15px', fontWeight: 600, color: text }}>{title}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          {!open && summary ? (
-            <span style={{ fontSize: '13px', color: muted, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {summary}
-            </span>
-          ) : null}
-          <span style={{ fontSize: '11px', color: muted, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }} aria-hidden>
-            ▼
-          </span>
-        </span>
-      </button>
-      {open ? <div style={{ padding: '12px 14px', borderTop: `0.5px solid ${border}` }}>{children}</div> : null}
-    </div>
-  )
-}
-
-export type ControlSurfaceViewProps = {
+type Props = {
   productionId: string
   bundle: ControlBundle
-  busy: boolean
   canControl: boolean
-  currentId: string | null | undefined
-  currentItem: ControlBundle['items'][number] | undefined
-  status: string
-  mode: string
-  broadcastable: ControlBundle['items']
-  assignedIds: Set<string>
-  btn: CSSProperties
-  primaryBtn: CSSProperties
-  dangerBtn: CSSProperties
-  post: (path: string, body?: Record<string, unknown>) => Promise<void>
-  toggleChannel: (channelId: string) => Promise<void>
-  onUpdated: () => void
+  onAction: (action: string, body?: unknown) => Promise<void>
+  busy: boolean
+  attendanceOpen: boolean
+  onAttendanceOpenChange: (open: boolean) => void
 }
 
-export default function ControlSurfaceView({
-  productionId,
-  bundle,
-  busy,
-  canControl,
-  currentId,
-  currentItem,
-  status,
-  mode,
-  broadcastable,
-  assignedIds,
-  btn,
-  primaryBtn,
-  dangerBtn,
-  post,
-  toggleChannel,
-  onUpdated,
-}: ControlSurfaceViewProps) {
-  const text = 'var(--text-primary)'
-  const muted = 'var(--text-muted)'
-  const border = 'var(--border-subtle)'
-  const productionTitle = bundle.production?.title
+export default function ControlSurfaceView({ productionId, bundle, canControl, onAction, busy, attendanceOpen, onAttendanceOpenChange }: Props) {
+  const router = useRouter()
+  const { meeting, broadcast_state, agenda_items, motion_lifecycle, attendance, lower_third_active, result_overlay } = bundle
+  const meetingTitle = meeting?.title || 'Board Meeting'
+  const status = broadcast_state?.status || 'draft'
+  const mode = broadcast_state?.mode || 'normal'
+  const isLive = status === 'live'
+
+  const liveElapsed = isLive && broadcast_state?.live_started_at
+    ? formatElapsed(Date.now() - new Date(broadcast_state.live_started_at).getTime())
+    : null
+
+  const goToMotion = () => router.push(`/control/${productionId}/motion`)
+  const prodNum = meeting?.production_number
 
   return (
-    <div className="control-surface control-shell">
-      <header className="control-header">
-        <nav className="control-header__nav" aria-label="Breadcrumb">
-          <Link href="/dashboard/board-meetings">← Board Meetings</Link>
-          {bundle.production?.production_number != null && (
-            <Link href={`/dashboard/productions/${bundle.production.production_number}?tab=boardmeeting`}>
-              ← Board Meeting tab
-            </Link>
+    <div className="control-surface">
+      <div className="cs-header">
+        <div style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--brand-primary)', marginBottom: 8 }}>
+          <Link href="/dashboard/board-meetings" style={{ color: 'inherit', textDecoration: 'none' }}>← Board Meetings</Link>
+          {prodNum != null && (
+            <Link href={`/dashboard/productions/${prodNum}?tab=boardmeeting`} style={{ color: 'inherit', textDecoration: 'none' }}>← Board Meeting tab</Link>
           )}
-          <Link href={`/dashboard/board-meetings/${productionId}/buttons`}>Companion buttons →</Link>
-        </nav>
-        <div className="control-header__title-row">
-          <div>
-            <h1 className="control-header__title">
-              Control surface
-              {productionTitle ? ` · ${productionTitle}` : ''}
-            </h1>
-            <p className="control-header__meta">
-              Status: <strong style={{ color: text }}>{status}</strong>
-              {mode !== 'normal' && ` · ${mode.replace(/_/g, ' ')}`}
-            </p>
-            <div style={{ marginTop: 8 }}>
-              <AttendancePanel productionId={productionId} disabled={!canControl} />
-            </div>
+          <Link href={`/dashboard/board-meetings/${productionId}/buttons`} style={{ color: 'inherit', textDecoration: 'none' }}>Companion buttons →</Link>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 16, fontWeight: 500 }}>Control surface · {meetingTitle}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {isLive && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '4px 10px', borderRadius: 999,
+                background: 'var(--semantic-danger-bg)',
+                color: 'var(--semantic-danger-text)',
+                fontSize: 11, fontWeight: 500,
+              }}>
+                <span className="cs-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--semantic-danger-text)' }} />
+                LIVE{liveElapsed ? ` · ${liveElapsed}` : ''}
+              </span>
+            )}
+            {attendance && (
+              <AttendancePanel
+                attendance={attendance}
+                quorumNeeded={meeting?.quorum_size || 4}
+                canEdit={canControl}
+                onMark={() => onAttendanceOpenChange(true)}
+              />
+            )}
           </div>
         </div>
-      </header>
+      </div>
 
       {!canControl && (
-        <p className="control-banner" style={{ marginTop: 10 }}>
-          Lock the agenda before using broadcast controls.
-        </p>
+        <p className="control-banner">Lock the agenda before using broadcast controls.</p>
       )}
 
-      <main className="control-main">
-        <section className="control-panel control-panel--agenda" aria-label="Agenda">
-          <h2 className="control-panel__head">Agenda</h2>
-          <div className="control-panel__body">
-            <div className="control-scroll">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {broadcastable.map(it => (
-                  <button
-                    key={it.id}
-                    type="button"
-                    disabled={!canControl || busy}
-                    onClick={() => post('jump-to', { agenda_item_id: it.id })}
-                    className={`control-agenda-btn${it.id === currentId ? ' control-agenda-btn--current' : ''}`}
-                  >
-                    <span className="control-agenda-btn__num">{it.item_number}</span>
-                    <span className="control-agenda-btn__title">{it.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
+      {mode !== 'normal' && (
+        <ModeBanner mode={mode} timer={broadcast_state?.mode_ends_at} />
+      )}
 
-        <section className="control-panel control-panel--center" aria-label="On air controls">
-          <h2 className="control-panel__head">On air</h2>
-          <div className="control-panel__body">
-            <div className="control-on-air-item">
-              {currentItem ? (
-                <>
-                  <p className="control-on-air-item__num">{currentItem.item_number}</p>
-                  <p className="control-on-air-item__title">{currentItem.title}</p>
-                </>
-              ) : (
-                <p style={{ margin: 0, color: muted, fontSize: 14 }}>No current item</p>
-              )}
-            </div>
+      <div className="cs-main">
+        <div className="cs-agenda">
+          <div className="cs-eyebrow" style={{ paddingLeft: 4 }}>AGENDA</div>
+          <AgendaPanel
+            items={agenda_items}
+            currentItemId={broadcast_state?.current_agenda_item_id}
+            disabled={!canControl || busy}
+            onJump={(itemId) => onAction('jump-to', { agenda_item_id: itemId })}
+          />
+        </div>
 
-            <div className="control-subsection">
-              <p className="control-subsection__label">Transport</p>
-              <div className="control-btn-row">
-                <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('go-back')}>← Back</button>
-                <button type="button" style={primaryBtn} disabled={!canControl || busy} onClick={() => post('advance')}>Advance →</button>
-                <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('toggle-overlay')}>
-                  Agenda overlay {bundle.broadcast_state?.overlay_visible ? 'on' : 'off'}
-                </button>
-              </div>
-              <div className="control-btn-row">
-                {status !== 'live' ? (
-                  <button type="button" style={primaryBtn} disabled={!canControl || busy} onClick={() => post('go-live')}>Go live</button>
-                ) : (
-                  <button type="button" style={dangerBtn} disabled={busy} onClick={() => post('end-meeting')}>End meeting</button>
-                )}
-              </div>
-            </div>
+        <div className="cs-onair">
+          <OnAirCard
+            item={getCurrentAgendaItem(agenda_items, broadcast_state?.current_agenda_item_id)}
+            isLive={isLive}
+          />
 
-            <div className="control-subsection control-scroll" style={{ flex: 1, minHeight: 120 }}>
-              <p className="control-subsection__label">Lower third</p>
-              <LowerThirdPanel
-                productionId={productionId}
-                broadcastState={bundle.broadcast_state}
-                disabled={!canControl || busy}
-                onUpdated={onUpdated}
-              />
-            </div>
+          <TransportCard
+            canControl={canControl}
+            isLive={isLive}
+            agendaOverlayOn={broadcast_state?.agenda_overlay_visible !== false}
+            busy={busy}
+            onBack={() => onAction('go-back')}
+            onAdvance={() => onAction('advance')}
+            onToggleOverlay={() => onAction('toggle-overlay')}
+            onGoLive={() => onAction('go-live')}
+          />
 
-            <div className="control-subsection">
-              <p className="control-subsection__label">QR code</p>
-              <QRPushPanel
-                productionId={productionId}
-                broadcastState={bundle.broadcast_state}
-                currentDocuments={bundle.current_documents || []}
-                hasYoutube={!!(bundle.production?.livestream_url || '').trim()}
-                disabled={!canControl || status !== 'live'}
-                onUpdated={onUpdated}
-              />
-            </div>
+          <LowerThirdPanel
+            active={lower_third_active}
+            people={bundle.lower_third_people || []}
+            canControl={canControl && !busy}
+            onSet={(personId) => onAction('set-lower-third', { person_id: personId })}
+            onClear={() => onAction('clear-lower-third')}
+          />
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <QRPushPanel
+              canControl={canControl && isLive}
+              activeQR={broadcast_state?.active_qr_url}
+              onPush={(url, label) => onAction('push-qr', { custom_url: url, custom_label: label })}
+              onClear={() => onAction('clear-qr')}
+            />
             <MotionAndVoteCard
-              productionId={productionId}
-              broadcastState={bundle.broadcast_state}
-              disabled={!canControl || status !== 'live' || busy}
-              onUpdated={onUpdated}
+              lifecycle={motion_lifecycle}
+              resultOverlay={result_overlay}
+              isLive={isLive}
+              onOpenMotion={goToMotion}
+              onContinueMotion={goToMotion}
+              onHoldResult={() => onAction('hold-result')}
+              onDismissResult={() => onAction('dismiss-result')}
             />
           </div>
-        </section>
 
-        <section className="control-panel control-panel--utilities" aria-label="Broadcast utilities">
-          <h2 className="control-panel__head">Utilities</h2>
-          <div className="control-panel__body">
-            <div className="cs-utilities-grid">
-              <CollapsiblePanel title="Pre-roll playlist" summary="Playlist playback" defaultOpen={status === 'prepared'}>
-                <PlaylistLiveControls productionId={productionId} disabled={!canControl} onUpdated={onUpdated} />
-              </CollapsiblePanel>
-
-              <CollapsiblePanel
-                title="Modes & timers"
-                summary={
-                  bundle.active_timer
-                    ? `Timer: ${bundle.active_timer.label}`
-                    : mode !== 'normal'
-                      ? mode.replace(/_/g, ' ')
-                      : 'Recess, tech diff, timers'
-                }
-                defaultOpen={mode !== 'normal' || !!bundle.active_timer}
+          {isLive && (
+            <div style={{ marginTop: 6, paddingTop: 10, borderTop: '0.5px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="cs-touchbtn cs-touchbtn-danger"
+                onClick={() => onAction('end-meeting')}
+                disabled={!canControl || busy}
               >
-                <div className="control-btn-row" style={{ marginBottom: 12 }}>
-                  <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('recess', { message: 'Recess' })}>Recess</button>
-                  <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('technical-difficulties')}>Tech diff</button>
-                  <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('clear-mode')}>Clear mode</button>
-                </div>
-                {bundle.timer_templates.length > 0 && (
-                  <div className="control-btn-row" style={{ marginBottom: 12 }}>
-                    {bundle.timer_templates.map(t => (
-                      <button key={t.id} type="button" style={btn} disabled={!canControl || busy} onClick={() => post('start-timer', { template_id: t.id })}>
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {bundle.active_timer && (
-                  <p style={{ fontSize: 13, color: muted, margin: '0 0 8px' }}>Timer: {bundle.active_timer.label}</p>
-                )}
-                <div className="control-btn-row">
-                  <button type="button" style={btn} disabled={!canControl || busy || !bundle.active_timer} onClick={() => post('end-timer')}>End timer</button>
-                  <button type="button" style={btn} disabled={!canControl || busy || !bundle.active_timer} onClick={() => post('cancel-timer')}>Cancel timer</button>
-                </div>
-              </CollapsiblePanel>
-
-              <CollapsiblePanel title="Output channels" summary={`${assignedIds.size} of ${bundle.output_channels.length} assigned`}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {bundle.output_channels.map(ch => (
-                    <label key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: text, minHeight: 44 }}>
-                      <input type="checkbox" checked={assignedIds.has(ch.id)} disabled={!canControl || busy} onChange={() => toggleChannel(ch.id)} />
-                      Ch {ch.channel_number} — {ch.channel_name}
-                    </label>
-                  ))}
-                </div>
-              </CollapsiblePanel>
-
-              <CollapsiblePanel
-                title="Recent events"
-                summary={
-                  bundle.recent_events[0]
-                    ? `${new Date(bundle.recent_events[0].occurred_at).toLocaleTimeString()} — ${bundle.recent_events[0].event_type}`
-                    : 'No events yet'
-                }
-              >
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                  {bundle.recent_events.length === 0 ? (
-                    <li style={{ fontSize: 13, color: muted }}>No events logged yet.</li>
-                  ) : (
-                    bundle.recent_events.slice(0, 20).map((ev, i) => (
-                      <li key={i} style={{ fontSize: 12, color: muted, padding: '6px 0', borderBottom: `0.5px solid ${border}` }}>
-                        {new Date(ev.occurred_at).toLocaleTimeString()} — {ev.event_type}
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </CollapsiblePanel>
+                End meeting
+              </button>
             </div>
-          </div>
-        </section>
+          )}
+        </div>
+      </div>
 
-      </main>
+      <div className="cs-utilities">
+        <div className="cs-eyebrow" style={{ marginBottom: 8 }}>UTILITIES</div>
+        <div className="cs-utilities-grid">
+          <UtilityPanel title="Pre-roll" summary={summarizePreRoll(bundle.playlist_state)} icon="playlist">
+            <PreRollPanel canControl={canControl} state={bundle.playlist_state} meetingPlaylist={bundle.meeting_playlist} onAction={onAction} />
+          </UtilityPanel>
+          <UtilityPanel
+            title="Modes & timers"
+            summary={summarizeModesTimers(broadcast_state, bundle.active_timer)}
+            icon="clock"
+            forceOpen={mode !== 'normal' || !!bundle.active_timer}
+          >
+            <ModesTimersPanel canControl={canControl} state={broadcast_state} timer={bundle.active_timer} templates={bundle.timer_templates} onAction={onAction} />
+          </UtilityPanel>
+          <UtilityPanel title="Output channels" summary={summarizeChannels(bundle.channel_assignments, bundle.channels)} icon="broadcast">
+            <OutputChannelsPanel canControl={canControl} channels={bundle.channels} assignments={bundle.channel_assignments} onAction={onAction} />
+          </UtilityPanel>
+          <UtilityPanel title="Recent events" summary={summarizeEvents(bundle.recent_events)} icon="history">
+            <EventLogPanel events={bundle.recent_events || []} />
+          </UtilityPanel>
+        </div>
+      </div>
+
+      <AttendancePanel
+        productionId={productionId}
+        disabled={!canControl}
+        open={attendanceOpen}
+        onOpenChange={onAttendanceOpenChange}
+        hideTrigger
+      />
     </div>
   )
+}
+
+function getCurrentAgendaItem(items: ControlBundle['agenda_items'], currentId: string | undefined | null) {
+  if (!currentId) return null
+  return (items || []).find(i => i.id === currentId) || null
+}
+
+function formatElapsed(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function summarizePreRoll(state: ControlBundle['playlist_state']): string {
+  if (!state) return 'No playlist'
+  if (state.playback_state === 'playing') return 'Playlist playback'
+  if (state.playback_state === 'paused') return 'Paused'
+  if (state.playback_state === 'held') return 'Held'
+  return 'Idle'
+}
+
+function summarizeModesTimers(state: ControlBundle['broadcast_state'], timer: ControlBundle['active_timer']): string {
+  const parts: string[] = []
+  if (state?.mode && state.mode !== 'normal') parts.push(state.mode.replace('_', ' '))
+  if (timer) parts.push('timer running')
+  return parts.length ? parts.join(' · ') : 'Recess, tech diff, timers'
+}
+
+function summarizeChannels(assignments: ControlBundle['channel_assignments'], channels: ControlBundle['channels']): string {
+  const total = (channels || []).length || 8
+  const active = (assignments || []).length
+  return `${active} of ${total} assigned`
+}
+
+function summarizeEvents(events: ControlBundle['recent_events']): string {
+  if (!events || events.length === 0) return 'No events yet'
+  const last = events[0]
+  const time = last?.created_at ? new Date(last.created_at).toLocaleTimeString() : ''
+  const label = last?.event_type || ''
+  return `${time} — ${label}`
 }

@@ -5,18 +5,28 @@ import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import ControlSurfaceView from './ControlSurfaceView'
-import type { ControlBundle } from './control-surface-types'
+import type { ControlBundle, ResultOverlayState } from '@/lib/board-meetings/types'
+
+const MOTION_ACTIONS = new Set([
+  'open',
+  'set-mover',
+  'set-seconder',
+  'set-text',
+  'set-vote-type',
+  'open-vote',
+  'record-vote',
+  'push-result',
+  'withdraw',
+  'propose-substitute',
+])
 
 export default function ControlSurfaceClient({ productionId }: { productionId: string }) {
   const supabase = createClient()
   const [bundle, setBundle] = useState<ControlBundle | null>(null)
+  const [resultOverlay, setResultOverlay] = useState<ResultOverlayState | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-
-  const muted = 'var(--text-muted)'
-  const border = 'var(--border-subtle)'
-  const text = 'var(--text-primary)'
-  const cardBg = 'var(--surface-1)'
+  const [attendanceOpen, setAttendanceOpen] = useState(false)
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/board-meetings/${productionId}/control`)
@@ -27,84 +37,208 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
       return
     }
     setBundle(body)
+    setResultOverlay(body.result_overlay ?? null)
     setLoading(false)
   }, [productionId])
 
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    if (!bundle?.board_meeting?.id) return
-    const channel = supabase
-      .channel(`broadcast-${bundle.board_meeting.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
-        () => { load() },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_timers', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
-        () => { load() },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
-        () => { load() },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
-        () => { load() },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_playlists', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
-        () => { load() },
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [bundle?.board_meeting?.id, supabase, load])
-
-  const post = async (path: string, body?: Record<string, unknown>) => {
-    setBusy(true)
-    try {
-      const res = await fetch(`/api/board-meetings/${productionId}/control/${path}`, {
-        method: 'POST',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
+    if (!resultOverlay?.active || resultOverlay.held) return
+    const interval = setInterval(() => {
+      setResultOverlay(prev => {
+        if (!prev || !prev.active || prev.held) return prev
+        const newRemaining = Math.max(0, prev.seconds_remaining - 1)
+        if (newRemaining === 0) {
+          return { ...prev, seconds_remaining: 0 }
+        }
+        return { ...prev, seconds_remaining: newRemaining }
       })
-      const data = await res.json()
-      if (!res.ok) toast(data.error || 'Action failed', 'error')
-      else await load()
-    } finally {
-      setBusy(false)
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [resultOverlay?.active, resultOverlay?.held])
+
+  const motionIds = useMemo(() => {
+    const ids = new Set<string>()
+    const activeId = bundle?.motion_lifecycle?.active_motion?.id
+    const parentId = bundle?.motion_lifecycle?.parent_motion?.id
+    if (activeId) ids.add(activeId)
+    if (parentId) ids.add(parentId)
+    if (resultOverlay?.motion_id) ids.add(resultOverlay.motion_id)
+    return [...ids]
+  }, [
+    bundle?.motion_lifecycle?.active_motion?.id,
+    bundle?.motion_lifecycle?.parent_motion?.id,
+    resultOverlay?.motion_id,
+  ])
+
+  useEffect(() => {
+    if (!bundle?.board_meeting?.id) return
+    const meetingId = bundle.board_meeting.id
+
+    let channel = supabase.channel(`control-surface-${meetingId}`)
+
+    channel = channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` },
+      () => { load() },
+    )
+
+    channel = channel
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_timers', filter: `board_meeting_id=eq.${meetingId}` },
+        () => { load() },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` },
+        () => { load() },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` },
+        () => { load() },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_playlists', filter: `board_meeting_id=eq.${meetingId}` },
+        () => { load() },
+      )
+
+    for (const motionId of motionIds) {
+      channel = channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_motion_votes', filter: `motion_id=eq.${motionId}` },
+        () => { load() },
+      )
     }
-  }
+
+    channel.subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [bundle?.board_meeting?.id, supabase, load, motionIds])
 
   const assignedIds = useMemo(
     () => new Set((bundle?.channel_assignments || []).map(a => a.output_channel_id)),
     [bundle?.channel_assignments],
   )
 
-  const toggleChannel = async (channelId: string) => {
+  const postControl = async (path: string, body?: Record<string, unknown>) => {
+    const res = await fetch(`/api/board-meetings/${productionId}/control/${path}`, {
+      method: 'POST',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      toast(data.error || 'Action failed', 'error')
+      return false
+    }
+    return true
+  }
+
+  const postMotion = async (path: string, body?: Record<string, unknown>) => {
+    const res = await fetch(`/api/board-meetings/${productionId}/motion/${path}`, {
+      method: 'POST',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      toast(data.error || 'Action failed', 'error')
+      return false
+    }
+    return true
+  }
+
+  const onAction = async (action: string, body?: unknown) => {
+    if (action === 'open-attendance') {
+      setAttendanceOpen(true)
+      return
+    }
+
     setBusy(true)
     try {
-      const method = assignedIds.has(channelId) ? 'DELETE' : 'POST'
-      const res = await fetch(`/api/board-meetings/${productionId}/channels`, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ output_channel_id: channelId }),
-      })
-      if (!res.ok) {
-        const d = await res.json()
-        toast(d.error || 'Channel update failed', 'error')
+      const payload = body as Record<string, unknown> | undefined
+
+      if (action === 'hold-result') {
+        const res = await fetch(`/api/board-meetings/${productionId}/motion/result/hold`, { method: 'POST' })
+        if (!res.ok) {
+          const d = await res.json()
+          toast(d.error || 'Action failed', 'error')
+        } else {
+          setResultOverlay(prev =>
+            prev?.active
+              ? { ...prev, held: true, seconds_remaining: prev.total_duration }
+              : prev,
+          )
+          await load()
+        }
         return
       }
-      await load()
+
+      if (action === 'dismiss-result') {
+        const res = await fetch(`/api/board-meetings/${productionId}/motion/result/dismiss`, { method: 'POST' })
+        if (!res.ok) {
+          const d = await res.json()
+          toast(d.error || 'Action failed', 'error')
+        } else {
+          setResultOverlay(null)
+          await load()
+        }
+        return
+      }
+
+      if (MOTION_ACTIONS.has(action) || action.startsWith('motion/')) {
+        const path = action.startsWith('motion/') ? action.slice('motion/'.length) : action
+        if (await postMotion(path, payload)) await load()
+        return
+      }
+
+      if (action === 'clear-qr') {
+        if (await postControl('dismiss-qr')) await load()
+        return
+      }
+
+      if (action === 'toggle-channel') {
+        const channelId = payload?.output_channel_id as string
+        const method = assignedIds.has(channelId) ? 'DELETE' : 'POST'
+        const res = await fetch(`/api/board-meetings/${productionId}/channels`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ output_channel_id: channelId }),
+        })
+        if (!res.ok) {
+          const d = await res.json()
+          toast(d.error || 'Channel update failed', 'error')
+        } else await load()
+        return
+      }
+
+      if (action.startsWith('playlist-')) {
+        const playlistAction = action.replace('playlist-', '')
+        const res = await fetch(`/api/board-meetings/${productionId}/playlist/${playlistAction}`, {
+          method: 'POST',
+          headers: payload ? { 'Content-Type': 'application/json' } : undefined,
+          body: payload ? JSON.stringify(payload) : undefined,
+        })
+        if (!res.ok) {
+          const d = await res.json()
+          toast(d.error || 'Playlist action failed', 'error')
+        } else await load()
+        return
+      }
+
+      if (await postControl(action, payload)) await load()
     } finally {
       setBusy(false)
     }
   }
+
+  const viewBundle = useMemo(
+    () => (bundle ? { ...bundle, result_overlay: resultOverlay } : null),
+    [bundle, resultOverlay],
+  )
 
   if (loading) {
     return (
@@ -114,49 +248,20 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
     )
   }
 
-  if (!bundle) return <p style={{ color: muted, padding: 16 }}>Board meeting not found.</p>
+  if (!viewBundle) return <p style={{ color: 'var(--text-muted)', padding: 16 }}>Board meeting not found.</p>
 
-  const currentId = bundle.broadcast_state?.current_agenda_item_id
-  const currentItem = bundle.items.find(i => i.id === currentId)
-  const status = bundle.board_meeting.broadcast_status
-  const mode = bundle.broadcast_state?.mode || 'normal'
-  const canControl = bundle.board_meeting.agenda_locked && status !== 'archived' && status !== 'cancelled'
-  const broadcastable = bundle.items.filter(i => i.is_broadcastable)
-
-  const btn: React.CSSProperties = {
-    fontSize: '14px',
-    padding: '12px 16px',
-    minHeight: '48px',
-    borderRadius: '10px',
-    border: `0.5px solid ${border}`,
-    background: cardBg,
-    color: text,
-    cursor: busy ? 'wait' : 'pointer',
-    fontFamily: 'inherit',
-    fontWeight: 600,
-    opacity: busy ? 0.6 : 1,
-  }
-  const primaryBtn: React.CSSProperties = { ...btn, background: '#1e6cb5', color: '#fff', border: 'none' }
-  const dangerBtn: React.CSSProperties = { ...btn, background: '#8b1a1a', color: '#fff', border: 'none' }
+  const status = viewBundle.broadcast_state?.status || viewBundle.board_meeting.broadcast_status
+  const canControl = viewBundle.board_meeting.agenda_locked && status !== 'archived' && status !== 'cancelled'
 
   return (
     <ControlSurfaceView
       productionId={productionId}
-      bundle={bundle}
+      bundle={viewBundle}
       busy={busy}
       canControl={canControl}
-      currentId={currentId}
-      currentItem={currentItem}
-      status={status}
-      mode={mode}
-      broadcastable={broadcastable}
-      assignedIds={assignedIds}
-      btn={btn}
-      primaryBtn={primaryBtn}
-      dangerBtn={dangerBtn}
-      post={post}
-      toggleChannel={toggleChannel}
-      onUpdated={load}
+      onAction={onAction}
+      attendanceOpen={attendanceOpen}
+      onAttendanceOpenChange={setAttendanceOpen}
     />
   )
 }

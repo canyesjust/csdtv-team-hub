@@ -26,16 +26,60 @@ const STATUSES: { value: AttendanceStatus; label: string }[] = [
   { value: 'arrived_late', label: 'Arrived late' },
 ]
 
-export default function AttendancePanel({
-  productionId,
-  disabled,
-  onQuorumChange,
-}: {
+type ChipProps = {
+  attendance: AttendanceData
+  quorumNeeded: number
+  canEdit: boolean
+  onMark: () => void
+}
+
+type FullProps = {
   productionId: string
   disabled?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  hideTrigger?: boolean
   onQuorumChange?: (q: AttendanceData['quorum']) => void
-}) {
-  const [open, setOpen] = useState(false)
+}
+
+export default function AttendancePanel(props: ChipProps | FullProps) {
+  if ('onMark' in props) {
+    const { attendance, quorumNeeded, canEdit, onMark } = props
+    const met = attendance.quorum.quorum_met
+    return (
+      <button
+        type="button"
+        className="cs-touchbtn"
+        onClick={onMark}
+        disabled={!canEdit}
+        style={{ fontSize: 11, padding: '4px 10px', minHeight: 32 }}
+      >
+        {attendance.quorum.present_count}/{quorumNeeded} quorum{met ? ' ✓' : ''}
+      </button>
+    )
+  }
+
+  return <AttendancePanelFull {...props} />
+}
+
+function AttendancePanelFull({
+  productionId,
+  disabled,
+  open: openProp,
+  onOpenChange,
+  hideTrigger,
+  onQuorumChange,
+}: FullProps) {
+  const [openInternal, setOpenInternal] = useState(false)
+  const open = openProp ?? openInternal
+  const setOpen = (v: boolean) => {
+    setOpenInternal(v)
+    onOpenChange?.(v)
+  }
+
+  useEffect(() => {
+    if (openProp) setOpenInternal(true)
+  }, [openProp])
   const [data, setData] = useState<AttendanceData | null>(null)
   const [draft, setDraft] = useState<AttendanceRecord[]>([])
   const [saving, setSaving] = useState(false)
@@ -92,24 +136,26 @@ export default function AttendancePanel({
 
   return (
     <>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={openModal}
-        style={{
-          fontSize: '13px',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          border: `0.5px solid ${border}`,
-          background: 'var(--surface-1)',
-          color: text,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          fontFamily: 'inherit',
-        }}
-      >
-        Mark attendance
-      </button>
-      {q && (
+      {!hideTrigger && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={openModal}
+          style={{
+            fontSize: '13px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            border: `0.5px solid ${border}`,
+            background: 'var(--surface-1)',
+            color: text,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Mark attendance
+        </button>
+      )}
+      {q && !hideTrigger && (
         <span style={{ fontSize: '13px', color: q.quorum_met ? '#166534' : '#b45309', marginLeft: '8px' }}>
           {q.present_count} present · quorum {q.quorum_met ? 'met' : 'not met'} ({q.threshold} needed)
         </span>

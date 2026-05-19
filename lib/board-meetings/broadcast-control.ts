@@ -1,7 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { buildPublicLowerThirdPayload } from '@/lib/board-meetings/lower-third-control'
-import { loadMeetingPlaylistBundle, stopPlaylistOnGoLive } from '@/lib/board-meetings/playlist-playback'
-import { mediaPublicUrl } from '@/lib/board-meetings/media-library'
+import { stopPlaylistOnGoLive } from '@/lib/board-meetings/playlist-playback'
 
 export type BroadcastStateRow = {
   id: string
@@ -420,96 +418,6 @@ export async function endActiveTimer(
 }
 
 export async function loadControlBundle(service: SupabaseClient, productionId: string) {
-  const { data: bm } = await service.from('board_meetings').select('*').eq('production_id', productionId).maybeSingle()
-  if (!bm) return null
-
-  const [
-    { data: items },
-    { data: state },
-    { data: assignments },
-    { data: timers },
-    { data: events },
-    { data: channels },
-    { data: templates },
-    { data: qrPresets },
-  ] = await Promise.all([
-    service
-      .from('board_meeting_agenda_items')
-      .select('id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested, consent_block')
-      .eq('board_meeting_id', bm.id)
-      .order('sort_order', { ascending: true }),
-    service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', bm.id).maybeSingle(),
-    service
-      .from('channel_assignments')
-      .select('id, output_channel_id, assigned_at, unassigned_at, output_channels(channel_number, channel_name, view_type)')
-      .eq('board_meeting_id', bm.id)
-      .is('unassigned_at', null),
-    service
-      .from('meeting_timers')
-      .select('*')
-      .eq('board_meeting_id', bm.id)
-      .is('ended_at', null)
-      .order('started_at', { ascending: false })
-      .limit(1),
-    service
-      .from('meeting_event_log')
-      .select('id, event_type, event_data, occurred_at')
-      .eq('board_meeting_id', bm.id)
-      .order('occurred_at', { ascending: false })
-      .limit(50),
-    service.from('output_channels').select('id, channel_number, channel_name, view_type, tier').eq('is_active', true).order('channel_number'),
-    service.from('timer_templates').select('*').order('sort_order', { ascending: true }),
-    service.from('qr_presets').select('*').order('sort_order', { ascending: true }),
-  ])
-
-  const { data: prod } = await service
-    .from('productions')
-    .select('production_number, livestream_url, title')
-    .eq('id', productionId)
-    .maybeSingle()
-
-  const playlistBundle = await loadMeetingPlaylistBundle(service, bm.id)
-  const meeting_playlist = playlistBundle
-    ? {
-        playlist: playlistBundle.playlist,
-        items: playlistBundle.items.map(it => {
-          const asset = it.media_asset_id ? playlistBundle.assets.get(it.media_asset_id) : null
-          return {
-            ...it,
-            asset_url: asset ? mediaPublicUrl(service, asset.storage_path) : null,
-          }
-        }),
-      }
-    : null
-
-  let current_documents: { source_url: string | null; title: string }[] = []
-  if (state?.current_agenda_item_id) {
-    const { data: docs } = await service
-      .from('board_meeting_agenda_documents')
-      .select('title, source_url')
-      .eq('agenda_item_id', state.current_agenda_item_id)
-      .order('sort_order')
-    current_documents = docs || []
-  }
-
-  const active_lower_third = await buildPublicLowerThirdPayload(
-    service,
-    state?.active_lower_third_person_id,
-  )
-
-  return {
-    board_meeting: bm,
-    production: prod,
-    items: items || [],
-    broadcast_state: state,
-    active_lower_third,
-    current_documents,
-    channel_assignments: assignments || [],
-    active_timer: timers?.[0] ?? null,
-    recent_events: events || [],
-    output_channels: channels || [],
-    timer_templates: templates || [],
-    qr_presets: qrPresets || [],
-    meeting_playlist,
-  }
+  const { buildControlSurfaceBundle } = await import('@/lib/board-meetings/control-bundle')
+  return buildControlSurfaceBundle(service, productionId)
 }
