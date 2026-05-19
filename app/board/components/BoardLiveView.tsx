@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 
 function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
   const vr = state?.active_vote_result
@@ -32,7 +33,6 @@ function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
   }
   return null
 }
-import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 
 const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
   action: { bg: '#fef3c7', text: '#92400e' },

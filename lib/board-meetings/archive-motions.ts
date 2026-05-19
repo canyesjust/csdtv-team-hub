@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { listMotionsEnriched } from '@/lib/board-meetings/motion-control'
-
-type EnrichedMotion = Awaited<ReturnType<typeof listMotionsEnriched>>[number]
+import type { EnrichedMotion, EnrichedMotionVote } from '@/lib/board-meetings/motion-types'
 
 export type ArchiveMotionPayload = {
   id: string
@@ -18,6 +17,10 @@ export type ArchiveMotionPayload = {
   voted_at_offset_seconds: number | null
 }
 
+function personName(person: EnrichedMotionVote['person']): string {
+  return person?.display_name || 'Unknown'
+}
+
 export async function enrichAgendaWithMotions(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -30,8 +33,8 @@ export async function enrichAgendaWithMotions(
   t0: number | null,
 ) {
   const motions = await listMotionsEnriched(service, boardMeetingId)
-  const byItem = new Map<string, typeof motions>()
-  const byConsent = new Map<string, (typeof motions)[0]>()
+  const byItem = new Map<string, EnrichedMotion[]>()
+  const byConsent = new Map<string, EnrichedMotion>()
 
   for (const m of motions) {
     if (m.consent_block) {
@@ -46,7 +49,7 @@ export async function enrichAgendaWithMotions(
     }
   }
 
-  const substitutesByParent = new Map<string, typeof motions>()
+  const substitutesByParent = new Map<string, EnrichedMotion[]>()
   for (const m of motions) {
     if (m.parent_motion_id) {
       const list = substitutesByParent.get(m.parent_motion_id) || []
@@ -64,12 +67,12 @@ export async function enrichAgendaWithMotions(
       motion_type: m.motion_type,
       status: m.status,
       result: m.result,
-      moved_by: m.moved_by ? { id: m.moved_by.id, name: (m.moved_by as { display_name?: string }).display_name || '' } : null,
-      seconded_by: m.seconded_by ? { id: m.seconded_by.id, name: (m.seconded_by as { display_name?: string }).display_name || '' } : null,
+      moved_by: m.moved_by ? { id: m.moved_by.id, name: m.moved_by.display_name } : null,
+      seconded_by: m.seconded_by ? { id: m.seconded_by.id, name: m.seconded_by.display_name } : null,
       vote_mode: m.vote_mode,
       tally: m.tally,
-      votes: m.votes.map(v => ({
-        person: v.person ? { name: (v.person as { display_name?: string }).display_name || 'Unknown' } : { name: 'Unknown' },
+      votes: m.votes.map((v: EnrichedMotionVote) => ({
+        person: { name: personName(v.person) },
         vote: v.vote,
       })),
       substitutes: (substitutesByParent.get(m.id) || []).map(s => formatMotion(s)),

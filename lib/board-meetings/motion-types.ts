@@ -51,3 +51,43 @@ export type MotionRow = {
   voted_at: string | null
   resolved_at: string | null
 }
+
+export type LowerThirdPersonSnippet = {
+  id: string
+  display_name: string
+  primary_title: string | null
+}
+
+export type EnrichedMotionVote = {
+  person_id: string
+  vote: VoteValue
+  person: LowerThirdPersonSnippet | null
+}
+
+export type EnrichedMotion = MotionRow & {
+  moved_by: LowerThirdPersonSnippet | null | undefined
+  seconded_by: LowerThirdPersonSnippet | null | undefined
+  votes: EnrichedMotionVote[]
+  tally: VoteTally
+}
+
+export type PublicActiveMotion = {
+  id: string
+  motion_text: string
+  moved_by_name: string
+  seconded_by_name: string
+  motion_type: string
+  status: string
+  is_consent_block: boolean
+  consent_block_label: string | null
+  parent_motion_text: string | null
+}
+
+export type PublicActiveVoteResult = {
+  motion_id: string
+  result: string
+  motion_text: string
+  tally: VoteTally
+  votes: { person_name: string; vote: string }[]
+  remaining_seconds: number
+}

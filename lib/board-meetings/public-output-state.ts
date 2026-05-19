@@ -6,6 +6,9 @@ import {
   getVoteResultRemainingSeconds,
   isVoteResultActive,
 } from '@/lib/board-meetings/motion-control'
+import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
+
+export type { PublicActiveMotion, PublicActiveVoteResult }
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 const ADVANCE_EVENT_TYPES = ['agenda_item_advanced', 'advance', 'jump_to']
@@ -24,27 +27,6 @@ export type PublicAgendaItem = {
 export type PublicActiveQr = {
   url: string
   label: string
-  remaining_seconds: number
-}
-
-export type PublicActiveMotion = {
-  id: string
-  motion_text: string
-  moved_by_name: string
-  seconded_by_name: string
-  motion_type: string
-  status: string
-  is_consent_block: boolean
-  consent_block_label: string | null
-  parent_motion_text: string | null
-}
-
-export type PublicActiveVoteResult = {
-  motion_id: string
-  result: string
-  motion_text: string
-  tally: { yea: number; nay: number; abstain: number; absent: number; recused: number }
-  votes: { person_name: string; vote: string }[]
   remaining_seconds: number
 }
 

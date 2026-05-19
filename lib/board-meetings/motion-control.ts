@@ -7,7 +7,16 @@ import {
   loadAttendance,
   loadBoardMembers,
 } from '@/lib/board-meetings/attendance-control'
-import type { MotionResult, VoteMode, VoteTally, VoteValue } from '@/lib/board-meetings/motion-types'
+import type {
+  EnrichedMotion,
+  EnrichedMotionVote,
+  MotionResult,
+  PublicActiveMotion,
+  PublicActiveVoteResult,
+  VoteMode,
+  VoteTally,
+  VoteValue,
+} from '@/lib/board-meetings/motion-types'
 
 const VOTE_RESULT_DEFAULT_SECONDS = 8
 
@@ -436,14 +445,17 @@ export async function reopenMotion(
   await logMeetingEvent(service, boardMeetingId, 'motion_reopened', operatorId, { motion_id: motionId })
 }
 
-export async function listMotionsEnriched(service: SupabaseClient, boardMeetingId: string) {
+export async function listMotionsEnriched(
+  service: SupabaseClient,
+  boardMeetingId: string,
+): Promise<EnrichedMotion[]> {
   const { data: motions } = await service
     .from('meeting_motions')
     .select('*')
     .eq('board_meeting_id', boardMeetingId)
     .order('opened_at', { ascending: true })
 
-  if (!motions?.length) return []
+  if (!motions?.length) return [] as EnrichedMotion[]
 
   const personIds = new Set<string>()
   for (const m of motions) {
@@ -482,14 +494,17 @@ export async function listMotionsEnriched(service: SupabaseClient, boardMeetingI
     votesByMotion.set(v.motion_id, list)
   }
 
-  return motions.map(m => ({
+  return motions.map((m): EnrichedMotion => ({
     ...m,
+    status: m.status as EnrichedMotion['status'],
+    vote_mode: m.vote_mode as EnrichedMotion['vote_mode'],
+    result: m.result as EnrichedMotion['result'],
     moved_by: m.moved_by_person_id ? votePeopleMap.get(m.moved_by_person_id) : null,
     seconded_by: m.seconded_by_person_id ? votePeopleMap.get(m.seconded_by_person_id) : null,
-    votes: (votesByMotion.get(m.id) || []).map(v => ({
+    votes: (votesByMotion.get(m.id) || []).map((v): EnrichedMotionVote => ({
       person_id: v.person_id,
-      vote: v.vote,
-      person: votePeopleMap.get(v.person_id) || null,
+      vote: v.vote as VoteValue,
+      person: votePeopleMap.get(v.person_id) ?? null,
     })),
     tally: {
       yea: m.tally_yea ?? 0,
@@ -505,7 +520,7 @@ export async function buildPublicMotionPayload(
   service: SupabaseClient,
   motionId: string,
   boardMeetingId: string,
-) {
+): Promise<PublicActiveMotion | null> {
   const motion = await loadMotion(service, motionId, boardMeetingId)
   if (!motion) return null
 
@@ -552,7 +567,7 @@ export async function buildPublicVoteResultPayload(
   motionId: string,
   boardMeetingId: string,
   remainingSeconds: number,
-) {
+): Promise<PublicActiveVoteResult | null> {
   const motion = await loadMotion(service, motionId, boardMeetingId)
   if (!motion || !motion.result) return null
 

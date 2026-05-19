@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { PublicActiveMotion, PublicActiveVoteResult, PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 
 function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {

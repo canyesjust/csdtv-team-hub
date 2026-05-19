@@ -21,8 +21,8 @@ type Motion = {
   parent_motion_id: string | null
   consent_block: string | null
   result: string | null
-  moved_by?: { id: string; name: string } | null
-  seconded_by?: { id: string; name: string } | null
+  moved_by?: { id: string; display_name: string } | null
+  seconded_by?: { id: string; display_name: string } | null
 }
 
 type AttendanceRecord = { person_id: string; name: string; status: string }
