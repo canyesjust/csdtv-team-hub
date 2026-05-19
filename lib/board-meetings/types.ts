@@ -170,6 +170,8 @@ export type ControlBundle = {
     status: string
     mode: string
     live_started_at?: string | null
+    /** Operator-controlled meeting clock — not tied to go-live. */
+    elapsed_started_at?: string | null
     current_agenda_item_id?: string | null
     agenda_overlay_visible?: boolean
     active_qr_url?: string | null

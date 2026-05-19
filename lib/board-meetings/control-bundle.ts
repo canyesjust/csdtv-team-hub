@@ -140,6 +140,7 @@ export async function buildControlSurfaceBundle(
     status: bm.broadcast_status,
     mode: state?.mode ?? 'normal',
     live_started_at: liveEvent?.occurred_at ?? bm.scheduled_public_start ?? null,
+    elapsed_started_at: (state?.elapsed_started_at as string | null | undefined) ?? null,
     current_agenda_item_id: state?.current_agenda_item_id ?? null,
     agenda_overlay_visible: state?.overlay_visible ?? true,
     overlay_visible: state?.overlay_visible ?? true,

@@ -35,6 +35,8 @@ const OPTIMISTIC_ACTIONS = new Set([
   'go-back',
   'toggle-overlay',
   'toggle-channel',
+  'reset-elapsed',
+  'clear-elapsed',
 ])
 
 type ControlPostResult = { ok: true; data: Record<string, unknown> } | { ok: false }
@@ -397,6 +399,24 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         }
       }
 
+      if (action === 'reset-elapsed') {
+        return {
+          ...prev,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
+            elapsed_started_at: new Date().toISOString(),
+          }),
+        }
+      }
+
+      if (action === 'clear-elapsed') {
+        return {
+          ...prev,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
+            elapsed_started_at: null,
+          }),
+        }
+      }
+
       return prev
     })
   }, [])
@@ -441,6 +461,24 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
             }),
           }))
         }
+      }
+
+      if (action === 'reset-elapsed' && typeof data.elapsed_started_at === 'string') {
+        patchBundle(prev => ({
+          ...prev,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
+            elapsed_started_at: data.elapsed_started_at as string,
+          }),
+        }))
+      }
+
+      if (action === 'clear-elapsed') {
+        patchBundle(prev => ({
+          ...prev,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
+            elapsed_started_at: null,
+          }),
+        }))
       }
     },
     [patchBundle],

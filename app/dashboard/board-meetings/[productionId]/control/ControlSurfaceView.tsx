@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AgendaPanel from './components/AgendaPanel'
@@ -33,10 +34,14 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
   const status = broadcast_state?.status || 'draft'
   const mode = broadcast_state?.mode || 'normal'
   const isLive = status === 'live'
+  const elapsedStartedAt = broadcast_state?.elapsed_started_at ?? null
+  const [clockNowMs, setClockNowMs] = useState(() => Date.now())
 
-  const liveElapsed = isLive && broadcast_state?.live_started_at
-    ? formatElapsed(Date.now() - new Date(broadcast_state.live_started_at).getTime())
-    : null
+  useEffect(() => {
+    if (!elapsedStartedAt) return
+    const id = setInterval(() => setClockNowMs(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [elapsedStartedAt])
 
   const goToMotion = () => router.push(`/control/${productionId}/motion`)
   const prodNum = meeting?.production_number
@@ -65,7 +70,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           {isLive ? (
             <span className="cs-live-pill">
               <span className="cs-pulse-dot cs-onair-pulse" aria-hidden="true" />
-              LIVE{liveElapsed ? ` · ${liveElapsed}` : ''}
+              LIVE
             </span>
           ) : null}
 
@@ -119,11 +124,16 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             canControl={canControl}
             isLive={isLive}
             agendaOverlayOn={broadcast_state?.agenda_overlay_visible !== false}
-            busy={false}
+            busy={busy}
+            elapsedStartedAt={elapsedStartedAt}
+            clockNowMs={clockNowMs}
             onBack={() => onAction('go-back')}
             onAdvance={() => onAction('advance')}
             onToggleOverlay={() => onAction('toggle-overlay')}
             onGoLive={() => onAction('go-live')}
+            onStartElapsed={() => onAction('reset-elapsed')}
+            onResetElapsed={() => onAction('reset-elapsed')}
+            onClearElapsed={() => onAction('clear-elapsed')}
           />
 
           <LowerThirdPanel
@@ -219,15 +229,6 @@ function resolveActiveQR(state: ControlBundle['broadcast_state']) {
     startedAt: state.active_qr_started_at ?? null,
     durationSeconds: state.active_qr_duration_seconds ?? null,
   }
-}
-
-function formatElapsed(ms: number): string {
-  const totalSec = Math.max(0, Math.floor(ms / 1000))
-  const h = Math.floor(totalSec / 3600)
-  const m = Math.floor((totalSec % 3600) / 60)
-  const s = totalSec % 60
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 function summarizePreRoll(state: ControlBundle['playlist_state']): string {

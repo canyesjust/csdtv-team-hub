@@ -1,3 +1,5 @@
+import { OVERLAY_PANEL_BG_ALT, OVERLAY_TEXT_MUTED, OVERLAY_TEXT_PRIMARY } from '@/app/board/overlay-graphics'
+
 export const CANYONS_LOGO_SRC = encodeURI('/images/Logos/Canyons Color Long Medium.webp')
 export const CSDTV_LOGO_SRC = encodeURI('/images/Logos/csdtvlogo outlined.webp')
 
@@ -46,7 +48,9 @@ export default function BoardIdleBranding({
         maxWidth: '420px',
         width: '100%',
         padding: '36px 32px',
-        background: 'rgba(15, 23, 42, 0.95)',
+        backgroundColor: OVERLAY_PANEL_BG_ALT,
+        opacity: 1,
+        isolation: 'isolate',
         borderRadius: '8px',
       }
     : {
@@ -57,12 +61,12 @@ export default function BoardIdleBranding({
         width: '100%',
       }
 
-  const muted = isOverlay ? '#94a3b8' : '#8899bb'
+  const muted = isOverlay ? OVERLAY_TEXT_MUTED : '#8899bb'
   const broughtBy = isOverlay ? '#cbd5e1' : '#a8b8d8'
 
   return (
     <div style={page}>
-      <div style={card}>
+      <div className={isOverlay ? 'obs-overlay-graphic' : undefined} style={card}>
         <img
           src={CANYONS_LOGO_SRC}
           alt="Canyons School District"
@@ -91,7 +95,7 @@ export default function BoardIdleBranding({
             fontSize: '15px',
             fontWeight: 600,
             letterSpacing: '0.04em',
-            color: '#f0f4ff',
+            color: isOverlay ? OVERLAY_TEXT_PRIMARY : '#f0f4ff',
             lineHeight: 1.35,
           }}
         >

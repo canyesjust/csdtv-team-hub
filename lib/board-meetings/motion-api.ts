@@ -56,7 +56,7 @@ export async function loadMotionScreenBundle(productionId: string): Promise<Moti
 
   const { data: state } = await supabase
     .from('meeting_broadcast_state')
-    .select('current_agenda_item_id, status, live_started_at')
+    .select('current_agenda_item_id, elapsed_started_at')
     .eq('board_meeting_id', meetingId)
     .maybeSingle()
 
@@ -156,8 +156,8 @@ export async function loadMotionScreenBundle(productionId: string): Promise<Moti
     else if (v === 'absent') tally.absent++
   }
 
-  const liveElapsed = state?.status === 'live' && state.live_started_at
-    ? formatElapsed(Date.now() - new Date(state.live_started_at).getTime())
+  const liveElapsed = state?.elapsed_started_at
+    ? formatElapsed(Date.now() - new Date(state.elapsed_started_at).getTime())
     : null
 
   return {

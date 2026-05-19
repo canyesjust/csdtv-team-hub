@@ -7,20 +7,28 @@ import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-mee
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
+import {
+  overlayPanelStyle,
+  OVERLAY_PANEL_BG,
+  OVERLAY_TEXT_MUTED,
+  OVERLAY_TEXT_PRIMARY,
+  OVERLAY_TEXT_SUBTLE,
+} from '@/app/board/overlay-graphics'
 
 function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {
   return (
     <div
-      style={{
-        background: `linear-gradient(135deg, ${accent} 0%, rgba(10,15,30,0.95) 100%)`,
+      className="obs-overlay-graphic"
+      style={overlayPanelStyle({
+        background: `linear-gradient(135deg, ${accent} 0%, ${OVERLAY_PANEL_BG} 100%)`,
         padding: '32px 40px',
         borderRadius: '8px',
         color: '#fff',
         maxWidth: '640px',
-      }}
+      })}
     >
       <p style={{ margin: 0, fontSize: '32px', fontWeight: 700 }}>{title}</p>
-      {message ? <p style={{ margin: '12px 0 0', fontSize: '18px', opacity: 0.9 }}>{message}</p> : null}
+      {message ? <p style={{ margin: '12px 0 0', fontSize: '18px', color: OVERLAY_TEXT_MUTED }}>{message}</p> : null}
     </div>
   )
 }
@@ -40,18 +48,18 @@ function QrOverlay({ url, label }: { url: string; label: string }) {
 
   return (
     <div
-      style={{
+      className="obs-overlay-graphic"
+      style={overlayPanelStyle({
         position: 'absolute',
         bottom: '32px',
         right: '32px',
-        background: 'rgba(10, 15, 30, 0.92)',
         padding: '16px',
         borderRadius: '12px',
         textAlign: 'center',
-        color: '#f0f4ff',
+        color: OVERLAY_TEXT_PRIMARY,
         fontFamily: 'system-ui, sans-serif',
         zIndex: 20,
-      }}
+      })}
     >
       {dataUrl ? (
         <img src={dataUrl} alt="QR code" width={220} height={220} style={{ display: 'block' }} />
@@ -142,15 +150,15 @@ export default function BoardOverlayView({
           {showMotion && activeMotion ? <MotionCard motion={activeMotion} /> : null}
           {showItem && item ? (
             <div
-              style={{
-                background: 'rgba(10, 15, 30, 0.88)',
+              className="obs-overlay-graphic"
+              style={overlayPanelStyle({
                 borderLeft: '4px solid #3b82f6',
                 padding: '16px 20px',
                 borderRadius: '4px',
-                color: '#f0f4ff',
-              }}
+                color: OVERLAY_TEXT_PRIMARY,
+              })}
             >
-              <p style={{ margin: '0 0 4px', fontSize: '13px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <p style={{ margin: '0 0 4px', fontSize: '13px', color: OVERLAY_TEXT_SUBTLE, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {item.section_title} · {item.item_number}
               </p>
               <p style={{ margin: 0, fontSize: '22px', fontWeight: 600, lineHeight: 1.3 }}>{item.title}</p>
@@ -180,13 +188,13 @@ function MotionCard({ motion }: { motion: PublicActiveMotion }) {
 
   return (
     <div
-      style={{
-        background: 'rgba(10, 15, 30, 0.92)',
+      className="obs-overlay-graphic"
+      style={overlayPanelStyle({
         borderLeft: `4px solid ${isVoting ? '#60a5fa' : '#f59e0b'}`,
         padding: '16px 20px',
         borderRadius: '4px',
-        color: '#f0f4ff',
-      }}
+        color: OVERLAY_TEXT_PRIMARY,
+      })}
     >
       <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: isVoting ? '#93c5fd' : '#fbbf24' }}>
         {label}
@@ -211,16 +219,16 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
   const nayNames = result.votes.filter(v => v.vote === 'nay').map(v => v.person_name)
   return (
     <div
-      style={{
+      className="obs-overlay-graphic"
+      style={overlayPanelStyle({
         maxWidth: '480px',
-        background: 'rgba(10, 15, 30, 0.95)',
         padding: '14px 18px',
         borderRadius: '6px',
-        color: '#f0f4ff',
+        color: OVERLAY_TEXT_PRIMARY,
         border: `2px solid ${passed ? '#22c55e' : '#ef4444'}`,
-      }}
+      })}
     >
-      <p style={{ margin: '0 0 6px', fontSize: '12px', lineHeight: 1.35, opacity: 0.85 }}>
+      <p style={{ margin: '0 0 6px', fontSize: '12px', lineHeight: 1.35, color: OVERLAY_TEXT_MUTED }}>
         {result.motion_text.slice(0, 80)}
         {result.motion_text.length > 80 ? '…' : ''}
       </p>
@@ -241,18 +249,18 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
 function TimerBadge({ timer }: { timer: NonNullable<PublicChannelState['timer']> }) {
   return (
     <div
-      style={{
+      className="obs-overlay-graphic"
+      style={overlayPanelStyle({
         position: 'absolute',
         top: '24px',
         right: '24px',
-        background: 'rgba(10, 15, 30, 0.92)',
         padding: '12px 18px',
         borderRadius: '8px',
-        color: '#f0f4ff',
+        color: OVERLAY_TEXT_PRIMARY,
         fontFamily: 'monospace',
         fontSize: '28px',
         fontWeight: 700,
-      }}
+      })}
     >
       {timer.label}: {formatOffsetSeconds(timer.remaining_seconds)}
     </div>

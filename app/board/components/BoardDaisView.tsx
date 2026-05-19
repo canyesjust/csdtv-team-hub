@@ -57,9 +57,9 @@ export default function BoardDaisView({
   }, [])
 
   const elapsed = useMemo(() => {
-    if (!state?.live_started_at) return 0
-    return Math.max(0, Math.floor((now - new Date(state.live_started_at).getTime()) / 1000))
-  }, [state?.live_started_at, now])
+    if (!state?.elapsed_started_at) return 0
+    return Math.max(0, Math.floor((now - new Date(state.elapsed_started_at).getTime()) / 1000))
+  }, [state?.elapsed_started_at, now])
 
   const wallClock = useMemo(
     () => new Date(now).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),

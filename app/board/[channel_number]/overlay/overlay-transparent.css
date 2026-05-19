@@ -36,3 +36,9 @@ html:has(.broadcast-overlay-root) body {
 .broadcast-overlay-stage > * {
   pointer-events: auto;
 }
+
+/* OBS: keep graphic layers fully opaque (page background stays transparent). */
+.broadcast-overlay-stage .obs-overlay-graphic {
+  opacity: 1 !important;
+  isolation: isolate;
+}

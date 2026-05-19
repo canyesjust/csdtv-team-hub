@@ -18,7 +18,7 @@ import type {
 /** Volatile overlay fields — no event log, completed list, or presenter/doc lookups. */
 export type PublicChannelLivePatch = Pick<
   PublicChannelState,
-  'active' | 'result_overlay' | 'state' | 'current_item' | 'timer' | 'upcoming_items'
+  'active' | 'result_overlay' | 'state' | 'current_item' | 'timer' | 'upcoming_items' | 'elapsed_started_at'
 > & {
   meeting?: Pick<NonNullable<PublicChannelState['meeting']>, 'broadcast_status'> | null
 }
@@ -88,6 +88,8 @@ export function mergePublicChannelState(
     current_item: mergedItem,
     upcoming_items: live.upcoming_items !== undefined ? live.upcoming_items : prev.upcoming_items,
     timer: live.timer !== undefined ? live.timer : prev.timer,
+    elapsed_started_at:
+      live.elapsed_started_at !== undefined ? live.elapsed_started_at : prev.elapsed_started_at,
     state:
       live.state && prev.state
         ? { ...prev.state, ...live.state }
@@ -245,5 +247,6 @@ export async function buildPublicChannelLivePatch(
     current_item,
     upcoming_items,
     timer: timerPayload,
+    elapsed_started_at: (bstate?.elapsed_started_at as string | null | undefined) ?? null,
   }
 }

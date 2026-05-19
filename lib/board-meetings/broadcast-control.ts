@@ -12,6 +12,7 @@ export type BroadcastStateRow = {
   mode_duration_seconds: number | null
   mode_message: string | null
   active_timer_id: string | null
+  elapsed_started_at: string | null
   updated_at: string
   updated_by: string | null
 }
@@ -216,7 +217,61 @@ export async function endMeeting(
     })
     .eq('board_meeting_id', boardMeetingId)
 
+  await service
+    .from('meeting_broadcast_state')
+    .update({ elapsed_started_at: null, updated_at: new Date().toISOString(), updated_by: operatorId })
+    .eq('board_meeting_id', boardMeetingId)
+
   await logMeetingEvent(service, boardMeetingId, 'end_meeting', operatorId)
+}
+
+/** Start or reset the meeting elapsed clock (independent of go-live). */
+export async function resetMeetingElapsed(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+) {
+  const now = new Date().toISOString()
+  const { data: updated, error } = await service
+    .from('meeting_broadcast_state')
+    .update({ elapsed_started_at: now, updated_at: now, updated_by: operatorId })
+    .eq('board_meeting_id', boardMeetingId)
+    .select('id, elapsed_started_at')
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!updated) {
+    await ensureBroadcastState(service, boardMeetingId, operatorId)
+    const retry = await service
+      .from('meeting_broadcast_state')
+      .update({ elapsed_started_at: now, updated_at: now, updated_by: operatorId })
+      .eq('board_meeting_id', boardMeetingId)
+      .select('elapsed_started_at')
+      .single()
+    if (retry.error) throw new Error(retry.error.message)
+    void logMeetingEvent(service, boardMeetingId, 'elapsed_reset', operatorId)
+    return retry.data.elapsed_started_at as string
+  }
+
+  void logMeetingEvent(service, boardMeetingId, 'elapsed_reset', operatorId)
+  return updated.elapsed_started_at as string
+}
+
+export async function clearMeetingElapsed(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+) {
+  const { error } = await service
+    .from('meeting_broadcast_state')
+    .update({
+      elapsed_started_at: null,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+  if (error) throw new Error(error.message)
+  void logMeetingEvent(service, boardMeetingId, 'elapsed_cleared', operatorId)
 }
 
 export async function advanceItem(

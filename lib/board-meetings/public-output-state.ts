@@ -86,6 +86,8 @@ export type PublicChannelState = {
     show_on_dais: boolean
   } | null
   live_started_at: string | null
+  /** Meeting elapsed clock for dais / displays (independent of go-live). */
+  elapsed_started_at: string | null
 }
 
 async function loadItemExtras(
@@ -171,6 +173,7 @@ export async function buildPublicChannelState(
     completed_items: [],
     timer: null,
     live_started_at: null,
+    elapsed_started_at: null,
   }
 
   const { data: assignment } = await service
@@ -352,5 +355,6 @@ export async function buildPublicChannelState(
     completed_items,
     timer: timerPayload,
     live_started_at,
+    elapsed_started_at: (bstate?.elapsed_started_at as string | null | undefined) ?? null,
   }
 }
