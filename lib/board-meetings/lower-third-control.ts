@@ -92,7 +92,7 @@ export async function setActiveLowerThird(
     throw new Error('Failed to save active lower third on broadcast state')
   }
 
-  await logMeetingEvent(service, boardMeetingId, 'lower_third_set', operatorId, {
+  void logMeetingEvent(service, boardMeetingId, 'lower_third_set', operatorId, {
     person_id: personId,
     display_name: person.display_name,
   })
@@ -116,5 +116,5 @@ export async function clearActiveLowerThird(
 
   if (updateError) throw new Error(updateError.message)
 
-  await logMeetingEvent(service, boardMeetingId, 'lower_third_cleared', operatorId)
+  void logMeetingEvent(service, boardMeetingId, 'lower_third_cleared', operatorId)
 }

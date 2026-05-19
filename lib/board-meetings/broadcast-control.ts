@@ -34,7 +34,7 @@ export async function logMeetingEvent(
   operatorId: string,
   eventData?: Record<string, unknown>,
 ) {
-  await service.from('meeting_event_log').insert({
+  void service.from('meeting_event_log').insert({
     board_meeting_id: boardMeetingId,
     event_type: eventType,
     event_data: eventData ?? null,

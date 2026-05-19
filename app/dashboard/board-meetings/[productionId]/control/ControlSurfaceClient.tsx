@@ -6,6 +6,7 @@ import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import ControlSurfaceView from './ControlSurfaceView'
 import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
+import type { ControlLivePatch } from '@/lib/board-meetings/control-live-bundle'
 import type { ControlBundle, ResultOverlayState } from '@/lib/board-meetings/types'
 
 const MOTION_ACTIONS = new Set([
@@ -23,7 +24,17 @@ const MOTION_ACTIONS = new Set([
 
 const REALTIME_DEBOUNCE_MS = 200
 /** Skip redundant realtime reload right after a local action refresh. */
-const REALTIME_SUPPRESS_MS = 900
+const REALTIME_SUPPRESS_MS = 2500
+
+const OPTIMISTIC_ACTIONS = new Set([
+  'set-lower-third',
+  'clear-lower-third',
+  'jump-to',
+  'advance',
+  'go-back',
+  'toggle-overlay',
+  'toggle-channel',
+])
 
 type ControlPostResult = { ok: true; data: Record<string, unknown> } | { ok: false }
 
@@ -61,6 +72,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     lower_third_people: ControlBundle['lower_third_people']
   } | null>(null)
   const suppressRealtimeUntilRef = useRef(0)
+  const liveFetchGenRef = useRef(0)
 
   const applyBundle = useCallback((body: ControlBundle) => {
     if (body.board_meeting.agenda_locked) {
@@ -101,15 +113,32 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     [productionId, applyBundle],
   )
 
+  const applyLivePatch = useCallback((live: ControlLivePatch) => {
+    setBundle(prev => (prev ? { ...prev, ...live } : prev))
+    setResultOverlay(live.result_overlay ?? null)
+  }, [])
+
+  const loadLive = useCallback(async () => {
+    const gen = ++liveFetchGenRef.current
+    const res = await fetch(`/api/board-meetings/${productionId}/control/live`)
+    if (gen !== liveFetchGenRef.current) return
+    const body = await res.json().catch(() => null)
+    if (!res.ok || !body) {
+      if (res.status !== 0) toast((body as { error?: string })?.error || 'Failed to sync live state', 'error')
+      return
+    }
+    applyLivePatch(body as ControlLivePatch)
+  }, [productionId, applyLivePatch])
+
   const refreshInBackground = useCallback(() => {
     suppressRealtimeUntilRef.current = Date.now() + REALTIME_SUPPRESS_MS
-    void load()
-  }, [load])
+    void loadLive()
+  }, [loadLive])
 
   /** Slim bundle — skips full playlist items and timer templates. */
   const loadDebounced = useDebouncedCallback(() => {
     if (Date.now() < suppressRealtimeUntilRef.current) return
-    void load()
+    void loadLive()
   }, REALTIME_DEBOUNCE_MS)
 
   const loadUtilitiesDebounced = useDebouncedCallback(() => {
@@ -203,7 +232,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` },
         () => {
-          loadDebounced()
+          void load()
         },
       )
       .on(
@@ -391,6 +420,37 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     [patchBundle],
   )
 
+  const runOptimisticPost = useCallback(
+    async (action: string, payload?: Record<string, unknown>) => {
+      applyOptimistic(action, payload)
+      suppressRealtimeUntilRef.current = Date.now() + REALTIME_SUPPRESS_MS
+
+      if (action === 'toggle-channel') {
+        const channelId = payload?.output_channel_id as string
+        const method = assignedIds.has(channelId) ? 'DELETE' : 'POST'
+        const res = await fetch(`/api/board-meetings/${productionId}/channels`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ output_channel_id: channelId }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast((data as { error?: string }).error || 'Channel update failed', 'error')
+          void loadLive()
+        }
+        return
+      }
+
+      const result = await postControl(action, payload)
+      if (result.ok) {
+        applyServerHints(action, result.data)
+        return
+      }
+      void loadLive()
+    },
+    [applyOptimistic, applyServerHints, assignedIds, loadLive, productionId],
+  )
+
   const onAction = async (action: string, body?: unknown) => {
     if (action === 'open-attendance') {
       setAttendanceOpen(true)
@@ -398,17 +458,10 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     }
 
     const payload = body as Record<string, unknown> | undefined
-    const optimisticActions = new Set([
-      'set-lower-third',
-      'clear-lower-third',
-      'jump-to',
-      'advance',
-      'go-back',
-      'toggle-overlay',
-      'toggle-channel',
-    ])
-    if (optimisticActions.has(action)) {
-      applyOptimistic(action, payload)
+
+    if (OPTIMISTIC_ACTIONS.has(action)) {
+      void runOptimisticPost(action, payload)
+      return
     }
 
     setBusy(true)
@@ -455,24 +508,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         return
       }
 
-      if (action === 'toggle-channel') {
-        const channelId = payload?.output_channel_id as string
-        const method = assignedIds.has(channelId) ? 'DELETE' : 'POST'
-        const res = await fetch(`/api/board-meetings/${productionId}/channels`, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ output_channel_id: channelId }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          toast((data as { error?: string }).error || 'Channel update failed', 'error')
-          refreshInBackground()
-        } else {
-          refreshInBackground()
-        }
-        return
-      }
-
       if (action.startsWith('playlist-')) {
         const playlistAction = action.replace('playlist-', '')
         const res = await fetch(`/api/board-meetings/${productionId}/playlist/${playlistAction}`, {
@@ -493,8 +528,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       const result = await postControl(action, payload)
       if (result.ok) {
         applyServerHints(action, result.data)
-        refreshInBackground()
-      } else if (optimisticActions.has(action)) {
         refreshInBackground()
       }
     } finally {
