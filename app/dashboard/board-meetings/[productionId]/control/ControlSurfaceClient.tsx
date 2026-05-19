@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
@@ -45,6 +45,71 @@ type ControlBundle = {
   recent_events: { event_type: string; occurred_at: string }[]
   output_channels: { id: string; channel_number: number; channel_name: string }[]
   timer_templates: { id: string; name: string; duration_seconds: number }[]
+}
+
+function CollapsiblePanel({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string
+  summary?: string
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const headerBg = 'var(--surface-2)'
+
+  return (
+    <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          padding: '12px 14px',
+          minHeight: '48px',
+          background: headerBg,
+          border: 'none',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: '15px', fontWeight: 600, color: text }}>{title}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {!open && summary ? (
+            <span style={{ fontSize: '13px', color: muted, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {summary}
+            </span>
+          ) : null}
+          <span
+            style={{
+              fontSize: '11px',
+              color: muted,
+              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s',
+            }}
+            aria-hidden
+          >
+            ▼
+          </span>
+        </span>
+      </button>
+      {open ? (
+        <div style={{ padding: '12px 14px', borderTop: `0.5px solid ${border}` }}>{children}</div>
+      ) : null}
+    </div>
+  )
 }
 
 export default function ControlSurfaceClient({ productionId }: { productionId: string }) {
@@ -174,6 +239,19 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px', fontSize: '14px' }}>
+        <Link href="/dashboard/board-meetings" style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}>
+          ← Board Meetings
+        </Link>
+        {bundle.production?.production_number != null && (
+          <Link
+            href={`/dashboard/productions/${bundle.production.production_number}?tab=boardmeeting`}
+            style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}
+          >
+            ← Board Meeting tab
+          </Link>
+        )}
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '22px', color: text }}>Control surface</h1>
@@ -281,8 +359,18 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
           <PlaylistLiveControls productionId={productionId} disabled={!canControl} onUpdated={load} />
         </section>
 
-        <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px' }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: text }}>Modes & timers</h2>
+        <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <CollapsiblePanel
+            title="Modes & timers"
+            summary={
+              bundle.active_timer
+                ? `Timer: ${bundle.active_timer.label}`
+                : mode !== 'normal'
+                  ? mode.replace(/_/g, ' ')
+                  : 'Recess, tech diff, timers'
+            }
+            defaultOpen={mode !== 'normal' || !!bundle.active_timer}
+          >
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
             <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('recess', { message: 'Recess' })}>Recess</button>
             <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('technical-difficulties')}>Tech diff</button>
@@ -300,12 +388,17 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
           {bundle.active_timer && (
             <p style={{ fontSize: '13px', color: muted, margin: '0 0 8px' }}>Timer: {bundle.active_timer.label}</p>
           )}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             <button type="button" style={btn} disabled={!canControl || busy || !bundle.active_timer} onClick={() => post('end-timer')}>End timer</button>
             <button type="button" style={btn} disabled={!canControl || busy || !bundle.active_timer} onClick={() => post('cancel-timer')}>Cancel timer</button>
           </div>
-          <h3 style={{ margin: '0 0 8px', fontSize: '13px', color: muted }}>Output channels</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+          </CollapsiblePanel>
+
+          <CollapsiblePanel
+            title="Output channels"
+            summary={`${assignedIds.size} of ${bundle.output_channels.length} assigned`}
+          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {bundle.output_channels.map(ch => (
               <label key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: text, minHeight: '44px' }}>
                 <input
@@ -318,14 +411,28 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
               </label>
             ))}
           </div>
-          <h3 style={{ margin: '0 0 8px', fontSize: '13px', color: muted }}>Recent events</h3>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', maxHeight: '160px', overflowY: 'auto' }}>
-            {bundle.recent_events.slice(0, 12).map((ev, i) => (
-              <li key={i} style={{ fontSize: '12px', color: muted, padding: '4px 0', borderBottom: `0.5px solid ${border}` }}>
-                {new Date(ev.occurred_at).toLocaleTimeString()} — {ev.event_type}
-              </li>
-            ))}
-          </ul>
+          </CollapsiblePanel>
+
+          <CollapsiblePanel
+            title="Recent events"
+            summary={
+              bundle.recent_events[0]
+                ? `${new Date(bundle.recent_events[0].occurred_at).toLocaleTimeString()} — ${bundle.recent_events[0].event_type}`
+                : 'No events yet'
+            }
+          >
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', maxHeight: '200px', overflowY: 'auto' }}>
+              {bundle.recent_events.length === 0 ? (
+                <li style={{ fontSize: '13px', color: muted }}>No events logged yet.</li>
+              ) : (
+                bundle.recent_events.slice(0, 20).map((ev, i) => (
+                  <li key={i} style={{ fontSize: '12px', color: muted, padding: '6px 0', borderBottom: `0.5px solid ${border}` }}>
+                    {new Date(ev.occurred_at).toLocaleTimeString()} — {ev.event_type}
+                  </li>
+                ))
+              )}
+            </ul>
+          </CollapsiblePanel>
         </section>
 
         <div style={{ gridColumn: '1 / -1' }}>

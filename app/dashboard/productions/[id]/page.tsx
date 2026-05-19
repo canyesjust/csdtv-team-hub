@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'r
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Loader from '../../components/Loader'
 import CommentsSection from '../../components/CommentsSection'
@@ -148,6 +148,7 @@ export default function ProductionDetailPage() {
   const dark = theme === 'dark'
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const productionNum = params.id as string
 
@@ -328,6 +329,12 @@ export default function ProductionDetailPage() {
   }, [supabase, productionNum, router])
 
   useEffect(() => { loadData() }, [loadData])
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'boardmeeting' && production?.request_type_number === 4) {
+      setActiveTab('boardmeeting')
+    }
+  }, [searchParams, production?.request_type_number])
 
   const getTypeLabel = (prod: Production) => prod.request_type_label || prod.type || 'Unknown'
   const isBoardMeetingProduction = production?.request_type_number === 4

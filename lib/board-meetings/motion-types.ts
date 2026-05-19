@@ -74,8 +74,8 @@ export type EnrichedMotion = MotionRow & {
 export type PublicActiveMotion = {
   id: string
   motion_text: string
-  moved_by_name: string
-  seconded_by_name: string
+  moved_by_name: string | null
+  seconded_by_name: string | null
   motion_type: string
   status: string
   is_consent_block: boolean

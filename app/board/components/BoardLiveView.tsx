@@ -20,15 +20,28 @@ function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
     )
   }
   if (motion) {
+    const isVoting = motion.status === 'voting'
+    const hasMover = !!motion.moved_by_name
+    const hasSeconder = !!motion.seconded_by_name
+    const label = isVoting
+      ? 'Voting open'
+      : !hasMover
+        ? 'Motion being made'
+        : 'Motion on floor'
     return (
-      <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: '#fffbeb', border: '1px solid #fde68a' }}>
-        <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#92400e' }}>
-          {motion.status === 'voting' ? 'Vote in progress' : 'Motion on floor'}
+      <div style={{ marginTop: '16px', padding: '12px', borderRadius: '8px', background: isVoting ? '#eff6ff' : '#fffbeb', border: `1px solid ${isVoting ? '#93c5fd' : '#fde68a'}` }}>
+        <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: isVoting ? '#1d4ed8' : '#92400e' }}>
+          {label}
         </p>
-        <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{motion.motion_text}</p>
-        <p style={{ margin: 0, fontSize: '13px', color: '#78716c' }}>
-          {motion.moved_by_name} · seconded by {motion.seconded_by_name}
-        </p>
+        {hasMover && <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{motion.motion_text}</p>}
+        {hasMover && hasSeconder && (
+          <p style={{ margin: 0, fontSize: '13px', color: '#78716c' }}>
+            {motion.moved_by_name} · seconded by {motion.seconded_by_name}
+          </p>
+        )}
+        {hasMover && !hasSeconder && (
+          <p style={{ margin: 0, fontSize: '13px', color: '#78716c' }}>Moved by {motion.moved_by_name}</p>
+        )}
       </div>
     )
   }

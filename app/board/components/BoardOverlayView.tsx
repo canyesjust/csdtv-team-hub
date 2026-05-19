@@ -171,27 +171,43 @@ export default function BoardOverlayView({
 }
 
 function MotionCard({ motion }: { motion: PublicActiveMotion }) {
+  const isVoting = motion.status === 'voting'
+  const hasMover = !!motion.moved_by_name
+  const hasSeconder = !!motion.seconded_by_name
   const text = motion.motion_text.length > 200 ? `${motion.motion_text.slice(0, 200)}…` : motion.motion_text
+  const label = isVoting
+    ? 'Voting open'
+    : !hasMover
+      ? 'Motion being made'
+      : motion.motion_type === 'substitute'
+        ? 'Substitute motion'
+        : 'Motion on floor'
+
   return (
     <div
       style={{
         maxWidth: '720px',
         background: 'rgba(10, 15, 30, 0.92)',
-        borderLeft: '4px solid #f59e0b',
+        borderLeft: `4px solid ${isVoting ? '#60a5fa' : '#f59e0b'}`,
         padding: '16px 20px',
         borderRadius: '4px',
         color: '#f0f4ff',
         marginBottom: '12px',
       }}
     >
-      <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#fbbf24' }}>
-        {motion.motion_type === 'substitute' ? 'Substitute motion' : 'Motion on floor'}
+      <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: isVoting ? '#93c5fd' : '#fbbf24' }}>
+        {label}
         {motion.is_consent_block && motion.consent_block_label ? ` · ${motion.consent_block_label}` : ''}
       </p>
-      <p style={{ margin: '0 0 10px', fontSize: '20px', fontWeight: 600, lineHeight: 1.35 }}>{text}</p>
-      <p style={{ margin: 0, fontSize: '14px', color: '#94a3b8' }}>
-        Moved by {motion.moved_by_name}, seconded by {motion.seconded_by_name}
-      </p>
+      {hasMover && <p style={{ margin: '0 0 10px', fontSize: '20px', fontWeight: 600, lineHeight: 1.35 }}>{text}</p>}
+      {hasMover && hasSeconder && (
+        <p style={{ margin: 0, fontSize: '14px', color: '#94a3b8' }}>
+          {motion.moved_by_name}, seconded by {motion.seconded_by_name}
+        </p>
+      )}
+      {hasMover && !hasSeconder && (
+        <p style={{ margin: 0, fontSize: '14px', color: '#94a3b8' }}>Moved by {motion.moved_by_name}</p>
+      )}
     </div>
   )
 }

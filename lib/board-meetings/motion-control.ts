@@ -153,11 +153,13 @@ export async function openMotion(
     motion_type: string
     parent_motion_id?: string | null
     motion_text: string
-    moved_by_person_id: string
-    seconded_by_person_id: string
+    moved_by_person_id?: string | null
+    seconded_by_person_id?: string | null
   },
 ) {
-  if (input.moved_by_person_id === input.seconded_by_person_id) {
+  const mover = input.moved_by_person_id ?? null
+  const seconder = input.seconded_by_person_id ?? null
+  if (mover && seconder && mover === seconder) {
     throw new Error('Mover and seconder must be different people')
   }
 
@@ -172,8 +174,8 @@ export async function openMotion(
       motion_type: input.motion_type,
       parent_motion_id: input.parent_motion_id ?? null,
       motion_text: input.motion_text.trim(),
-      moved_by_person_id: input.moved_by_person_id,
-      seconded_by_person_id: input.seconded_by_person_id,
+      moved_by_person_id: mover,
+      seconded_by_person_id: seconder,
       status: 'open_for_discussion',
       opened_by: operatorId,
     })
@@ -192,6 +194,47 @@ export async function openMotion(
   return motion
 }
 
+export async function updateMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+  patch: {
+    motion_text?: string
+    moved_by_person_id?: string | null
+    seconded_by_person_id?: string | null
+  },
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (!['open_for_discussion', 'voting'].includes(motion.status)) {
+    throw new Error('Motion cannot be edited in its current state')
+  }
+
+  const movedBy =
+    patch.moved_by_person_id !== undefined ? patch.moved_by_person_id : motion.moved_by_person_id
+  const secondedBy =
+    patch.seconded_by_person_id !== undefined ? patch.seconded_by_person_id : motion.seconded_by_person_id
+  if (movedBy && secondedBy && movedBy === secondedBy) {
+    throw new Error('Mover and seconder must be different people')
+  }
+
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (patch.motion_text !== undefined) row.motion_text = patch.motion_text.trim()
+  if (patch.moved_by_person_id !== undefined) row.moved_by_person_id = patch.moved_by_person_id
+  if (patch.seconded_by_person_id !== undefined) row.seconded_by_person_id = patch.seconded_by_person_id
+
+  const { error } = await service.from('meeting_motions').update(row).eq('id', motionId)
+  if (error) throw new Error(error.message)
+
+  await setActiveMotion(service, boardMeetingId, motionId, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'motion_updated', operatorId, {
+    motion_id: motionId,
+    moved_by_person_id: movedBy,
+    seconded_by_person_id: secondedBy,
+  })
+}
+
 export async function openVote(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -203,6 +246,9 @@ export async function openVote(
   if (!motion) throw new Error('Motion not found')
   if (!['open_for_discussion', 'voting'].includes(motion.status)) {
     throw new Error('Motion is not open for voting')
+  }
+  if (!motion.moved_by_person_id || !motion.seconded_by_person_id) {
+    throw new Error('Select mover and seconder before opening the vote')
   }
 
   await service
@@ -557,8 +603,8 @@ export async function buildPublicMotionPayload(
   return {
     id: motion.id,
     motion_text: motion.motion_text,
-    moved_by_name: motion.moved_by_person_id ? pmap.get(motion.moved_by_person_id) || '' : '',
-    seconded_by_name: motion.seconded_by_person_id ? pmap.get(motion.seconded_by_person_id) || '' : '',
+    moved_by_name: motion.moved_by_person_id ? pmap.get(motion.moved_by_person_id) || null : null,
+    seconded_by_name: motion.seconded_by_person_id ? pmap.get(motion.seconded_by_person_id) || null : null,
     motion_type: motion.motion_type,
     status: motion.status,
     is_consent_block: !!motion.consent_block,

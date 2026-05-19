@@ -27,8 +27,10 @@ export default function PeopleTab() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const [people, setPeople] = useState<LowerThirdPerson[]>([])
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -66,22 +68,32 @@ export default function PeopleTab() {
     return base ? `${base}/storage/v1/object/public/lower-third-photos/${path}` : null
   }
 
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search), 300)
+    return () => window.clearTimeout(t)
+  }, [search])
+
   const load = useCallback(async () => {
     const q = new URLSearchParams()
     if (categoryFilter !== 'all') q.set('category', categoryFilter)
-    if (search.trim()) q.set('search', search.trim())
+    if (debouncedSearch.trim()) q.set('search', debouncedSearch.trim())
     const res = await fetch(`/api/lower-third-people?${q}`)
     const body = await res.json()
     if (!res.ok) {
       toast(body.error || 'Failed to load people', 'error')
-      setLoading(false)
+      setInitialLoading(false)
+      setRefreshing(false)
       return
     }
     setPeople(body.people || [])
-    setLoading(false)
-  }, [categoryFilter, search])
+    setInitialLoading(false)
+    setRefreshing(false)
+  }, [categoryFilter, debouncedSearch])
 
-  useEffect(() => { setLoading(true); load() }, [load])
+  useEffect(() => {
+    setRefreshing(true)
+    load()
+  }, [load])
 
   const openAdd = () => {
     setEditingId(null)
@@ -191,7 +203,7 @@ export default function PeopleTab() {
     load()
   }
 
-  if (loading) return <Loader />
+  if (initialLoading) return <Loader />
 
   return (
     <div>
@@ -201,6 +213,7 @@ export default function PeopleTab() {
           onChange={e => setSearch(e.target.value)}
           placeholder="Search people..."
           style={{ ...inputStyle, flex: '1 1 200px', maxWidth: '320px' }}
+          aria-busy={refreshing}
         />
         <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', flex: '0 0 auto' }}>
           <option value="all">All categories</option>

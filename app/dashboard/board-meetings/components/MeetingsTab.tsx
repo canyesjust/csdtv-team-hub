@@ -150,7 +150,7 @@ export default function MeetingsTab() {
         minHeight: '44px',
       }}
     >
-      <Link href={`/dashboard/productions/${r.production_number}`} style={{ flex: 1, textDecoration: 'none', color: text }}>
+      <Link href={`/dashboard/productions/${r.production_number}?tab=boardmeeting`} style={{ flex: 1, textDecoration: 'none', color: text }}>
         <div>
           <div style={{ fontWeight: 600, fontSize: '15px' }}>#{r.production_number} {r.title}</div>
           <div style={{ fontSize: '13px', color: muted, marginTop: '4px' }}>
@@ -179,7 +179,7 @@ export default function MeetingsTab() {
             Archive →
           </Link>
         )}
-        <Link href={`/dashboard/productions/${r.production_number}`} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none' }}>
+        <Link href={`/dashboard/productions/${r.production_number}?tab=boardmeeting`} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none' }}>
           Open →
         </Link>
       </div>
