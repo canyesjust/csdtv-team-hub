@@ -38,6 +38,16 @@ const OPTIMISTIC_ACTIONS = new Set([
 
 type ControlPostResult = { ok: true; data: Record<string, unknown> } | { ok: false }
 
+type BroadcastState = NonNullable<ControlBundle['broadcast_state']>
+
+function patchBroadcastState(
+  prev: ControlBundle['broadcast_state'],
+  patch: Partial<BroadcastState>,
+): BroadcastState {
+  const base: BroadcastState = prev ?? { status: 'prepared', mode: 'normal' }
+  return { ...base, ...patch }
+}
+
 type Props = {
   productionId: string
   initialBundle?: ControlBundle | null
@@ -295,10 +305,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
             officer_position: person.officer_position,
             photo_url: null,
           },
-          broadcast_state: {
-            ...prev.broadcast_state,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
             active_lower_third_person_id: person.id,
-          },
+          }),
         }))
         return
       }
@@ -308,10 +317,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           ...prev,
           lower_third_active: null,
           active_lower_third: null,
-          broadcast_state: {
-            ...prev.broadcast_state,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
             active_lower_third_person_id: null,
-          },
+          }),
         }))
         return
       }
@@ -321,10 +329,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         if (!agendaItemId) return
         patchBundle(prev => ({
           ...prev,
-          broadcast_state: {
-            ...prev.broadcast_state,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
             current_agenda_item_id: agendaItemId,
-          },
+          }),
         }))
         return
       }
@@ -338,10 +345,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         if (!next) return
         patchBundle(prev => ({
           ...prev,
-          broadcast_state: {
-            ...prev.broadcast_state,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
             current_agenda_item_id: next.id,
-          },
+          }),
         }))
         return
       }
@@ -350,11 +356,10 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         const visible = bundle.broadcast_state?.agenda_overlay_visible !== false
         patchBundle(prev => ({
           ...prev,
-          broadcast_state: {
-            ...prev.broadcast_state,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
             agenda_overlay_visible: !visible,
             overlay_visible: !visible,
-          },
+          }),
         }))
         return
       }
@@ -409,10 +414,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         if (item?.id) {
           patchBundle(prev => ({
             ...prev,
-            broadcast_state: {
-              ...prev.broadcast_state,
+            broadcast_state: patchBroadcastState(prev.broadcast_state, {
               current_agenda_item_id: item.id,
-            },
+            }),
           }))
         }
       }
