@@ -3,6 +3,15 @@ import { ensureBroadcastState, logMeetingEvent } from '@/lib/board-meetings/broa
 
 const PHOTO_BUCKET = 'lower-third-photos'
 
+export type LowerThirdPosition = 'left' | 'center' | 'right'
+
+export const LOWER_THIRD_POSITIONS: LowerThirdPosition[] = ['left', 'center', 'right']
+
+export function normalizeLowerThirdPosition(value: unknown): LowerThirdPosition {
+  if (value === 'center' || value === 'right') return value
+  return 'left'
+}
+
 export type PublicActiveLowerThird = {
   person_id: string
   display_name: string
@@ -54,11 +63,38 @@ export async function buildPublicLowerThirdPayload(
   }
 }
 
+export async function setLowerThirdPosition(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  position: LowerThirdPosition,
+) {
+  const normalized = normalizeLowerThirdPosition(position)
+  const now = new Date().toISOString()
+  const { error } = await service
+    .from('meeting_broadcast_state')
+    .update({
+      lower_third_position: normalized,
+      updated_at: now,
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+
+  if (error) {
+    throw new Error(
+      error.message.includes('lower_third_position')
+        ? 'Lower third position column missing — run db/board_meetings_lower_third_position.sql migration'
+        : error.message,
+    )
+  }
+}
+
 export async function setActiveLowerThird(
   service: SupabaseClient,
   boardMeetingId: string,
   operatorId: string,
   personId: string,
+  position?: LowerThirdPosition,
 ) {
   const { data: person } = await service
     .from('lower_third_people')
@@ -68,13 +104,19 @@ export async function setActiveLowerThird(
 
   if (!person) throw new Error('Person not found')
 
+  const normalizedPosition = position ? normalizeLowerThirdPosition(position) : undefined
+  const patch: Record<string, unknown> = {
+    active_lower_third_person_id: personId,
+    updated_at: new Date().toISOString(),
+    updated_by: operatorId,
+  }
+  if (normalizedPosition) {
+    patch.lower_third_position = normalizedPosition
+  }
+
   const { data: updated, error: updateError } = await service
     .from('meeting_broadcast_state')
-    .update({
-      active_lower_third_person_id: personId,
-      updated_at: new Date().toISOString(),
-      updated_by: operatorId,
-    })
+    .update(patch)
     .eq('board_meeting_id', boardMeetingId)
     .select('id, active_lower_third_person_id')
     .single()
@@ -90,11 +132,7 @@ export async function setActiveLowerThird(
     await ensureBroadcastState(service, boardMeetingId, operatorId)
     const retry = await service
       .from('meeting_broadcast_state')
-      .update({
-        active_lower_third_person_id: personId,
-        updated_at: new Date().toISOString(),
-        updated_by: operatorId,
-      })
+      .update(patch)
       .eq('board_meeting_id', boardMeetingId)
       .select('id, active_lower_third_person_id')
       .single()
@@ -108,6 +146,7 @@ export async function setActiveLowerThird(
   void logMeetingEvent(service, boardMeetingId, 'lower_third_set', operatorId, {
     person_id: personId,
     display_name: person.display_name,
+    position: normalizedPosition,
   })
 }
 

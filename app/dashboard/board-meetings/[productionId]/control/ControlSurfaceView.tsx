@@ -139,8 +139,16 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           <LowerThirdPanel
             active={lower_third_active}
             people={bundle.lower_third_people || []}
+            position={broadcast_state?.lower_third_position ?? 'left'}
             canControl={canControl}
-            onSet={(person) => onAction('set-lower-third', { person_id: person.id, person })}
+            onSet={(person) =>
+              onAction('set-lower-third', {
+                person_id: person.id,
+                person,
+                position: broadcast_state?.lower_third_position ?? 'left',
+              })
+            }
+            onPositionChange={pos => onAction('set-lower-third-position', { position: pos })}
             onClear={() => onAction('clear-lower-third')}
           />
 

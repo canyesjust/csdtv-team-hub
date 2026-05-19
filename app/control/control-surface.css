@@ -463,6 +463,52 @@
   color: var(--text-muted, #6b7385);
 }
 
+.cs-lt-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cs-lt-pos-toggle {
+  display: inline-flex;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+}
+
+.cs-lt-pos-btn {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  min-height: 28px;
+  border: none;
+  background: var(--surface-2, #1a2236);
+  color: var(--text-muted, #6b7385);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.cs-lt-pos-btn + .cs-lt-pos-btn {
+  border-left: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.cs-lt-pos-btn:hover:not(:disabled) {
+  color: var(--text-primary, #f8fafc);
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-lt-pos-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cs-lt-pos-btn.cs-lt-pos-btn--active {
+  background: var(--semantic-info-bg);
+  color: var(--semantic-info-text);
+}
+
 .cs-lt-onair-pill {
   display: inline-flex;
   align-items: center;

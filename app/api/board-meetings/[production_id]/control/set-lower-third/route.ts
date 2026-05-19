@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
-import { setActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
+import { normalizeLowerThirdPosition, setActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,8 +16,12 @@ export async function POST(
       return controlError('person_id required')
     }
     try {
-      await setActiveLowerThird(ctx.service, ctx.boardMeetingId, ctx.teamUserId, personId)
-      return NextResponse.json({ success: true })
+      const position = body?.position != null ? normalizeLowerThirdPosition(body.position) : undefined
+      await setActiveLowerThird(ctx.service, ctx.boardMeetingId, ctx.teamUserId, personId, position)
+      return NextResponse.json({
+        success: true,
+        lower_third_position: position ?? null,
+      })
     } catch (e) {
       return controlError(e instanceof Error ? e.message : 'Failed to set lower third')
     }

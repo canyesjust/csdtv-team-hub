@@ -7,6 +7,8 @@ import {
   boardMembersInOrder,
   lowerThirdFirstName,
 } from '@/lib/board-meetings/lower-third-board-order'
+import type { LowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
+import { LOWER_THIRD_POSITIONS } from '@/lib/board-meetings/lower-third-control'
 import type { LowerThirdPerson } from '@/lib/board-meetings/types'
 
 type LowerThirdStateFields = {
@@ -18,8 +20,10 @@ type BroadcastState = Partial<LowerThirdStateFields> | null
 type CallbackProps = {
   active: { person_id: string; display_name: string; primary_title: string | null } | null
   people: LowerThirdPerson[]
+  position: LowerThirdPosition
   canControl: boolean
   onSet: (person: LowerThirdPerson) => void
+  onPositionChange: (position: LowerThirdPosition) => void
   onClear: () => void
 }
 
@@ -41,7 +45,21 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function LowerThirdPanelControlled({ active, people, canControl, onSet, onClear }: CallbackProps) {
+const POSITION_LABELS: Record<LowerThirdPosition, string> = {
+  left: 'Left',
+  center: 'Center',
+  right: 'Right',
+}
+
+function LowerThirdPanelControlled({
+  active,
+  people,
+  position,
+  canControl,
+  onSet,
+  onPositionChange,
+  onClear,
+}: CallbackProps) {
   const activeId = active?.person_id ?? null
   const disabled = !canControl
   const prioritySlots = useMemo(() => boardMembersInOrder(people), [people])
@@ -60,7 +78,23 @@ function LowerThirdPanelControlled({ active, people, canControl, onSet, onClear 
   return (
     <div className="cs-card cs-lt">
       <div className="cs-lt-header">
-        <span className="cs-lt-label">Lower third</span>
+        <div className="cs-lt-title-row">
+          <span className="cs-lt-label">Lower third</span>
+          <div className="cs-lt-pos-toggle" role="group" aria-label="Lower third position">
+            {LOWER_THIRD_POSITIONS.map(pos => (
+              <button
+                key={pos}
+                type="button"
+                className={`cs-lt-pos-btn${position === pos ? ' cs-lt-pos-btn--active' : ''}`}
+                disabled={disabled}
+                aria-pressed={position === pos}
+                onClick={() => onPositionChange(pos)}
+              >
+                {POSITION_LABELS[pos]}
+              </button>
+            ))}
+          </div>
+        </div>
         {active ? (
           <span className="cs-lt-onair-pill">
             <span className="cs-lt-onair-dot" aria-hidden="true" />

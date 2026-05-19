@@ -3,7 +3,11 @@ import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr
 import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
-import { buildPublicLowerThirdPayload, type PublicActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
+import {
+  buildPublicLowerThirdPayload,
+  normalizeLowerThirdPosition,
+  type PublicActiveLowerThird,
+} from '@/lib/board-meetings/lower-third-control'
 import {
   buildPublicPlaylistPayload,
   loadMeetingPlaylistBundle,
@@ -72,6 +76,7 @@ export type PublicChannelState = {
     active_motion: PublicActiveMotion | null
     active_vote_result: PublicActiveVoteResult | null
     active_lower_third: PublicActiveLowerThird | null
+    lower_third_position: 'left' | 'center' | 'right'
     playlist: PublicPlaylistState | null
   } | null
   current_item: PublicAgendaItem | null
@@ -348,6 +353,7 @@ export async function buildPublicChannelState(
       active_motion,
       active_vote_result,
       active_lower_third,
+      lower_third_position: normalizeLowerThirdPosition(bstate?.lower_third_position),
       playlist,
     },
     current_item,

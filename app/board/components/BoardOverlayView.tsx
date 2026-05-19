@@ -122,7 +122,13 @@ export default function BoardOverlayView({
           <ModeBanner accent="#1e4a8a" title="Recess" message={b?.mode_message ?? null} />
         </div>
         {qr && <QrOverlay url={qr.url} label={qr.label} />}
-        {showLowerThird && lowerThird ? <LowerThirdBanner person={lowerThird} variant="overlay" /> : null}
+        {showLowerThird && lowerThird ? (
+          <LowerThirdBanner
+            person={lowerThird}
+            variant="overlay"
+            position={b?.lower_third_position ?? 'left'}
+          />
+        ) : null}
       </>
     )
   }
@@ -168,7 +174,9 @@ export default function BoardOverlayView({
       ) : null}
       {showTimer && timer ? <TimerBadge timer={timer} /> : null}
       {qr && <QrOverlay url={qr.url} label={qr.label} />}
-      {showLowerThird && lowerThird ? <LowerThirdBanner person={lowerThird} variant="overlay" /> : null}
+      {showLowerThird && lowerThird ? (
+        <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
+      ) : null}
     </>
   )
 }

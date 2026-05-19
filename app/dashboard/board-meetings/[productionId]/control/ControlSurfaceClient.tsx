@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast'
 import ControlSurfaceView from './ControlSurfaceView'
 import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
 import type { ControlLivePatch } from '@/lib/board-meetings/control-live-bundle'
+import { normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import type { ControlBundle, LowerThirdPerson, ResultOverlayState } from '@/lib/board-meetings/types'
 
 const MOTION_ACTIONS = new Set([
@@ -30,6 +31,7 @@ const REALTIME_SUPPRESS_MS = 8000
 const OPTIMISTIC_ACTIONS = new Set([
   'set-lower-third',
   'clear-lower-third',
+  'set-lower-third-position',
   'jump-to',
   'advance',
   'go-back',
@@ -321,6 +323,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         const fromPayload = payload?.person as LowerThirdPerson | undefined
         const person = fromPayload ?? prev.lower_third_people?.find(p => p.id === personId)
         if (!person) return prev
+        const position = normalizeLowerThirdPosition(
+          payload?.position ?? prev.broadcast_state?.lower_third_position,
+        )
         const active = {
           person_id: person.id,
           display_name: person.display_name,
@@ -335,6 +340,17 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           active_lower_third: active,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             active_lower_third_person_id: person.id,
+            lower_third_position: position,
+          }),
+        }
+      }
+
+      if (action === 'set-lower-third-position') {
+        const position = normalizeLowerThirdPosition(payload?.position)
+        return {
+          ...prev,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
+            lower_third_position: position,
           }),
         }
       }

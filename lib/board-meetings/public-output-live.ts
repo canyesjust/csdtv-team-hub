@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAgendaItemsForControl } from '@/lib/board-meetings/control-meeting-cache'
 import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
 import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
-import { buildPublicLowerThirdPayload } from '@/lib/board-meetings/lower-third-control'
+import { buildPublicLowerThirdPayload, normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import {
   buildPublicPlaylistPayload,
   loadMeetingPlaylistBundle,
@@ -119,6 +119,7 @@ export async function buildPublicChannelLivePatch(
     current_item: null,
     upcoming_items: [],
     timer: null,
+    elapsed_started_at: null,
   }
 
   const { data: assignment } = await service
@@ -242,6 +243,7 @@ export async function buildPublicChannelLivePatch(
       active_motion,
       active_vote_result,
       active_lower_third,
+      lower_third_position: normalizeLowerThirdPosition(bstate?.lower_third_position),
       playlist,
     },
     current_item,

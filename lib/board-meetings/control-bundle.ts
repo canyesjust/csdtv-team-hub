@@ -4,7 +4,7 @@ import {
   isVoteResultActive,
   listMotionsEnriched,
 } from '@/lib/board-meetings/motion-control'
-import { buildPublicLowerThirdPayload } from '@/lib/board-meetings/lower-third-control'
+import { buildPublicLowerThirdPayload, normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import { loadAttendance } from '@/lib/board-meetings/attendance-control'
 import { loadMeetingPlaylistBundle } from '@/lib/board-meetings/playlist-playback'
 import { mediaPublicUrl } from '@/lib/board-meetings/media-library'
@@ -154,6 +154,7 @@ export async function buildControlSurfaceBundle(
     vote_result_started_at: state?.vote_result_started_at ?? null,
     vote_result_duration_seconds: state?.vote_result_duration_seconds ?? null,
     active_lower_third_person_id: state?.active_lower_third_person_id ?? null,
+    lower_third_position: normalizeLowerThirdPosition(state?.lower_third_position),
   }
 
   const meeting_playlist = playlistBundle

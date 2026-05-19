@@ -5,6 +5,7 @@ import {
   listMotionsEnriched,
 } from '@/lib/board-meetings/motion-control'
 import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting-cache'
+import { normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import type { ControlBundle, MotionLifecycleState, ResultOverlayState } from '@/lib/board-meetings/types'
 import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
 
@@ -241,6 +242,7 @@ export async function buildControlLiveBundle(
     vote_result_started_at: state?.vote_result_started_at ?? null,
     vote_result_duration_seconds: state?.vote_result_duration_seconds ?? null,
     active_lower_third_person_id: state?.active_lower_third_person_id ?? null,
+    lower_third_position: normalizeLowerThirdPosition(state?.lower_third_position),
   }
 
   return {

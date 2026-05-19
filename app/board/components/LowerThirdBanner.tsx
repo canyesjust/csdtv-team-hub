@@ -1,14 +1,27 @@
-import type { PublicActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
+import type { LowerThirdPosition, PublicActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
 import { overlayPanelStyle, OVERLAY_TEXT_MUTED, OVERLAY_TEXT_PRIMARY } from '@/app/board/overlay-graphics'
 
 type Variant = 'overlay' | 'live'
 
+function horizontalPlacement(position: LowerThirdPosition, isOverlay: boolean) {
+  const inset = isOverlay ? '48px' : '32px'
+  if (position === 'center') {
+    return { left: '50%', right: 'auto' as const, transform: 'translateX(-50%)' }
+  }
+  if (position === 'right') {
+    return { left: 'auto' as const, right: inset, transform: 'none' }
+  }
+  return { left: inset, right: 'auto' as const, transform: 'none' }
+}
+
 export default function LowerThirdBanner({
   person,
   variant = 'overlay',
+  position = 'left',
 }: {
   person: PublicActiveLowerThird
   variant?: Variant
+  position?: LowerThirdPosition
 }) {
   const subtitle = [person.primary_title, person.officer_position, person.affiliation]
     .filter(Boolean)
@@ -17,7 +30,6 @@ export default function LowerThirdBanner({
   const isOverlay = variant === 'overlay'
 
   const overlayLayout = {
-    left: '48px',
     bottom: '10vh',
     gap: '20px',
     padding: '18px 28px',
@@ -29,7 +41,6 @@ export default function LowerThirdBanner({
   } as const
 
   const liveLayout = {
-    left: '32px',
     bottom: '32px',
     gap: '14px',
     padding: '14px 20px',
@@ -41,13 +52,14 @@ export default function LowerThirdBanner({
   } as const
 
   const layout = isOverlay ? overlayLayout : liveLayout
+  const placement = horizontalPlacement(position, isOverlay)
 
   return (
     <div
       className={isOverlay ? 'obs-overlay-graphic' : undefined}
       style={{
         position: isOverlay ? 'absolute' : 'fixed',
-        left: layout.left,
+        ...placement,
         bottom: layout.bottom,
         display: 'flex',
         alignItems: 'center',
