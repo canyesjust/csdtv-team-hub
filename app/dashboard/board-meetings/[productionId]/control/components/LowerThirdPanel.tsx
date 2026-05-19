@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from '@/lib/toast'
 import type { LowerThirdPerson } from '@/lib/board-meetings/types'
 
-type BroadcastState = {
+type LowerThirdStateFields = {
   active_lower_third_person_id?: string | null
-} | null
+}
+
+type BroadcastState = Partial<LowerThirdStateFields> | null
 
 export default function LowerThirdPanel({
   productionId,

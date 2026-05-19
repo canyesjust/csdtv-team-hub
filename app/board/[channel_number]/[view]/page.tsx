@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import BoardPlaceholder from '@/app/board/components/BoardPlaceholder'
 import BoardOverlayView from '@/app/board/components/BoardOverlayView'
+import OverlayTransparentShell from '@/app/board/components/OverlayTransparentShell'
 import BoardPrerollView from '@/app/board/components/BoardPrerollView'
 import BoardLiveView from '@/app/board/components/BoardLiveView'
 import BoardDaisView from '@/app/board/components/BoardDaisView'
@@ -32,7 +33,11 @@ export default async function BoardPublicViewPage({
   const channelName = channel.channel_name
 
   if (slug === 'overlay') {
-    return <BoardOverlayView channelNumber={num} initialChannelName={channelName} />
+    return (
+      <OverlayTransparentShell>
+        <BoardOverlayView channelNumber={num} initialChannelName={channelName} />
+      </OverlayTransparentShell>
+    )
   }
   if (slug === 'preroll') {
     return <BoardPrerollView channelNumber={num} initialChannelName={channelName} />

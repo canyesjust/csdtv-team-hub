@@ -27,6 +27,8 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const [diff, setDiff] = useState<AgendaDiffEntry[]>([])
   const [diffAccepted, setDiffAccepted] = useState<Record<string, boolean>>({})
   const [isNarrow, setIsNarrow] = useState(false)
+  const [reorderingId, setReorderingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -79,13 +81,8 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
 
   useEffect(() => { load() }, [load])
 
-  const sortedReviewItems = useMemo(() => {
-    const copy = [...items]
-    copy.sort((a, b) => {
-      if (a.needs_review !== b.needs_review) return a.needs_review ? -1 : 1
-      return a.sort_order - b.sort_order
-    })
-    return copy
+  const orderedReviewItems = useMemo(() => {
+    return [...items].sort((a, b) => a.sort_order - b.sort_order)
   }, [items])
 
   const uploadPdf = async (file: File, reupload = false) => {
@@ -125,8 +122,58 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
     }
   }
 
-  const updateItem = (idx: number, patch: Partial<AgendaItemUI>) => {
-    setItems(prev => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
+  const updateItemById = (id: string | undefined, patch: Partial<AgendaItemUI>) => {
+    if (!id) return
+    setItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)))
+  }
+
+  const persistReorder = async (ordered: AgendaItemUI[]) => {
+    const orderedIds = ordered.map(it => it.id).filter((id): id is string => !!id)
+    if (orderedIds.length !== ordered.length) return false
+    const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordered_ids: orderedIds }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast((body as { error?: string }).error || 'Failed to reorder items', 'error')
+      return false
+    }
+    return true
+  }
+
+  const moveItem = async (itemId: string, direction: 'up' | 'down') => {
+    const ordered = [...items].sort((a, b) => a.sort_order - b.sort_order)
+    const idx = ordered.findIndex(it => it.id === itemId)
+    if (idx < 0) return
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= ordered.length) return
+
+    const next = [...ordered]
+    ;[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
+    const renumbered = next.map((it, i) => ({ ...it, sort_order: i }))
+    setItems(renumbered)
+    setReorderingId(itemId)
+    const ok = await persistReorder(renumbered)
+    setReorderingId(null)
+    if (!ok) load()
+  }
+
+  const deleteItem = async (itemId: string) => {
+    if (!confirm('Remove this agenda item from the extracted agenda?')) return
+    setDeletingId(itemId)
+    const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/${itemId}`, {
+      method: 'DELETE',
+    })
+    setDeletingId(null)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast((body as { error?: string }).error || 'Failed to remove item', 'error')
+      return
+    }
+    toast('Item removed', 'success')
+    await load()
   }
 
   const saveItemPatch = async (item: AgendaItemUI) => {
@@ -310,7 +357,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       {phase === 'review' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-            <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Review extracted items. Items needing review appear first.</p>
+            <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Review extracted items. Use arrows to reorder or remove items you do not need.</p>
             <button
               type="button"
               onClick={lockAgenda}
@@ -321,8 +368,22 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {sortedReviewItems.map((it, idx) => {
-              const realIdx = items.findIndex(x => x === it || (x.item_number === it.item_number && x.section_number === it.section_number))
+            {orderedReviewItems.map((it, idx) => {
+              const itemId = it.id
+              const busy = reorderingId === itemId || deletingId === itemId
+              const canMoveUp = idx > 0
+              const canMoveDown = idx < orderedReviewItems.length - 1
+              const actionBtn: React.CSSProperties = {
+                fontSize: '12px',
+                padding: '6px 10px',
+                minHeight: '36px',
+                borderRadius: '8px',
+                background: 'transparent',
+                color: text,
+                border: `0.5px solid ${border}`,
+                cursor: busy ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }
               return (
                 <div
                   key={it.id || `${it.item_number}-${idx}`}
@@ -333,26 +394,76 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                     borderRadius: '10px',
                   }}
                 >
-                  <div style={{ fontSize: '12px', color: muted, marginBottom: '6px' }}>
-                    §{it.section_number} {it.section_title} · {it.item_number}
-                    {it.needs_review && <span style={{ color: '#e8a020', marginLeft: '8px' }}>Needs review</span>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '12px', color: muted }}>
+                      §{it.section_number} {it.section_title} · {it.item_number}
+                      {it.needs_review && <span style={{ color: '#e8a020', marginLeft: '8px' }}>Needs review</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        title="Move up"
+                        disabled={!canMoveUp || busy || !itemId}
+                        onClick={() => itemId && moveItem(itemId, 'up')}
+                        style={{ ...actionBtn, opacity: canMoveUp && itemId ? 1 : 0.4 }}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        title="Move down"
+                        disabled={!canMoveDown || busy || !itemId}
+                        onClick={() => itemId && moveItem(itemId, 'down')}
+                        style={{ ...actionBtn, opacity: canMoveDown && itemId ? 1 : 0.4 }}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        title="Remove item"
+                        disabled={busy || !itemId}
+                        onClick={() => itemId && deleteItem(itemId)}
+                        style={{ ...actionBtn, color: '#ef4444', opacity: itemId ? 1 : 0.4 }}
+                      >
+                        {deletingId === itemId ? '…' : 'Remove'}
+                      </button>
+                    </div>
                   </div>
                   <input
                     value={it.title}
-                    onChange={e => updateItem(realIdx >= 0 ? realIdx : idx, { title: e.target.value })}
-                    onBlur={() => saveItemPatch(it)}
+                    onChange={e => updateItemById(itemId, { title: e.target.value })}
+                    onBlur={() => {
+                      const current = items.find(x => x.id === itemId)
+                      if (current) saveItemPatch(current)
+                    }}
                     style={{ ...inputStyle, marginBottom: '8px', fontWeight: 600 }}
                   />
                   {it.review_notes && <p style={{ fontSize: '12px', color: '#e8a020', margin: '0 0 8px' }}>{it.review_notes}</p>}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-                    <select value={it.type} onChange={e => updateItem(realIdx >= 0 ? realIdx : idx, { type: e.target.value })} style={inputStyle}>
+                    <select
+                      value={it.type}
+                      onChange={e => {
+                        const nextType = e.target.value
+                        updateItemById(itemId, { type: nextType })
+                        saveItemPatch({ ...it, type: nextType })
+                      }}
+                      style={inputStyle}
+                    >
                       <option value="procedural">Procedural</option>
                       <option value="information">Information</option>
                       <option value="action">Action</option>
                       <option value="recognition">Recognition</option>
                     </select>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: muted, minHeight: '44px' }}>
-                      <input type="checkbox" checked={it.is_broadcastable} onChange={e => updateItem(realIdx >= 0 ? realIdx : idx, { is_broadcastable: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        checked={it.is_broadcastable}
+                        onChange={e => {
+                          const checked = e.target.checked
+                          updateItemById(itemId, { is_broadcastable: checked })
+                          saveItemPatch({ ...it, is_broadcastable: checked })
+                        }}
+                      />
                       Broadcastable
                     </label>
                   </div>

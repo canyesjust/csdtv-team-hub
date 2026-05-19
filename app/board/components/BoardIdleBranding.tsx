@@ -37,9 +37,7 @@ export default function BoardIdleBranding({
         maxWidth: '420px',
         width: '100%',
         padding: '36px 32px',
-        borderRadius: '16px',
-        background: 'rgba(10, 15, 30, 0.88)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.35)',
+        background: 'transparent',
       }
     : {
         display: 'flex',

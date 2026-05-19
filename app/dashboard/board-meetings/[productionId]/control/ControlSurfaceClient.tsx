@@ -38,6 +38,7 @@ type ControlBundle = {
     active_vote_result_motion_id?: string | null
     vote_result_started_at?: string | null
     vote_result_duration_seconds?: number | null
+    active_lower_third_person_id?: string | null
   } | null
   channel_assignments: { output_channel_id: string }[]
   active_timer: { id: string; label: string; duration_seconds: number; started_at: string } | null
