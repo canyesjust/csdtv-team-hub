@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS public.board_meeting_presenters (
   person_id uuid REFERENCES public.lower_third_people (id) ON DELETE SET NULL,
   name text NOT NULL,
   title text,
+  affiliation text,
   sort_order integer NOT NULL DEFAULT 0
 );
 
