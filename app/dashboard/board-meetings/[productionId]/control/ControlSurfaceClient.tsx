@@ -1,116 +1,11 @@
 'use client'
 
-import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
-import QRPushPanel from './QRPushPanel'
-import AttendancePanel from './components/AttendancePanel'
-import MotionVotePanel from './components/MotionVotePanel'
-import PlaylistLiveControls from './components/PlaylistLiveControls'
-import LowerThirdPanel from './components/LowerThirdPanel'
-
-type ControlBundle = {
-  board_meeting: { id: string; broadcast_status: string; agenda_locked: boolean }
-  items: {
-    id: string
-    section_number: number
-    section_title: string
-    item_number: string
-    title: string
-    is_broadcastable: boolean
-    type: string
-    consent_block?: string | null
-  }[]
-  production?: { production_number: number; livestream_url: string | null; title: string } | null
-  current_documents?: { source_url: string | null; title: string }[]
-  broadcast_state: {
-    current_agenda_item_id: string | null
-    overlay_visible: boolean
-    mode: string
-    mode_message: string | null
-    active_qr_url?: string | null
-    active_qr_label?: string | null
-    active_qr_started_at?: string | null
-    active_qr_duration_seconds?: number | null
-    active_motion_id?: string | null
-    active_vote_result_motion_id?: string | null
-    vote_result_started_at?: string | null
-    vote_result_duration_seconds?: number | null
-    active_lower_third_person_id?: string | null
-  } | null
-  channel_assignments: { output_channel_id: string }[]
-  active_timer: { id: string; label: string; duration_seconds: number; started_at: string } | null
-  recent_events: { event_type: string; occurred_at: string }[]
-  output_channels: { id: string; channel_number: number; channel_name: string }[]
-  timer_templates: { id: string; name: string; duration_seconds: number }[]
-}
-
-function CollapsiblePanel({
-  title,
-  summary,
-  defaultOpen = false,
-  children,
-}: {
-  title: string
-  summary?: string
-  defaultOpen?: boolean
-  children: ReactNode
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  const text = 'var(--text-primary)'
-  const muted = 'var(--text-muted)'
-  const border = 'var(--border-subtle)'
-  const headerBg = 'var(--surface-2)'
-
-  return (
-    <div style={{ border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden' }}>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          padding: '12px 14px',
-          minHeight: '48px',
-          background: headerBg,
-          border: 'none',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          textAlign: 'left',
-        }}
-      >
-        <span style={{ fontSize: '15px', fontWeight: 600, color: text }}>{title}</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          {!open && summary ? (
-            <span style={{ fontSize: '13px', color: muted, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {summary}
-            </span>
-          ) : null}
-          <span
-            style={{
-              fontSize: '11px',
-              color: muted,
-              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.15s',
-            }}
-            aria-hidden
-          >
-            ▼
-          </span>
-        </span>
-      </button>
-      {open ? (
-        <div style={{ padding: '12px 14px', borderTop: `0.5px solid ${border}` }}>{children}</div>
-      ) : null}
-    </div>
-  )
-}
+import ControlSurfaceView from './ControlSurfaceView'
+import type { ControlBundle } from './control-surface-types'
 
 export default function ControlSurfaceClient({ productionId }: { productionId: string }) {
   const supabase = createClient()
@@ -118,9 +13,9 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
-  const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
   const border = 'var(--border-subtle)'
+  const text = 'var(--text-primary)'
   const cardBg = 'var(--surface-1)'
 
   const load = useCallback(async () => {
@@ -211,8 +106,15 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
     }
   }
 
-  if (loading) return <Loader />
-  if (!bundle) return <p style={{ color: muted }}>Board meeting not found.</p>
+  if (loading) {
+    return (
+      <div className="control-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader />
+      </div>
+    )
+  }
+
+  if (!bundle) return <p style={{ color: muted, padding: 16 }}>Board meeting not found.</p>
 
   const currentId = bundle.broadcast_state?.current_agenda_item_id
   const currentItem = bundle.items.find(i => i.id === currentId)
@@ -238,214 +140,23 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
   const dangerBtn: React.CSSProperties = { ...btn, background: '#8b1a1a', color: '#fff', border: 'none' }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px', fontSize: '14px' }}>
-        <Link href="/dashboard/board-meetings" style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}>
-          ← Board Meetings
-        </Link>
-        {bundle.production?.production_number != null && (
-          <Link
-            href={`/dashboard/productions/${bundle.production.production_number}?tab=boardmeeting`}
-            style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}
-          >
-            ← Board Meeting tab
-          </Link>
-        )}
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '22px', color: text }}>Control surface</h1>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: muted }}>
-            Status: <strong>{status}</strong>
-            {mode !== 'normal' && ` · ${mode.replace('_', ' ')}`}
-          </p>
-          <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
-            <AttendancePanel productionId={productionId} disabled={!canControl} />
-          </div>
-        </div>
-        <Link href={`/dashboard/board-meetings/${productionId}/buttons`} style={{ color: 'var(--brand-primary)', fontSize: '14px' }}>
-          Companion buttons →
-        </Link>
-      </div>
-
-      {!canControl && (
-        <p style={{ padding: '12px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '8px', color: muted, margin: 0 }}>
-          Lock the agenda before using broadcast controls.
-        </p>
-      )}
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '16px',
-          alignItems: 'start',
-        }}
-      >
-        <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px' }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: text }}>Agenda</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '420px', overflowY: 'auto' }}>
-            {broadcastable.map(it => (
-              <button
-                key={it.id}
-                type="button"
-                disabled={!canControl || busy}
-                onClick={() => post('jump-to', { agenda_item_id: it.id })}
-                style={{
-                  textAlign: 'left',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: `0.5px solid ${it.id === currentId ? 'var(--brand-primary)' : border}`,
-                  background: it.id === currentId ? 'rgba(30,108,181,0.12)' : 'transparent',
-                  cursor: busy ? 'wait' : 'pointer',
-                  fontFamily: 'inherit',
-                  color: text,
-                }}
-              >
-                <span style={{ fontSize: '12px', color: muted }}>{it.item_number}</span>
-                <span style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>{it.title}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px' }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: text }}>On air</h2>
-          {currentItem ? (
-            <div style={{ marginBottom: '16px' }}>
-              <p style={{ margin: '0 0 4px', fontSize: '12px', color: muted }}>{currentItem.item_number}</p>
-              <p style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: text, lineHeight: 1.35 }}>{currentItem.title}</p>
-            </div>
-          ) : (
-            <p style={{ color: muted, fontSize: '14px' }}>No current item</p>
-          )}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('go-back')}>← Back</button>
-            <button type="button" style={primaryBtn} disabled={!canControl || busy} onClick={() => post('advance')}>Advance →</button>
-            <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('toggle-overlay')}>
-              Agenda overlay {bundle.broadcast_state?.overlay_visible ? 'on' : 'off'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
-            {status !== 'live' ? (
-              <button type="button" style={primaryBtn} disabled={!canControl || busy} onClick={() => post('go-live')}>Go live</button>
-            ) : (
-              <button type="button" style={dangerBtn} disabled={busy} onClick={() => post('end-meeting')}>End meeting</button>
-            )}
-          </div>
-          <div>
-            <h3 style={{ margin: '0 0 10px', fontSize: '13px', color: muted }}>Lower third</h3>
-            <LowerThirdPanel
-              productionId={productionId}
-              broadcastState={bundle.broadcast_state}
-              disabled={!canControl || busy}
-              onUpdated={load}
-            />
-          </div>
-          <div style={{ marginTop: '16px' }}>
-            <QRPushPanel
-              productionId={productionId}
-              broadcastState={bundle.broadcast_state}
-              currentDocuments={bundle.current_documents || []}
-              hasYoutube={!!(bundle.production?.livestream_url || '').trim()}
-              disabled={!canControl || status !== 'live'}
-              onUpdated={load}
-            />
-          </div>
-        </section>
-
-        <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px' }}>
-          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: text }}>Pre-roll playlist</h2>
-          <PlaylistLiveControls productionId={productionId} disabled={!canControl} onUpdated={load} />
-        </section>
-
-        <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <CollapsiblePanel
-            title="Modes & timers"
-            summary={
-              bundle.active_timer
-                ? `Timer: ${bundle.active_timer.label}`
-                : mode !== 'normal'
-                  ? mode.replace(/_/g, ' ')
-                  : 'Recess, tech diff, timers'
-            }
-            defaultOpen={mode !== 'normal' || !!bundle.active_timer}
-          >
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-            <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('recess', { message: 'Recess' })}>Recess</button>
-            <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('technical-difficulties')}>Tech diff</button>
-            <button type="button" style={btn} disabled={!canControl || busy} onClick={() => post('clear-mode')}>Clear mode</button>
-          </div>
-          {bundle.timer_templates.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
-              {bundle.timer_templates.map(t => (
-                <button key={t.id} type="button" style={btn} disabled={!canControl || busy} onClick={() => post('start-timer', { template_id: t.id })}>
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          )}
-          {bundle.active_timer && (
-            <p style={{ fontSize: '13px', color: muted, margin: '0 0 8px' }}>Timer: {bundle.active_timer.label}</p>
-          )}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            <button type="button" style={btn} disabled={!canControl || busy || !bundle.active_timer} onClick={() => post('end-timer')}>End timer</button>
-            <button type="button" style={btn} disabled={!canControl || busy || !bundle.active_timer} onClick={() => post('cancel-timer')}>Cancel timer</button>
-          </div>
-          </CollapsiblePanel>
-
-          <CollapsiblePanel
-            title="Output channels"
-            summary={`${assignedIds.size} of ${bundle.output_channels.length} assigned`}
-          >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {bundle.output_channels.map(ch => (
-              <label key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: text, minHeight: '44px' }}>
-                <input
-                  type="checkbox"
-                  checked={assignedIds.has(ch.id)}
-                  disabled={!canControl || busy}
-                  onChange={() => toggleChannel(ch.id)}
-                />
-                Ch {ch.channel_number} — {ch.channel_name}
-              </label>
-            ))}
-          </div>
-          </CollapsiblePanel>
-
-          <CollapsiblePanel
-            title="Recent events"
-            summary={
-              bundle.recent_events[0]
-                ? `${new Date(bundle.recent_events[0].occurred_at).toLocaleTimeString()} — ${bundle.recent_events[0].event_type}`
-                : 'No events yet'
-            }
-          >
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', maxHeight: '200px', overflowY: 'auto' }}>
-              {bundle.recent_events.length === 0 ? (
-                <li style={{ fontSize: '13px', color: muted }}>No events logged yet.</li>
-              ) : (
-                bundle.recent_events.slice(0, 20).map((ev, i) => (
-                  <li key={i} style={{ fontSize: '12px', color: muted, padding: '6px 0', borderBottom: `0.5px solid ${border}` }}>
-                    {new Date(ev.occurred_at).toLocaleTimeString()} — {ev.event_type}
-                  </li>
-                ))
-              )}
-            </ul>
-          </CollapsiblePanel>
-        </section>
-
-        <div style={{ gridColumn: '1 / -1' }}>
-          <MotionVotePanel
-            productionId={productionId}
-            currentItem={currentItem}
-            allItems={bundle.items}
-            broadcastState={bundle.broadcast_state}
-            disabled={!canControl || status !== 'live'}
-            onUpdated={load}
-          />
-        </div>
-      </div>
-    </div>
+    <ControlSurfaceView
+      productionId={productionId}
+      bundle={bundle}
+      busy={busy}
+      canControl={canControl}
+      currentId={currentId}
+      currentItem={currentItem}
+      status={status}
+      mode={mode}
+      broadcastable={broadcastable}
+      assignedIds={assignedIds}
+      btn={btn}
+      primaryBtn={primaryBtn}
+      dangerBtn={dangerBtn}
+      post={post}
+      toggleChannel={toggleChannel}
+      onUpdated={load}
+    />
   )
 }
