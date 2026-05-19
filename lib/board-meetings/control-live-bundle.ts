@@ -243,6 +243,7 @@ export async function buildControlLiveBundle(
     vote_result_duration_seconds: state?.vote_result_duration_seconds ?? null,
     active_lower_third_person_id: state?.active_lower_third_person_id ?? null,
     lower_third_position: normalizeLowerThirdPosition(state?.lower_third_position),
+    agenda_branding_hold: !!state?.agenda_branding_hold,
   }
 
   return {

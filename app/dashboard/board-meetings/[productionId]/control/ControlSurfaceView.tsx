@@ -109,14 +109,17 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           <AgendaPanel
             items={agenda_items}
             currentItemId={broadcast_state?.current_agenda_item_id}
+            brandingHold={!!broadcast_state?.agenda_branding_hold}
             disabled={!canControl}
             onJump={(itemId) => onAction('jump-to', { agenda_item_id: itemId })}
+            onBrandingHold={() => onAction('show-agenda-branding')}
           />
         </div>
 
         <div className="cs-onair">
           <OnAirCard
             item={getCurrentAgendaItem(agenda_items, broadcast_state?.current_agenda_item_id)}
+            brandingHold={!!broadcast_state?.agenda_branding_hold}
             isLive={isLive}
           />
 

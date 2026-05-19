@@ -106,14 +106,17 @@ export default function BoardOverlayView({
     !!voteResult &&
     (!!voteResult.held || !!state.result_overlay?.held || (voteResult.remaining_seconds ?? 0) > 0)
   const showMotion = !showVoteResult && !!activeMotion
-  const showItem = b?.overlay_visible && mode === 'normal' && item && !showVoteResult && !showMotion
+  const brandingHold = !!b?.agenda_branding_hold
+  const showItem =
+    b?.overlay_visible && mode === 'normal' && item && !showVoteResult && !showMotion && !brandingHold
+  const showBrandingHold = brandingHold && mode === 'normal' && !showVoteResult && !showMotion
   const timer = state.timer
   const showTimer = timer?.show_on_broadcast && (timer.remaining_seconds ?? 0) > 0
   const qr = b?.active_qr
   const lowerThird = b?.active_lower_third
   const showLowerThird = !!lowerThird && mode !== 'technical_difficulties'
   const showIdleBranding =
-    mode === 'normal' && !showVoteResult && !showMotion && !showItem && !showTimer && !qr && !lowerThird
+    mode === 'normal' && !showVoteResult && !showMotion && !showItem && !showBrandingHold && !showTimer && !qr && !lowerThird
 
   if (mode === 'recess') {
     return (
@@ -146,6 +149,19 @@ export default function BoardOverlayView({
 
   if (showIdleBranding) {
     return <BoardIdleBranding screenName={screenName} variant="overlay" statusLine={null} />
+  }
+
+  if (showBrandingHold) {
+    return (
+      <>
+        <BoardIdleBranding screenName={screenName} variant="overlay" statusLine={null} />
+        {showTimer && timer ? <TimerBadge timer={timer} /> : null}
+        {qr && <QrOverlay url={qr.url} label={qr.label} />}
+        {showLowerThird && lowerThird ? (
+          <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
+        ) : null}
+      </>
+    )
   }
 
   return (

@@ -185,6 +185,7 @@ export type ControlBundle = {
     vote_result_duration_seconds?: number | null
     active_lower_third_person_id?: string | null
     lower_third_position?: 'left' | 'center' | 'right' | null
+    agenda_branding_hold?: boolean
     active_qr_started_at?: string | null
     active_qr_duration_seconds?: number | null
   } | null

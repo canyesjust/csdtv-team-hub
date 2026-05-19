@@ -244,6 +244,7 @@ export async function buildPublicChannelLivePatch(
       active_vote_result,
       active_lower_third,
       lower_third_position: normalizeLowerThirdPosition(bstate?.lower_third_position),
+      agenda_branding_hold: !!bstate?.agenda_branding_hold,
       playlist,
     },
     current_item,

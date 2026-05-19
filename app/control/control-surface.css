@@ -183,6 +183,14 @@
   opacity: 0.6;
 }
 
+.cs-agenda-item.cs-agenda-item-branding {
+  border-style: dashed;
+}
+
+.cs-agenda-item.cs-agenda-item-branding .cs-agenda-title {
+  font-style: italic;
+}
+
 .cs-agenda-item.cs-agenda-item-onair {
   border-color: var(--semantic-danger-border);
   background: var(--semantic-danger-bg);

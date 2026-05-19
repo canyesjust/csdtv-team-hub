@@ -35,6 +35,7 @@ const OPTIMISTIC_ACTIONS = new Set([
   'jump-to',
   'advance',
   'go-back',
+  'show-agenda-branding',
   'toggle-overlay',
   'toggle-channel',
   'reset-elapsed',
@@ -373,6 +374,16 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           ...prev,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             current_agenda_item_id: agendaItemId,
+            agenda_branding_hold: false,
+          }),
+        }
+      }
+
+      if (action === 'show-agenda-branding') {
+        return {
+          ...prev,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, {
+            agenda_branding_hold: true,
           }),
         }
       }
@@ -388,6 +399,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           ...prev,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             current_agenda_item_id: next.id,
+            agenda_branding_hold: false,
           }),
         }
       }

@@ -77,6 +77,7 @@ export type PublicChannelState = {
     active_vote_result: PublicActiveVoteResult | null
     active_lower_third: PublicActiveLowerThird | null
     lower_third_position: 'left' | 'center' | 'right'
+    agenda_branding_hold: boolean
     playlist: PublicPlaylistState | null
   } | null
   current_item: PublicAgendaItem | null
@@ -354,6 +355,7 @@ export async function buildPublicChannelState(
       active_vote_result,
       active_lower_third,
       lower_third_position: normalizeLowerThirdPosition(bstate?.lower_third_position),
+      agenda_branding_hold: !!bstate?.agenda_branding_hold,
       playlist,
     },
     current_item,

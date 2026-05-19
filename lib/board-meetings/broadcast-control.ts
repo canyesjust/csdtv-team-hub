@@ -13,6 +13,7 @@ export type BroadcastStateRow = {
   mode_message: string | null
   active_timer_id: string | null
   elapsed_started_at: string | null
+  agenda_branding_hold: boolean
   updated_at: string
   updated_by: string | null
 }
@@ -118,6 +119,40 @@ function findAdjacent(
   return items[next]
 }
 
+export async function setAgendaBrandingHold(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  hold: boolean,
+) {
+  const patch = {
+    agenda_branding_hold: hold,
+    updated_at: new Date().toISOString(),
+    updated_by: operatorId,
+  }
+
+  const { data: updated, error } = await service
+    .from('meeting_broadcast_state')
+    .update(patch)
+    .eq('board_meeting_id', boardMeetingId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(
+      error.message.includes('agenda_branding_hold')
+        ? 'Agenda branding column missing — run db/board_meetings_agenda_branding_hold.sql migration'
+        : error.message,
+    )
+  }
+  if (!updated) {
+    await ensureBroadcastState(service, boardMeetingId, operatorId)
+    await service.from('meeting_broadcast_state').update(patch).eq('board_meeting_id', boardMeetingId)
+  }
+
+  void logMeetingEvent(service, boardMeetingId, hold ? 'agenda_branding_hold' : 'agenda_branding_clear', operatorId)
+}
+
 export async function setCurrentItem(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -126,6 +161,7 @@ export async function setCurrentItem(
 ) {
   const patch = {
     current_agenda_item_id: itemId,
+    agenda_branding_hold: false,
     updated_at: new Date().toISOString(),
     updated_by: operatorId,
   }
@@ -219,7 +255,12 @@ export async function endMeeting(
 
   await service
     .from('meeting_broadcast_state')
-    .update({ elapsed_started_at: null, updated_at: new Date().toISOString(), updated_by: operatorId })
+    .update({
+      elapsed_started_at: null,
+      agenda_branding_hold: false,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
     .eq('board_meeting_id', boardMeetingId)
 
   await logMeetingEvent(service, boardMeetingId, 'end_meeting', operatorId)

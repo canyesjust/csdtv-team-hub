@@ -160,6 +160,12 @@ export default function BoardDaisView({
               <StatusHero label="Recess" accent={C.accent} />
             ) : mode === 'technical_difficulties' ? (
               <StatusHero label="Technical difficulties" accent={C.red} />
+            ) : state.state?.agenda_branding_hold ? (
+              <div style={nowBlock}>
+                <p style={nowLabel}>On air</p>
+                <h1 style={itemTitle}>CSDtv logo slide</h1>
+                <p style={waitingText}>Agenda update — standing by</p>
+              </div>
             ) : item ? (
               <div style={nowBlock}>
                 <p style={nowLabel}>Now</p>
