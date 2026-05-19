@@ -103,7 +103,7 @@ export async function buildControlSurfaceBundle(
       .eq('id', productionId)
       .maybeSingle(),
     loadAttendance(service, bm.id),
-    listMotionsEnriched(service, bm.id, { openOnly: true }),
+    listMotionsEnriched(service, bm.id, { openOnly: true, voteCountsOnly: true }),
     slim ? Promise.resolve(null) : loadMeetingPlaylistBundle(service, bm.id),
   ])
 

@@ -104,7 +104,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           <AgendaPanel
             items={agenda_items}
             currentItemId={broadcast_state?.current_agenda_item_id}
-            disabled={!canControl || busy}
+            disabled={!canControl}
             onJump={(itemId) => onAction('jump-to', { agenda_item_id: itemId })}
           />
         </div>
@@ -119,7 +119,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             canControl={canControl}
             isLive={isLive}
             agendaOverlayOn={broadcast_state?.agenda_overlay_visible !== false}
-            busy={busy}
+            busy={false}
             onBack={() => onAction('go-back')}
             onAdvance={() => onAction('advance')}
             onToggleOverlay={() => onAction('toggle-overlay')}
@@ -129,7 +129,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           <LowerThirdPanel
             active={lower_third_active}
             people={bundle.lower_third_people || []}
-            canControl={canControl && !busy}
+            canControl={canControl}
             onSet={(personId) => onAction('set-lower-third', { person_id: personId })}
             onClear={() => onAction('clear-lower-third')}
           />
@@ -166,7 +166,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
                 type="button"
                 className="cs-touchbtn cs-touchbtn-danger"
                 onClick={() => onAction('end-meeting')}
-                disabled={!canControl || busy}
+                disabled={!canControl}
               >
                 End meeting
               </button>

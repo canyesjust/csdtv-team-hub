@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getAgendaItemsForControl } from '@/lib/board-meetings/control-meeting-cache'
 import { stopPlaylistOnGoLive } from '@/lib/board-meetings/playlist-playback'
 
 export type BroadcastStateRow = {
@@ -73,6 +74,26 @@ export async function loadBroadcastableItems(
   service: SupabaseClient,
   boardMeetingId: string,
 ): Promise<AgendaItemRow[]> {
+  const { data: bm } = await service
+    .from('board_meetings')
+    .select('agenda_locked')
+    .eq('id', boardMeetingId)
+    .maybeSingle()
+
+  if (bm?.agenda_locked) {
+    const cached = await getAgendaItemsForControl(service, boardMeetingId, true)
+    return cached.map(i => ({
+      id: i.id,
+      sort_order: i.sort_order,
+      is_broadcastable: i.is_broadcastable,
+      section_number: i.section_number,
+      section_title: i.section_title,
+      item_number: i.item_number,
+      title: i.title,
+      type: i.type,
+    }))
+  }
+
   const { data } = await service
     .from('board_meeting_agenda_items')
     .select('id, sort_order, is_broadcastable, section_number, section_title, item_number, title, type')
@@ -197,7 +218,6 @@ export async function advanceItem(
   const next = findAdjacent(items, state.current_agenda_item_id, direction)
   if (!next) throw new Error(direction > 0 ? 'Already at last item' : 'Already at first item')
   await setCurrentItem(service, boardMeetingId, next.id, operatorId)
-  await logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: next.id })
   await logMeetingEvent(service, boardMeetingId, direction > 0 ? 'advance' : 'go_back', operatorId, {
     agenda_item_id: next.id,
   })

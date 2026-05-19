@@ -821,7 +821,7 @@ const CLOSED_MOTION_STATUSES_DB = ['withdrawn', 'tabled', 'superseded', 'replace
 export async function listMotionsEnriched(
   service: SupabaseClient,
   boardMeetingId: string,
-  opts?: { openOnly?: boolean },
+  opts?: { openOnly?: boolean; voteCountsOnly?: boolean },
 ): Promise<EnrichedMotion[]> {
   let query = service
     .from('meeting_motions')
@@ -850,6 +850,41 @@ export async function listMotionsEnriched(
   const peopleMap = new Map((people || []).map(p => [p.id, p]))
 
   const motionIds = motions.map(m => m.id)
+  const votesByMotion = new Map<string, { person_id: string; vote: string; recorded_at: string }[]>()
+
+  if (opts?.voteCountsOnly) {
+    const { data: voteRows } = await service
+      .from('meeting_motion_votes')
+      .select('motion_id, person_id, vote, recorded_at')
+      .in('motion_id', motionIds)
+      .is('superseded_by_vote_id', null)
+    for (const v of voteRows || []) {
+      const list = votesByMotion.get(v.motion_id) || []
+      list.push(v)
+      votesByMotion.set(v.motion_id, list)
+    }
+    return motions.map((m): EnrichedMotion => ({
+      ...m,
+      status: m.status as EnrichedMotion['status'],
+      vote_mode: m.vote_mode as EnrichedMotion['vote_mode'],
+      result: m.result as EnrichedMotion['result'],
+      moved_by: m.moved_by_person_id ? peopleMap.get(m.moved_by_person_id) : null,
+      seconded_by: m.seconded_by_person_id ? peopleMap.get(m.seconded_by_person_id) : null,
+      votes: (votesByMotion.get(m.id) || []).map((v): EnrichedMotionVote => ({
+        person_id: v.person_id,
+        vote: v.vote as VoteValue,
+        person: null,
+      })),
+      tally: {
+        yea: m.tally_yea ?? 0,
+        nay: m.tally_nay ?? 0,
+        abstain: m.tally_abstain ?? 0,
+        absent: m.tally_absent ?? 0,
+        recused: m.tally_recused ?? 0,
+      },
+    }))
+  }
+
   const { data: votes } = await service
     .from('meeting_motion_votes')
     .select('id, motion_id, person_id, vote, recorded_at, superseded_by_vote_id')
@@ -868,7 +903,6 @@ export async function listMotionsEnriched(
     votePeopleMap = new Map((vp || []).map(p => [p.id, p]))
   }
 
-  const votesByMotion = new Map<string, typeof votes>()
   for (const v of votes || []) {
     const list = votesByMotion.get(v.motion_id) || []
     list.push(v)
