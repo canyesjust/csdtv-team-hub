@@ -71,9 +71,8 @@ export default function MeetingsTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {rows.map(r => (
-        <Link
+        <div
           key={r.id}
-          href={`/dashboard/productions/${r.production_number}`}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -83,11 +82,10 @@ export default function MeetingsTab() {
             background: cardBg,
             border: `0.5px solid ${border}`,
             borderRadius: '10px',
-            textDecoration: 'none',
-            color: text,
             minHeight: '44px',
           }}
         >
+          <Link href={`/dashboard/productions/${r.production_number}`} style={{ flex: 1, textDecoration: 'none', color: text }}>
           <div>
             <div style={{ fontWeight: 600, fontSize: '15px' }}>#{r.production_number} {r.title}</div>
             <div style={{ fontSize: '13px', color: muted, marginTop: '4px' }}>
@@ -97,8 +95,21 @@ export default function MeetingsTab() {
               {r.board_meeting ? ` · ${r.board_meeting.broadcast_status}${r.board_meeting.agenda_locked ? ' · agenda locked' : ''}` : ' · not started'}
             </div>
           </div>
-          <span style={{ fontSize: '13px', color: 'var(--brand-primary)' }}>Open →</span>
-        </Link>
+          </Link>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+            {r.board_meeting && ['prepared', 'live'].includes(r.board_meeting.broadcast_status) && (
+              <Link
+                href={`/dashboard/board-meetings/${r.id}/control`}
+                style={{ fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
+              >
+                Control →
+              </Link>
+            )}
+            <Link href={`/dashboard/productions/${r.production_number}`} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none' }}>
+              Open →
+            </Link>
+          </div>
+        </div>
       ))}
     </div>
   )

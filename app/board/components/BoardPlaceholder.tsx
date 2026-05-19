@@ -31,7 +31,7 @@ export default function BoardPlaceholder({
         {channelName ? ` · ${channelName}` : ''} · {viewLabel}
       </p>
       <p style={{ fontSize: '13px', color: '#4a5a7a', marginTop: '24px' }}>
-        Live broadcast surfaces ship in Phase 2.
+        This view ships in a later phase.
       </p>
     </div>
   )

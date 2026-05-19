@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../../components/Loader'
@@ -303,6 +304,22 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             </div>
             {fileInput(true)}
           </div>
+          {meeting && ['prepared', 'live'].includes(meeting.broadcast_status) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
+              <Link
+                href={`/dashboard/board-meetings/${productionId}/control`}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}
+              >
+                Open control surface
+              </Link>
+              <Link
+                href={`/dashboard/board-meetings/${productionId}/buttons`}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', border: `0.5px solid ${border}`, color: text, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+              >
+                Companion buttons
+              </Link>
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {items.map(it => (
               <div key={it.id} style={{ padding: '12px 14px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '8px' }}>

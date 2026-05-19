@@ -1,0 +1,450 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+export type BroadcastStateRow = {
+  id: string
+  board_meeting_id: string
+  current_agenda_item_id: string | null
+  overlay_visible: boolean
+  mode: 'normal' | 'recess' | 'technical_difficulties'
+  mode_started_at: string | null
+  mode_duration_seconds: number | null
+  mode_message: string | null
+  active_timer_id: string | null
+  updated_at: string
+  updated_by: string | null
+}
+
+export type AgendaItemRow = {
+  id: string
+  sort_order: number
+  is_broadcastable: boolean
+  section_number: number
+  section_title: string
+  item_number: string
+  title: string
+  type: string
+}
+
+export async function logMeetingEvent(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  eventType: string,
+  operatorId: string,
+  eventData?: Record<string, unknown>,
+) {
+  await service.from('meeting_event_log').insert({
+    board_meeting_id: boardMeetingId,
+    event_type: eventType,
+    event_data: eventData ?? null,
+    operator_id: operatorId,
+  })
+}
+
+export async function ensureBroadcastState(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+): Promise<BroadcastStateRow> {
+  const { data: existing } = await service
+    .from('meeting_broadcast_state')
+    .select('*')
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  if (existing) return existing as BroadcastStateRow
+
+  const { data: created, error } = await service
+    .from('meeting_broadcast_state')
+    .insert({
+      board_meeting_id: boardMeetingId,
+      overlay_visible: true,
+      mode: 'normal',
+      updated_by: operatorId,
+    })
+    .select('*')
+    .single()
+
+  if (error || !created) throw new Error(error?.message || 'Failed to create broadcast state')
+  return created as BroadcastStateRow
+}
+
+export async function loadBroadcastableItems(
+  service: SupabaseClient,
+  boardMeetingId: string,
+): Promise<AgendaItemRow[]> {
+  const { data } = await service
+    .from('board_meeting_agenda_items')
+    .select('id, sort_order, is_broadcastable, section_number, section_title, item_number, title, type')
+    .eq('board_meeting_id', boardMeetingId)
+    .eq('is_broadcastable', true)
+    .order('sort_order', { ascending: true })
+  return (data || []) as AgendaItemRow[]
+}
+
+function findAdjacent(
+  items: AgendaItemRow[],
+  currentId: string | null,
+  direction: 1 | -1,
+): AgendaItemRow | null {
+  if (items.length === 0) return null
+  if (!currentId) return items[0]
+  const idx = items.findIndex(i => i.id === currentId)
+  if (idx < 0) return items[0]
+  const next = idx + direction
+  if (next < 0 || next >= items.length) return null
+  return items[next]
+}
+
+export async function setCurrentItem(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  itemId: string | null,
+  operatorId: string,
+) {
+  await ensureBroadcastState(service, boardMeetingId, operatorId)
+  const { error } = await service
+    .from('meeting_broadcast_state')
+    .update({
+      current_agenda_item_id: itemId,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+  if (error) throw new Error(error.message)
+}
+
+export async function goLive(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+) {
+  const { data: bm } = await service
+    .from('board_meetings')
+    .select('broadcast_status, agenda_locked')
+    .eq('id', boardMeetingId)
+    .single()
+
+  if (!bm?.agenda_locked) throw new Error('Agenda must be locked before going live')
+  if (bm.broadcast_status === 'archived' || bm.broadcast_status === 'cancelled') {
+    throw new Error('Meeting is not active')
+  }
+
+  const items = await loadBroadcastableItems(service, boardMeetingId)
+  const state = await ensureBroadcastState(service, boardMeetingId, operatorId)
+  const first = items[0]?.id ?? null
+  const current = state.current_agenda_item_id || first
+
+  await service
+    .from('board_meetings')
+    .update({ broadcast_status: 'live', updated_at: new Date().toISOString() })
+    .eq('id', boardMeetingId)
+
+  if (!state.current_agenda_item_id && first) {
+    await setCurrentItem(service, boardMeetingId, first, operatorId)
+  } else if (current && current !== state.current_agenda_item_id) {
+    await setCurrentItem(service, boardMeetingId, current, operatorId)
+  }
+
+  await logMeetingEvent(service, boardMeetingId, 'go_live', operatorId, { current_item_id: current || first })
+}
+
+export async function endMeeting(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+) {
+  await service
+    .from('board_meetings')
+    .update({ broadcast_status: 'archived', updated_at: new Date().toISOString() })
+    .eq('id', boardMeetingId)
+
+  await service
+    .from('channel_assignments')
+    .update({ unassigned_at: new Date().toISOString(), unassigned_by: operatorId })
+    .eq('board_meeting_id', boardMeetingId)
+    .is('unassigned_at', null)
+
+  await logMeetingEvent(service, boardMeetingId, 'end_meeting', operatorId)
+}
+
+export async function advanceItem(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  direction: 1 | -1,
+) {
+  const items = await loadBroadcastableItems(service, boardMeetingId)
+  const state = await ensureBroadcastState(service, boardMeetingId, operatorId)
+  const next = findAdjacent(items, state.current_agenda_item_id, direction)
+  if (!next) throw new Error(direction > 0 ? 'Already at last item' : 'Already at first item')
+  await setCurrentItem(service, boardMeetingId, next.id, operatorId)
+  await logMeetingEvent(service, boardMeetingId, direction > 0 ? 'advance' : 'go_back', operatorId, {
+    agenda_item_id: next.id,
+  })
+  return next
+}
+
+export async function jumpToItem(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  agendaItemId: string,
+  operatorId: string,
+) {
+  const { data: item } = await service
+    .from('board_meeting_agenda_items')
+    .select('id, is_broadcastable')
+    .eq('id', agendaItemId)
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+  if (!item) throw new Error('Agenda item not found')
+  if (!item.is_broadcastable) throw new Error('Item is not broadcastable')
+  await setCurrentItem(service, boardMeetingId, agendaItemId, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'jump_to', operatorId, { agenda_item_id: agendaItemId })
+}
+
+export async function toggleOverlay(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  visible?: boolean,
+) {
+  const state = await ensureBroadcastState(service, boardMeetingId, operatorId)
+  const next = visible ?? !state.overlay_visible
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      overlay_visible: next,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+  await logMeetingEvent(service, boardMeetingId, 'toggle_overlay', operatorId, { visible: next })
+  return next
+}
+
+export async function setBroadcastMode(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  mode: 'normal' | 'recess' | 'technical_difficulties',
+  opts?: { message?: string; duration_seconds?: number },
+) {
+  await ensureBroadcastState(service, boardMeetingId, operatorId)
+  const patch: Record<string, unknown> = {
+    mode,
+    updated_at: new Date().toISOString(),
+    updated_by: operatorId,
+  }
+  if (mode === 'normal') {
+    patch.mode_started_at = null
+    patch.mode_duration_seconds = null
+    patch.mode_message = null
+  } else {
+    patch.mode_started_at = new Date().toISOString()
+    patch.mode_duration_seconds = opts?.duration_seconds ?? null
+    patch.mode_message = opts?.message ?? null
+  }
+  await service.from('meeting_broadcast_state').update(patch).eq('board_meeting_id', boardMeetingId)
+  await logMeetingEvent(service, boardMeetingId, mode === 'normal' ? 'clear_mode' : mode, operatorId, {
+    message: opts?.message,
+    duration_seconds: opts?.duration_seconds,
+  })
+}
+
+export async function assignChannel(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  outputChannelId: string,
+  operatorId: string,
+) {
+  const { data: channel } = await service
+    .from('output_channels')
+    .select('id')
+    .eq('id', outputChannelId)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (!channel) throw new Error('Channel not found')
+
+  await service
+    .from('channel_assignments')
+    .update({ unassigned_at: new Date().toISOString(), unassigned_by: operatorId })
+    .eq('output_channel_id', outputChannelId)
+    .is('unassigned_at', null)
+
+  const { error } = await service.from('channel_assignments').insert({
+    output_channel_id: outputChannelId,
+    board_meeting_id: boardMeetingId,
+    assigned_by: operatorId,
+  })
+  if (error) throw new Error(error.message)
+  await logMeetingEvent(service, boardMeetingId, 'channel_assign', operatorId, { output_channel_id: outputChannelId })
+}
+
+export async function unassignChannel(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  outputChannelId: string,
+  operatorId: string,
+) {
+  const { error } = await service
+    .from('channel_assignments')
+    .update({ unassigned_at: new Date().toISOString(), unassigned_by: operatorId })
+    .eq('board_meeting_id', boardMeetingId)
+    .eq('output_channel_id', outputChannelId)
+    .is('unassigned_at', null)
+  if (error) throw new Error(error.message)
+  await logMeetingEvent(service, boardMeetingId, 'channel_unassign', operatorId, {
+    output_channel_id: outputChannelId,
+  })
+}
+
+export async function startTimer(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  opts: {
+    template_id?: string
+    duration_seconds?: number
+    label?: string
+    show_on_broadcast?: boolean
+    show_on_speaker_monitor?: boolean
+    show_on_dais?: boolean
+  },
+) {
+  let duration = opts.duration_seconds
+  let label = opts.label
+  let showBroadcast = opts.show_on_broadcast ?? false
+  let showSpeaker = opts.show_on_speaker_monitor ?? true
+  let showDais = opts.show_on_dais ?? true
+  let templateId: string | null = opts.template_id ?? null
+
+  if (opts.template_id) {
+    const { data: tpl } = await service.from('timer_templates').select('*').eq('id', opts.template_id).maybeSingle()
+    if (!tpl) throw new Error('Timer template not found')
+    duration = tpl.duration_seconds
+    label = label || tpl.name
+    showBroadcast = opts.show_on_broadcast ?? tpl.show_on_broadcast_default
+    showSpeaker = opts.show_on_speaker_monitor ?? tpl.show_on_speaker_monitor_default
+    showDais = opts.show_on_dais ?? tpl.show_on_dais_default
+    templateId = tpl.id
+  }
+
+  if (!duration || duration < 1) throw new Error('duration_seconds required')
+
+  await service
+    .from('meeting_timers')
+    .update({ ended_at: new Date().toISOString(), ended_by: 'cancelled' })
+    .eq('board_meeting_id', boardMeetingId)
+    .is('ended_at', null)
+
+  const { data: timer, error } = await service
+    .from('meeting_timers')
+    .insert({
+      board_meeting_id: boardMeetingId,
+      template_id: templateId,
+      label: label || 'Timer',
+      duration_seconds: duration,
+      show_on_broadcast: showBroadcast,
+      show_on_speaker_monitor: showSpeaker,
+      show_on_dais: showDais,
+      started_by: operatorId,
+    })
+    .select('*')
+    .single()
+
+  if (error || !timer) throw new Error(error?.message || 'Failed to start timer')
+
+  await ensureBroadcastState(service, boardMeetingId, operatorId)
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_timer_id: timer.id,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+
+  await logMeetingEvent(service, boardMeetingId, 'start_timer', operatorId, { timer_id: timer.id })
+  return timer
+}
+
+export async function endActiveTimer(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  endedBy: 'completed' | 'cancelled',
+) {
+  const state = await ensureBroadcastState(service, boardMeetingId, operatorId)
+  if (!state.active_timer_id) throw new Error('No active timer')
+
+  await service
+    .from('meeting_timers')
+    .update({ ended_at: new Date().toISOString(), ended_by: endedBy })
+    .eq('id', state.active_timer_id)
+
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_timer_id: null,
+      updated_at: new Date().toISOString(),
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+
+  await logMeetingEvent(service, boardMeetingId, endedBy === 'completed' ? 'end_timer' : 'cancel_timer', operatorId, {
+    timer_id: state.active_timer_id,
+  })
+}
+
+export async function loadControlBundle(service: SupabaseClient, productionId: string) {
+  const { data: bm } = await service.from('board_meetings').select('*').eq('production_id', productionId).maybeSingle()
+  if (!bm) return null
+
+  const [
+    { data: items },
+    { data: state },
+    { data: assignments },
+    { data: timers },
+    { data: events },
+    { data: channels },
+    { data: templates },
+  ] = await Promise.all([
+    service
+      .from('board_meeting_agenda_items')
+      .select('id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested')
+      .eq('board_meeting_id', bm.id)
+      .order('sort_order', { ascending: true }),
+    service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', bm.id).maybeSingle(),
+    service
+      .from('channel_assignments')
+      .select('id, output_channel_id, assigned_at, unassigned_at, output_channels(channel_number, channel_name, view_type)')
+      .eq('board_meeting_id', bm.id)
+      .is('unassigned_at', null),
+    service
+      .from('meeting_timers')
+      .select('*')
+      .eq('board_meeting_id', bm.id)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1),
+    service
+      .from('meeting_event_log')
+      .select('id, event_type, event_data, occurred_at')
+      .eq('board_meeting_id', bm.id)
+      .order('occurred_at', { ascending: false })
+      .limit(50),
+    service.from('output_channels').select('id, channel_number, channel_name, view_type, tier').eq('is_active', true).order('channel_number'),
+    service.from('timer_templates').select('*').order('sort_order', { ascending: true }),
+  ])
+
+  return {
+    board_meeting: bm,
+    items: items || [],
+    broadcast_state: state,
+    channel_assignments: assignments || [],
+    active_timer: timers?.[0] ?? null,
+    recent_events: events || [],
+    output_channels: channels || [],
+    timer_templates: templates || [],
+  }
+}

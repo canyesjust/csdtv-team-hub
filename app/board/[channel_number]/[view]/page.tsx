@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
 import BoardPlaceholder from '@/app/board/components/BoardPlaceholder'
+import BoardOverlayView from '@/app/board/components/BoardOverlayView'
+import BoardPrerollView from '@/app/board/components/BoardPrerollView'
 import { getOutputChannelByNumber, type BoardViewSlug } from '@/lib/board-meetings/public-channel'
 
 const VIEW_LABELS: Record<BoardViewSlug, string> = {
@@ -24,6 +26,13 @@ export default async function BoardPublicViewPage({
   const slug = view as BoardViewSlug
   const channel = await getOutputChannelByNumber(num)
   if (!channel) notFound()
+
+  if (slug === 'overlay') {
+    return <BoardOverlayView channelNumber={num} />
+  }
+  if (slug === 'preroll') {
+    return <BoardPrerollView channelNumber={num} />
+  }
 
   return (
     <BoardPlaceholder
