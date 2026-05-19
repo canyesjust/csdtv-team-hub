@@ -162,6 +162,11 @@ export default function MotionVotePanel({
     }
   }
 
+  const presentMembers = useMemo(
+    () => attendance.filter(p => p.status !== 'absent'),
+    [attendance],
+  )
+
   const voters: VoterRow[] = attendance.map(p => ({
     person_id: p.person_id,
     name: p.name,

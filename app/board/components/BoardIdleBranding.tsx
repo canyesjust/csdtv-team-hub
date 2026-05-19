@@ -1,6 +1,5 @@
-/** Drop `canyons-logo.png` in public/images and switch this path when ready. */
-export const CANYONS_LOGO_SRC = '/images/canyons-logo.svg'
-export const CSDTV_LOGO_SRC = '/images/CSDtv Logo - New Logo Outlined.png'
+export const CANYONS_LOGO_SRC = encodeURI('/images/logos/Canyons Color Long Medium.webp')
+export const CSDTV_LOGO_SRC = encodeURI('/images/logos/csdtvlogo outlined.webp')
 
 type BoardIdleBrandingProps = {
   screenName: string
