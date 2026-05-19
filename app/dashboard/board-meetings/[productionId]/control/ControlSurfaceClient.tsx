@@ -96,8 +96,13 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     [productionId, applyBundle],
   )
 
+  /** Slim bundle — skips full playlist items and timer templates. */
   const loadDebounced = useDebouncedCallback(() => {
-    void load({ full: true })
+    void load()
+  }, REALTIME_DEBOUNCE_MS)
+
+  const loadUtilitiesDebounced = useDebouncedCallback(() => {
+    void loadUtilities()
   }, REALTIME_DEBOUNCE_MS)
 
   const loadUtilities = useCallback(async () => {
@@ -195,6 +200,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         { event: '*', schema: 'public', table: 'meeting_playlists', filter: `board_meeting_id=eq.${meetingId}` },
         () => {
           loadDebounced()
+          loadUtilitiesDebounced()
         },
       )
 
@@ -212,7 +218,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [bundle?.board_meeting?.id, supabase, loadDebounced, motionIds])
+  }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadUtilitiesDebounced, motionIds])
 
   const assignedIds = useMemo(
     () => new Set((bundle?.channel_assignments || []).map(a => a.output_channel_id)),
@@ -268,7 +274,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
               ? { ...prev, held: true, seconds_remaining: prev.total_duration }
               : prev,
           )
-          await load({ full: true })
+          await load()
         }
         return
       }
@@ -280,19 +286,19 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           toast((d as { error?: string }).error || 'Action failed', 'error')
         } else {
           setResultOverlay(null)
-          await load({ full: true })
+          await load()
         }
         return
       }
 
       if (MOTION_ACTIONS.has(action) || action.startsWith('motion/')) {
         const path = action.startsWith('motion/') ? action.slice('motion/'.length) : action
-        if (await postMotion(path, payload)) await load({ full: true })
+        if (await postMotion(path, payload)) await load()
         return
       }
 
       if (action === 'clear-qr') {
-        if (await postControl('dismiss-qr')) await load({ full: true })
+        if (await postControl('dismiss-qr')) await load()
         return
       }
 
@@ -307,7 +313,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         if (!res.ok) {
           const d = await res.json()
           toast(d.error || 'Channel update failed', 'error')
-        } else await load({ full: true })
+        } else await load()
         return
       }
 
@@ -321,11 +327,14 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         if (!res.ok) {
           const d = await res.json()
           toast(d.error || 'Playlist action failed', 'error')
-        } else await load({ full: true })
+        } else {
+          await load()
+          await loadUtilities()
+        }
         return
       }
 
-      if (await postControl(action, payload)) await load({ full: true })
+      if (await postControl(action, payload)) await load()
     } finally {
       setBusy(false)
     }

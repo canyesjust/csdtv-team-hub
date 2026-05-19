@@ -4,8 +4,11 @@ import type { ControlAgendaItem, LowerThirdPerson } from '@/lib/board-meetings/t
 /** Locked agenda items per meeting — immutable until agenda is unlocked. */
 const lockedAgendaByMeeting = new Map<string, ControlAgendaItem[]>()
 
+/** Board members only — used for attendance / quorum. */
+let boardMembersForAttendanceCache: LowerThirdPerson[] | null = null
+
 /** Priority lower-third directory (board members + frequent staff). Changes rarely. */
-let boardMemberPeopleCache: LowerThirdPerson[] | null = null
+let priorityLowerThirdPeopleCache: LowerThirdPerson[] | null = null
 
 const AGENDA_SELECT =
   'id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested, consent_block'
@@ -20,7 +23,22 @@ export function clearLockedAgendaCache(boardMeetingId: string) {
 }
 
 export function clearBoardMemberPeopleCache() {
-  boardMemberPeopleCache = null
+  boardMembersForAttendanceCache = null
+  priorityLowerThirdPeopleCache = null
+}
+
+export async function getCachedBoardMembersForAttendance(service: SupabaseClient): Promise<LowerThirdPerson[]> {
+  if (boardMembersForAttendanceCache) return boardMembersForAttendanceCache
+
+  const { data } = await service
+    .from('lower_third_people')
+    .select(PEOPLE_SELECT)
+    .eq('is_active', true)
+    .eq('category', 'board_member')
+    .order('display_name')
+
+  boardMembersForAttendanceCache = (data || []) as LowerThirdPerson[]
+  return boardMembersForAttendanceCache
 }
 
 export function warmLockedAgendaCache(boardMeetingId: string, items: ControlAgendaItem[]) {
@@ -33,7 +51,7 @@ export function warmLockedAgendaCache(boardMeetingId: string, items: ControlAgen
  * full /api/lower-third-people endpoint for everyone else.
  */
 export async function getCachedBoardMemberPeople(service: SupabaseClient): Promise<LowerThirdPerson[]> {
-  if (boardMemberPeopleCache) return boardMemberPeopleCache
+  if (priorityLowerThirdPeopleCache) return priorityLowerThirdPeopleCache
 
   const { data } = await service
     .from('lower_third_people')
@@ -42,8 +60,8 @@ export async function getCachedBoardMemberPeople(service: SupabaseClient): Promi
     .in('category', PRIORITY_LOWER_THIRD_CATEGORIES as unknown as string[])
     .order('display_name')
 
-  boardMemberPeopleCache = (data || []) as LowerThirdPerson[]
-  return boardMemberPeopleCache
+  priorityLowerThirdPeopleCache = (data || []) as LowerThirdPerson[]
+  return priorityLowerThirdPeopleCache
 }
 
 export async function getAgendaItemsForControl(

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AttendanceStatus } from '@/lib/board-meetings/motion-types'
 import { logMeetingEvent } from '@/lib/board-meetings/broadcast-control'
-import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting-cache'
+import { getCachedBoardMembersForAttendance } from '@/lib/board-meetings/control-meeting-cache'
 
 export type AttendanceRecord = {
   id: string
@@ -14,7 +14,7 @@ export type AttendanceRecord = {
 }
 
 export async function loadBoardMembers(service: SupabaseClient) {
-  const people = await getCachedBoardMemberPeople(service)
+  const people = await getCachedBoardMembersForAttendance(service)
   return people.map(p => ({
     id: p.id,
     display_name: p.display_name,
