@@ -27,7 +27,7 @@ const STATUSES: { value: AttendanceStatus; label: string }[] = [
 ]
 
 type ChipProps = {
-  attendance: AttendanceData
+  attendance: Pick<AttendanceData, 'quorum'>
   quorumNeeded: number
   canEdit: boolean
   onMark: () => void

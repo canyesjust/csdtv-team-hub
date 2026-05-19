@@ -1,36 +1,22 @@
 import type { VoteTally } from '@/lib/board-meetings/motion-types'
-import type { VoterRow } from '@/app/dashboard/board-meetings/[productionId]/control/components/VoteInterface'
+import type { ActiveMotion, MotionScreenBundle } from '@/lib/board-meetings/types'
 
-export type MotionUi = {
-  id: string
-  motion_text: string
-  status: string
-  motion_type: string
-  parent_motion_id: string | null
-  result: string | null
-  tally_yea?: number | null
-  tally_nay?: number | null
-  tally_abstain?: number | null
-  moved_by?: { id: string; display_name: string } | null
-  seconded_by?: { id: string; display_name: string } | null
+export type MotionScreenViewProps = {
+  bundle: MotionScreenBundle
+  busy: boolean
+  error: string | null
+  onAction: (action: string, body?: unknown) => Promise<void>
+  onMinimize: () => void
+  onPushResult: () => Promise<void>
 }
 
-export type MotionScreenModel = {
-  activeMotion: MotionUi | null
-  parentMotion: MotionUi | null
-  currentItem: { id: string; title: string; item_number: string; type: string; consent_block?: string | null } | null
-  members: { person_id: string; name: string }[]
-  voters: VoterRow[]
-  statusLabel: string
-  isConsentLead: boolean
-  consentRange: string | null
-  canControl: boolean
-  isLive: boolean
-  resultOnOverlay: boolean
+export type MotionScreenStateProps = MotionScreenViewProps & {
+  active: ActiveMotion | null
+  parent?: ActiveMotion | null
 }
 
-export function tallyFromMotion(m: MotionUi): VoteTally | null {
-  if (m.tally_yea == null && m.tally_nay == null) return null
+export function tallyFromActiveMotion(m: ActiveMotion | null): VoteTally | null {
+  if (!m || (m.tally_yea == null && m.tally_nay == null)) return null
   return {
     yea: m.tally_yea ?? 0,
     nay: m.tally_nay ?? 0,
@@ -38,4 +24,12 @@ export function tallyFromMotion(m: MotionUi): VoteTally | null {
     absent: 0,
     recused: 0,
   }
+}
+
+export function uiMotionStatus(bundle: MotionScreenBundle, active: ActiveMotion | null): string {
+  if (!active) return 'No motion'
+  if (bundle.lifecycle_state === 'drafting' && bundle.active_motion?.id === active.id) {
+    return 'drafting'
+  }
+  return active.status
 }

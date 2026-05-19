@@ -1,3 +1,14 @@
+import type { AttendanceStatus } from '@/lib/board-meetings/motion-types'
+
+export type ControlAttendanceRecord = {
+  person_id: string
+  name: string
+  status: AttendanceStatus
+  arrived_at: string | null
+  left_at: string | null
+  notes: string | null
+}
+
 export type BoardMeetingRecord = {
   id: string
   production_id: string
@@ -150,7 +161,7 @@ export type ControlBundle = {
   agenda_items: ControlAgendaItem[]
   motion_lifecycle: MotionLifecycleState | null
   attendance: {
-    records: { person_id: string; name: string; status: string }[]
+    records: ControlAttendanceRecord[]
     quorum: { threshold: number; present_count: number; quorum_met: boolean }
   } | null
   lower_third_active: {

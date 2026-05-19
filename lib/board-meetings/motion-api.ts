@@ -61,6 +61,11 @@ export async function loadMotionScreenBundle(
   const canControl =
     surface.board_meeting.agenda_locked && status !== 'archived' && status !== 'cancelled'
 
+  let active_motion = enrichActiveMotion(lifecycle?.active_motion ?? null, motions)
+  if (active_motion && lifecycle?.state === 'drafting') {
+    active_motion = { ...active_motion, status: 'drafting' }
+  }
+
   return {
     meeting: {
       id: surface.board_meeting.id,
@@ -69,7 +74,7 @@ export async function loadMotionScreenBundle(
       broadcast_status: status,
       agenda_locked: surface.board_meeting.agenda_locked,
     },
-    active_motion: enrichActiveMotion(lifecycle?.active_motion ?? null, motions),
+    active_motion,
     parent_motion: enrichActiveMotion(lifecycle?.parent_motion ?? null, motions),
     lifecycle_state: lifecycle?.state ?? 'no_motion',
     current_agenda_item: currentItem,
