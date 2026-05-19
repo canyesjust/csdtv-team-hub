@@ -403,6 +403,316 @@
   font-size: 12px;
 }
 
+/* ============================================================ */
+/*  Lower Third panel (batch 2a redesign)                        */
+/* ============================================================ */
+
+.cs-lt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.cs-lt-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.cs-lt-label {
+  font-size: 13px;
+  color: var(--text-muted, #6b7385);
+}
+
+.cs-lt-onair-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--semantic-info-bg);
+  color: var(--semantic-info-text);
+  font-size: 13px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cs-lt-onair-pill strong {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-lt-onair-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--semantic-info-text);
+  flex-shrink: 0;
+}
+
+.cs-lt-onair-empty {
+  font-size: 13px;
+  color: var(--text-muted, #6b7385);
+  font-style: italic;
+  flex: 1 1 auto;
+}
+
+.cs-lt-clear-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-2, #1a2236);
+  color: var(--text-primary, #f8fafc);
+  font-family: inherit;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.cs-lt-clear-btn:hover:not(:disabled) {
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-lt-clear-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cs-lt-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .cs-lt-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .cs-lt-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .cs-lt-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.cs-lt-btn {
+  padding: 14px 10px;
+  border-radius: 10px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-2, #1a2236);
+  color: var(--text-primary, #f8fafc);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 120ms, border-color 120ms;
+}
+
+.cs-lt-btn:hover:not(:disabled) {
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-lt-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cs-lt-btn.cs-lt-btn--active {
+  border-color: var(--semantic-info-text);
+  background: var(--semantic-info-bg);
+  color: var(--semantic-info-text);
+}
+
+.cs-lt-btn.cs-lt-btn--missing {
+  opacity: 0.35;
+  font-style: italic;
+}
+
+.cs-lt-btn.cs-lt-btn--other {
+  background: transparent;
+}
+
+.cs-lt-other-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+}
+
+/* ============================================================ */
+/*  Modal (Other / future modals)                                */
+/* ============================================================ */
+
+.cs-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.cs-modal-dialog {
+  background: var(--surface-1, #131b2e);
+  border-radius: 14px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.cs-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.cs-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary, #f8fafc);
+}
+
+.cs-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #6b7385);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 6px;
+  font-family: inherit;
+}
+
+.cs-modal-close:hover {
+  color: var(--text-primary, #f8fafc);
+}
+
+.cs-modal-section {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cs-modal-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #6b7385);
+}
+
+.cs-modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-2, #1a2236);
+  color: var(--text-primary, #f8fafc);
+  font-family: inherit;
+  font-size: 14px;
+  min-height: 44px;
+}
+
+.cs-modal-input:focus {
+  outline: none;
+  border-color: var(--brand-primary, #1e6cb5);
+}
+
+.cs-modal-divider {
+  height: 0;
+  border-top: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  margin: 0 18px;
+}
+
+.cs-modal-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.cs-modal-results-empty {
+  margin: 0;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--text-muted, #6b7385);
+}
+
+.cs-modal-result {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--surface-2, #1a2236);
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cs-modal-result:hover {
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-modal-result.cs-modal-result--active {
+  border-color: var(--semantic-info-text);
+  background: var(--semantic-info-bg);
+  color: var(--semantic-info-text);
+}
+
+.cs-modal-result-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cs-modal-result-sub {
+  font-size: 12px;
+  color: var(--text-muted, #6b7385);
+}
+
+.cs-modal-result--active .cs-modal-result-sub {
+  color: var(--semantic-info-text);
+  opacity: 0.85;
+}
+
+.cs-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* ============================================================ */
+/*  Legacy lower-third grid (kept for the Legacy variant)        */
+/* ============================================================ */
+
 .cs-lower-third-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
