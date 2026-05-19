@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 
 function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {
   return (
@@ -60,7 +61,13 @@ function QrOverlay({ url, label }: { url: string; label: string }) {
   )
 }
 
-export default function BoardOverlayView({ channelNumber }: { channelNumber: number }) {
+export default function BoardOverlayView({
+  channelNumber,
+  initialChannelName,
+}: {
+  channelNumber: number
+  initialChannelName?: string
+}) {
   const [state, setState] = useState<PublicChannelState | null>(null)
 
   useEffect(() => {
@@ -87,13 +94,10 @@ export default function BoardOverlayView({ channelNumber }: { channelNumber: num
     fontFamily: 'system-ui, sans-serif',
   }
 
+  const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
+
   if (!state?.active) {
-    return (
-      <div style={{ ...root, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#8899bb' }}>
-        <p style={{ fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>CSDtv Board</p>
-        <p style={{ fontSize: '18px', margin: 0 }}>No production active</p>
-      </div>
-    )
+    return <BoardIdleBranding screenName={screenName} variant="overlay" />
   }
 
   const b = state.state
@@ -107,6 +111,8 @@ export default function BoardOverlayView({ channelNumber }: { channelNumber: num
   const timer = state.timer
   const showTimer = timer?.show_on_broadcast && (timer.remaining_seconds ?? 0) > 0
   const qr = b?.active_qr
+  const showIdleBranding =
+    mode === 'normal' && !showVoteResult && !showMotion && !showItem && !showTimer && !qr
 
   if (mode === 'recess') {
     return (
@@ -124,6 +130,10 @@ export default function BoardOverlayView({ channelNumber }: { channelNumber: num
         {qr && <QrOverlay url={qr.url} label={qr.label} />}
       </div>
     )
+  }
+
+  if (showIdleBranding) {
+    return <BoardIdleBranding screenName={screenName} variant="overlay" statusLine={null} />
   }
 
   return (

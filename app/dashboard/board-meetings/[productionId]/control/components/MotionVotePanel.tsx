@@ -78,11 +78,6 @@ export default function MotionVotePanel({
 
   useEffect(() => { load() }, [load])
 
-  const presentMembers = useMemo(
-    () => attendance.filter(a => a.status !== 'absent'),
-    [attendance],
-  )
-
   const activeMotion = useMemo(() => {
     const id = broadcastState?.active_motion_id
     if (!id) return motions.find(m => ['open_for_discussion', 'voting'].includes(m.status))
@@ -167,7 +162,7 @@ export default function MotionVotePanel({
     }
   }
 
-  const voters: VoterRow[] = presentMembers.map(p => ({
+  const voters: VoterRow[] = attendance.map(p => ({
     person_id: p.person_id,
     name: p.name,
     eligible: p.status !== 'absent',

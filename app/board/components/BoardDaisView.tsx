@@ -3,10 +3,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 
 const LS_KEY = 'board-dais-person'
 
-export default function BoardDaisView({ channelNumber }: { channelNumber: number }) {
+export default function BoardDaisView({
+  channelNumber,
+  initialChannelName,
+}: {
+  channelNumber: number
+  initialChannelName?: string
+}) {
   const [state, setState] = useState<PublicChannelState | null>(null)
   const [personName, setPersonName] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -55,11 +62,8 @@ export default function BoardDaisView({ channelNumber }: { channelNumber: number
   }
 
   if (!state?.active) {
-    return (
-      <div style={root}>
-        <p style={{ color: '#94a3b8', fontSize: '24px' }}>No production active</p>
-      </div>
-    )
+    const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
+    return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
   }
 
   const item = state.current_item

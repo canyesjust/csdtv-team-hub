@@ -17,6 +17,8 @@ export type StoredAgendaItem = {
   subitems: unknown
   needs_review: boolean
   review_notes: string | null
+  presenters?: { name: string; title?: string | null; affiliation?: string | null }[]
+  documents?: { title: string; filename: string; source_url?: string | null }[]
 }
 
 export type AgendaDiffEntry =
@@ -24,7 +26,39 @@ export type AgendaDiffEntry =
   | { change_id: string; kind: 'removed'; before: StoredAgendaItem }
   | { change_id: string; kind: 'modified'; before: StoredAgendaItem; after: ExtractedAgendaItem }
 
-function serializeForCompare(it: Pick<StoredAgendaItem, 'title' | 'type' | 'is_broadcastable' | 'action_requested' | 'consent_block' | 'needs_review' | 'item_number' | 'section_number'>): string {
+function normalizePresenters(p: { name: string; title?: string | null; affiliation?: string | null }[] | undefined) {
+  return (p || [])
+    .map(x => ({ name: x.name, title: x.title ?? null, affiliation: x.affiliation ?? null }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function normalizeDocuments(d: { title: string; filename: string; source_url?: string | null }[] | undefined) {
+  return (d || [])
+    .map(x => ({ title: x.title, filename: x.filename, source_url: x.source_url ?? null }))
+    .sort((a, b) => a.filename.localeCompare(b.filename))
+}
+
+function serializeForCompare(
+  it: Pick<
+    StoredAgendaItem,
+    | 'title'
+    | 'type'
+    | 'is_broadcastable'
+    | 'action_requested'
+    | 'consent_block'
+    | 'needs_review'
+    | 'item_number'
+    | 'section_number'
+    | 'section_title'
+    | 'original_title'
+    | 'notes'
+    | 'review_notes'
+    | 'subitems'
+  > & {
+    presenters?: StoredAgendaItem['presenters']
+    documents?: StoredAgendaItem['documents']
+  },
+): string {
   return JSON.stringify({
     title: it.title,
     type: it.type,
@@ -34,6 +68,13 @@ function serializeForCompare(it: Pick<StoredAgendaItem, 'title' | 'type' | 'is_b
     needs_review: it.needs_review,
     item_number: it.item_number,
     section_number: it.section_number,
+    section_title: it.section_title,
+    original_title: it.original_title ?? null,
+    notes: it.notes ?? null,
+    review_notes: it.review_notes ?? null,
+    subitems: it.subitems ?? null,
+    presenters: normalizePresenters(it.presenters),
+    documents: normalizeDocuments(it.documents),
   })
 }
 
@@ -57,16 +98,24 @@ export function buildAgendaDiff(
       diff.push({ change_id: `add:${key}`, kind: 'added', after: item })
       continue
     }
-    if (serializeForCompare(before) !== serializeForCompare({
-      title : item.title,
-      type : item.type,
-      is_broadcastable : item.is_broadcastable !== false,
-      action_requested : !!item.action_requested,
-      consent_block : item.consent_block ?? null,
-      needs_review : !!item.needs_review,
-      item_number : item.item_number,
-      section_number : item.section_number,
-    }) || (before.original_title || '') !== (item.original_title || '')) {
+    const afterCompare = {
+      title: item.title,
+      type: item.type,
+      is_broadcastable: item.is_broadcastable !== false,
+      action_requested: !!item.action_requested,
+      consent_block: item.consent_block ?? null,
+      needs_review: !!item.needs_review,
+      item_number: item.item_number,
+      section_number: item.section_number,
+      section_title: item.section_title,
+      original_title: item.original_title ?? null,
+      notes: item.notes ?? null,
+      review_notes: item.review_notes ?? null,
+      subitems: item.subitems ?? null,
+      presenters: item.presenters,
+      documents: item.documents,
+    }
+    if (serializeForCompare(before) !== serializeForCompare(afterCompare)) {
       diff.push({ change_id: `mod:${before.id}`, kind: 'modified', before, after: item })
     }
   }

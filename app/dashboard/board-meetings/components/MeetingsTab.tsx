@@ -33,16 +33,16 @@ function daysFromToday(d: string | null): number | null {
   return Math.round((eventDay.getTime() - todayDay.getTime()) / 86400000)
 }
 
-function isPastMeeting(row: MeetingRow): boolean {
-  if (!row.start_datetime) return false
-  const df = daysFromToday(row.start_datetime)
-  return df !== null && df < 0
-}
-
 function meetingInstant(row: MeetingRow): number | null {
   if (!row.start_datetime) return null
   const t = parseProductionInstant(row.start_datetime).getTime()
   return Number.isNaN(t) ? null : t
+}
+
+function isPastMeeting(row: MeetingRow): boolean {
+  const ts = meetingInstant(row)
+  if (ts !== null) return ts < Date.now()
+  return false
 }
 
 function sortUpcoming(a: MeetingRow, b: MeetingRow): number {
@@ -76,10 +76,17 @@ export default function MeetingsTab() {
   const cardBg = 'var(--surface-1)'
 
   const load = useCallback(async () => {
-    const { data: prods } = await supabase
+    const { data: prods, error: prodErr } = await supabase
       .from('productions')
       .select('id, production_number, title, start_datetime, status')
       .eq('request_type_number', 4)
+
+    if (prodErr) {
+      console.error(prodErr)
+      setRows([])
+      setLoading(false)
+      return
+    }
 
     const list = prods || []
     if (list.length === 0) {

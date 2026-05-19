@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 
 function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
   const vr = state?.active_vote_result
@@ -50,7 +51,13 @@ function TypePill({ type }: { type: string }) {
   )
 }
 
-export default function BoardLiveView({ channelNumber }: { channelNumber: number }) {
+export default function BoardLiveView({
+  channelNumber,
+  initialChannelName,
+}: {
+  channelNumber: number
+  initialChannelName?: string
+}) {
   const [state, setState] = useState<PublicChannelState | null>(null)
   const [expandedPast, setExpandedPast] = useState(false)
 
@@ -81,11 +88,8 @@ export default function BoardLiveView({ channelNumber }: { channelNumber: number
   }, [mode, state?.state?.mode_started_at, state?.state?.mode_duration_seconds, state])
 
   if (!state?.active) {
-    return (
-      <div style={page}>
-        <p style={{ color: '#64748b', textAlign: 'center', marginTop: '40vh' }}>No production active on this channel.</p>
-      </div>
-    )
+    const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
+    return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
   }
 
   const item = state.current_item

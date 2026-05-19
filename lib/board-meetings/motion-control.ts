@@ -224,7 +224,11 @@ export async function recordVotes(
 ) {
   const motion = await loadMotion(service, motionId, boardMeetingId)
   if (!motion) throw new Error('Motion not found')
-  if (!opts?.re_record && !['open_for_discussion', 'voting'].includes(motion.status)) {
+  if (opts?.re_record) {
+    if (!['passed', 'failed', 'voting'].includes(motion.status)) {
+      throw new Error('Can only re-record votes on motions that are voting or already resolved')
+    }
+  } else if (!['open_for_discussion', 'voting'].includes(motion.status)) {
     throw new Error('Motion is not open for voting')
   }
 
@@ -233,7 +237,7 @@ export async function recordVotes(
   const now = new Date()
   const voteTime = now.toISOString()
 
-  for (const v of votes) {
+  const normalizedVotes = votes.map(v => {
     if (!attByPerson.has(v.person_id)) {
       throw new Error('All voters must have attendance records; mark attendance first')
     }
@@ -243,9 +247,10 @@ export async function recordVotes(
       v.vote !== 'absent' &&
       v.vote !== 'recused'
     ) {
-      // Allow explicit absent/recused; otherwise coerce absent for ineligible
+      return { person_id: v.person_id, vote: 'absent' as VoteValue }
     }
-  }
+    return v
+  })
 
   if (opts?.re_record) {
     const { data: oldVotes } = await service
@@ -256,7 +261,7 @@ export async function recordVotes(
 
     const previousIds = (oldVotes || []).map(v => v.id)
 
-    for (const v of votes) {
+    for (const v of normalizedVotes) {
       const { data: inserted, error } = await service
         .from('meeting_motion_votes')
         .insert({
@@ -291,7 +296,7 @@ export async function recordVotes(
       previous_vote_ids: previousIds,
     })
   } else {
-    for (const v of votes) {
+    for (const v of normalizedVotes) {
       const { error } = await service.from('meeting_motion_votes').insert({
         motion_id: motionId,
         person_id: v.person_id,

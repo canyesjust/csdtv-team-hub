@@ -35,6 +35,9 @@ export default function PeopleTab() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importCsv, setImportCsv] = useState('')
+  const [importing, setImporting] = useState(false)
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -144,6 +147,38 @@ export default function PeopleTab() {
     load()
   }
 
+  const runImport = async () => {
+    if (!importCsv.trim()) return
+    setImporting(true)
+    try {
+      const res = await fetch('/api/lower-third-people/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv: importCsv }),
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        toast(body.error || 'Import failed', 'error')
+        return
+      }
+      const parts = [
+        body.created ? `${body.created} added` : null,
+        body.matched_existing ? `${body.matched_existing} matched existing` : null,
+        body.updated ? `${body.updated} updated` : null,
+        body.skipped ? `${body.skipped} skipped` : null,
+      ].filter(Boolean)
+      toast(parts.length ? parts.join(', ') : 'Import complete', 'success')
+      if (body.errors?.length) {
+        console.warn('People import warnings:', body.errors)
+      }
+      setImportOpen(false)
+      setImportCsv('')
+      load()
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const remove = async (id: string) => {
     if (!confirm('Delete this person?')) return
     const res = await fetch(`/api/lower-third-people/${id}`, { method: 'DELETE' })
@@ -171,6 +206,13 @@ export default function PeopleTab() {
           <option value="all">All categories</option>
           {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
+        <button
+          type="button"
+          onClick={() => setImportOpen(true)}
+          style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'transparent', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}
+        >
+          Import CSV
+        </button>
         <button
           type="button"
           onClick={openAdd}
@@ -220,6 +262,36 @@ export default function PeopleTab() {
           </button>
         ))}
       </div>
+
+      {importOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={e => { if (e.target === e.currentTarget) setImportOpen(false) }}
+        >
+          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '16px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto', padding: '24px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 600, margin: '0 0 8px', color: text }}>Import people from CSV</h2>
+            <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px', lineHeight: 1.45 }}>
+              Paste CSV with a header row. Columns: Display Name, Title, Affiliation, Category, Officer Position (board members only).
+              Category values: board_member, staff, presenter, other.
+            </p>
+            <textarea
+              value={importCsv}
+              onChange={e => setImportCsv(e.target.value)}
+              placeholder={'Display Name,Title,Affiliation,Category,Officer Position\nJane Doe,Principal,...'}
+              rows={12}
+              style={{ ...inputStyle, resize: 'vertical', minHeight: '200px', fontFamily: 'ui-monospace, monospace', fontSize: '13px' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+              <button type="button" onClick={runImport} disabled={importing || !importCsv.trim()} style={{ flex: 1, minHeight: '44px', padding: '10px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                {importing ? 'Importing…' : 'Import'}
+              </button>
+              <button type="button" onClick={() => { setImportOpen(false); setImportCsv('') }} style={{ minHeight: '44px', padding: '10px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <div

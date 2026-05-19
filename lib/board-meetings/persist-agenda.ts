@@ -22,7 +22,47 @@ export async function ensureBoardMeetingRow(
   return created
 }
 
-/** Replace all agenda items (cascade deletes presenters/documents). */
+async function insertPresentersForItem(
+  service: SupabaseClient,
+  itemId: string,
+  presenters: ExtractedAgendaItem['presenters'],
+): Promise<void> {
+  const list = presenters || []
+  if (list.length === 0) return
+  const { error } = await service.from('board_meeting_presenters').insert(
+    list.map((p, j) => ({
+      agenda_item_id: itemId,
+      person_id: null,
+      name: p.name,
+      title: p.title ?? null,
+      affiliation: p.affiliation ?? null,
+      sort_order: j,
+    })),
+  )
+  if (error) throw new Error(error.message)
+}
+
+async function insertDocumentsForItem(
+  service: SupabaseClient,
+  itemId: string,
+  documents: ExtractedAgendaItem['documents'],
+): Promise<void> {
+  const list = documents || []
+  if (list.length === 0) return
+  const { error } = await service.from('board_meeting_agenda_documents').insert(
+    list.map((d, j) => ({
+      agenda_item_id: itemId,
+      title: d.title,
+      filename: d.filename,
+      source_url: d.source_url ?? null,
+      storage_path: null,
+      sort_order: j,
+    })),
+  )
+  if (error) throw new Error(error.message)
+}
+
+/** Replace all agenda items (insert new rows, then delete prior rows). */
 export async function replaceAgendaItemsFromExtraction(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -30,13 +70,12 @@ export async function replaceAgendaItemsFromExtraction(
 ): Promise<void> {
   const items = enrichExtractedItems(extracted)
 
-  const { error: delErr } = await service
-    .from('board_meeting_agenda_items')
-    .delete()
-    .eq('board_meeting_id', boardMeetingId)
-  if (delErr) throw new Error(delErr.message)
-
   if (items.length === 0) {
+    const { error: delErr } = await service
+      .from('board_meeting_agenda_items')
+      .delete()
+      .eq('board_meeting_id', boardMeetingId)
+    if (delErr) throw new Error(delErr.message)
     await service
       .from('board_meetings')
       .update({
@@ -74,36 +113,32 @@ export async function replaceAgendaItemsFromExtraction(
     throw new Error(insErr?.message || 'Insert agenda items failed')
   }
 
-  for (let i = 0; i < items.length; i++) {
-    const itemId = inserted[i].id
-    const it = items[i]
-    const presenters = it.presenters || []
-    if (presenters.length > 0) {
-      const { error: pErr } = await service.from('board_meeting_presenters').insert(
-        presenters.map((p, j) => ({
-          agenda_item_id: itemId,
-          person_id: null,
-          name: p.name,
-          title: p.title ?? null,
-          sort_order: j,
-        })),
-      )
-      if (pErr) throw new Error(pErr.message)
+  const newIds = inserted.map(r => r.id)
+  try {
+    for (let i = 0; i < items.length; i++) {
+      await insertPresentersForItem(service, newIds[i], items[i].presenters)
+      await insertDocumentsForItem(service, newIds[i], items[i].documents)
     }
-    const documents = it.documents || []
-    if (documents.length > 0) {
-      const { error: dErr } = await service.from('board_meeting_agenda_documents').insert(
-        documents.map((d, j) => ({
-          agenda_item_id: itemId,
-          title: d.title,
-          filename: d.filename,
-          source_url: d.source_url ?? null,
-          storage_path: null,
-          sort_order: j,
-        })),
-      )
-      if (dErr) throw new Error(dErr.message)
+
+    const { data: existing } = await service
+      .from('board_meeting_agenda_items')
+      .select('id')
+      .eq('board_meeting_id', boardMeetingId)
+
+    const staleIds = (existing || []).map(r => r.id).filter(id => !newIds.includes(id))
+    if (staleIds.length > 0) {
+      const { error: delErr } = await service
+        .from('board_meeting_agenda_items')
+        .delete()
+        .eq('board_meeting_id', boardMeetingId)
+        .in('id', staleIds)
+      if (delErr) throw new Error(delErr.message)
     }
+  } catch (e) {
+    if (newIds.length > 0) {
+      await service.from('board_meeting_agenda_items').delete().in('id', newIds)
+    }
+    throw e
   }
 
   const { error: upErr } = await service
@@ -117,16 +152,44 @@ export async function replaceAgendaItemsFromExtraction(
   if (upErr) throw new Error(upErr.message)
 }
 
+/** Interpret date + HH:MM as America/Denver wall time, return UTC ISO. */
 function combineDateAndTime(dateStr: string | undefined, timeStr: string | undefined): string | null {
   if (!dateStr || !timeStr) return null
   const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(timeStr.trim())
   if (!timeMatch) return null
-  const hours = Number(timeMatch[1])
-  const minutes = Number(timeMatch[2])
-  const base = new Date(`${dateStr}T00:00:00`)
-  if (Number.isNaN(base.getTime())) return null
-  base.setHours(hours, minutes, 0, 0)
-  return base.toISOString()
+  const hour = Number(timeMatch[1])
+  const minute = Number(timeMatch[2])
+  const [y, mo, d] = dateStr.split('-').map(Number)
+  if (!y || !mo || !d) return null
+
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const timeZone = 'America/Denver'
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  })
+  const readZoned = (ms: number) => {
+    const parts = fmt.formatToParts(new Date(ms))
+    const v = (t: string) => Number(parts.find(p => p.type === t)?.value || 0)
+    return { y: v('year'), mo: v('month'), d: v('day'), h: v('hour'), mi: v('minute') }
+  }
+
+  let ms = Date.UTC(y, mo - 1, d, hour, minute)
+  for (let i = 0; i < 4; i++) {
+    const got = readZoned(ms)
+    const errMin =
+      (got.h - hour) * 60 +
+      (got.mi - minute) +
+      (got.d - d) * 24 * 60 +
+      (got.mo - mo) * 24 * 60 * 31
+    ms -= errMin * 60 * 1000
+  }
+  return new Date(ms).toISOString()
 }
 
 function schedulePatchFromMeeting(meeting: ExtractedAgendaResponse['meeting'] | undefined): Record<string, string | null> {
@@ -179,35 +242,13 @@ export async function insertAgendaItemTree(
     .single()
   if (error || !row) throw new Error(error?.message || 'Insert failed')
 
-  const presenters = it.presenters || []
-  if (presenters.length > 0) {
-    await service.from('board_meeting_presenters').insert(
-      presenters.map((p, j) => ({
-        agenda_item_id: row.id,
-        person_id: null,
-        name: p.name,
-        title: p.title ?? null,
-        sort_order: j,
-      })),
-    )
-  }
-  const documents = it.documents || []
-  if (documents.length > 0) {
-    await service.from('board_meeting_agenda_documents').insert(
-      documents.map((d, j) => ({
-        agenda_item_id: row.id,
-        title: d.title,
-        filename: d.filename,
-        source_url: d.source_url ?? null,
-        storage_path: null,
-        sort_order: j,
-      })),
-    )
-  }
+  await insertPresentersForItem(service, row.id, it.presenters)
+  await insertDocumentsForItem(service, row.id, it.documents)
 }
 
 export async function updateAgendaItemFromExtracted(
   service: SupabaseClient,
+  boardMeetingId: string,
   itemId: string,
   it: ExtractedAgendaItem,
 ): Promise<void> {
@@ -224,40 +265,19 @@ export async function updateAgendaItemFromExtracted(
       action_requested: !!it.action_requested,
       is_broadcastable: it.is_broadcastable !== false,
       consent_block: it.consent_block ?? null,
+      notes: it.notes ?? null,
       subitems: it.subitems != null ? JSON.parse(JSON.stringify(it.subitems)) : null,
       needs_review: !!it.needs_review,
       review_notes: it.review_notes ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', itemId)
+    .eq('board_meeting_id', boardMeetingId)
   if (error) throw new Error(error.message)
 
   await service.from('board_meeting_presenters').delete().eq('agenda_item_id', itemId)
   await service.from('board_meeting_agenda_documents').delete().eq('agenda_item_id', itemId)
 
-  const presenters = it.presenters || []
-  if (presenters.length > 0) {
-    await service.from('board_meeting_presenters').insert(
-      presenters.map((p, j) => ({
-        agenda_item_id: itemId,
-        person_id: null,
-        name: p.name,
-        title: p.title ?? null,
-        sort_order: j,
-      })),
-    )
-  }
-  const documents = it.documents || []
-  if (documents.length > 0) {
-    await service.from('board_meeting_agenda_documents').insert(
-      documents.map((d, j) => ({
-        agenda_item_id: itemId,
-        title: d.title,
-        filename: d.filename,
-        source_url: d.source_url ?? null,
-        storage_path: null,
-        sort_order: j,
-      })),
-    )
-  }
+  await insertPresentersForItem(service, itemId, it.presenters)
+  await insertDocumentsForItem(service, itemId, it.documents)
 }

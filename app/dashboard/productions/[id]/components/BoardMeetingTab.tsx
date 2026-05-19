@@ -20,6 +20,9 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const [items, setItems] = useState<AgendaItemUI[]>([])
   const [error, setError] = useState('')
   const [locking, setLocking] = useState(false)
+  const [unlocking, setUnlocking] = useState(false)
+  const [reopening, setReopening] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [diff, setDiff] = useState<AgendaDiffEntry[]>([])
   const [diffAccepted, setDiffAccepted] = useState<Record<string, boolean>>({})
   const [isNarrow, setIsNarrow] = useState(false)
@@ -127,11 +130,15 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
 
   const saveItemPatch = async (item: AgendaItemUI) => {
     if (!item.id || meeting?.agenda_locked) return
-    await fetch(`/api/board-meetings/${productionId}/agenda-items/${item.id}`, {
+    const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/${item.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item),
     })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast((body as { error?: string }).error || 'Failed to save item', 'error')
+    }
   }
 
   const lockAgenda = async () => {
@@ -147,8 +154,66 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       toast(body.error || 'Lock failed', 'error')
       return
     }
-    toast('Agenda locked', 'success')
+    const sync = body.people_sync as {
+      created?: number
+      linked?: number
+      matched_existing?: number
+      skipped_placeholders?: number
+    } | undefined
+    const syncParts = [
+      sync?.created ? `${sync.created} added to People` : null,
+      sync?.matched_existing ? `${sync.matched_existing} already in People` : null,
+      sync?.linked ? `${sync.linked} linked` : null,
+    ].filter(Boolean)
+    toast(
+      syncParts.length ? `Agenda locked — ${syncParts.join(', ')}` : 'Agenda locked',
+      'success',
+    )
     load()
+  }
+
+  const unlockAgenda = async () => {
+    if (!confirm('Unlock the agenda? You can edit items and lock again when ready.')) return
+    setUnlocking(true)
+    const res = await fetch(`/api/board-meetings/${productionId}/unlock-agenda`, { method: 'POST' })
+    const body = await res.json()
+    setUnlocking(false)
+    if (!res.ok) {
+      toast(body.error || 'Unlock failed', 'error')
+      return
+    }
+    toast('Agenda unlocked', 'success')
+    load()
+  }
+
+  const reopenMeeting = async () => {
+    if (!confirm('Reopen this meeting? Control surface and live broadcast will be available again. Reassign output channels if needed.')) return
+    setReopening(true)
+    const res = await fetch(`/api/board-meetings/${productionId}/reopen-meeting`, { method: 'POST' })
+    const body = await res.json()
+    setReopening(false)
+    if (!res.ok) {
+      toast(body.error || 'Reopen failed', 'error')
+      return
+    }
+    toast('Meeting reopened', 'success')
+    load()
+  }
+
+  const resetMeeting = async () => {
+    if (!confirm('Delete all board meeting data for this production? Agenda, motions, timers, and broadcast history will be removed. This cannot be undone.')) return
+    setResetting(true)
+    const res = await fetch(`/api/board-meetings/${productionId}/reset`, { method: 'POST' })
+    const body = await res.json()
+    setResetting(false)
+    if (!res.ok) {
+      toast(body.error || 'Reset failed', 'error')
+      return
+    }
+    toast('Board meeting reset', 'success')
+    setMeeting(null)
+    setItems([])
+    setPhase('empty')
   }
 
   const applyDiff = async () => {
@@ -306,7 +371,32 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                 Status: {meeting?.broadcast_status || 'prepared'} · {items.length} items
               </p>
             </div>
-            {fileInput(true)}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+              {meeting?.broadcast_status === 'prepared' && (
+                <button
+                  type="button"
+                  onClick={unlockAgenda}
+                  disabled={unlocking}
+                  style={{ fontSize: '13px', padding: '8px 14px', minHeight: '40px', borderRadius: '8px', background: 'transparent', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  {unlocking ? 'Unlocking…' : 'Unlock agenda'}
+                </button>
+              )}
+              {meeting?.broadcast_status === 'live' && (
+                <span style={{ fontSize: '12px', color: muted }}>End the live meeting from control surface to unlock.</span>
+              )}
+              {meeting?.broadcast_status === 'prepared' && (
+                <button
+                  type="button"
+                  onClick={resetMeeting}
+                  disabled={resetting}
+                  style={{ fontSize: '13px', padding: '8px 14px', minHeight: '40px', borderRadius: '8px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  {resetting ? 'Deleting…' : 'Delete meeting data'}
+                </button>
+              )}
+              {fileInput(true)}
+            </div>
           </div>
           {meeting && ['prepared', 'live'].includes(meeting.broadcast_status) && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
@@ -341,7 +431,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
           <div style={{ marginBottom: '16px' }}>
             <p style={{ margin: 0, fontWeight: 600, color: text }}>Meeting archived</p>
             <p style={{ margin: '4px 0 12px', fontSize: '13px', color: muted }}>{items.length} agenda items · broadcast complete</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
               {productionNumber && (
                 <Link
                   href={`/board/meeting/${productionNumber}/archive`}
@@ -352,6 +442,24 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                 </Link>
               )}
               <GenerateChaptersButton productionId={productionId} />
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={reopenMeeting}
+                disabled={reopening}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+              >
+                {reopening ? 'Reopening…' : 'Reopen meeting'}
+              </button>
+              <button
+                type="button"
+                onClick={resetMeeting}
+                disabled={resetting}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                {resetting ? 'Deleting…' : 'Delete meeting data'}
+              </button>
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

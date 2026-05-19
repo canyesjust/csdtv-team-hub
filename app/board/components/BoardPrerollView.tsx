@@ -2,10 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 
 type PrerollState = PublicChannelState
 
-export default function BoardPrerollView({ channelNumber }: { channelNumber: number }) {
+export default function BoardPrerollView({
+  channelNumber,
+  initialChannelName,
+}: {
+  channelNumber: number
+  initialChannelName?: string
+}) {
   const [state, setState] = useState<PrerollState | null>(null)
   const [cardIndex, setCardIndex] = useState(0)
 
@@ -48,11 +55,8 @@ export default function BoardPrerollView({ channelNumber }: { channelNumber: num
   }, [cards.length])
 
   if (!state?.active) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a1628', color: '#8899bb', fontFamily: 'system-ui, sans-serif' }}>
-        No production active
-      </div>
-    )
+    const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
+    return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
   }
 
   const card = cards[cardIndex % cards.length]

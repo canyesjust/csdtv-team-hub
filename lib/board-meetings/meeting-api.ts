@@ -123,13 +123,17 @@ export async function callExtractAgendaEdge(pdfBase64: string): Promise<unknown>
   const controller = new AbortController()
   const t = setTimeout(() => controller.abort(), 90_000)
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${anon}`,
+  }
+  const invokeSecret = process.env.EXTRACT_AGENDA_INVOKE_SECRET?.trim()
+  if (invokeSecret) headers['x-extract-agenda-secret'] = invokeSecret
+
   try {
     const res = await fetch(`${url}/functions/v1/extract-agenda`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${anon}`,
-      },
+      headers,
       body: JSON.stringify({ pdf_base64: pdfBase64 }),
       signal: controller.signal,
     })

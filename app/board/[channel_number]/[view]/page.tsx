@@ -29,17 +29,19 @@ export default async function BoardPublicViewPage({
   const channel = await getOutputChannelByNumber(num)
   if (!channel) notFound()
 
+  const channelName = channel.channel_name
+
   if (slug === 'overlay') {
-    return <BoardOverlayView channelNumber={num} />
+    return <BoardOverlayView channelNumber={num} initialChannelName={channelName} />
   }
   if (slug === 'preroll') {
-    return <BoardPrerollView channelNumber={num} />
+    return <BoardPrerollView channelNumber={num} initialChannelName={channelName} />
   }
   if (slug === 'live') {
-    return <BoardLiveView channelNumber={num} />
+    return <BoardLiveView channelNumber={num} initialChannelName={channelName} />
   }
   if (slug === 'dais') {
-    return <BoardDaisView channelNumber={num} />
+    return <BoardDaisView channelNumber={num} initialChannelName={channelName} />
   }
 
   return (

@@ -14,6 +14,24 @@ type ApplyChange = {
   before_id?: string
 }
 
+async function assertItemsBelongToMeeting(
+  service: NonNullable<ReturnType<typeof getServiceSupabaseClient>>,
+  boardMeetingId: string,
+  itemIds: string[],
+): Promise<void> {
+  if (itemIds.length === 0) return
+  const unique = [...new Set(itemIds)]
+  const { data, error } = await service
+    .from('board_meeting_agenda_items')
+    .select('id')
+    .eq('board_meeting_id', boardMeetingId)
+    .in('id', unique)
+  if (error) throw new Error(error.message)
+  if ((data || []).length !== unique.length) {
+    throw new Error('One or more agenda items do not belong to this meeting')
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ production_id: string }> },
@@ -43,14 +61,25 @@ export async function POST(
 
   const bmId = bundle.board_meeting.id
 
+  const beforeIds = changes
+    .filter(ch => (ch.kind === 'removed' || ch.kind === 'modified') && ch.before_id)
+    .map(ch => ch.before_id as string)
+
   try {
+    await assertItemsBelongToMeeting(service, bmId, beforeIds)
+
     for (const ch of changes) {
       if (ch.kind === 'added' && ch.after) {
         await insertAgendaItemTree(service, bmId, ch.after)
       } else if (ch.kind === 'removed' && ch.before_id) {
-        await service.from('board_meeting_agenda_items').delete().eq('id', ch.before_id)
+        const { error } = await service
+          .from('board_meeting_agenda_items')
+          .delete()
+          .eq('id', ch.before_id)
+          .eq('board_meeting_id', bmId)
+        if (error) throw new Error(error.message)
       } else if (ch.kind === 'modified' && ch.before_id && ch.after) {
-        await updateAgendaItemFromExtracted(service, ch.before_id, ch.after)
+        await updateAgendaItemFromExtracted(service, bmId, ch.before_id, ch.after)
       }
     }
 

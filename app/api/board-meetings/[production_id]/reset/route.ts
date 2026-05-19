@@ -2,13 +2,12 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
-import { ensureBoardMeetingRow } from '@/lib/board-meetings/persist-agenda'
-import { syncAgendaPresentersToPeopleLibrary } from '@/lib/board-meetings/people-import'
+import { resetBoardMeeting } from '@/lib/board-meetings/meeting-lifecycle'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ production_id: string }> },
 ) {
   const teamUser = await getAuthenticatedTeamUser()
@@ -24,28 +23,12 @@ export async function POST(
   }
 
   try {
-    const bm = await ensureBoardMeetingRow(service, production_id)
-
-    const { error } = await service
-      .from('board_meetings')
-      .update({
-        agenda_locked: true,
-        agenda_locked_at: new Date().toISOString(),
-        agenda_locked_by: teamUser.id,
-        broadcast_status: 'prepared',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', bm.id)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    const peopleSync = await syncAgendaPresentersToPeopleLibrary(service, bm.id, teamUser.id)
-
-    return NextResponse.json({ success: true, people_sync: peopleSync })
+    await resetBoardMeeting(service, production_id)
+    return NextResponse.json({ success: true })
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Lock failed' },
-      { status: 500 },
+      { error: e instanceof Error ? e.message : 'Reset failed' },
+      { status: 400 },
     )
   }
 }
