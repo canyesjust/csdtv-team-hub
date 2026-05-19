@@ -7,19 +7,38 @@ type Props = {
   isLive: boolean
 }
 
+const TYPE_BADGE_LABEL: Record<string, string> = {
+  action: 'ACTION',
+  recognition: 'RECOGNITION',
+  procedural: 'PROCEDURAL',
+  information: 'INFO',
+}
+
 export default function OnAirCard({ item, isLive }: Props) {
+  const badgeLabel = item ? TYPE_BADGE_LABEL[item.type] : null
+  const showActionBadge = item?.type === 'action' || item?.type === 'recognition'
+
   return (
-    <div className="cs-card control-on-air-item">
-      <div className="cs-eyebrow" style={{ marginBottom: 6 }}>
-        {isLive ? 'On air' : 'Current item'}
+    <div className="cs-card cs-onair-card">
+      <div className="cs-onair-eyebrow">
+        {isLive ? (
+          <span className="cs-pulse-dot cs-onair-pulse" aria-hidden="true" />
+        ) : null}
+        <span>{isLive ? 'ON AIR' : 'NEXT UP'}</span>
+        {item ? (
+          <>
+            <span className="cs-onair-divider" aria-hidden="true">·</span>
+            <span>ITEM {item.item_number}</span>
+            {showActionBadge && badgeLabel ? (
+              <span className="cs-onair-badge">{badgeLabel}</span>
+            ) : null}
+          </>
+        ) : null}
       </div>
       {item ? (
-        <>
-          <p className="control-on-air-item__num">{item.item_number}</p>
-          <p className="control-on-air-item__title">{item.title}</p>
-        </>
+        <h2 className="cs-onair-title">{item.title}</h2>
       ) : (
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>No current item</p>
+        <p className="cs-onair-empty">No current item</p>
       )}
     </div>
   )

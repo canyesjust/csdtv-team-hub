@@ -41,50 +41,58 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
   const goToMotion = () => router.push(`/control/${productionId}/motion`)
   const prodNum = meeting?.production_number
 
+  const quorumMet = attendance?.quorum?.quorum_met
+  const presentCount = attendance?.quorum?.present_count
+
   return (
     <div className="control-surface">
       <div className="cs-header">
-        <div style={{ display: 'flex', gap: 14, fontSize: 11, color: 'var(--brand-primary)', marginBottom: 8 }}>
-          <Link href="/dashboard/board-meetings" style={{ color: 'inherit', textDecoration: 'none' }}>← Board Meetings</Link>
-          {prodNum != null && (
-            <Link href={`/dashboard/productions/${prodNum}?tab=boardmeeting`} style={{ color: 'inherit', textDecoration: 'none' }}>← Board Meeting tab</Link>
-          )}
-          <Link href={`/dashboard/board-meetings/${productionId}/buttons`} style={{ color: 'inherit', textDecoration: 'none' }}>Companion buttons →</Link>
+        <div className="cs-header-breadcrumbs">
+          <Link href="/dashboard/board-meetings">← Board Meetings</Link>
+          {prodNum != null ? (
+            <Link href={`/dashboard/productions/${prodNum}?tab=boardmeeting`}>← Board Meeting tab</Link>
+          ) : null}
+          <Link href={`/dashboard/board-meetings/${productionId}/buttons`}>Companion buttons →</Link>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 16, fontWeight: 500 }}>Control surface · {meetingTitle}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {isLive && (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '4px 10px', borderRadius: 999,
-                background: 'var(--semantic-danger-bg)',
-                color: 'var(--semantic-danger-text)',
-                fontSize: 11, fontWeight: 500,
-              }}>
-                <span className="cs-pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--semantic-danger-text)' }} />
-                LIVE{liveElapsed ? ` · ${liveElapsed}` : ''}
+
+        <div className="cs-header-title">Control surface · {meetingTitle}</div>
+
+        <div className="cs-header-status-row">
+          {isLive ? (
+            <span className="cs-live-pill">
+              <span className="cs-pulse-dot cs-onair-pulse" aria-hidden="true" />
+              LIVE{liveElapsed ? ` · ${liveElapsed}` : ''}
+            </span>
+          ) : null}
+
+          {attendance ? (
+            <span className="cs-attendance-text">
+              {presentCount} present
+              <span aria-hidden="true"> · </span>
+              <span className={quorumMet ? 'cs-quorum-met-text' : 'cs-quorum-unmet-text'}>
+                quorum {quorumMet ? 'met' : 'not met'}
               </span>
-            )}
-            {attendance && (
-              <AttendancePanel
-                attendance={attendance}
-                quorumNeeded={meeting?.quorum_size || 4}
-                canEdit={canControl}
-                onMark={() => onAttendanceOpenChange(true)}
-              />
-            )}
-          </div>
+            </span>
+          ) : null}
+
+          <button
+            type="button"
+            className="cs-touchbtn cs-touchbtn-small"
+            onClick={() => onAttendanceOpenChange(true)}
+            disabled={!canControl}
+          >
+            Mark attendance
+          </button>
         </div>
       </div>
 
-      {!canControl && (
+      {!canControl ? (
         <p className="control-banner">Lock the agenda before using broadcast controls.</p>
-      )}
+      ) : null}
 
-      {mode !== 'normal' && (
+      {mode !== 'normal' ? (
         <ModeBanner mode={mode} timer={broadcast_state?.mode_ends_at} />
-      )}
+      ) : null}
 
       <div className="cs-main">
         <div className="cs-agenda">
@@ -145,8 +153,8 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             />
           </div>
 
-          {isLive && (
-            <div style={{ marginTop: 6, paddingTop: 10, borderTop: '0.5px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end' }}>
+          {isLive ? (
+            <div className="cs-end-meeting-row">
               <button
                 type="button"
                 className="cs-touchbtn cs-touchbtn-danger"
@@ -156,7 +164,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
                 End meeting
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -225,4 +233,3 @@ function summarizeChannels(assignments: ControlBundle['channel_assignments'], ch
   const active = (assignments || []).length
   return `${active} of ${total} assigned`
 }
-
