@@ -1,10 +1,6 @@
 'use client'
 
-<<<<<<< HEAD
-import type { ActiveMotion } from '@/lib/board-meetings/types'
-=======
 import type { ActiveMotion } from '@/lib/board-meetings/motion-types'
->>>>>>> 33c0c41 (Control surface and motion screen redesign)
 
 type Props = {
   motion: ActiveMotion
@@ -13,46 +9,6 @@ type Props = {
 
 export default function HeldMotionCard({ motion, note }: Props) {
   return (
-<<<<<<< HEAD
-    <div
-      style={{
-        padding: '10px 14px',
-        background: 'var(--surface-1)',
-        borderRadius: 8,
-        border: '0.5px dashed var(--border-subtle)',
-        opacity: 0.7,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 10,
-          marginBottom: 4,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span
-            style={{
-              fontSize: 10,
-              color: 'var(--text-muted)',
-              letterSpacing: '0.06em',
-              padding: '2px 6px',
-              border: '0.5px solid var(--border-subtle)',
-              borderRadius: 6,
-            }}
-          >
-            MAIN · HELD
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {motion.mover_name} / {motion.seconder_name}
-          </span>
-        </div>
-        {note && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>⤴ {note}</span>}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>{motion.text}</div>
-=======
     <div style={{
       padding: '10px 14px',
       background: 'var(--surface-1, #131b2e)',
@@ -83,7 +39,6 @@ export default function HeldMotionCard({ motion, note }: Props) {
       <div style={{ fontSize: 12, color: 'var(--text-muted, #6b7385)', lineHeight: 1.4 }}>
         {motion.text}
       </div>
->>>>>>> 33c0c41 (Control surface and motion screen redesign)
     </div>
   )
 }

@@ -4,11 +4,7 @@ import DraftingState from './states/DraftingState'
 import OpenForDiscussionState from './states/OpenForDiscussionState'
 import VotingState from './states/VotingState'
 import SubstituteVotingState from './states/SubstituteVotingState'
-<<<<<<< HEAD
-import type { MotionScreenBundle } from '@/lib/board-meetings/types'
-=======
 import type { MotionScreenBundle } from '@/lib/board-meetings/motion-types'
->>>>>>> 33c0c41 (Control surface and motion screen redesign)
 
 type Props = {
   bundle: MotionScreenBundle
@@ -24,15 +20,7 @@ export default function MotionScreenView(props: Props) {
   const active = bundle.active_motion
   const parent = bundle.parent_motion
 
-<<<<<<< HEAD
-  if (
-    active?.motion_type === 'substitute' &&
-    parent &&
-    (active.status === 'voting' || active.status === 'passed' || active.status === 'failed')
-  ) {
-=======
   if (active?.motion_type === 'substitute' && parent) {
->>>>>>> 33c0c41 (Control surface and motion screen redesign)
     return <SubstituteVotingState {...props} active={active} parent={parent} />
   }
 
@@ -46,11 +34,6 @@ export default function MotionScreenView(props: Props) {
     case 'open_for_discussion':
       return <OpenForDiscussionState {...props} active={active} />
     case 'voting':
-<<<<<<< HEAD
-    case 'passed':
-    case 'failed':
-=======
->>>>>>> 33c0c41 (Control surface and motion screen redesign)
       return <VotingState {...props} active={active} />
     default:
       return <DraftingState {...props} active={active} />

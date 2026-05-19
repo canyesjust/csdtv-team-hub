@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 export type AttendanceStatus = 'present' | 'absent' | 'remote' | 'left_early' | 'arrived_late'
 export type MotionStatus =
   | 'open_for_discussion'
@@ -12,7 +11,6 @@ export type MotionStatus =
 export type VoteMode = 'voice' | 'roll_call'
 export type VoteValue = 'yea' | 'nay' | 'absent' | 'abstain' | 'recused'
 export type MotionResult = 'passed' | 'failed'
-
 export type VoteTally = {
   yea: number
   nay: number
@@ -20,15 +18,12 @@ export type VoteTally = {
   absent: number
   recused: number
 }
-
 export type PersonRef = { id: string; name: string; title?: string | null }
-
 export type MotionVoteRow = {
   person_id: string
   vote: VoteValue
   person?: PersonRef
 }
-
 export type MotionRow = {
   id: string
   board_meeting_id: string
@@ -52,26 +47,22 @@ export type MotionRow = {
   voted_at: string | null
   resolved_at: string | null
 }
-
 export type LowerThirdPersonSnippet = {
   id: string
   display_name: string
   primary_title: string | null
 }
-
 export type EnrichedMotionVote = {
   person_id: string
   vote: VoteValue
   person: LowerThirdPersonSnippet | null
 }
-
 export type EnrichedMotion = MotionRow & {
   moved_by: LowerThirdPersonSnippet | null | undefined
   seconded_by: LowerThirdPersonSnippet | null | undefined
   votes: EnrichedMotionVote[]
   tally: VoteTally
 }
-
 export type PublicActiveMotion = {
   id: string
   motion_text: string
@@ -83,7 +74,6 @@ export type PublicActiveMotion = {
   consent_block_label: string | null
   parent_motion_text: string | null
 }
-
 export type PublicActiveVoteResult = {
   motion_id: string
   result: string
@@ -94,7 +84,13 @@ export type PublicActiveVoteResult = {
   held?: boolean
   started_at?: string
   total_duration?: number
-=======
+}
+
+// ============================================================
+// Types added for the new motion screen redesign (5 additions).
+// These do not conflict with existing exports above.
+// ============================================================
+
 export type ActiveMotion = {
   id: string
   motion_type: 'main' | 'substitute' | 'amendment'
@@ -143,30 +139,4 @@ export type MotionScreenBundle = {
   quorum_size: number
   suggested_motion_text: string
   live_elapsed: string | null
-}
-
-export type MotionLifecycleState = {
-  state: 'no_motion' | 'drafting' | 'open_for_discussion' | 'voting' | 'voted' | 'closed'
-  active_motion: {
-    id: string
-    motion_type: 'main' | 'substitute' | 'amendment'
-    text: string | null
-    mover_name: string | null
-    seconder_name: string | null
-  } | null
-  recorded_votes_count: number
-}
-
-export type ResultOverlayState = {
-  active: boolean
-  motion_id: string
-  passed: boolean
-  yea_count: number
-  nay_count: number
-  abstain_count: number
-  started_at: string
-  total_duration: number
-  seconds_remaining: number
-  held: boolean
->>>>>>> 33c0c41 (Control surface and motion screen redesign)
 }
