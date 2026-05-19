@@ -19,6 +19,7 @@ export default function BoardBrandingSlide({
     return (
       <div style={overlayCornerWrap}>
         <img src={CANYONS_LOGO_SRC} alt="Canyons School District" style={cornerCanyonsLogo} />
+        <p style={cornerBroughtBy}>brought to you by</p>
         <img src={CSDTV_LOGO_SRC} alt="CSDtv" style={cornerCsdtvLogo} />
       </div>
     )
@@ -37,15 +38,19 @@ export default function BoardBrandingSlide({
   }
 
   const isOverlay = variant === 'overlay'
-  const muted = isOverlay ? '#94a3b8' : '#8899bb'
-  const broughtBy = isOverlay ? '#cbd5e1' : '#a8b8d8'
-  const titleColor = isOverlay ? '#f0f4ff' : '#f0f4ff'
+  const muted = isOverlay ? '#e2e8f0' : '#8899bb'
+  const broughtBy = isOverlay ? '#ffffff' : '#a8b8d8'
+  const titleColor = isOverlay ? '#ffffff' : '#f0f4ff'
 
   return (
     <div style={isOverlay ? overlayWrap : fullscreenWrap}>
       <img src={CANYONS_LOGO_SRC} alt="Canyons School District" style={canyonsLogo} />
       <p style={{ ...broughtByText, color: broughtBy }}>brought to you by</p>
-      <img src={CSDTV_LOGO_SRC} alt="CSDtv" style={csdtvLogo} />
+      <img
+        src={CSDTV_LOGO_SRC}
+        alt="CSDtv"
+        style={isOverlay ? { ...csdtvLogo, filter: 'brightness(0) invert(1)' } : csdtvLogo}
+      />
       {screenName ? (
         <p style={{ ...screenNameText, color: titleColor }}>{screenName}</p>
       ) : null}
@@ -71,12 +76,22 @@ const cornerCanyonsLogo: React.CSSProperties = {
   display: 'block',
 }
 
+const cornerBroughtBy: React.CSSProperties = {
+  margin: 0,
+  fontSize: '12px',
+  fontWeight: 500,
+  letterSpacing: '0.12em',
+  textTransform: 'lowercase',
+  color: '#ffffff',
+}
+
 const cornerCsdtvLogo: React.CSSProperties = {
   width: 'min(140px, 32vw)',
   height: 'auto',
   maxHeight: '48px',
   objectFit: 'contain',
   display: 'block',
+  filter: 'brightness(0) invert(1)',
 }
 
 const overlayWrap: React.CSSProperties = {

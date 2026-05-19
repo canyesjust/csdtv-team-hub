@@ -156,7 +156,14 @@ export default function BoardOverlayView({
     return (
       <>
         <div style={stackAnchor}>
-          <div className="obs-overlay-graphic" style={overlayPanelStyle({ padding: '16px 20px', borderRadius: '8px' })}>
+          <div
+            className="obs-overlay-graphic"
+            style={overlayPanelStyle({
+              padding: '16px 20px',
+              borderRadius: '8px',
+              color: OVERLAY_TEXT_PRIMARY,
+            })}
+          >
             <BoardBrandingSlide variant="overlay-corner" />
           </div>
         </div>
