@@ -90,10 +90,12 @@ export async function buildArchivePayload(service: SupabaseClient, productionNum
   }
 
   const offsets = [...firstAdvanceByItem.values()]
-  const totalDuration =
-    offsets.length > 0 && t0 ? Math.max(...offsets) + 300 : bm.scheduled_public_start && prod.start_datetime
-      ? Math.max(0, Math.floor((new Date(prod.start_datetime).getTime() - t0) / 1000))
-      : 0
+  let totalDuration = 0
+  if (offsets.length > 0 && t0 != null) {
+    totalDuration = Math.max(...offsets) + 300
+  } else if (t0 != null && prod.start_datetime) {
+    totalDuration = Math.max(0, Math.floor((new Date(prod.start_datetime).getTime() - t0) / 1000))
+  }
 
   const recessCount = (events || []).filter(e => e.event_type === 'recess').length
 
