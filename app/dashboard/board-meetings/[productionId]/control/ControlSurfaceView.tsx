@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import QRPushPanel from './QRPushPanel'
 import AttendancePanel from './components/AttendancePanel'
-import MotionVotePanel from './components/MotionVotePanel'
+import MotionAndVoteCard from './components/MotionAndVoteCard'
 import PlaylistLiveControls from './components/PlaylistLiveControls'
 import LowerThirdPanel from './components/LowerThirdPanel'
 import type { ControlBundle } from './control-surface-types'
@@ -107,7 +107,7 @@ export default function ControlSurfaceView({
   const productionTitle = bundle.production?.title
 
   return (
-    <div className="control-shell">
+    <div className="control-surface control-shell">
       <header className="control-header">
         <nav className="control-header__nav" aria-label="Breadcrumb">
           <Link href="/dashboard/board-meetings">← Board Meetings</Link>
@@ -217,13 +217,20 @@ export default function ControlSurfaceView({
                 onUpdated={onUpdated}
               />
             </div>
+
+            <MotionAndVoteCard
+              productionId={productionId}
+              broadcastState={bundle.broadcast_state}
+              disabled={!canControl || status !== 'live' || busy}
+              onUpdated={onUpdated}
+            />
           </div>
         </section>
 
-        <section className="control-panel control-panel--sidebar" aria-label="Broadcast utilities">
+        <section className="control-panel control-panel--utilities" aria-label="Broadcast utilities">
           <h2 className="control-panel__head">Utilities</h2>
           <div className="control-panel__body">
-            <div className="control-sidebar-stack">
+            <div className="cs-utilities-grid">
               <CollapsiblePanel title="Pre-roll playlist" summary="Playlist playback" defaultOpen={status === 'prepared'}>
                 <PlaylistLiveControls productionId={productionId} disabled={!canControl} onUpdated={onUpdated} />
               </CollapsiblePanel>
@@ -297,19 +304,6 @@ export default function ControlSurfaceView({
           </div>
         </section>
 
-        <section className="control-panel control-motions" aria-label="Motions and voting">
-          <h2 className="control-panel__head">Motions &amp; voting</h2>
-          <div className="control-panel__body">
-            <MotionVotePanel
-              productionId={productionId}
-              currentItem={currentItem}
-              allItems={bundle.items}
-              broadcastState={bundle.broadcast_state}
-              disabled={!canControl || status !== 'live'}
-              onUpdated={onUpdated}
-            />
-          </div>
-        </section>
       </main>
     </div>
   )

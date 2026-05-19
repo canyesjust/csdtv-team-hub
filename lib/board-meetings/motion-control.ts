@@ -112,6 +112,49 @@ async function showVoteResult(
   })
 }
 
+export async function pushVoteResult(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+  durationSeconds = VOTE_RESULT_DEFAULT_SECONDS,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (!['passed', 'failed', 'voting'].includes(motion.status)) {
+    throw new Error('Motion must be voted before pushing a result')
+  }
+  await showVoteResult(service, boardMeetingId, motionId, operatorId, durationSeconds)
+}
+
+export async function holdVoteResult(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+) {
+  const { data: state } = await service
+    .from('meeting_broadcast_state')
+    .select('active_vote_result_motion_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  if (!state?.active_vote_result_motion_id) throw new Error('No vote result on overlay')
+
+  const now = new Date().toISOString()
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      vote_result_started_at: now,
+      updated_at: now,
+      updated_by: operatorId,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+
+  await logMeetingEvent(service, boardMeetingId, 'vote_result_held', operatorId, {
+    motion_id: state.active_vote_result_motion_id,
+  })
+}
+
 export async function dismissVoteResult(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -235,6 +278,31 @@ export async function updateMotion(
   })
 }
 
+export async function setMotionVoteType(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+  voteMode: VoteMode,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+  if (!['open_for_discussion', 'voting'].includes(motion.status)) {
+    throw new Error('Vote type can only be set while the motion is open')
+  }
+
+  const { error } = await service
+    .from('meeting_motions')
+    .update({ vote_mode: voteMode, updated_at: new Date().toISOString() })
+    .eq('id', motionId)
+  if (error) throw new Error(error.message)
+
+  await logMeetingEvent(service, boardMeetingId, 'vote_type_set', operatorId, {
+    motion_id: motionId,
+    vote_mode: voteMode,
+  })
+}
+
 export async function openVote(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -266,7 +334,7 @@ export async function recordVotes(
   motionId: string,
   operatorId: string,
   votes: { person_id: string; vote: VoteValue }[],
-  opts?: { re_record?: boolean },
+  opts?: { re_record?: boolean; defer_result_display?: boolean },
 ) {
   const motion = await loadMotion(service, motionId, boardMeetingId)
   if (!motion) throw new Error('Motion not found')
@@ -414,7 +482,9 @@ export async function recordVotes(
     await setActiveMotion(service, boardMeetingId, null, operatorId)
   }
 
-  await showVoteResult(service, boardMeetingId, motionId, operatorId)
+  if (!opts?.defer_result_display) {
+    await showVoteResult(service, boardMeetingId, motionId, operatorId)
+  }
   await logMeetingEvent(service, boardMeetingId, 'vote_recorded', operatorId, {
     motion_id: motionId,
     result,
