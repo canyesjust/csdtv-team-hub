@@ -360,10 +360,12 @@ export async function syncAgendaPresentersToPeopleLibrary(
         .single()
       if (error || !inserted) continue
       personId = inserted.id
-      peopleById.set(personId, inserted)
-      registerPersonInIndex(index, personId, inserted.display_name)
+      peopleById.set(inserted.id, inserted)
+      registerPersonInIndex(index, inserted.id, inserted.display_name)
       result.created++
     }
+
+    if (!personId) continue
 
     const norm = normalizePersonName(person.name)
     const toLink = rows.filter(

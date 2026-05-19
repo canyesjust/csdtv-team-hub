@@ -289,7 +289,7 @@ export default function MotionVotePanel({
             type="button"
             style={btn}
             disabled={busy}
-            onClick={() => post(`${broadcastState.active_vote_result_motion_id}/dismiss-result`)}
+            onClick={() => post(`${broadcastState?.active_vote_result_motion_id}/dismiss-result`)}
           >
             Dismiss result
           </button>
