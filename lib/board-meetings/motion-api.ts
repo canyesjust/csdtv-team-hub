@@ -290,7 +290,15 @@ export async function openDiscussion(ctx: MotionActionContext, motionId: string)
 }
 
 export async function openVote(ctx: MotionActionContext, motionId: string) {
-  await openMotionVote(ctx.service, ctx.boardMeetingId, motionId, ctx.teamUserId)
+  const { data: motion } = await ctx.service
+    .from('meeting_motions')
+    .select('vote_mode')
+    .eq('id', motionId)
+    .eq('board_meeting_id', ctx.boardMeetingId)
+    .maybeSingle()
+  if (!motion) throw new Error('Motion not found')
+  const voteMode = (motion.vote_mode || 'voice') as VoteMode
+  await openMotionVote(ctx.service, ctx.boardMeetingId, motionId, ctx.teamUserId, voteMode)
 }
 
 export async function recordVote(
