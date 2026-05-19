@@ -8,15 +8,26 @@ type Props = {
   isLive: boolean
   onOpenMotion: () => void
   onContinueMotion: () => void
+  onPushResult?: () => void
   onHoldResult: () => void
   onDismissResult: () => void
 }
 
 export default function MotionAndVoteCard(props: Props) {
-  const { lifecycle, resultOverlay, isLive, onOpenMotion, onContinueMotion, onHoldResult, onDismissResult } = props
+  const { lifecycle, resultOverlay, isLive, onOpenMotion, onContinueMotion, onPushResult, onHoldResult, onDismissResult } = props
 
-  if (resultOverlay && resultOverlay.active) {
+  if (resultOverlay?.active) {
     return <StateC overlay={resultOverlay} onHold={onHoldResult} onDismiss={onDismissResult} />
+  }
+
+  if (lifecycle?.state === 'voted') {
+    return (
+      <StateVotedPending
+        lifecycle={lifecycle}
+        onPushResult={onPushResult}
+        onContinue={onContinueMotion}
+      />
+    )
   }
 
   if (lifecycle && !['no_motion', 'closed', 'pushed'].includes(lifecycle.state)) {
@@ -45,6 +56,56 @@ function StateA({ isLive, onOpen }: { isLive: boolean; onOpen: () => void }) {
       >
         Open motion screen →
       </button>
+    </div>
+  )
+}
+
+function StateVotedPending({
+  lifecycle,
+  onPushResult,
+  onContinue,
+}: {
+  lifecycle: MotionLifecycleState
+  onPushResult?: () => void
+  onContinue: () => void
+}) {
+  const motion = lifecycle.active_motion
+  const text = motion?.text || 'Motion'
+  const moverName = motion?.mover_name || '—'
+  const seconderName = motion?.seconder_name || '—'
+
+  return (
+    <div className="cs-card" style={{ borderColor: 'var(--semantic-info-border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: 'var(--semantic-info-text)', letterSpacing: '0.05em', fontWeight: 500 }}>
+          Vote complete
+        </div>
+        <span style={{
+          fontSize: 10, padding: '2px 6px', borderRadius: 999,
+          background: 'var(--semantic-info-bg)',
+          color: 'var(--semantic-info-text)',
+          fontWeight: 500,
+        }}>VOTED</span>
+      </div>
+      <div style={{ fontSize: 11, marginBottom: 4, lineHeight: 1.35, color: 'var(--text-primary)' }}>
+        {truncate(text, 60)}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
+        {moverName} / {seconderName}
+      </div>
+      <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+        Push the result to the overlay to show the countdown banner.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {onPushResult ? (
+          <button type="button" onClick={onPushResult} className="cs-touchbtn cs-touchbtn-primary" style={{ width: '100%', minHeight: 44 }}>
+            Push result to overlay
+          </button>
+        ) : null}
+        <button type="button" onClick={onContinue} className="cs-touchbtn" style={{ width: '100%', minHeight: 44 }}>
+          Open motion screen →
+        </button>
+      </div>
     </div>
   )
 }

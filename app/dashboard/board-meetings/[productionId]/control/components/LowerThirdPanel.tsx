@@ -116,9 +116,17 @@ function LowerThirdPanelControlled({ active, people, canControl, onSet, onClear 
           )
         })}
       </div>
-      <button type="button" className="cs-touchbtn" disabled={disabled || !activeId} onClick={onClear} style={{ width: '100%' }}>
-        Clear lower third
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          className="cs-touchbtn"
+          disabled={disabled || !activeId}
+          onClick={onClear}
+          style={{ minWidth: 160 }}
+        >
+          Clear lower third
+        </button>
+      </div>
     </div>
   )
 }
@@ -315,14 +323,17 @@ function LowerThirdPanelLegacy({
         ))}
       </div>
 
-      <button
-        type="button"
-        disabled={disabled || busy || !activeId}
-        onClick={() => post('clear-lower-third')}
-        style={{ ...btn, width: 'auto', textAlign: 'center' }}
-      >
-        Clear lower third
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          className="cs-touchbtn"
+          disabled={disabled || busy || !activeId}
+          onClick={() => post('clear-lower-third')}
+          style={{ minWidth: 160 }}
+        >
+          Clear lower third
+        </button>
+      </div>
     </div>
   )
 }

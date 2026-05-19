@@ -136,6 +136,11 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
               isLive={isLive}
               onOpenMotion={goToMotion}
               onContinueMotion={goToMotion}
+              onPushResult={
+                motion_lifecycle?.active_motion?.id
+                  ? () => onAction(`motion/${motion_lifecycle.active_motion!.id}/push-result`)
+                  : undefined
+              }
               onHoldResult={() => onAction('hold-result')}
               onDismissResult={() => onAction('dismiss-result')}
             />

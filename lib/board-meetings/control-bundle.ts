@@ -75,6 +75,7 @@ export async function buildControlSurfaceBundle(
         'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active',
       )
       .eq('is_active', true)
+      .eq('category', 'board_member')
       .order('display_name'),
   ])
 

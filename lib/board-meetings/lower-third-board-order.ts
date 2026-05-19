@@ -2,7 +2,6 @@ import type { LowerThirdPerson } from '@/lib/board-meetings/types'
 
 /** Board member lower-third quick picks (first-name match, display order). */
 export const BOARD_LOWER_THIRD_ORDER = [
-  'leon',
   'holly',
   'jackson',
   'andrew',
@@ -10,7 +9,6 @@ export const BOARD_LOWER_THIRD_ORDER = [
   'amanda',
   'katie',
   'karen',
-  'mckay',
 ] as const
 
 export function lowerThirdFirstName(displayName: string): string {
@@ -26,5 +24,6 @@ export function findBoardMemberByFirstName(
 }
 
 export function boardMembersInOrder(people: LowerThirdPerson[]): (LowerThirdPerson | null)[] {
-  return BOARD_LOWER_THIRD_ORDER.map(name => findBoardMemberByFirstName(people, name) ?? null)
+  const boardOnly = people.filter(p => p.category === 'board_member')
+  return BOARD_LOWER_THIRD_ORDER.map(name => findBoardMemberByFirstName(boardOnly, name) ?? null)
 }
