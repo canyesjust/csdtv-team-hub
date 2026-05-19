@@ -15,10 +15,13 @@ const VALID_VIEWS = new Set<string>(['preroll', 'live', 'dais'])
 
 export default async function BoardPublicViewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ channel_number: string; view: string }>
+  searchParams: Promise<{ fullscreen?: string }>
 }) {
   const { channel_number, view } = await params
+  const sp = await searchParams
   const num = parseInt(channel_number, 10)
   if (!Number.isFinite(num) || num < 1) notFound()
   if (!VALID_VIEWS.has(view)) notFound()
@@ -36,7 +39,13 @@ export default async function BoardPublicViewPage({
     return <BoardLiveView channelNumber={num} initialChannelName={channelName} />
   }
   if (slug === 'dais') {
-    return <BoardDaisView channelNumber={num} initialChannelName={channelName} />
+    return (
+      <BoardDaisView
+        channelNumber={num}
+        initialChannelName={channelName}
+        autoFullscreen={sp?.fullscreen === '1'}
+      />
+    )
   }
 
   return (

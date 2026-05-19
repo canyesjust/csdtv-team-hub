@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
+import { useElementFullscreen } from '@/app/board/hooks/useElementFullscreen'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
@@ -37,15 +38,21 @@ const mono = '"SF Mono", "JetBrains Mono", ui-monospace, monospace'
 export default function BoardDaisView({
   channelNumber,
   initialChannelName,
+  autoFullscreen = false,
 }: {
   channelNumber: number
   initialChannelName?: string
+  /** When true (e.g. `?fullscreen=1` in the URL), prompt or enter browser full screen. */
+  autoFullscreen?: boolean
 }) {
+  const wantAutoFullscreen = autoFullscreen
   const state = useBoardChannelState(channelNumber, { livePriority: true })
+  const fullscreen = useElementFullscreen()
   const [personName, setPersonName] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [boardMembers, setBoardMembers] = useState<{ id: string; display_name: string }[]>([])
   const [now, setNow] = useState(() => Date.now())
+  const [autoFsPrompt, setAutoFsPrompt] = useState(false)
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null
@@ -56,6 +63,10 @@ export default function BoardDaisView({
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [])
+
+  useEffect(() => {
+    if (wantAutoFullscreen && fullscreen.supported) setAutoFsPrompt(true)
+  }, [wantAutoFullscreen, fullscreen.supported])
 
   const elapsed = useMemo(() => {
     if (!state?.elapsed_started_at) return 0
@@ -87,9 +98,25 @@ export default function BoardDaisView({
     setPickerOpen(false)
   }
 
+  const screenNameForIdle = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
+
+  const shellProps = {
+    channelNumber,
+    fullscreen,
+    autoFsPrompt,
+    onDismissAutoFsPrompt: () => setAutoFsPrompt(false),
+    onEnterFullscreen: async () => {
+      const ok = await fullscreen.enter()
+      if (ok) setAutoFsPrompt(false)
+    },
+  }
+
   if (!state?.active) {
-    const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
-    return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
+    return (
+      <DaisShell {...shellProps}>
+        <BoardIdleBranding screenName={screenNameForIdle} variant="fullscreen" />
+      </DaisShell>
+    )
   }
 
   const item = state.current_item
@@ -101,7 +128,7 @@ export default function BoardDaisView({
   const screenName = state.meeting?.title || initialChannelName || `Channel ${channelNumber}`
 
   return (
-    <>
+    <DaisShell {...shellProps}>
       <style>{`
         @keyframes dais-pulse {
           0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }
@@ -113,7 +140,7 @@ export default function BoardDaisView({
         }
       `}</style>
 
-      <div style={shell}>
+      <div style={inner}>
         <div style={bgGrid} aria-hidden />
         <div style={bgGlow} aria-hidden />
 
@@ -243,7 +270,66 @@ export default function BoardDaisView({
           </aside>
         </main>
       </div>
-    </>
+    </DaisShell>
+  )
+}
+
+function DaisShell({
+  channelNumber: _channelNumber,
+  children,
+  fullscreen,
+  autoFsPrompt,
+  onDismissAutoFsPrompt,
+  onEnterFullscreen,
+}: {
+  channelNumber: number
+  children: React.ReactNode
+  fullscreen: ReturnType<typeof useElementFullscreen>
+  autoFsPrompt: boolean
+  onDismissAutoFsPrompt: () => void
+  onEnterFullscreen: () => void | Promise<void>
+}) {
+  const { isFullscreen, supported, toggle, setContainer } = fullscreen
+
+  return (
+    <div
+      ref={setContainer}
+      style={{
+        ...shell,
+        minHeight: isFullscreen ? '100dvh' : shell.minHeight,
+      }}
+    >
+      {autoFsPrompt && supported && !isFullscreen ? (
+        <div style={autoFsBanner} role="status">
+          <p style={autoFsBannerText}>Tap below for full-screen display on this monitor.</p>
+          <div style={autoFsBannerActions}>
+            <button type="button" onClick={() => void onEnterFullscreen()} style={autoFsBannerPrimary}>
+              Enter full screen
+            </button>
+            <button type="button" onClick={onDismissAutoFsPrompt} style={autoFsBannerGhost}>
+              Not now
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {supported ? (
+        <button
+          type="button"
+          onClick={() => void toggle()}
+          style={{
+            ...fullscreenBtn,
+            ...(isFullscreen ? fullscreenBtnActive : {}),
+          }}
+          aria-label={isFullscreen ? 'Exit full screen' : 'Enter full screen'}
+          title={isFullscreen ? 'Exit full screen (Esc)' : 'Full screen'}
+        >
+          {isFullscreen ? 'Exit full screen' : 'Full screen'}
+        </button>
+      ) : null}
+
+      {children}
+    </div>
   )
 }
 
@@ -432,6 +518,89 @@ const shell: React.CSSProperties = {
   boxSizing: 'border-box',
   position: 'relative',
   overflow: 'hidden',
+}
+
+const inner: React.CSSProperties = {
+  position: 'relative',
+  zIndex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  flex: 1,
+  minHeight: 0,
+}
+
+const fullscreenBtn: React.CSSProperties = {
+  position: 'absolute',
+  top: 20,
+  right: 20,
+  zIndex: 60,
+  padding: '10px 18px',
+  borderRadius: '10px',
+  border: `1px solid ${C.glassBorder}`,
+  background: C.glassHi,
+  color: C.accent,
+  fontSize: '13px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  letterSpacing: '0.02em',
+}
+
+const fullscreenBtnActive: React.CSSProperties = {
+  background: 'rgba(56, 189, 248, 0.15)',
+  borderColor: 'rgba(56, 189, 248, 0.45)',
+}
+
+const autoFsBanner: React.CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  zIndex: 80,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '24px',
+  background: 'rgba(4, 8, 15, 0.88)',
+  backdropFilter: 'blur(10px)',
+}
+
+const autoFsBannerText: React.CSSProperties = {
+  margin: '0 0 20px',
+  fontSize: '18px',
+  color: C.text,
+  textAlign: 'center',
+  lineHeight: 1.45,
+}
+
+const autoFsBannerActions: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '10px',
+  width: '100%',
+  maxWidth: '280px',
+}
+
+const autoFsBannerPrimary: React.CSSProperties = {
+  background: C.accent,
+  color: '#0f172a',
+  border: 'none',
+  borderRadius: '10px',
+  fontWeight: 700,
+  padding: '14px 20px',
+  fontSize: '15px',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+}
+
+const autoFsBannerGhost: React.CSSProperties = {
+  background: 'transparent',
+  border: `1px solid ${C.glassBorder}`,
+  borderRadius: '10px',
+  color: C.textSoft,
+  padding: '12px 20px',
+  fontSize: '14px',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  textAlign: 'center',
 }
 
 const bgGrid: React.CSSProperties = {

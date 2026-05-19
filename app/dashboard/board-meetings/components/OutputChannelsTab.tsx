@@ -72,6 +72,8 @@ export default function OutputChannelsTab() {
           {channels.map(ch => {
             const slug = ch.view_type === 'second_screen' ? 'live' : ch.view_type
             const publicUrl = siteBase ? `${siteBase}/board/${ch.channel_number}/${slug}` : ''
+            const fullscreenUrl =
+              ch.view_type === 'dais' && publicUrl ? `${publicUrl}?fullscreen=1` : ''
             return (
               <tr key={ch.id} style={{ borderBottom: `0.5px solid ${border}` }}>
                 <td style={{ padding: '12px 14px', color: text, fontWeight: 600 }}>{ch.channel_number}</td>
@@ -81,7 +83,16 @@ export default function OutputChannelsTab() {
                 <td style={{ padding: '12px 14px', color: muted, fontFamily: 'monospace', fontSize: '12px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.access_secret}</td>
                 <td style={{ padding: '12px 14px', fontSize: '12px' }}>
                   {publicUrl ? (
-                    <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>{publicUrl}</a>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>
+                        {publicUrl}
+                      </a>
+                      {fullscreenUrl ? (
+                        <a href={fullscreenUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>
+                          {fullscreenUrl} (full screen)
+                        </a>
+                      ) : null}
+                    </div>
                   ) : '—'}
                 </td>
                 <td style={{ padding: '12px 14px' }}>
