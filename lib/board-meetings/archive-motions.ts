@@ -1,6 +1,23 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { listMotionsEnriched } from '@/lib/board-meetings/motion-control'
 
+type EnrichedMotion = Awaited<ReturnType<typeof listMotionsEnriched>>[number]
+
+export type ArchiveMotionPayload = {
+  id: string
+  motion_text: string
+  motion_type: string
+  status: string
+  result: string | null
+  moved_by: { id: string; name: string } | null
+  seconded_by: { id: string; name: string } | null
+  vote_mode: string | null
+  tally: { yea: number; nay: number; abstain: number; absent: number; recused: number }
+  votes: { person: { name: string }; vote: string }[]
+  substitutes: ArchiveMotionPayload[]
+  voted_at_offset_seconds: number | null
+}
+
 export async function enrichAgendaWithMotions(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -38,7 +55,7 @@ export async function enrichAgendaWithMotions(
     }
   }
 
-  const formatMotion = (m: (typeof motions)[0]) => {
+  function formatMotion(m: EnrichedMotion): ArchiveMotionPayload {
     const votedOffset =
       m.voted_at && t0 ? Math.max(0, Math.floor((new Date(m.voted_at).getTime() - t0) / 1000)) : null
     return {
