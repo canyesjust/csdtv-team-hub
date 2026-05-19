@@ -17,10 +17,28 @@
   --touch-target-min: 44px;
 }
 
+.control-layout-root {
+  display: flex;
+  flex-direction: column;
+}
+
+.control-page,
+.control-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .control-surface {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
   background: var(--bg-main, #0a0f1e);
   color: var(--text-primary, #f8fafc);
 }
@@ -296,7 +314,7 @@
 
 .cs-utilities-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -305,7 +323,6 @@
   background: var(--surface-1, #131b2e);
   border-radius: 8px;
   border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  cursor: pointer;
   font-family: inherit;
   text-align: left;
   color: inherit;
@@ -316,25 +333,45 @@
   background: var(--surface-2, #1a2236);
 }
 
-.cs-utility-panel-header {
+.cs-utility-panel-header,
+.cs-utility-panel__head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
 
-.cs-utility-panel-title {
+.cs-utility-panel__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.cs-utility-panel-title,
+.cs-utility-panel__title {
   font-size: 12px;
   font-weight: 500;
 }
 
-.cs-utility-panel-summary {
+.cs-utility-panel-summary,
+.cs-utility-panel__summary {
   font-size: 11px;
   color: var(--text-muted, #6b7385);
   margin-top: 2px;
 }
 
-.cs-utility-panel-body {
+.cs-utility-panel-body,
+.cs-utility-panel__body {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08));

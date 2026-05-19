@@ -86,28 +86,44 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   const liveFetchGenRef = useRef(0)
   const optimisticEpochRef = useRef(0)
 
-  const applyBundle = useCallback((body: ControlBundle) => {
-    if (body.board_meeting.agenda_locked) {
-      if (!stableWhenLockedRef.current) {
-        stableWhenLockedRef.current = {
-          agenda_items: body.agenda_items,
-          lower_third_people: body.lower_third_people,
-        }
-      }
-      const stable = stableWhenLockedRef.current
-      setBundle({
-        ...body,
-        agenda_items: stable.agenda_items,
-        items: stable.agenda_items,
-        lower_third_people: stable.lower_third_people,
-      })
-    } else {
-      stableWhenLockedRef.current = null
-      setBundle(body)
+  const preserveUtilities = useCallback((prev: ControlBundle | null, next: ControlBundle): ControlBundle => {
+    return {
+      ...next,
+      meeting_playlist: next.meeting_playlist ?? prev?.meeting_playlist ?? null,
+      timer_templates:
+        next.timer_templates && next.timer_templates.length > 0
+          ? next.timer_templates
+          : (prev?.timer_templates ?? []),
     }
-    setResultOverlay(body.result_overlay ?? null)
-    if (body.meeting_playlist) utilitiesLoadedRef.current = true
   }, [])
+
+  const applyBundle = useCallback(
+    (body: ControlBundle) => {
+      if (body.board_meeting.agenda_locked) {
+        if (!stableWhenLockedRef.current) {
+          stableWhenLockedRef.current = {
+            agenda_items: body.agenda_items,
+            lower_third_people: body.lower_third_people,
+          }
+        }
+        const stable = stableWhenLockedRef.current
+        setBundle(prev =>
+          preserveUtilities(prev, {
+            ...body,
+            agenda_items: stable.agenda_items,
+            items: stable.agenda_items,
+            lower_third_people: stable.lower_third_people,
+          }),
+        )
+      } else {
+        stableWhenLockedRef.current = null
+        setBundle(prev => preserveUtilities(prev, body))
+      }
+      setResultOverlay(body.result_overlay ?? null)
+      if (body.meeting_playlist) utilitiesLoadedRef.current = true
+    },
+    [preserveUtilities],
+  )
 
   const load = useCallback(
     async (opts?: { full?: boolean }) => {
@@ -171,7 +187,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     const res = await fetch(`/api/board-meetings/${productionId}/control/utilities`)
     if (!res.ok) return
     const utilities = await res.json()
-    utilitiesLoadedRef.current = true
+    if (utilities.meeting_playlist || (utilities.timer_templates || []).length > 0) {
+      utilitiesLoadedRef.current = true
+    }
     setBundle(prev =>
       prev
         ? {
@@ -181,6 +199,13 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           }
         : prev,
     )
+  }, [productionId])
+
+  const refreshAttendance = useCallback(async () => {
+    const res = await fetch(`/api/board-meetings/${productionId}/attendance`)
+    if (!res.ok) return
+    const attendance = await res.json()
+    setBundle(prev => (prev ? { ...prev, attendance } : prev))
   }, [productionId])
 
   useEffect(() => {
@@ -253,7 +278,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` },
         () => {
-          void load()
+          void refreshAttendance()
         },
       )
       .on(
@@ -279,7 +304,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadUtilitiesDebounced, motionIds])
+  }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadUtilitiesDebounced, motionIds, refreshAttendance])
 
   const patchBundle = useCallback((patch: (prev: ControlBundle) => ControlBundle) => {
     setBundle(prev => (prev ? patch(prev) : prev))
