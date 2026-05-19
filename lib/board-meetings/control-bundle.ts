@@ -109,17 +109,7 @@ export async function buildControlSurfaceBundle(
 
   const [lowerThirdActive, playlist_state, current_documents] = await Promise.all([
     buildPublicLowerThirdPayload(service, state?.active_lower_third_person_id),
-    slim
-      ? loadPlaylistStateOnly(service, bm.id)
-      : Promise.resolve(
-          playlistBundle
-            ? {
-                playback_state: playlistBundle.playback_state,
-                held_item_id: playlistBundle.held_item_id,
-                current_item_id: playlistBundle.current_item_id,
-              }
-            : null,
-        ),
+    loadPlaylistStateOnly(service, bm.id),
     state?.current_agenda_item_id
       ? service
           .from('board_meeting_agenda_documents')
