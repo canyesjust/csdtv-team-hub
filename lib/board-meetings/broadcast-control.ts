@@ -1,4 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { loadMeetingPlaylistBundle, stopPlaylistOnGoLive } from '@/lib/board-meetings/playlist-playback'
+import { mediaPublicUrl } from '@/lib/board-meetings/media-library'
 
 export type BroadcastStateRow = {
   id: string
@@ -138,6 +140,8 @@ export async function goLive(
     .from('board_meetings')
     .update({ broadcast_status: 'live', updated_at: new Date().toISOString() })
     .eq('id', boardMeetingId)
+
+  await stopPlaylistOnGoLive(service, boardMeetingId)
 
   if (!state.current_agenda_item_id && first) {
     await setCurrentItem(service, boardMeetingId, first, operatorId)
@@ -463,6 +467,20 @@ export async function loadControlBundle(service: SupabaseClient, productionId: s
     .eq('id', productionId)
     .maybeSingle()
 
+  const playlistBundle = await loadMeetingPlaylistBundle(service, bm.id)
+  const meeting_playlist = playlistBundle
+    ? {
+        playlist: playlistBundle.playlist,
+        items: playlistBundle.items.map(it => {
+          const asset = it.media_asset_id ? playlistBundle.assets.get(it.media_asset_id) : null
+          return {
+            ...it,
+            asset_url: asset ? mediaPublicUrl(service, asset.storage_path) : null,
+          }
+        }),
+      }
+    : null
+
   let current_documents: { source_url: string | null; title: string }[] = []
   if (state?.current_agenda_item_id) {
     const { data: docs } = await service
@@ -485,5 +503,6 @@ export async function loadControlBundle(service: SupabaseClient, productionId: s
     output_channels: channels || [],
     timer_templates: templates || [],
     qr_presets: qrPresets || [],
+    meeting_playlist,
   }
 }

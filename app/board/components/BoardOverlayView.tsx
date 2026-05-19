@@ -5,6 +5,7 @@ import type { PublicChannelState } from '@/lib/board-meetings/public-output-stat
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
+import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
 
 function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {
   return (
@@ -111,14 +112,17 @@ export default function BoardOverlayView({
   const timer = state.timer
   const showTimer = timer?.show_on_broadcast && (timer.remaining_seconds ?? 0) > 0
   const qr = b?.active_qr
+  const lowerThird = b?.active_lower_third
+  const showLowerThird = !!lowerThird && b?.overlay_visible !== false && mode !== 'technical_difficulties'
   const showIdleBranding =
-    mode === 'normal' && !showVoteResult && !showMotion && !showItem && !showTimer && !qr
+    mode === 'normal' && !showVoteResult && !showMotion && !showItem && !showTimer && !qr && !lowerThird
 
   if (mode === 'recess') {
     return (
       <div style={root}>
         <ModeBanner accent="#1e4a8a" title="Recess" message={b?.mode_message ?? null} />
         {qr && <QrOverlay url={qr.url} label={qr.label} />}
+        {showLowerThird && lowerThird ? <LowerThirdBanner person={lowerThird} variant="overlay" /> : null}
       </div>
     )
   }
@@ -161,6 +165,7 @@ export default function BoardOverlayView({
         <TimerBadge timer={timer} />
       ) : null}
       {qr && <QrOverlay url={qr.url} label={qr.label} />}
+      {showLowerThird && lowerThird ? <LowerThirdBanner person={lowerThird} variant="overlay" /> : null}
     </div>
   )
 }

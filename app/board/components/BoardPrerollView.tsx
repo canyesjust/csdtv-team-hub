@@ -1,10 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
-
-type PrerollState = PublicChannelState
+import {
+  PrerollAgendaPreviewCard,
+  PrerollBrandingStrip,
+  PrerollCountdownCard,
+  PrerollCustomCard,
+  PrerollMeetTheBoardCard,
+  PrerollPastMeetingsCard,
+} from '@/app/board/components/PrerollInfoCards'
 
 export default function BoardPrerollView({
   channelNumber,
@@ -13,8 +20,10 @@ export default function BoardPrerollView({
   channelNumber: number
   initialChannelName?: string
 }) {
-  const [state, setState] = useState<PrerollState | null>(null)
-  const [cardIndex, setCardIndex] = useState(0)
+  const [state, setState] = useState<PublicChannelState | null>(null)
+  const [fadeKey, setFadeKey] = useState(0)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -24,46 +33,49 @@ export default function BoardPrerollView({
         if (!res.ok) return
         const data = await res.json()
         if (!cancelled) setState(data)
-      } catch {
-        /* poll errors ignored */
-      }
+      } catch { /* ignore */ }
     }
     load()
     const t = setInterval(load, 1500)
-    return () => {
-      cancelled = true
-      clearInterval(t)
-    }
+    return () => { cancelled = true; clearInterval(t) }
   }, [channelNumber])
 
-  const cards = useMemo(() => {
-    const preview = state?.upcoming_items?.length
-      ? state.upcoming_items
-      : state?.current_item
-        ? [{ item_number: state.current_item.item_number, title: state.current_item.title }]
-        : []
-    if (preview.length === 0) {
-      return [{ title: state?.meeting?.title || 'Board meeting starting soon', sub: state?.channel_name || `Channel ${channelNumber}` }]
-    }
-    return preview.map(p => ({ title: p.title, sub: p.item_number }))
-  }, [state, channelNumber])
+  const playlist = state?.state?.playlist
+  const itemKey = playlist?.replace_now_asset?.started_at
+    || playlist?.current_item?.id
+    || 'idle'
 
   useEffect(() => {
-    if (cards.length <= 1) return
-    const t = setInterval(() => setCardIndex(i => (i + 1) % cards.length), 8000)
-    return () => clearInterval(t)
-  }, [cards.length])
+    setFadeKey(k => k + 1)
+  }, [itemKey])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !playlist?.music_bed_url) return
+
+    const showingVideo =
+      playlist.replace_now_asset?.asset_type === 'video' ||
+      playlist.replace_now_asset?.asset_type === 'bumper' ||
+      (playlist.current_item?.asset_type === 'video' || playlist.current_item?.asset_type === 'bumper')
+
+    if (showingVideo) {
+      audio.pause()
+    } else if (playlist.playback_state === 'playing') {
+      audio.play().catch(() => {})
+    }
+  }, [playlist])
 
   if (!state?.active) {
     const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
     return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
   }
 
-  const card = cards[cardIndex % cards.length]
+  const meetingTitle = state.meeting?.title || 'Board Meeting'
+  const channelName = state.channel_name || initialChannelName || `Channel ${channelNumber}`
   const ticker = [
-    ...(state?.completed_items || []).map(c => ({ item_number: c.number, title: c.title })),
-    ...(state?.current_item ? [{ item_number: state.current_item.item_number, title: state.current_item.title }] : []),
-    ...(state?.upcoming_items || []),
+    ...state.completed_items.map(c => ({ item_number: c.number, title: c.title })),
+    ...(state.current_item ? [{ item_number: state.current_item.item_number, title: state.current_item.title }] : []),
+    ...state.upcoming_items,
   ]
 
   return (
@@ -78,46 +90,20 @@ export default function BoardPrerollView({
         overflow: 'hidden',
       }}
     >
-      <div
-        style={{
-          padding: '20px 32px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <span style={{ fontSize: '14px', letterSpacing: '0.1em', textTransform: 'uppercase', color: '#8899bb' }}>
-          Cherry Creek Schools
-        </span>
-        <span style={{ fontSize: '16px', fontWeight: 600 }}>{state?.channel_name || `Channel ${channelNumber}`}</span>
-      </div>
+      {playlist?.music_bed_url && (
+        <audio ref={audioRef} src={playlist.music_bed_url} loop preload="auto" />
+      )}
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
-        <div
-          style={{
-            maxWidth: '720px',
-            textAlign: 'center',
-            padding: '48px',
-            background: 'rgba(255,255,255,0.06)',
-            borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.12)',
-          }}
-        >
-          <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#8899bb' }}>{card.sub}</p>
-          <h1 style={{ margin: 0, fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 600, lineHeight: 1.25 }}>{card.title}</h1>
+      <PrerollBrandingStrip channelName={channelName} meetingTitle={meetingTitle} />
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', minHeight: 0 }}>
+        <div key={fadeKey} style={{ width: '100%', animation: 'preroll-fade 0.5s ease' }}>
+          <PrerollMainContent state={state} playlist={playlist} videoRef={videoRef} />
         </div>
       </div>
 
       {ticker.length > 0 && (
-        <div
-          style={{
-            borderTop: '1px solid rgba(255,255,255,0.1)',
-            padding: '14px 0',
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-          }}
-        >
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', padding: '14px 0', overflow: 'hidden', whiteSpace: 'nowrap', flexShrink: 0 }}>
           <div
             style={{
               display: 'inline-block',
@@ -133,9 +119,105 @@ export default function BoardPrerollView({
               </span>
             ))}
           </div>
-          <style>{`@keyframes board-ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }`}</style>
         </div>
       )}
+
+      <style>{`
+        @keyframes board-ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+        @keyframes preroll-fade { from { opacity: 0; } to { opacity: 1; } }
+      `}</style>
     </div>
   )
+}
+
+function PrerollMainContent({
+  state,
+  playlist,
+  videoRef,
+}: {
+  state: PublicChannelState
+  playlist: PublicPlaylistState | null | undefined
+  videoRef: React.RefObject<HTMLVideoElement | null>
+}) {
+  if (!playlist || playlist.playback_state === 'idle' || (!playlist.current_item && !playlist.replace_now_asset)) {
+    return (
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ margin: 0, fontSize: '28px', fontWeight: 600 }}>Meeting begins shortly</p>
+        <p style={{ margin: '12px 0 0', fontSize: '15px', color: '#8899bb' }}>Pre-show playlist is idle</p>
+      </div>
+    )
+  }
+
+  const replace = playlist.replace_now_asset
+  if (replace) {
+    if (replace.asset_type === 'video' || replace.asset_type === 'bumper') {
+      return (
+        <video
+          ref={videoRef}
+          key={replace.started_at}
+          src={replace.asset_url}
+          autoPlay
+          muted
+          playsInline
+          style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: '8px' }}
+        />
+      )
+    }
+    return (
+      <img
+        src={replace.asset_url}
+        alt={replace.label}
+        style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '8px' }}
+      />
+    )
+  }
+
+  const item = playlist.current_item
+  if (!item) {
+    return <p style={{ textAlign: 'center', fontSize: '22px', color: '#c5d0e8' }}>Meeting begins shortly</p>
+  }
+
+  if (item.item_type === 'video' || item.item_type === 'bumper') {
+    if (!item.asset_url) return <p style={{ textAlign: 'center' }}>Video unavailable</p>
+    return (
+      <video
+        ref={videoRef}
+        key={item.id}
+        src={item.asset_url}
+        autoPlay
+        muted
+        playsInline
+        style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: '8px' }}
+      />
+    )
+  }
+
+  if (item.item_type === 'image' && item.asset_url) {
+    return (
+      <img
+        src={item.asset_url}
+        alt={item.label}
+        style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '8px' }}
+      />
+    )
+  }
+
+  if (item.item_type === 'info_card_countdown') {
+    return <PrerollCountdownCard scheduledStart={state.meeting?.scheduled_public_start ?? null} />
+  }
+  if (item.item_type === 'info_card_agenda_preview') {
+    return <PrerollAgendaPreviewCard state={state} />
+  }
+  if (item.item_type === 'info_card_meet_the_board') {
+    const rotate = typeof item.info_card_config?.rotate_seconds === 'number' ? item.info_card_config.rotate_seconds : 8
+    return <PrerollMeetTheBoardCard rotateSeconds={rotate} />
+  }
+  if (item.item_type === 'info_card_past_meetings') {
+    return <PrerollPastMeetingsCard productionNumber={state.meeting?.production_number ?? null} />
+  }
+  if (item.item_type === 'info_card_custom') {
+    return <PrerollCustomCard config={item.info_card_config} />
+  }
+
+  return <p style={{ textAlign: 'center', fontSize: '20px' }}>{item.label}</p>
 }

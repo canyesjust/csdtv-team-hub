@@ -5,8 +5,10 @@ import { useTheme } from '@/lib/theme'
 import MeetingsTab from './components/MeetingsTab'
 import PeopleTab from './components/PeopleTab'
 import OutputChannelsTab from './components/OutputChannelsTab'
+import MediaTab from './components/MediaTab'
+import TemplatesTab from './components/TemplatesTab'
 
-type Tab = 'meetings' | 'people' | 'channels'
+type Tab = 'meetings' | 'people' | 'channels' | 'media' | 'templates'
 
 export default function BoardMeetingsPage() {
   const { theme } = useTheme()
@@ -44,7 +46,7 @@ export default function BoardMeetingsPage() {
     <div>
       <h1 style={{ fontSize: '22px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Board Meetings</h1>
       <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>
-        Agenda extraction, people library, and output channels for live board broadcasts.
+        Agenda extraction, media library, playlists, people, and output channels for live board broadcasts.
       </p>
       <p style={{ margin: '0 0 20px' }}>
         <a href="/dashboard/voting-records" style={{ color: 'var(--brand-primary)', fontSize: '14px' }}>Voting records →</a>
@@ -54,11 +56,15 @@ export default function BoardMeetingsPage() {
         {tabBtn('meetings', 'Meetings')}
         {tabBtn('people', 'People')}
         {tabBtn('channels', 'Output Channels')}
+        {tabBtn('media', 'Media')}
+        {tabBtn('templates', 'Templates')}
       </div>
 
       {tab === 'meetings' && <MeetingsTab />}
       {tab === 'people' && <PeopleTab />}
       {tab === 'channels' && <OutputChannelsTab />}
+      {tab === 'media' && <MediaTab />}
+      {tab === 'templates' && <TemplatesTab />}
     </div>
   )
 }

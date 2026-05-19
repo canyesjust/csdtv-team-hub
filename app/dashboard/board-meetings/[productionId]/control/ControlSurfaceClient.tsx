@@ -8,6 +8,8 @@ import { toast } from '@/lib/toast'
 import QRPushPanel from './QRPushPanel'
 import AttendancePanel from './components/AttendancePanel'
 import MotionVotePanel from './components/MotionVotePanel'
+import PlaylistLiveControls from './components/PlaylistLiveControls'
+import LowerThirdPanel from './components/LowerThirdPanel'
 
 type ControlBundle = {
   board_meeting: { id: string; broadcast_status: string; agenda_locked: boolean }
@@ -91,6 +93,11 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
+        () => { load() },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_playlists', filter: `board_meeting_id=eq.${bundle.board_meeting.id}` },
         () => { load() },
       )
       .subscribe()
@@ -247,6 +254,15 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
               <button type="button" style={dangerBtn} disabled={busy} onClick={() => post('end-meeting')}>End meeting</button>
             )}
           </div>
+          <div>
+            <h3 style={{ margin: '0 0 10px', fontSize: '13px', color: muted }}>Lower third</h3>
+            <LowerThirdPanel
+              productionId={productionId}
+              broadcastState={bundle.broadcast_state}
+              disabled={!canControl || busy}
+              onUpdated={load}
+            />
+          </div>
           <div style={{ marginTop: '16px' }}>
             <QRPushPanel
               productionId={productionId}
@@ -257,6 +273,11 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
               onUpdated={load}
             />
           </div>
+        </section>
+
+        <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px' }}>
+          <h2 style={{ margin: '0 0 12px', fontSize: '15px', color: text }}>Pre-roll playlist</h2>
+          <PlaylistLiveControls productionId={productionId} disabled={!canControl} onUpdated={load} />
         </section>
 
         <section style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px' }}>

@@ -7,8 +7,16 @@ import {
   isVoteResultActive,
 } from '@/lib/board-meetings/motion-control'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
+import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
+import { buildPublicLowerThirdPayload, type PublicActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
+import {
+  buildPublicPlaylistPayload,
+  loadMeetingPlaylistBundle,
+  shouldPlaylistRun,
+  tickMeetingPlaylist,
+} from '@/lib/board-meetings/playlist-playback'
 
-export type { PublicActiveMotion, PublicActiveVoteResult }
+export type { PublicActiveMotion, PublicActiveVoteResult, PublicActiveLowerThird }
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 const ADVANCE_EVENT_TYPES = ['agenda_item_advanced', 'advance', 'jump_to']
@@ -53,6 +61,8 @@ export type PublicChannelState = {
     active_qr: PublicActiveQr | null
     active_motion: PublicActiveMotion | null
     active_vote_result: PublicActiveVoteResult | null
+    active_lower_third: PublicActiveLowerThird | null
+    playlist: PublicPlaylistState | null
   } | null
   current_item: PublicAgendaItem | null
   upcoming_items: { id: string; item_number: string; title: string; type: string }[]
@@ -92,7 +102,7 @@ export async function buildPublicChannelState(
 ): Promise<PublicChannelState | null> {
   const { data: channel } = await service
     .from('output_channels')
-    .select('id, channel_number, channel_name')
+    .select('id, channel_number, channel_name, view_type')
     .eq('channel_number', channelNumber)
     .eq('is_active', true)
     .maybeSingle()
@@ -237,6 +247,22 @@ export async function buildPublicChannelState(
     active_motion = await buildPublicMotionPayload(service, bstate.active_motion_id, bm.id)
   }
 
+  const active_lower_third = await buildPublicLowerThirdPayload(
+    service,
+    bstate?.active_lower_third_person_id,
+  )
+
+  let playlist: PublicPlaylistState | null = null
+  if (channel.view_type === 'preroll') {
+    let bundle = await loadMeetingPlaylistBundle(service, bm.id)
+    if (bundle && shouldPlaylistRun(bundle.playlist, bm.broadcast_status, bstate?.mode ?? 'normal')) {
+      bundle = await tickMeetingPlaylist(service, bundle, bm.broadcast_status, bstate?.mode ?? 'normal')
+      playlist = await buildPublicPlaylistPayload(service, bundle)
+    } else if (bundle) {
+      playlist = await buildPublicPlaylistPayload(service, bundle)
+    }
+  }
+
   return {
     active: true,
     channel_number: channel.channel_number,
@@ -260,6 +286,8 @@ export async function buildPublicChannelState(
       active_qr,
       active_motion,
       active_vote_result,
+      active_lower_third,
+      playlist,
     },
     current_item,
     upcoming_items,

@@ -8,6 +8,7 @@ import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import type { AgendaItemUI, BoardMeetingRecord } from '@/lib/board-meetings/types'
 import type { AgendaDiffEntry } from '@/lib/board-meetings/agenda-diff'
+import MeetingPlaylistSection from './MeetingPlaylistSection'
 
 type Phase = 'loading' | 'empty' | 'extracting' | 'review' | 'locked' | 'diff' | 'readonly'
 
@@ -414,7 +415,8 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
               </Link>
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <MeetingPlaylistSection productionId={productionId} />
+          <div>
             {items.map(it => (
               <div key={it.id} style={{ padding: '12px 14px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '8px' }}>
                 <span style={{ fontSize: '12px', color: muted }}>{it.item_number}</span>
