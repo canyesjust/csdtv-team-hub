@@ -74,7 +74,7 @@ export default function SubstituteVotingState({ bundle, active, parent, busy, er
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)', letterSpacing: '0.05em' }}>
-            VOTES ON SUBSTITUTE · TAP A CARD TO CHANGE
+            VOTES ON SUBSTITUTE · TAP TO CYCLE YEA → NAY → ABSTAIN → ABSENT
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)' }}>
             {bundle.voting_members.length} voting members

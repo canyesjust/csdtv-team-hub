@@ -76,59 +76,6 @@ export function computeQuorum(
   }
 }
 
-export async function upsertAttendanceBulk(
-  service: SupabaseClient,
-  boardMeetingId: string,
-  operatorId: string,
-  updates: {
-    person_id: string
-    status: AttendanceStatus
-    arrived_at?: string | null
-    left_at?: string | null
-    notes?: string | null
-  }[],
-) {
-  for (const u of updates) {
-    const { data: existing } = await service
-      .from('meeting_attendance')
-      .select('id, status')
-      .eq('board_meeting_id', boardMeetingId)
-      .eq('person_id', u.person_id)
-      .maybeSingle()
-
-    const patch = {
-      status: u.status,
-      arrived_at: u.arrived_at ?? null,
-      left_at: u.left_at ?? null,
-      notes: u.notes ?? null,
-      updated_at: new Date().toISOString(),
-    }
-
-    if (existing) {
-      const fromStatus = existing.status
-      await service.from('meeting_attendance').update(patch).eq('id', existing.id)
-      if (fromStatus !== u.status) {
-        await logMeetingEvent(service, boardMeetingId, 'attendance_changed', operatorId, {
-          person_id: u.person_id,
-          from_status: fromStatus,
-          to_status: u.status,
-        })
-      }
-    } else {
-      await service.from('meeting_attendance').insert({
-        board_meeting_id: boardMeetingId,
-        person_id: u.person_id,
-        ...patch,
-      })
-      await logMeetingEvent(service, boardMeetingId, 'attendance_changed', operatorId, {
-        person_id: u.person_id,
-        from_status: null,
-        to_status: u.status,
-      })
-    }
-  }
-}
-
 export async function ensureDefaultAttendance(
   service: SupabaseClient,
   boardMeetingId: string,

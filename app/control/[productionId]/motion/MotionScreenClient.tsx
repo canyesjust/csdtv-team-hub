@@ -50,7 +50,6 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
       .channel(`motion-screen-${meetingId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motion_votes' }, refreshDebounced)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
       .subscribe()
 

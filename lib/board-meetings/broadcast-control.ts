@@ -582,6 +582,6 @@ export async function loadControlBundle(
 }
 
 /**
- * Client-side hold/dismiss/open-attendance routing lives in
+ * Client-side hold/dismiss routing lives in
  * `lib/board-meetings/control-surface-actions.ts` (`dispatchControlSurfaceAction`).
  */

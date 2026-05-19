@@ -49,10 +49,10 @@ export default function VotingState({ bundle, active, busy, error, onAction, onM
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
           <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)', letterSpacing: '0.05em' }}>
-            VOTES · TAP A CARD TO CHANGE
+            VOTES · TAP TO CYCLE YEA → NAY → ABSTAIN → ABSENT
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7385)' }}>
-            {isVoice ? 'Voice vote: all present default to yea' : 'Roll call: tap each member'}
+            {isVoice ? 'Voice vote: members default to yea' : 'Roll call: tap each member'}
           </div>
         </div>
 

@@ -171,24 +171,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
                 LIVE{liveElapsed ? ` · ${liveElapsed}` : ''}
               </span>
             )}
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px', borderRadius: 8,
-              border: `0.5px solid ${attendance.quorum_met ? COLOR.successBorder : COLOR.borderSubtle}`,
-              background: COLOR.surface2,
-              color: attendance.quorum_met ? COLOR.successText : COLOR.textPrimary,
-              fontSize: 12,
-            }}>
-              {attendance.present_count}/{attendance.quorum_size} quorum {attendance.quorum_met ? '✓' : ''}
-            </span>
-            <button
-              type="button"
-              onClick={() => onAction('open-attendance')}
-              disabled={!canControl}
-              style={smallBtn(canControl)}
-            >
-              Mark attendance
-            </button>
           </div>
         </div>
       </div>

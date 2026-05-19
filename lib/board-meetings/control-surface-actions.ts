@@ -15,9 +15,6 @@ export async function dispatchControlSurfaceAction(
     case 'dismiss-result':
       return fetch(`/api/board-meetings/${productionId}/motion/result/dismiss`, { method: 'POST' })
 
-    case 'open-attendance':
-      return Promise.resolve(new Response(null, { status: 204 }))
-
     default:
       if (action.startsWith('motion/')) {
         const path = action.slice('motion/'.length)

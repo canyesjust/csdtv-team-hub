@@ -81,7 +81,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   )
   const [loading, setLoading] = useState(!initialBundle)
   const [busy, setBusy] = useState(false)
-  const [attendanceOpen, setAttendanceOpen] = useState(false)
   const utilitiesLoadedRef = useRef(!!initialBundle?.meeting_playlist)
   const stableWhenLockedRef = useRef<{
     agenda_items: ControlBundle['agenda_items']
@@ -206,13 +205,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     )
   }, [productionId])
 
-  const refreshAttendance = useCallback(async () => {
-    const res = await fetch(`/api/board-meetings/${productionId}/attendance`)
-    if (!res.ok) return
-    const attendance = await res.json()
-    setBundle(prev => (prev ? { ...prev, attendance } : prev))
-  }, [productionId])
-
   useEffect(() => {
     if (!initialBundle) {
       void load({ full: true })
@@ -281,13 +273,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_attendance', filter: `board_meeting_id=eq.${meetingId}` },
-        () => {
-          void refreshAttendance()
-        },
-      )
-      .on(
-        'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_playlists', filter: `board_meeting_id=eq.${meetingId}` },
         () => {
           loadDebounced()
@@ -309,7 +294,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadUtilitiesDebounced, motionIds, refreshAttendance])
+  }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadUtilitiesDebounced, motionIds])
 
   const patchBundle = useCallback((patch: (prev: ControlBundle) => ControlBundle) => {
     setBundle(prev => (prev ? patch(prev) : prev))
@@ -559,11 +544,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   )
 
   const onAction = async (action: string, body?: unknown) => {
-    if (action === 'open-attendance') {
-      setAttendanceOpen(true)
-      return
-    }
-
     const payload = body as Record<string, unknown> | undefined
 
     if (action === 'end-preroll') {
@@ -691,8 +671,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       busy={busy}
       canControl={canControl}
       onAction={onAction}
-      attendanceOpen={attendanceOpen}
-      onAttendanceOpenChange={setAttendanceOpen}
     />
   )
 }

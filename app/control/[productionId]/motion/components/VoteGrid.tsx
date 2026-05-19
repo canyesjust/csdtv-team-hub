@@ -12,10 +12,11 @@ type Props = {
   onRecordVote: (personId: string, vote: 'yea' | 'nay' | 'abstain' | 'absent' | 'recused') => void
 }
 
-const NEXT_VOTE: Record<string, 'yea' | 'nay' | 'abstain'> = {
+const NEXT_VOTE: Record<string, 'yea' | 'nay' | 'abstain' | 'absent'> = {
   yea: 'nay',
   nay: 'abstain',
-  abstain: 'yea',
+  abstain: 'absent',
+  absent: 'yea',
 }
 
 export default function VoteGrid({ members, votes, mover, seconder, parentMover, parentSeconder, onRecordVote }: Props) {
@@ -23,10 +24,7 @@ export default function VoteGrid({ members, votes, mover, seconder, parentMover,
     <div className="ms-vote-grid">
       {members.map(m => {
         const record = votes[m.id]
-        const isAbsentAttendance = record?.attendance === 'absent'
-        const currentVote: string = isAbsentAttendance
-          ? 'absent'
-          : (record?.vote || 'yea')
+        const currentVote: string = record?.vote || 'yea'
 
         const isAbsent = currentVote === 'absent'
         const isRecused = currentVote === 'recused'
@@ -39,15 +37,16 @@ export default function VoteGrid({ members, votes, mover, seconder, parentMover,
             key={m.id}
             type="button"
             onClick={() => {
-              if (isAbsent || isRecused) return
-              onRecordVote(m.id, NEXT_VOTE[currentVote] || 'yea')
+              if (isRecused) return
+              const next = NEXT_VOTE[currentVote] || 'yea'
+              onRecordVote(m.id, next)
             }}
             style={{
               padding: '12px 10px',
               borderRadius: 8,
               border: `0.5px ${isAbsent ? 'dashed' : 'solid'} ${style.border}`,
               background: style.bg,
-              cursor: (isAbsent || isRecused) ? 'default' : 'pointer',
+              cursor: isRecused ? 'default' : 'pointer',
               textAlign: 'left',
               color: 'inherit',
               fontFamily: 'inherit',

@@ -164,19 +164,14 @@ export async function loadMotionScreenBundle(
       initials: initials(p.display_name),
     }))
 
-  const attendanceByPerson = new Map(
-    attendance.records.map(r => [r.person_id, r.status]),
-  )
-
   const votes: Record<string, VoteRecord> = {}
   const tally = { yea: 0, nay: 0, abstain: 0, absent: 0 }
 
   if (activeRow) {
     for (const v of activeRow.votes) {
-      const att = attendanceByPerson.get(v.person_id) === 'absent' ? 'absent' : 'present'
       votes[v.person_id] = {
         vote: v.vote,
-        attendance: att,
+        attendance: v.vote === 'absent' ? 'absent' : 'present',
         recorded_at: null,
       }
     }
@@ -184,9 +179,7 @@ export async function loadMotionScreenBundle(
 
   for (const m of voting_members) {
     if (!votes[m.id]) {
-      const att = attendanceByPerson.get(m.id) === 'absent' ? 'absent' : 'present'
-      const defaultVote: VoteValue = att === 'absent' ? 'absent' : 'yea'
-      votes[m.id] = { vote: defaultVote, attendance: att, recorded_at: null }
+      votes[m.id] = { vote: 'yea', attendance: 'present', recorded_at: null }
     }
     const v = votes[m.id]?.vote || 'yea'
     if (v === 'yea') tally.yea++

@@ -12,7 +12,6 @@ import UtilityPanel from './components/UtilityPanel'
 import PreRollPanel from './components/PreRollPanel'
 import ModesTimersPanel from './components/ModesTimersPanel'
 import OutputChannelsPanel from './components/OutputChannelsPanel'
-import AttendancePanel from './components/AttendancePanel'
 import ModeBanner from './components/ModeBanner'
 import type { ControlBundle } from '@/lib/board-meetings/types'
 
@@ -22,12 +21,10 @@ type Props = {
   canControl: boolean
   onAction: (action: string, body?: unknown) => Promise<void>
   busy: boolean
-  attendanceOpen: boolean
-  onAttendanceOpenChange: (open: boolean) => void
 }
 
-export default function ControlSurfaceView({ productionId, bundle, canControl, onAction, busy, attendanceOpen, onAttendanceOpenChange }: Props) {
-  const { meeting, broadcast_state, agenda_items, motion_lifecycle, attendance, lower_third_active, result_overlay } = bundle
+export default function ControlSurfaceView({ productionId, bundle, canControl, onAction, busy }: Props) {
+  const { meeting, broadcast_state, agenda_items, motion_lifecycle, lower_third_active, result_overlay } = bundle
   const meetingTitle = meeting?.title || 'Board Meeting'
   const status = broadcast_state?.status || 'draft'
   const mode = broadcast_state?.mode || 'normal'
@@ -43,9 +40,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
   }, [elapsedStartedAt])
 
   const prodNum = meeting?.production_number
-
-  const quorumMet = attendance?.quorum?.quorum_met
-  const presentCount = attendance?.quorum?.present_count
 
   const activeQR = resolveActiveQR(broadcast_state)
   const hasCurrentDocument = (bundle.current_documents || []).some(d => !!d.source_url)
@@ -75,25 +69,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
               Pre-show
             </span>
           ) : null}
-
-          {attendance ? (
-            <span className="cs-attendance-text">
-              {presentCount} present
-              <span aria-hidden="true"> · </span>
-              <span className={quorumMet ? 'cs-quorum-met-text' : 'cs-quorum-unmet-text'}>
-                quorum {quorumMet ? 'met' : 'not met'}
-              </span>
-            </span>
-          ) : null}
-
-          <button
-            type="button"
-            className="cs-touchbtn cs-touchbtn-small"
-            onClick={() => onAttendanceOpenChange(true)}
-            disabled={!canControl}
-          >
-            Mark attendance
-          </button>
         </div>
       </div>
 
@@ -220,14 +195,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
           </UtilityPanel>
         </div>
       </div>
-
-      <AttendancePanel
-        productionId={productionId}
-        disabled={!canControl}
-        open={attendanceOpen}
-        onOpenChange={onAttendanceOpenChange}
-        hideTrigger
-      />
     </div>
   )
 }
