@@ -1,11 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
-import {
-  buildPublicMotionPayload,
-  buildPublicVoteResultPayload,
-  getVoteResultRemainingSeconds,
-  isVoteResultActive,
-} from '@/lib/board-meetings/motion-control'
+import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
 import { buildPublicLowerThirdPayload, type PublicActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
@@ -17,6 +12,20 @@ import {
 } from '@/lib/board-meetings/playlist-playback'
 
 export type { PublicActiveMotion, PublicActiveVoteResult, PublicActiveLowerThird }
+
+/** Vote result banner for overlay + control bundle (same shape). */
+export type PublicVoteResultOverlay = {
+  active: boolean
+  motion_id: string
+  passed: boolean
+  yea_count: number
+  nay_count: number
+  abstain_count: number
+  started_at: string
+  total_duration: number
+  seconds_remaining: number
+  held: boolean
+}
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 const ADVANCE_EVENT_TYPES = ['agenda_item_advanced', 'advance', 'jump_to']
@@ -42,6 +51,7 @@ export type PublicChannelState = {
   active: boolean
   channel_number: number
   channel_name: string
+  result_overlay: PublicVoteResultOverlay | null
   meeting: {
     title: string
     type: string | null
@@ -96,6 +106,46 @@ async function loadItemExtras(
   }
 }
 
+async function buildVoteResultOverlay(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  broadcastState: Record<string, unknown> | null | undefined,
+): Promise<PublicVoteResultOverlay | null> {
+  const activeResultId = broadcastState?.active_vote_result_motion_id as string | undefined
+  const voteResultStartedAt = broadcastState?.vote_result_started_at as string | undefined
+  if (!activeResultId || !voteResultStartedAt) return null
+
+  const startedAt = new Date(voteResultStartedAt).getTime()
+  const elapsed = Math.floor((Date.now() - startedAt) / 1000)
+  const total = (broadcastState?.vote_result_duration_seconds as number | undefined) || 8
+  const held = !!broadcastState?.vote_result_held
+  const remaining = held ? total : Math.max(0, total - elapsed)
+
+  if (!held && remaining <= 0) return null
+
+  const { data: motionRow } = await service
+    .from('meeting_motions')
+    .select('id, result, tally_yea, tally_nay, tally_abstain')
+    .eq('id', activeResultId)
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  if (!motionRow?.result) return null
+
+  return {
+    active: true,
+    motion_id: activeResultId,
+    passed: motionRow.result === 'passed',
+    yea_count: motionRow.tally_yea ?? 0,
+    nay_count: motionRow.tally_nay ?? 0,
+    abstain_count: motionRow.tally_abstain ?? 0,
+    started_at: voteResultStartedAt,
+    total_duration: total,
+    seconds_remaining: remaining,
+    held,
+  }
+}
+
 export async function buildPublicChannelState(
   service: SupabaseClient,
   channelNumber: number,
@@ -113,6 +163,7 @@ export async function buildPublicChannelState(
     active: false,
     channel_number: channel.channel_number,
     channel_name: channel.channel_name,
+    result_overlay: null,
     meeting: null,
     state: null,
     current_item: null,
@@ -232,16 +283,22 @@ export async function buildPublicChannelState(
     }
   }
 
+  const result_overlay = await buildVoteResultOverlay(service, bm.id, bstate)
+
   let active_motion: PublicActiveMotion | null = null
   let active_vote_result: PublicActiveVoteResult | null = null
 
-  if (bstate?.active_vote_result_motion_id && isVoteResultActive(bstate)) {
-    const remaining = getVoteResultRemainingSeconds(bstate)
+  if (result_overlay) {
     active_vote_result = await buildPublicVoteResultPayload(
       service,
-      bstate.active_vote_result_motion_id,
+      result_overlay.motion_id,
       bm.id,
-      remaining,
+      result_overlay.seconds_remaining,
+      {
+        held: result_overlay.held,
+        started_at: result_overlay.started_at,
+        total_duration: result_overlay.total_duration,
+      },
     )
   } else if (bstate?.active_motion_id) {
     active_motion = await buildPublicMotionPayload(service, bstate.active_motion_id, bm.id)

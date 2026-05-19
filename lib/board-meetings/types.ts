@@ -74,6 +74,9 @@ export type ControlAgendaItem = {
   consent_block?: string | null
 }
 
+/** Agenda item shape for the motion screen UI. */
+export type AgendaItem = ControlAgendaItem
+
 export type ActiveMotion = {
   id: string
   motion_type: 'main' | 'substitute' | 'amendment'
@@ -93,9 +96,19 @@ export type ActiveMotion = {
   tally_abstain?: number
 }
 
-export type MotionVotingMember = {
+export type VotingMember = {
   id: string
   display_name: string
+  district?: string | null
+  officer_position?: string | null
+}
+
+/** @deprecated Use VotingMember */
+export type MotionVotingMember = VotingMember
+
+export type VoteRecord = {
+  vote?: string
+  attendance?: string
 }
 
 export type MotionScreenBundle = {
@@ -109,12 +122,12 @@ export type MotionScreenBundle = {
   active_motion: ActiveMotion | null
   parent_motion: ActiveMotion | null
   lifecycle_state: MotionLifecycleState['state']
-  current_agenda_item: ControlAgendaItem | null
+  current_agenda_item: AgendaItem | null
   current_agenda_item_id: string | null
   suggested_motion_text: string | null
   live_elapsed: string | null
-  voting_members: MotionVotingMember[]
-  votes: Record<string, string>
+  voting_members: VotingMember[]
+  votes: Record<string, VoteRecord>
   tally: { yea: number; nay: number; abstain: number; absent: number }
   quorum_size: number
   consent_is_lead: boolean

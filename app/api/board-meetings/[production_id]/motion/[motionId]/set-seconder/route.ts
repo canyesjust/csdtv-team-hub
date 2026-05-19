@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
-import { updateMotion } from '@/lib/board-meetings/motion-control'
+import { withMotionContext, motionError, assertMotionInMeeting } from '@/lib/board-meetings/motion-route'
+import { setMotionSeconder } from '@/lib/board-meetings/motion-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,18 +9,20 @@ export async function POST(
   { params }: { params: Promise<{ production_id: string; motionId: string }> },
 ) {
   const { production_id, motionId } = await params
-  return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
-    const body = await request.json()
-    if (body.person_id !== null && (typeof body.person_id !== 'string' || !body.person_id)) {
-      return controlError('person_id required')
+  return withMotionContext(production_id, async ctx => {
+    if (!(await assertMotionInMeeting(ctx.service, motionId, ctx.boardMeetingId))) {
+      return motionError('Motion not found', 404)
+    }
+    const body = await request.json().catch(() => null)
+    if (!body || !('person_id' in body)) return motionError('person_id is required')
+    if (body.person_id !== null && typeof body.person_id !== 'string') {
+      return motionError('person_id must be a string or null')
     }
     try {
-      await updateMotion(service, boardMeetingId, motionId, teamUserId, {
-        seconded_by_person_id: body.person_id ?? null,
-      })
+      await setMotionSeconder(ctx, motionId, body.person_id ?? null)
       return NextResponse.json({ ok: true })
     } catch (e) {
-      return controlError(e instanceof Error ? e.message : 'Failed to set seconder')
+      return motionError(e instanceof Error ? e.message : 'Failed to set seconder')
     }
   })
 }

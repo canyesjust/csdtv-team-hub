@@ -1,23 +1,23 @@
 import { NextResponse } from 'next/server'
-import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
-import { pushVoteResult } from '@/lib/board-meetings/motion-control'
+import { withMotionContext, motionError, assertMotionInMeeting } from '@/lib/board-meetings/motion-route'
+import { pushResult } from '@/lib/board-meetings/motion-api'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ production_id: string; motionId: string }> },
 ) {
   const { production_id, motionId } = await params
-  return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
-    const body = await request.json().catch(() => ({}))
-    const duration =
-      typeof body.duration_seconds === 'number' ? body.duration_seconds : undefined
+  return withMotionContext(production_id, async ctx => {
+    if (!(await assertMotionInMeeting(ctx.service, motionId, ctx.boardMeetingId))) {
+      return motionError('Motion not found', 404)
+    }
     try {
-      await pushVoteResult(service, boardMeetingId, motionId, teamUserId, duration)
-      return NextResponse.json({ ok: true })
+      const result = await pushResult(ctx, motionId)
+      return NextResponse.json(result)
     } catch (e) {
-      return controlError(e instanceof Error ? e.message : 'Failed to push result')
+      return motionError(e instanceof Error ? e.message : 'Failed to push result')
     }
   })
 }

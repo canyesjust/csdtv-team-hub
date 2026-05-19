@@ -1,53 +1,76 @@
 'use client'
 
-import type { MotionVotingMember } from '@/lib/board-meetings/types'
+import type { VotingMember } from '@/lib/board-meetings/types'
 
 type Props = {
-  members: MotionVotingMember[]
-  moverId?: string | null
-  seconderId?: string | null
+  members: VotingMember[]
+  moverId: string | null | undefined
+  seconderId: string | null | undefined
   onPick: (personId: string) => void
 }
 
 export default function MemberPickerGrid({ members, moverId, seconderId, onPick }: Props) {
   return (
-    <div
-      className="ms-member-grid"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-        gap: 10,
-      }}
-    >
+    <div className="ms-vote-grid">
       {members.map(m => {
         const isMover = m.id === moverId
         const isSeconder = m.id === seconderId
-        const role = isMover ? 'Mover' : isSeconder ? 'Seconder' : null
+        const highlighted = isMover || isSeconder
+        const bg = highlighted ? 'var(--semantic-info-bg)' : 'var(--surface-1)'
+        const border = highlighted ? 'var(--semantic-info-border)' : 'var(--border-subtle)'
+        const labelText = isMover ? 'MOVER' : isSeconder ? 'SECONDER' : m.district || ''
+        const initials = (m.display_name || '')
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map(s => s[0])
+          .join('')
+
         return (
           <button
             key={m.id}
             type="button"
-            className={`cs-touchbtn${isMover || isSeconder ? ' cs-touchbtn-primary' : ''}`}
             onClick={() => onPick(m.id)}
             style={{
-              minHeight: 72,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
+              padding: '14px 10px',
+              borderRadius: 8,
+              border: `0.5px solid ${border}`,
+              background: bg,
               textAlign: 'center',
-              borderColor: isMover
-                ? 'var(--semantic-success-border)'
-                : isSeconder
-                  ? 'var(--semantic-info-border)'
-                  : undefined,
+              cursor: 'pointer',
+              minHeight: 100,
+              color: 'var(--text-primary)',
+              fontFamily: 'inherit',
             }}
           >
-            <span style={{ fontSize: 15, fontWeight: 600 }}>{m.display_name}</span>
-            {role && (
-              <span style={{ fontSize: 10, letterSpacing: '0.06em', opacity: 0.9 }}>{role.toUpperCase()}</span>
-            )}
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                background: 'var(--semantic-info-bg)',
+                color: 'var(--semantic-info-text)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                fontWeight: 500,
+                marginBottom: 6,
+              }}
+            >
+              {initials.toUpperCase()}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{m.display_name}</div>
+            <div
+              style={{
+                fontSize: 10,
+                color: highlighted ? 'var(--semantic-info-text)' : 'var(--text-muted)',
+                marginTop: 2,
+                fontWeight: highlighted ? 500 : 400,
+              }}
+            >
+              {labelText}
+            </div>
           </button>
         )
       })}

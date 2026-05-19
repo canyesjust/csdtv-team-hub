@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
-import { withdrawMotion } from '@/lib/board-meetings/motion-control'
+import { withMotionContext, motionError, assertMotionInMeeting } from '@/lib/board-meetings/motion-route'
+import { withdrawMotionApi } from '@/lib/board-meetings/motion-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,12 +9,15 @@ export async function POST(
   { params }: { params: Promise<{ production_id: string; motionId: string }> },
 ) {
   const { production_id, motionId } = await params
-  return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
+  return withMotionContext(production_id, async ctx => {
+    if (!(await assertMotionInMeeting(ctx.service, motionId, ctx.boardMeetingId))) {
+      return motionError('Motion not found', 404)
+    }
     try {
-      await withdrawMotion(service, boardMeetingId, motionId, teamUserId)
+      await withdrawMotionApi(ctx, motionId)
       return NextResponse.json({ ok: true })
     } catch (e) {
-      return controlError(e instanceof Error ? e.message : 'Failed to withdraw motion')
+      return motionError(e instanceof Error ? e.message : 'Failed to withdraw motion')
     }
   })
 }

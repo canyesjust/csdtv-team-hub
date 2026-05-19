@@ -90,4 +90,7 @@ export type PublicActiveVoteResult = {
   tally: VoteTally
   votes: { person_name: string; vote: string }[]
   remaining_seconds: number
+  held?: boolean
+  started_at?: string
+  total_duration?: number
 }

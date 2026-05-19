@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import ControlSurfaceView from './ControlSurfaceView'
+import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
 import type { ControlBundle, ResultOverlayState } from '@/lib/board-meetings/types'
 
 const MOTION_ACTIONS = new Set([
@@ -162,10 +163,10 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
       const payload = body as Record<string, unknown> | undefined
 
       if (action === 'hold-result') {
-        const res = await fetch(`/api/board-meetings/${productionId}/motion/result/hold`, { method: 'POST' })
+        const res = await dispatchControlSurfaceAction(productionId, 'hold-result')
         if (!res.ok) {
-          const d = await res.json()
-          toast(d.error || 'Action failed', 'error')
+          const d = await res.json().catch(() => ({}))
+          toast((d as { error?: string }).error || 'Action failed', 'error')
         } else {
           setResultOverlay(prev =>
             prev?.active
@@ -178,10 +179,10 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
       }
 
       if (action === 'dismiss-result') {
-        const res = await fetch(`/api/board-meetings/${productionId}/motion/result/dismiss`, { method: 'POST' })
+        const res = await dispatchControlSurfaceAction(productionId, 'dismiss-result')
         if (!res.ok) {
-          const d = await res.json()
-          toast(d.error || 'Action failed', 'error')
+          const d = await res.json().catch(() => ({}))
+          toast((d as { error?: string }).error || 'Action failed', 'error')
         } else {
           setResultOverlay(null)
           await load()

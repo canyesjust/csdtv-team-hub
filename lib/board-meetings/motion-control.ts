@@ -57,7 +57,10 @@ export function isVoteResultActive(bstate: {
   active_vote_result_motion_id?: string | null
   vote_result_started_at?: string | null
   vote_result_duration_seconds?: number | null
+  vote_result_held?: boolean | null
 }): boolean {
+  if (!bstate.active_vote_result_motion_id) return false
+  if (bstate.vote_result_held) return true
   return getVoteResultRemainingSeconds(bstate) > 0
 }
 
@@ -101,6 +104,7 @@ async function showVoteResult(
       active_vote_result_motion_id: motionId,
       vote_result_started_at: now,
       vote_result_duration_seconds: durationSeconds,
+      vote_result_held: false,
       active_motion_id: null,
       updated_at: now,
       updated_by: operatorId,
@@ -147,7 +151,7 @@ export async function holdVoteResult(
   await service
     .from('meeting_broadcast_state')
     .update({
-      vote_result_started_at: now,
+      vote_result_held: true,
       updated_at: now,
       updated_by: operatorId,
     })
@@ -176,6 +180,8 @@ export async function dismissVoteResult(
     .update({
       active_vote_result_motion_id: null,
       vote_result_started_at: null,
+      vote_result_duration_seconds: null,
+      vote_result_held: false,
       updated_at: new Date().toISOString(),
       updated_by: operatorId,
     })
@@ -322,10 +328,50 @@ export async function openVote(
     throw new Error('Select mover and seconder before opening the vote')
   }
 
+  const now = new Date().toISOString()
   await service
     .from('meeting_motions')
-    .update({ status: 'voting', vote_mode: voteMode, updated_at: new Date().toISOString() })
+    .update({ status: 'voting', vote_mode: voteMode, updated_at: now })
     .eq('id', motionId)
+
+  if (voteMode === 'voice') {
+    const attendance = await loadAttendance(service, boardMeetingId)
+    const at = new Date()
+    for (const record of attendance.records) {
+      if (!isEligibleToVote(record.status, at, record.arrived_at, record.left_at)) continue
+      const { data: existing } = await service
+        .from('meeting_motion_votes')
+        .select('id')
+        .eq('motion_id', motionId)
+        .eq('person_id', record.person_id)
+        .is('superseded_by_vote_id', null)
+        .maybeSingle()
+      if (existing) continue
+      await service.from('meeting_motion_votes').insert({
+        motion_id: motionId,
+        person_id: record.person_id,
+        vote: 'yea',
+        recorded_by: operatorId,
+      })
+    }
+    const { data: activeVotes } = await service
+      .from('meeting_motion_votes')
+      .select('vote')
+      .eq('motion_id', motionId)
+      .is('superseded_by_vote_id', null)
+    const tally = computeTally(activeVotes || [])
+    await service
+      .from('meeting_motions')
+      .update({
+        tally_yea: tally.yea,
+        tally_nay: tally.nay,
+        tally_abstain: tally.abstain,
+        tally_absent: tally.absent,
+        tally_recused: tally.recused,
+        updated_at: now,
+      })
+      .eq('id', motionId)
+  }
 
   await setActiveMotion(service, boardMeetingId, motionId, operatorId)
   await logMeetingEvent(service, boardMeetingId, 'vote_opened', operatorId, { motion_id: motionId, vote_mode: voteMode })
@@ -342,6 +388,14 @@ export async function confirmOpenDiscussion(
   if (!motion.moved_by_person_id || !motion.seconded_by_person_id) {
     throw new Error('Select mover and seconder before opening for discussion')
   }
+
+  const now = new Date().toISOString()
+  await service
+    .from('meeting_motions')
+    .update({ status: 'open_for_discussion', updated_at: now })
+    .eq('id', motionId)
+
+  await setActiveMotion(service, boardMeetingId, motionId, operatorId)
   await logMeetingEvent(service, boardMeetingId, 'motion_discussion_opened', operatorId, { motion_id: motionId })
 }
 
@@ -884,6 +938,7 @@ export async function buildPublicVoteResultPayload(
   motionId: string,
   boardMeetingId: string,
   remainingSeconds: number,
+  opts?: { held?: boolean; started_at?: string; total_duration?: number },
 ): Promise<PublicActiveVoteResult | null> {
   const motion = await loadMotion(service, motionId, boardMeetingId)
   if (!motion || !motion.result) return null
@@ -916,6 +971,9 @@ export async function buildPublicVoteResultPayload(
       vote: v.vote,
     })),
     remaining_seconds: remainingSeconds,
+    held: opts?.held ?? false,
+    started_at: opts?.started_at,
+    total_duration: opts?.total_duration,
   }
 }
 

@@ -4,28 +4,49 @@ import type { ActiveMotion } from '@/lib/board-meetings/types'
 
 type Props = {
   motion: ActiveMotion
-  note: string
+  note?: string
 }
 
 export default function HeldMotionCard({ motion, note }: Props) {
   return (
     <div
       style={{
-        padding: '12px 14px',
-        background: 'var(--surface-2)',
-        border: '0.5px solid var(--border-subtle)',
-        borderRadius: 12,
+        padding: '10px 14px',
+        background: 'var(--surface-1)',
+        borderRadius: 8,
+        border: '0.5px dashed var(--border-subtle)',
+        opacity: 0.7,
       }}
     >
-      <div style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 6 }}>
-        HELD MAIN MOTION
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          marginBottom: 4,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            style={{
+              fontSize: 10,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.06em',
+              padding: '2px 6px',
+              border: '0.5px solid var(--border-subtle)',
+              borderRadius: 6,
+            }}
+          >
+            MAIN · HELD
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {motion.mover_name} / {motion.seconder_name}
+          </span>
+        </div>
+        {note && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>⤴ {note}</span>}
       </div>
-      <p style={{ margin: '0 0 6px', fontSize: 14, lineHeight: 1.4, color: 'var(--text-primary)' }}>
-        {motion.text || '—'}
-      </p>
-      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-        {motion.mover_name || '—'} / {motion.seconder_name || '—'} · {note}
-      </p>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>{motion.text}</div>
     </div>
   )
 }

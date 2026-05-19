@@ -283,6 +283,6 @@ function buildResultOverlay(
     started_at: startedAt,
     total_duration: total,
     seconds_remaining: remaining,
-    held: false,
+    held: !!(state.vote_result_held),
   }
 }

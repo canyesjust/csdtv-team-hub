@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
-import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
-import { setMotionVoteType } from '@/lib/board-meetings/motion-control'
-import type { VoteMode } from '@/lib/board-meetings/motion-types'
+import { withMotionContext, motionError, assertMotionInMeeting } from '@/lib/board-meetings/motion-route'
+import { setMotionVoteTypeApi } from '@/lib/board-meetings/motion-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,17 +9,20 @@ export async function POST(
   { params }: { params: Promise<{ production_id: string; motionId: string }> },
 ) {
   const { production_id, motionId } = await params
-  return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
-    const body = await request.json()
-    const voteMode = (body.vote_type ?? body.vote_mode) as VoteMode
-    if (voteMode !== 'voice' && voteMode !== 'roll_call') {
-      return controlError('vote_mode must be voice or roll_call')
+  return withMotionContext(production_id, async ctx => {
+    if (!(await assertMotionInMeeting(ctx.service, motionId, ctx.boardMeetingId))) {
+      return motionError('Motion not found', 404)
+    }
+    const body = await request.json().catch(() => null)
+    const voteType = body?.vote_type ?? body?.vote_mode
+    if (voteType !== 'voice' && voteType !== 'roll_call') {
+      return motionError('vote_type must be voice or roll_call')
     }
     try {
-      await setMotionVoteType(service, boardMeetingId, motionId, teamUserId, voteMode)
+      await setMotionVoteTypeApi(ctx, motionId, voteType)
       return NextResponse.json({ ok: true })
     } catch (e) {
-      return controlError(e instanceof Error ? e.message : 'Failed to set vote type')
+      return motionError(e instanceof Error ? e.message : 'Failed to set vote type')
     }
   })
 }

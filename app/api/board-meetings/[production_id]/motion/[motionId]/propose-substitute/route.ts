@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { withControlContext, controlError } from '@/lib/board-meetings/control-route'
-import { openMotion } from '@/lib/board-meetings/motion-control'
+import { withMotionContext, motionError, assertMotionInMeeting } from '@/lib/board-meetings/motion-route'
+import { proposeSubstitute } from '@/lib/board-meetings/motion-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,21 +9,19 @@ export async function POST(
   { params }: { params: Promise<{ production_id: string; motionId: string }> },
 ) {
   const { production_id, motionId: parentMotionId } = await params
-  return withControlContext(production_id, async ({ service, boardMeetingId, teamUserId }) => {
-    const body = await request.json().catch(() => ({}))
-    const motionText =
-      typeof body.motion_text === 'string' && body.motion_text.trim()
-        ? body.motion_text.trim()
-        : 'I move to substitute the following motion'
+  return withMotionContext(production_id, async ctx => {
+    if (!(await assertMotionInMeeting(ctx.service, parentMotionId, ctx.boardMeetingId))) {
+      return motionError('Motion not found', 404)
+    }
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body.agenda_item_id !== 'string' || !body.agenda_item_id) {
+      return motionError('agenda_item_id is required')
+    }
     try {
-      const motion = await openMotion(service, boardMeetingId, teamUserId, {
-        motion_type: 'substitute',
-        parent_motion_id: parentMotionId,
-        motion_text: motionText,
-      })
-      return NextResponse.json({ motion })
+      const result = await proposeSubstitute(ctx, parentMotionId, body.agenda_item_id)
+      return NextResponse.json(result)
     } catch (e) {
-      return controlError(e instanceof Error ? e.message : 'Failed to propose substitute')
+      return motionError(e instanceof Error ? e.message : 'Failed to propose substitute')
     }
   })
 }

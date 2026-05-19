@@ -421,3 +421,8 @@ export async function loadControlBundle(service: SupabaseClient, productionId: s
   const { buildControlSurfaceBundle } = await import('@/lib/board-meetings/control-bundle')
   return buildControlSurfaceBundle(service, productionId)
 }
+
+/**
+ * Client-side hold/dismiss/open-attendance routing lives in
+ * `lib/board-meetings/control-surface-actions.ts` (`dispatchControlSurfaceAction`).
+ */

@@ -6,14 +6,8 @@ type Props = {
   abstain: number
   absent: number
   projection: string
-  projectionVariant: 'success' | 'danger' | 'info'
+  projectionVariant: 'success' | 'danger'
   quorumNote?: string
-}
-
-const PROJECTION_STYLES = {
-  success: { color: 'var(--semantic-success-text)', bg: 'var(--semantic-success-bg)', border: 'var(--semantic-success-border)' },
-  danger: { color: 'var(--semantic-danger-text)', bg: 'var(--semantic-danger-bg)', border: 'var(--semantic-danger-border)' },
-  info: { color: 'var(--semantic-info-text)', bg: 'var(--semantic-info-bg)', border: 'var(--semantic-info-border)' },
 }
 
 export default function TallyRow({
@@ -25,34 +19,54 @@ export default function TallyRow({
   projectionVariant,
   quorumNote,
 }: Props) {
-  const proj = PROJECTION_STYLES[projectionVariant]
-
+  const projColor =
+    projectionVariant === 'success' ? 'var(--semantic-success-text)' : 'var(--semantic-danger-text)'
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="ms-tally">
-        <span className="ms-tally__item">Yea {yea}</span>
-        <span className="ms-tally__item">Nay {nay}</span>
-        <span className="ms-tally__item">Abstain {abstain}</span>
-        <span className="ms-tally__item">Absent {absent}</span>
-      </div>
+    <div className="ms-tally">
+      <TallyBlock label="YEA" value={yea} bg="var(--semantic-success-bg)" fg="var(--semantic-success-text)" />
+      <TallyBlock label="NAY" value={nay} bg="var(--semantic-danger-bg)" fg="var(--semantic-danger-text)" />
+      <TallyBlock
+        label="ABSTAIN"
+        value={abstain}
+        bg="var(--semantic-warning-bg)"
+        fg="var(--semantic-warning-text)"
+      />
       <div
         style={{
-          padding: '10px 12px',
-          borderRadius: 10,
-          background: proj.bg,
-          border: `0.5px solid ${proj.border}`,
-          color: proj.color,
-          fontSize: 13,
-          fontWeight: 600,
+          padding: '12px 14px',
+          background: 'var(--surface-1)',
+          border: '0.5px solid var(--border-subtle)',
+          borderRadius: 8,
         }}
       >
-        {projection}
-        {quorumNote ? (
-          <span style={{ display: 'block', marginTop: 4, fontSize: 11, fontWeight: 500, opacity: 0.9 }}>
-            {quorumNote}
-          </span>
-        ) : null}
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>PROJECTED</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: projColor, marginTop: 2 }}>{projection}</div>
+        {quorumNote && (
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{quorumNote}</div>
+        )}
+        {absent > 0 && (
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{absent} absent</div>
+        )}
       </div>
+    </div>
+  )
+}
+
+function TallyBlock({
+  label,
+  value,
+  bg,
+  fg,
+}: {
+  label: string
+  value: number
+  bg: string
+  fg: string
+}) {
+  return (
+    <div style={{ padding: '12px 14px', background: bg, borderRadius: 8 }}>
+      <div style={{ fontSize: 10, color: fg, letterSpacing: '0.06em', opacity: 0.85 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 500, color: fg, lineHeight: 1.1, marginTop: 2 }}>{value}</div>
     </div>
   )
 }

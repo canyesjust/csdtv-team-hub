@@ -108,7 +108,9 @@ export default function BoardOverlayView({
   const mode = b?.mode || 'normal'
   const voteResult = b?.active_vote_result
   const activeMotion = b?.active_motion
-  const showVoteResult = !!voteResult && (voteResult.remaining_seconds ?? 0) > 0
+  const showVoteResult =
+    !!voteResult &&
+    (!!voteResult.held || !!state.result_overlay?.held || (voteResult.remaining_seconds ?? 0) > 0)
   const showMotion = !showVoteResult && !!activeMotion
   const showItem = b?.overlay_visible && mode === 'normal' && item && !showVoteResult && !showMotion
   const timer = state.timer
