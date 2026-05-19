@@ -141,11 +141,14 @@ export async function goLive(
 
   if (!state.current_agenda_item_id && first) {
     await setCurrentItem(service, boardMeetingId, first, operatorId)
+    await logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: first })
   } else if (current && current !== state.current_agenda_item_id) {
     await setCurrentItem(service, boardMeetingId, current, operatorId)
   }
 
-  await logMeetingEvent(service, boardMeetingId, 'go_live', operatorId, { current_item_id: current || first })
+  const itemId = current || first
+  await logMeetingEvent(service, boardMeetingId, 'meeting_went_live', operatorId, { current_item_id: itemId })
+  await logMeetingEvent(service, boardMeetingId, 'go_live', operatorId, { current_item_id: itemId })
 }
 
 export async function endMeeting(
@@ -164,6 +167,16 @@ export async function endMeeting(
     .eq('board_meeting_id', boardMeetingId)
     .is('unassigned_at', null)
 
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_qr_url: null,
+      active_qr_label: null,
+      active_qr_started_at: null,
+      active_qr_duration_seconds: null,
+    })
+    .eq('board_meeting_id', boardMeetingId)
+
   await logMeetingEvent(service, boardMeetingId, 'end_meeting', operatorId)
 }
 
@@ -178,6 +191,7 @@ export async function advanceItem(
   const next = findAdjacent(items, state.current_agenda_item_id, direction)
   if (!next) throw new Error(direction > 0 ? 'Already at last item' : 'Already at first item')
   await setCurrentItem(service, boardMeetingId, next.id, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: next.id })
   await logMeetingEvent(service, boardMeetingId, direction > 0 ? 'advance' : 'go_back', operatorId, {
     agenda_item_id: next.id,
   })
@@ -199,6 +213,7 @@ export async function jumpToItem(
   if (!item) throw new Error('Agenda item not found')
   if (!item.is_broadcastable) throw new Error('Item is not broadcastable')
   await setCurrentItem(service, boardMeetingId, agendaItemId, operatorId)
+  await logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: agendaItemId })
   await logMeetingEvent(service, boardMeetingId, 'jump_to', operatorId, { agenda_item_id: agendaItemId })
 }
 
@@ -408,6 +423,7 @@ export async function loadControlBundle(service: SupabaseClient, productionId: s
     { data: events },
     { data: channels },
     { data: templates },
+    { data: qrPresets },
   ] = await Promise.all([
     service
       .from('board_meeting_agenda_items')
@@ -435,16 +451,36 @@ export async function loadControlBundle(service: SupabaseClient, productionId: s
       .limit(50),
     service.from('output_channels').select('id, channel_number, channel_name, view_type, tier').eq('is_active', true).order('channel_number'),
     service.from('timer_templates').select('*').order('sort_order', { ascending: true }),
+    service.from('qr_presets').select('*').order('sort_order', { ascending: true }),
   ])
+
+  const { data: prod } = await service
+    .from('productions')
+    .select('production_number, livestream_url, title')
+    .eq('id', productionId)
+    .maybeSingle()
+
+  let current_documents: { source_url: string | null; title: string }[] = []
+  if (state?.current_agenda_item_id) {
+    const { data: docs } = await service
+      .from('board_meeting_agenda_documents')
+      .select('title, source_url')
+      .eq('agenda_item_id', state.current_agenda_item_id)
+      .order('sort_order')
+    current_documents = docs || []
+  }
 
   return {
     board_meeting: bm,
+    production: prod,
     items: items || [],
     broadcast_state: state,
+    current_documents,
     channel_assignments: assignments || [],
     active_timer: timers?.[0] ?? null,
     recent_events: events || [],
     output_channels: channels || [],
     timer_templates: templates || [],
+    qr_presets: qrPresets || [],
   }
 }

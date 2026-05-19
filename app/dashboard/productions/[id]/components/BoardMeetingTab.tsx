@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import GenerateChaptersButton from '@/app/dashboard/board-meetings/[productionId]/components/GenerateChaptersButton'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
@@ -15,6 +16,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const dark = theme === 'dark'
   const [phase, setPhase] = useState<Phase>('loading')
   const [meeting, setMeeting] = useState<BoardMeetingRecord | null>(null)
+  const [productionNumber, setProductionNumber] = useState<number | null>(null)
   const [items, setItems] = useState<AgendaItemUI[]>([])
   const [error, setError] = useState('')
   const [locking, setLocking] = useState(false)
@@ -59,12 +61,14 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       return
     }
     setMeeting(body.board_meeting)
+    setProductionNumber(body.production?.production_number ?? null)
     const loaded: AgendaItemUI[] = (body.items || []).map((it: AgendaItemUI & { presenters?: { name: string; title?: string | null }[] }) => ({
       ...it,
       presenters: (it.presenters || []).map(p => ({ name: p.name, title: p.title })),
     }))
     setItems(loaded)
-    if (body.board_meeting?.agenda_locked) setPhase('locked')
+    if (body.board_meeting?.broadcast_status === 'archived') setPhase('readonly')
+    else if (body.board_meeting?.agenda_locked) setPhase('locked')
     else if (loaded.length > 0) setPhase('review')
     else setPhase('empty')
   }, [productionId])
@@ -326,6 +330,35 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                 <span style={{ fontSize: '12px', color: muted }}>{it.item_number}</span>
                 <span style={{ fontSize: '14px', color: text, fontWeight: 500, marginLeft: '8px' }}>{it.title}</span>
                 {!it.is_broadcastable && <span style={{ marginLeft: '8px', fontSize: '11px', color: '#e8a020' }}>Not broadcastable</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {phase === 'readonly' && (
+        <div>
+          <div style={{ marginBottom: '16px' }}>
+            <p style={{ margin: 0, fontWeight: 600, color: text }}>Meeting archived</p>
+            <p style={{ margin: '4px 0 12px', fontSize: '13px', color: muted }}>{items.length} agenda items · broadcast complete</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+              {productionNumber && (
+                <Link
+                  href={`/board/meeting/${productionNumber}/archive`}
+                  target="_blank"
+                  style={{ fontSize: '14px', color: 'var(--brand-primary)', fontWeight: 600 }}
+                >
+                  View public archive →
+                </Link>
+              )}
+              <GenerateChaptersButton productionId={productionId} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {items.map(it => (
+              <div key={it.id} style={{ padding: '12px 14px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '8px' }}>
+                <span style={{ fontSize: '12px', color: muted }}>{it.item_number}</span>
+                <span style={{ fontSize: '14px', color: text, fontWeight: 500, marginLeft: '8px' }}>{it.title}</span>
               </div>
             ))}
           </div>

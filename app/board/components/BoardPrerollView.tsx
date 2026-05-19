@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 
+type PrerollState = PublicChannelState
+
 export default function BoardPrerollView({ channelNumber }: { channelNumber: number }) {
-  const [state, setState] = useState<PublicChannelState | null>(null)
+  const [state, setState] = useState<PrerollState | null>(null)
   const [cardIndex, setCardIndex] = useState(0)
 
   useEffect(() => {
@@ -28,9 +30,13 @@ export default function BoardPrerollView({ channelNumber }: { channelNumber: num
   }, [channelNumber])
 
   const cards = useMemo(() => {
-    const preview = state?.agenda_preview || []
+    const preview = state?.upcoming_items?.length
+      ? state.upcoming_items
+      : state?.current_item
+        ? [{ item_number: state.current_item.item_number, title: state.current_item.title }]
+        : []
     if (preview.length === 0) {
-      return [{ title: 'Board meeting starting soon', sub: state?.channel_name || `Channel ${channelNumber}` }]
+      return [{ title: state?.meeting?.title || 'Board meeting starting soon', sub: state?.channel_name || `Channel ${channelNumber}` }]
     }
     return preview.map(p => ({ title: p.title, sub: p.item_number }))
   }, [state, channelNumber])
@@ -41,8 +47,20 @@ export default function BoardPrerollView({ channelNumber }: { channelNumber: num
     return () => clearInterval(t)
   }, [cards.length])
 
+  if (!state?.active) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a1628', color: '#8899bb', fontFamily: 'system-ui, sans-serif' }}>
+        No production active
+      </div>
+    )
+  }
+
   const card = cards[cardIndex % cards.length]
-  const ticker = state?.agenda_preview || []
+  const ticker = [
+    ...(state?.completed_items || []).map(c => ({ item_number: c.number, title: c.title })),
+    ...(state?.current_item ? [{ item_number: state.current_item.item_number, title: state.current_item.title }] : []),
+    ...(state?.upcoming_items || []),
+  ]
 
   return (
     <div

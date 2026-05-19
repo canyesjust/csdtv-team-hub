@@ -1,38 +1,76 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
+
+const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
+const ADVANCE_EVENT_TYPES = ['agenda_item_advanced', 'advance', 'jump_to']
+
+export type PublicAgendaItem = {
+  id: string
+  section_number: number
+  section_title: string
+  item_number: string
+  title: string
+  type: string
+  presenters: { name: string; title: string | null }[]
+  documents: { title: string; source_url: string | null }[]
+}
 
 export type PublicChannelState = {
+  active: boolean
   channel_number: number
   channel_name: string
-  has_active_meeting: boolean
-  meeting?: {
-    production_id: string
+  meeting: {
+    title: string
+    type: string | null
+    date: string | null
+    location: string | null
     broadcast_status: string
+    production_number: number | null
+    youtube_url: string | null
     scheduled_public_start: string | null
-  }
-  broadcast?: {
-    overlay_visible: boolean
+  } | null
+  state: {
     mode: string
+    overlay_visible: boolean
     mode_message: string | null
     mode_started_at: string | null
     mode_duration_seconds: number | null
-    current_item: {
-      id: string
-      section_number: number
-      section_title: string
-      item_number: string
-      title: string
-      type: string
-    } | null
-    timer: {
-      id: string
+    active_qr: {
+      url: string
       label: string
-      duration_seconds: number
-      started_at: string
       remaining_seconds: number
-      show_on_broadcast: boolean
     } | null
+  } | null
+  current_item: PublicAgendaItem | null
+  upcoming_items: { id: string; item_number: string; title: string; type: string }[]
+  completed_items: { id: string; number: string; title: string; started_at_offset_seconds: number }[]
+  timer: {
+    label: string
+    duration_seconds: number
+    remaining_seconds: number
+    show_on_broadcast: boolean
+    show_on_speaker_monitor: boolean
+    show_on_dais: boolean
+  } | null
+  live_started_at: string | null
+}
+
+async function loadItemExtras(
+  service: SupabaseClient,
+  itemId: string,
+): Promise<{ presenters: PublicAgendaItem['presenters']; documents: PublicAgendaItem['documents'] }> {
+  const [{ data: pres }, { data: docs }] = await Promise.all([
+    service.from('board_meeting_presenters').select('name, title').eq('agenda_item_id', itemId).order('sort_order'),
+    service
+      .from('board_meeting_agenda_documents')
+      .select('title, source_url')
+      .eq('agenda_item_id', itemId)
+      .order('sort_order'),
+  ])
+  return {
+    presenters: (pres || []).map(p => ({ name: p.name, title: p.title })),
+    documents: (docs || []).map(d => ({ title: d.title, source_url: d.source_url })),
   }
-  agenda_preview?: { item_number: string; title: string }[]
 }
 
 export async function buildPublicChannelState(
@@ -48,10 +86,17 @@ export async function buildPublicChannelState(
 
   if (!channel) return null
 
-  const base: PublicChannelState = {
+  const idle: PublicChannelState = {
+    active: false,
     channel_number: channel.channel_number,
     channel_name: channel.channel_name,
-    has_active_meeting: false,
+    meeting: null,
+    state: null,
+    current_item: null,
+    upcoming_items: [],
+    completed_items: [],
+    timer: null,
+    live_started_at: null,
   }
 
   const { data: assignment } = await service
@@ -61,7 +106,7 @@ export async function buildPublicChannelState(
     .is('unassigned_at', null)
     .maybeSingle()
 
-  if (!assignment?.board_meeting_id) return base
+  if (!assignment?.board_meeting_id) return idle
 
   const { data: bm } = await service
     .from('board_meetings')
@@ -69,72 +114,127 @@ export async function buildPublicChannelState(
     .eq('id', assignment.board_meeting_id)
     .maybeSingle()
 
-  if (!bm) return base
+  if (!bm) return idle
 
-  base.has_active_meeting = true
-  base.meeting = {
-    production_id: bm.production_id,
-    broadcast_status: bm.broadcast_status,
-    scheduled_public_start: bm.scheduled_public_start,
-  }
+  const { data: prod } = await service
+    .from('productions')
+    .select('production_number, title, start_datetime, request_type_label, filming_location, event_location, livestream_url')
+    .eq('id', bm.production_id)
+    .maybeSingle()
 
-  const { data: state } = await service
+  const { data: bstate } = await service
     .from('meeting_broadcast_state')
     .select('*')
     .eq('board_meeting_id', bm.id)
     .maybeSingle()
 
-  let currentItem = null
-  if (state?.current_agenda_item_id) {
-    const { data: item } = await service
-      .from('board_meeting_agenda_items')
-      .select('id, section_number, section_title, item_number, title, type')
-      .eq('id', state.current_agenda_item_id)
-      .maybeSingle()
-    currentItem = item
+  const { data: broadcastable } = await service
+    .from('board_meeting_agenda_items')
+    .select('id, section_number, section_title, item_number, title, type, sort_order')
+    .eq('board_meeting_id', bm.id)
+    .eq('is_broadcastable', true)
+    .order('sort_order', { ascending: true })
+
+  const items = broadcastable || []
+  const currentIdx = items.findIndex(i => i.id === bstate?.current_agenda_item_id)
+  const currentRow = currentIdx >= 0 ? items[currentIdx] : null
+
+  let current_item: PublicAgendaItem | null = null
+  if (currentRow) {
+    const extras = await loadItemExtras(service, currentRow.id)
+    current_item = { ...currentRow, ...extras }
   }
 
-  let timerPayload = null
-  if (state?.active_timer_id) {
+  const upcoming_items = items
+    .slice(currentIdx >= 0 ? currentIdx + 1 : 0, currentIdx >= 0 ? currentIdx + 4 : 3)
+    .map(i => ({ id: i.id, item_number: i.item_number, title: i.title, type: i.type }))
+
+  const { data: events } = await service
+    .from('meeting_event_log')
+    .select('event_type, event_data, occurred_at')
+    .eq('board_meeting_id', bm.id)
+    .order('occurred_at', { ascending: true })
+
+  const liveEvent = (events || []).find(e => LIVE_EVENT_TYPES.includes(e.event_type))
+  const live_started_at = liveEvent?.occurred_at ?? bm.scheduled_public_start ?? null
+  const t0 = live_started_at ? new Date(live_started_at).getTime() : null
+
+  const completed_items: PublicChannelState['completed_items'] = []
+  if (t0 && currentIdx > 0) {
+    for (let i = 0; i < currentIdx; i++) {
+      const it = items[i]
+      let offset = 0
+      const adv = (events || []).find(e => {
+        if (!ADVANCE_EVENT_TYPES.includes(e.event_type)) return false
+        const d = e.event_data as { agenda_item_id?: string } | null
+        return d?.agenda_item_id === it.id
+      })
+      if (adv) offset = Math.max(0, Math.floor((new Date(adv.occurred_at).getTime() - t0) / 1000))
+      completed_items.push({
+        id: it.id,
+        number: it.item_number,
+        title: it.title,
+        started_at_offset_seconds: offset,
+      })
+    }
+  }
+
+  let timerPayload: PublicChannelState['timer'] = null
+  if (bstate?.active_timer_id) {
     const { data: timer } = await service
       .from('meeting_timers')
       .select('*')
-      .eq('id', state.active_timer_id)
+      .eq('id', bstate.active_timer_id)
       .is('ended_at', null)
       .maybeSingle()
     if (timer) {
       const elapsed = Math.floor((Date.now() - new Date(timer.started_at).getTime()) / 1000)
-      const remaining = Math.max(0, timer.duration_seconds - elapsed)
       timerPayload = {
-        id: timer.id,
         label: timer.label || 'Timer',
         duration_seconds: timer.duration_seconds,
-        started_at: timer.started_at,
-        remaining_seconds: remaining,
+        remaining_seconds: Math.max(0, timer.duration_seconds - elapsed),
         show_on_broadcast: timer.show_on_broadcast,
+        show_on_speaker_monitor: timer.show_on_speaker_monitor,
+        show_on_dais: timer.show_on_dais,
       }
     }
   }
 
-  base.broadcast = {
-    overlay_visible: state?.overlay_visible ?? true,
-    mode: state?.mode ?? 'normal',
-    mode_message: state?.mode_message ?? null,
-    mode_started_at: state?.mode_started_at ?? null,
-    mode_duration_seconds: state?.mode_duration_seconds ?? null,
-    current_item: currentItem,
-    timer: timerPayload,
+  let active_qr: PublicChannelState['state'] extends { active_qr: infer Q } ? Q : never = null
+  if (bstate && isQrActive(bstate)) {
+    active_qr = {
+      url: bstate.active_qr_url!,
+      label: bstate.active_qr_label || 'Scan',
+      remaining_seconds: getActiveQrRemainingSeconds(bstate),
+    }
   }
 
-  const { data: previewItems } = await service
-    .from('board_meeting_agenda_items')
-    .select('item_number, title')
-    .eq('board_meeting_id', bm.id)
-    .eq('is_broadcastable', true)
-    .order('sort_order', { ascending: true })
-    .limit(12)
-
-  base.agenda_preview = previewItems || []
-
-  return base
+  return {
+    active: true,
+    channel_number: channel.channel_number,
+    channel_name: channel.channel_name,
+    meeting: {
+      title: prod?.title || 'Board Meeting',
+      type: prod?.request_type_label ?? null,
+      date: prod?.start_datetime ?? null,
+      location: prod?.event_location || prod?.filming_location || null,
+      broadcast_status: bm.broadcast_status,
+      production_number: prod?.production_number ?? null,
+      youtube_url: prod?.livestream_url ?? null,
+      scheduled_public_start: bm.scheduled_public_start,
+    },
+    state: {
+      mode: bstate?.mode ?? 'normal',
+      overlay_visible: bstate?.overlay_visible ?? true,
+      mode_message: bstate?.mode_message ?? null,
+      mode_started_at: bstate?.mode_started_at ?? null,
+      mode_duration_seconds: bstate?.mode_duration_seconds ?? null,
+      active_qr,
+    },
+    current_item,
+    upcoming_items,
+    completed_items,
+    timer: timerPayload,
+    live_started_at,
+  }
 }

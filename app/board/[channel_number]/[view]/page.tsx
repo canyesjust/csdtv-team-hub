@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import BoardPlaceholder from '@/app/board/components/BoardPlaceholder'
 import BoardOverlayView from '@/app/board/components/BoardOverlayView'
 import BoardPrerollView from '@/app/board/components/BoardPrerollView'
+import BoardLiveView from '@/app/board/components/BoardLiveView'
+import BoardDaisView from '@/app/board/components/BoardDaisView'
 import { getOutputChannelByNumber, type BoardViewSlug } from '@/lib/board-meetings/public-channel'
 
 const VIEW_LABELS: Record<BoardViewSlug, string> = {
@@ -32,6 +34,12 @@ export default async function BoardPublicViewPage({
   }
   if (slug === 'preroll') {
     return <BoardPrerollView channelNumber={num} />
+  }
+  if (slug === 'live') {
+    return <BoardLiveView channelNumber={num} />
+  }
+  if (slug === 'dais') {
+    return <BoardDaisView channelNumber={num} />
   }
 
   return (

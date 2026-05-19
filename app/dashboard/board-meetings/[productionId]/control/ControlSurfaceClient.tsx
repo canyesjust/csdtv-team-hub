@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
+import QRPushPanel from './QRPushPanel'
 
 type ControlBundle = {
   board_meeting: { id: string; broadcast_status: string; agenda_locked: boolean }
@@ -16,11 +17,17 @@ type ControlBundle = {
     title: string
     is_broadcastable: boolean
   }[]
+  production?: { production_number: number; livestream_url: string | null; title: string } | null
+  current_documents?: { source_url: string | null; title: string }[]
   broadcast_state: {
     current_agenda_item_id: string | null
     overlay_visible: boolean
     mode: string
     mode_message: string | null
+    active_qr_url?: string | null
+    active_qr_label?: string | null
+    active_qr_started_at?: string | null
+    active_qr_duration_seconds?: number | null
   } | null
   channel_assignments: { output_channel_id: string }[]
   active_timer: { id: string; label: string; duration_seconds: number; started_at: string } | null
@@ -218,6 +225,16 @@ export default function ControlSurfaceClient({ productionId }: { productionId: s
             ) : (
               <button type="button" style={dangerBtn} disabled={busy} onClick={() => post('end-meeting')}>End meeting</button>
             )}
+          </div>
+          <div style={{ marginTop: '16px' }}>
+            <QRPushPanel
+              productionId={productionId}
+              broadcastState={bundle.broadcast_state}
+              currentDocuments={bundle.current_documents || []}
+              hasYoutube={!!(bundle.production?.livestream_url || '').trim()}
+              disabled={!canControl || status !== 'live'}
+              onUpdated={load}
+            />
           </div>
         </section>
 

@@ -22,5 +22,13 @@ export async function GET(
   }
 
   const bundle = await loadBoardMeetingBundle(service, production_id)
-  return NextResponse.json(bundle)
+  if (!bundle) return NextResponse.json({ board_meeting: null, items: [] })
+
+  const { data: prod } = await service
+    .from('productions')
+    .select('production_number, livestream_url, title')
+    .eq('id', production_id)
+    .maybeSingle()
+
+  return NextResponse.json({ ...bundle, production: prod })
 }

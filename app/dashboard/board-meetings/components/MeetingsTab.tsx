@@ -105,6 +105,15 @@ export default function MeetingsTab() {
                 Control →
               </Link>
             )}
+            {r.board_meeting?.broadcast_status === 'archived' && (
+              <Link
+                href={`/board/meeting/${r.production_number}/archive`}
+                target="_blank"
+                style={{ fontSize: '12px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
+              >
+                Archive →
+              </Link>
+            )}
             <Link href={`/dashboard/productions/${r.production_number}`} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none' }}>
               Open →
             </Link>
