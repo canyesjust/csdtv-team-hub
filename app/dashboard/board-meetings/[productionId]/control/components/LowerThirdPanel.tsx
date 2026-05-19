@@ -19,7 +19,7 @@ type CallbackProps = {
   active: { person_id: string; display_name: string; primary_title: string | null } | null
   people: LowerThirdPerson[]
   canControl: boolean
-  onSet: (personId: string) => void
+  onSet: (person: LowerThirdPerson) => void
   onClear: () => void
 }
 
@@ -52,8 +52,8 @@ function LowerThirdPanelControlled({ active, people, canControl, onSet, onClear 
 
   const [otherOpen, setOtherOpen] = useState(false)
 
-  const handleOtherSelect = (personId: string) => {
-    onSet(personId)
+  const handleOtherSelect = (person: LowerThirdPerson) => {
+    onSet(person)
     setOtherOpen(false)
   }
 
@@ -106,7 +106,7 @@ function LowerThirdPanelControlled({ active, people, canControl, onSet, onClear 
               type="button"
               className={`cs-lt-btn${isActive ? ' cs-lt-btn--active' : ''}`}
               disabled={disabled}
-              onClick={() => onSet(person.id)}
+              onClick={() => onSet(person)}
             >
               {capitalize(lowerThirdFirstName(person.display_name) || person.display_name)}
             </button>
@@ -143,7 +143,7 @@ function OtherPersonModal({
 }: {
   excludeIds: Set<string>
   activeId: string | null
-  onSelect: (personId: string) => void
+  onSelect: (person: LowerThirdPerson) => void
   onClose: () => void
 }) {
   const [search, setSearch] = useState('')
@@ -202,12 +202,12 @@ function OtherPersonModal({
         toast(body.error || 'Failed to add person', 'error')
         return
       }
-      const personId = body.person?.id
-      if (!personId) {
+      const person = body.person as LowerThirdPerson | undefined
+      if (!person?.id) {
         toast('Person created but no id returned', 'error')
         return
       }
-      onSelect(personId)
+      onSelect(person)
     } finally {
       setCreating(false)
     }
@@ -252,7 +252,7 @@ function OtherPersonModal({
                     key={p.id}
                     type="button"
                     className={`cs-modal-result${isActive ? ' cs-modal-result--active' : ''}`}
-                    onClick={() => onSelect(p.id)}
+                    onClick={() => onSelect(p)}
                   >
                     <span className="cs-modal-result-name">{p.display_name}</span>
                     {(p.primary_title || p.officer_position) ? (

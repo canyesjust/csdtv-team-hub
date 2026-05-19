@@ -1,13 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import ControlSurfaceView from './ControlSurfaceView'
 import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
 import type { ControlLivePatch } from '@/lib/board-meetings/control-live-bundle'
-import type { ControlBundle, ResultOverlayState } from '@/lib/board-meetings/types'
+import type { ControlBundle, LowerThirdPerson, ResultOverlayState } from '@/lib/board-meetings/types'
 
 const MOTION_ACTIONS = new Set([
   'open',
@@ -24,7 +25,7 @@ const MOTION_ACTIONS = new Set([
 
 const REALTIME_DEBOUNCE_MS = 200
 /** Skip redundant realtime reload right after a local action refresh. */
-const REALTIME_SUPPRESS_MS = 2500
+const REALTIME_SUPPRESS_MS = 8000
 
 const OPTIMISTIC_ACTIONS = new Set([
   'set-lower-third',
@@ -83,6 +84,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   } | null>(null)
   const suppressRealtimeUntilRef = useRef(0)
   const liveFetchGenRef = useRef(0)
+  const optimisticEpochRef = useRef(0)
 
   const applyBundle = useCallback((body: ControlBundle) => {
     if (body.board_meeting.agenda_locked) {
@@ -130,15 +132,24 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
 
   const loadLive = useCallback(async () => {
     const gen = ++liveFetchGenRef.current
+    const epochAtStart = optimisticEpochRef.current
     const res = await fetch(`/api/board-meetings/${productionId}/control/live`)
     if (gen !== liveFetchGenRef.current) return
+    if (epochAtStart !== optimisticEpochRef.current) return
     const body = await res.json().catch(() => null)
     if (!res.ok || !body) {
       if (res.status !== 0) toast((body as { error?: string })?.error || 'Failed to sync live state', 'error')
       return
     }
+    if (epochAtStart !== optimisticEpochRef.current) return
     applyLivePatch(body as ControlLivePatch)
   }, [productionId, applyLivePatch])
+
+  const beginOptimisticAction = useCallback(() => {
+    optimisticEpochRef.current += 1
+    liveFetchGenRef.current += 1
+    suppressRealtimeUntilRef.current = Date.now() + REALTIME_SUPPRESS_MS
+  }, [])
 
   const refreshInBackground = useCallback(() => {
     suppressRealtimeUntilRef.current = Date.now() + REALTIME_SUPPRESS_MS
@@ -270,114 +281,100 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     }
   }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadUtilitiesDebounced, motionIds])
 
-  const assignedIds = useMemo(
-    () => new Set((bundle?.channel_assignments || []).map(a => a.output_channel_id)),
-    [bundle?.channel_assignments],
-  )
-
   const patchBundle = useCallback((patch: (prev: ControlBundle) => ControlBundle) => {
     setBundle(prev => (prev ? patch(prev) : prev))
   }, [])
 
-  const applyOptimistic = useCallback(
-    (action: string, payload?: Record<string, unknown>) => {
-      if (!bundle) return
+  const applyOptimistic = useCallback((action: string, payload?: Record<string, unknown>) => {
+    setBundle(prev => {
+      if (!prev) return prev
 
       if (action === 'set-lower-third') {
         const personId = payload?.person_id as string
-        const person = bundle.lower_third_people?.find(p => p.id === personId)
-        if (!person) return
-        patchBundle(prev => ({
+        const fromPayload = payload?.person as LowerThirdPerson | undefined
+        const person = fromPayload ?? prev.lower_third_people?.find(p => p.id === personId)
+        if (!person) return prev
+        const active = {
+          person_id: person.id,
+          display_name: person.display_name,
+          primary_title: person.primary_title,
+          affiliation: person.affiliation,
+          officer_position: person.officer_position,
+          photo_url: null,
+        }
+        return {
           ...prev,
-          lower_third_active: {
-            person_id: person.id,
-            display_name: person.display_name,
-            primary_title: person.primary_title,
-            affiliation: person.affiliation,
-            officer_position: person.officer_position,
-            photo_url: null,
-          },
-          active_lower_third: {
-            person_id: person.id,
-            display_name: person.display_name,
-            primary_title: person.primary_title,
-            affiliation: person.affiliation,
-            officer_position: person.officer_position,
-            photo_url: null,
-          },
+          lower_third_active: active,
+          active_lower_third: active,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             active_lower_third_person_id: person.id,
           }),
-        }))
-        return
+        }
       }
 
       if (action === 'clear-lower-third') {
-        patchBundle(prev => ({
+        return {
           ...prev,
           lower_third_active: null,
           active_lower_third: null,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             active_lower_third_person_id: null,
           }),
-        }))
-        return
+        }
       }
 
       if (action === 'jump-to') {
         const agendaItemId = payload?.agenda_item_id as string
-        if (!agendaItemId) return
-        patchBundle(prev => ({
+        if (!agendaItemId) return prev
+        return {
           ...prev,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             current_agenda_item_id: agendaItemId,
           }),
-        }))
-        return
+        }
       }
 
       if (action === 'advance' || action === 'go-back') {
-        const items = bundle.agenda_items || []
-        const currentId = bundle.broadcast_state?.current_agenda_item_id ?? null
+        const items = prev.agenda_items || []
+        const currentId = prev.broadcast_state?.current_agenda_item_id ?? null
         const idx = currentId ? items.findIndex(i => i.id === currentId) : -1
         const nextIdx = action === 'advance' ? (idx < 0 ? 0 : idx + 1) : idx <= 0 ? -1 : idx - 1
         const next = nextIdx >= 0 && nextIdx < items.length ? items[nextIdx] : null
-        if (!next) return
-        patchBundle(prev => ({
+        if (!next) return prev
+        return {
           ...prev,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             current_agenda_item_id: next.id,
           }),
-        }))
-        return
+        }
       }
 
       if (action === 'toggle-overlay') {
-        const visible = bundle.broadcast_state?.agenda_overlay_visible !== false
-        patchBundle(prev => ({
+        const visible = prev.broadcast_state?.agenda_overlay_visible !== false
+        return {
           ...prev,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             agenda_overlay_visible: !visible,
             overlay_visible: !visible,
           }),
-        }))
-        return
+        }
       }
 
       if (action === 'toggle-channel') {
         const channelId = payload?.output_channel_id as string
-        if (!channelId) return
-        const has = assignedIds.has(channelId)
-        patchBundle(prev => ({
+        if (!channelId) return prev
+        const has = (prev.channel_assignments || []).some(a => a.output_channel_id === channelId)
+        return {
           ...prev,
           channel_assignments: has
             ? (prev.channel_assignments || []).filter(a => a.output_channel_id !== channelId)
             : [...(prev.channel_assignments || []), { output_channel_id: channelId }],
-        }))
+        }
       }
-    },
-    [assignedIds, bundle, patchBundle],
-  )
+
+      return prev
+    })
+  }, [])
 
   const postControl = async (path: string, body?: Record<string, unknown>): Promise<ControlPostResult> => {
     const res = await fetch(`/api/board-meetings/${productionId}/control/${path}`, {
@@ -424,35 +421,50 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     [patchBundle],
   )
 
-  const runOptimisticPost = useCallback(
-    async (action: string, payload?: Record<string, unknown>) => {
-      applyOptimistic(action, payload)
-      suppressRealtimeUntilRef.current = Date.now() + REALTIME_SUPPRESS_MS
+  const postOptimisticInBackground = useCallback(
+    (
+      action: string,
+      payload?: Record<string, unknown>,
+      opts?: { channelWasAssigned?: boolean },
+    ) => {
+      const epochAtSend = optimisticEpochRef.current
+
+      const onFailure = () => {
+        if (epochAtSend !== optimisticEpochRef.current) return
+        void loadLive()
+      }
 
       if (action === 'toggle-channel') {
         const channelId = payload?.output_channel_id as string
-        const method = assignedIds.has(channelId) ? 'DELETE' : 'POST'
-        const res = await fetch(`/api/board-meetings/${productionId}/channels`, {
+        const method = opts?.channelWasAssigned ? 'DELETE' : 'POST'
+        void fetch(`/api/board-meetings/${productionId}/channels`, {
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ output_channel_id: channelId }),
         })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          toast((data as { error?: string }).error || 'Channel update failed', 'error')
-          void loadLive()
-        }
+          .then(async res => {
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              toast((data as { error?: string }).error || 'Channel update failed', 'error')
+              onFailure()
+            }
+          })
+          .catch(() => onFailure())
         return
       }
 
-      const result = await postControl(action, payload)
-      if (result.ok) {
-        applyServerHints(action, result.data)
-        return
-      }
-      void loadLive()
+      void postControl(action, payload)
+        .then(result => {
+          if (epochAtSend !== optimisticEpochRef.current) return
+          if (result.ok) {
+            applyServerHints(action, result.data)
+            return
+          }
+          onFailure()
+        })
+        .catch(() => onFailure())
     },
-    [applyOptimistic, applyServerHints, assignedIds, loadLive, productionId],
+    [applyServerHints, loadLive, productionId],
   )
 
   const onAction = async (action: string, body?: unknown) => {
@@ -464,7 +476,14 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     const payload = body as Record<string, unknown> | undefined
 
     if (OPTIMISTIC_ACTIONS.has(action)) {
-      void runOptimisticPost(action, payload)
+      const channelId =
+        action === 'toggle-channel' ? (payload?.output_channel_id as string | undefined) : undefined
+      const channelWasAssigned = channelId
+        ? (bundle?.channel_assignments || []).some(a => a.output_channel_id === channelId)
+        : false
+      beginOptimisticAction()
+      flushSync(() => applyOptimistic(action, payload))
+      postOptimisticInBackground(action, payload, { channelWasAssigned })
       return
     }
 

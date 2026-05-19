@@ -123,16 +123,28 @@ export async function setCurrentItem(
   itemId: string | null,
   operatorId: string,
 ) {
-  await ensureBroadcastState(service, boardMeetingId, operatorId)
-  const { error } = await service
+  const patch = {
+    current_agenda_item_id: itemId,
+    updated_at: new Date().toISOString(),
+    updated_by: operatorId,
+  }
+
+  const { data: updated, error } = await service
     .from('meeting_broadcast_state')
-    .update({
-      current_agenda_item_id: itemId,
-      updated_at: new Date().toISOString(),
-      updated_by: operatorId,
-    })
+    .update(patch)
     .eq('board_meeting_id', boardMeetingId)
+    .select('id')
+    .maybeSingle()
+
   if (error) throw new Error(error.message)
+  if (updated) return
+
+  await ensureBroadcastState(service, boardMeetingId, operatorId)
+  const { error: retryError } = await service
+    .from('meeting_broadcast_state')
+    .update(patch)
+    .eq('board_meeting_id', boardMeetingId)
+  if (retryError) throw new Error(retryError.message)
 }
 
 export async function goLive(
@@ -213,12 +225,21 @@ export async function advanceItem(
   operatorId: string,
   direction: 1 | -1,
 ) {
-  const items = await loadBroadcastableItems(service, boardMeetingId)
-  const state = await ensureBroadcastState(service, boardMeetingId, operatorId)
-  const next = findAdjacent(items, state.current_agenda_item_id, direction)
+  const [items, stateResult] = await Promise.all([
+    loadBroadcastableItems(service, boardMeetingId),
+    service
+      .from('meeting_broadcast_state')
+      .select('current_agenda_item_id')
+      .eq('board_meeting_id', boardMeetingId)
+      .maybeSingle(),
+  ])
+
+  const currentId = stateResult.data?.current_agenda_item_id ?? null
+  const next = findAdjacent(items, currentId, direction)
   if (!next) throw new Error(direction > 0 ? 'Already at last item' : 'Already at first item')
+
   await setCurrentItem(service, boardMeetingId, next.id, operatorId)
-  await logMeetingEvent(service, boardMeetingId, direction > 0 ? 'advance' : 'go_back', operatorId, {
+  void logMeetingEvent(service, boardMeetingId, direction > 0 ? 'advance' : 'go_back', operatorId, {
     agenda_item_id: next.id,
   })
   return next
@@ -239,8 +260,8 @@ export async function jumpToItem(
   if (!item) throw new Error('Agenda item not found')
   if (!item.is_broadcastable) throw new Error('Item is not broadcastable')
   await setCurrentItem(service, boardMeetingId, agendaItemId, operatorId)
-  await logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: agendaItemId })
-  await logMeetingEvent(service, boardMeetingId, 'jump_to', operatorId, { agenda_item_id: agendaItemId })
+  void logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: agendaItemId })
+  void logMeetingEvent(service, boardMeetingId, 'jump_to', operatorId, { agenda_item_id: agendaItemId })
 }
 
 export async function toggleOverlay(
@@ -249,17 +270,33 @@ export async function toggleOverlay(
   operatorId: string,
   visible?: boolean,
 ) {
-  const state = await ensureBroadcastState(service, boardMeetingId, operatorId)
-  const next = visible ?? !state.overlay_visible
-  await service
+  const { data: state } = await service
     .from('meeting_broadcast_state')
-    .update({
-      overlay_visible: next,
-      updated_at: new Date().toISOString(),
-      updated_by: operatorId,
-    })
+    .select('overlay_visible')
     .eq('board_meeting_id', boardMeetingId)
-  await logMeetingEvent(service, boardMeetingId, 'toggle_overlay', operatorId, { visible: next })
+    .maybeSingle()
+
+  const next = visible ?? !(state?.overlay_visible ?? true)
+  const patch = {
+    overlay_visible: next,
+    updated_at: new Date().toISOString(),
+    updated_by: operatorId,
+  }
+
+  const { data: updated, error } = await service
+    .from('meeting_broadcast_state')
+    .update(patch)
+    .eq('board_meeting_id', boardMeetingId)
+    .select('id')
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!updated) {
+    await ensureBroadcastState(service, boardMeetingId, operatorId)
+    await service.from('meeting_broadcast_state').update(patch).eq('board_meeting_id', boardMeetingId)
+  }
+
+  void logMeetingEvent(service, boardMeetingId, 'toggle_overlay', operatorId, { visible: next })
   return next
 }
 

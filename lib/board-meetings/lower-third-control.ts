@@ -68,8 +68,6 @@ export async function setActiveLowerThird(
 
   if (!person) throw new Error('Person not found')
 
-  await ensureBroadcastState(service, boardMeetingId, operatorId)
-
   const { data: updated, error: updateError } = await service
     .from('meeting_broadcast_state')
     .update({
@@ -88,7 +86,22 @@ export async function setActiveLowerThird(
         : updateError.message,
     )
   }
-  if (updated?.active_lower_third_person_id !== personId) {
+  if (!updated) {
+    await ensureBroadcastState(service, boardMeetingId, operatorId)
+    const retry = await service
+      .from('meeting_broadcast_state')
+      .update({
+        active_lower_third_person_id: personId,
+        updated_at: new Date().toISOString(),
+        updated_by: operatorId,
+      })
+      .eq('board_meeting_id', boardMeetingId)
+      .select('id, active_lower_third_person_id')
+      .single()
+    if (retry.error || retry.data?.active_lower_third_person_id !== personId) {
+      throw new Error(retry.error?.message || 'Failed to save active lower third on broadcast state')
+    }
+  } else if (updated.active_lower_third_person_id !== personId) {
     throw new Error('Failed to save active lower third on broadcast state')
   }
 

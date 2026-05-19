@@ -130,7 +130,7 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             active={lower_third_active}
             people={bundle.lower_third_people || []}
             canControl={canControl}
-            onSet={(personId) => onAction('set-lower-third', { person_id: personId })}
+            onSet={(person) => onAction('set-lower-third', { person_id: person.id, person })}
             onClear={() => onAction('clear-lower-third')}
           />
 
