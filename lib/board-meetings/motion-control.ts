@@ -22,7 +22,7 @@ import type {
 
 const VOTE_RESULT_DEFAULT_SECONDS = 8
 
-/** One active vote per (motion, person); upsert without a prior select. */
+/** One active vote per (motion, person); update in place when already recorded. */
 async function upsertActiveMotionVote(
   service: SupabaseClient,
   motionId: string,
@@ -31,16 +31,29 @@ async function upsertActiveMotionVote(
   operatorId: string,
 ) {
   const now = new Date().toISOString()
-  const { error } = await service.from('meeting_motion_votes').upsert(
-    {
-      motion_id: motionId,
-      person_id: personId,
-      vote,
-      recorded_by: operatorId,
-      recorded_at: now,
-    },
-    { onConflict: 'motion_id,person_id' },
-  )
+  const { data: prev } = await service
+    .from('meeting_motion_votes')
+    .select('id')
+    .eq('motion_id', motionId)
+    .eq('person_id', personId)
+    .is('superseded_by_vote_id', null)
+    .maybeSingle()
+
+  if (prev) {
+    const { error } = await service
+      .from('meeting_motion_votes')
+      .update({ vote, recorded_by: operatorId, recorded_at: now })
+      .eq('id', prev.id)
+    if (error) throw new Error(error.message)
+    return
+  }
+
+  const { error } = await service.from('meeting_motion_votes').insert({
+    motion_id: motionId,
+    person_id: personId,
+    vote,
+    recorded_by: operatorId,
+  })
   if (error) throw new Error(error.message)
 }
 
@@ -487,17 +500,9 @@ export async function openVote(
       isEligibleToVote(r.status, at, r.arrived_at, r.left_at),
     )
     if (eligible.length > 0) {
-      const { error: seedError } = await service.from('meeting_motion_votes').upsert(
-        eligible.map(r => ({
-          motion_id: motionId,
-          person_id: r.person_id,
-          vote: 'yea' as const,
-          recorded_by: operatorId,
-          recorded_at: now,
-        })),
-        { onConflict: 'motion_id,person_id' },
+      await Promise.all(
+        eligible.map(r => upsertActiveMotionVote(service, motionId, r.person_id, 'yea', operatorId)),
       )
-      if (seedError) throw new Error(seedError.message)
     }
     await service
       .from('meeting_motions')
