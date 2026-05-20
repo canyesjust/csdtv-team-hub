@@ -3,6 +3,12 @@ import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
 import { normalizeAgendaType } from '@/lib/board-meetings/extraction'
+import {
+  buildLiveLockedAgendaPatch,
+  canEditAgendaWhileLocked,
+  liveLockedAgendaPatchHasChanges,
+} from '@/lib/board-meetings/agenda-live-edit'
+import { clearLockedAgendaCache } from '@/lib/board-meetings/control-meeting-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,14 +30,11 @@ export async function PATCH(
 
   const { data: bm } = await service
     .from('board_meetings')
-    .select('id, agenda_locked')
+    .select('id, agenda_locked, broadcast_status')
     .eq('production_id', production_id)
     .maybeSingle()
 
   if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
-  if (bm.agenda_locked) {
-    return NextResponse.json({ error: 'Agenda is locked' }, { status: 400 })
-  }
 
   const { data: item } = await service
     .from('board_meeting_agenda_items')
@@ -43,18 +46,33 @@ export async function PATCH(
   if (!item) return NextResponse.json({ error: 'Agenda item not found' }, { status: 404 })
 
   const body = await request.json()
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  let patch: Record<string, unknown>
 
-  const fields = [
-    'section_number', 'section_title', 'item_number', 'sort_order', 'title', 'original_title',
-    'type', 'action_requested', 'is_broadcastable', 'consent_block', 'notes', 'subitems',
-    'needs_review', 'review_notes',
-  ] as const
+  if (bm.agenda_locked) {
+    if (!canEditAgendaWhileLocked(bm.broadcast_status)) {
+      return NextResponse.json({ error: 'Agenda is locked' }, { status: 400 })
+    }
+    if (body.presenters !== undefined) {
+      return NextResponse.json({ error: 'Cannot edit presenters while the meeting is in progress' }, { status: 400 })
+    }
+    patch = buildLiveLockedAgendaPatch(body)
+    if (!liveLockedAgendaPatchHasChanges(patch)) {
+      return NextResponse.json({ error: 'No allowed fields to update' }, { status: 400 })
+    }
+    if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
+  } else {
+    patch = { updated_at: new Date().toISOString() }
+    const fields = [
+      'section_number', 'section_title', 'item_number', 'sort_order', 'title', 'original_title',
+      'type', 'action_requested', 'is_broadcastable', 'consent_block', 'notes', 'subitems',
+      'needs_review', 'review_notes',
+    ] as const
 
-  for (const f of fields) {
-    if (body[f] !== undefined) patch[f] = body[f]
+    for (const f of fields) {
+      if (body[f] !== undefined) patch[f] = body[f]
+    }
+    if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
   }
-  if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
 
   const { error } = await service
     .from('board_meeting_agenda_items')
@@ -63,7 +81,7 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  if (Array.isArray(body.presenters)) {
+  if (!bm.agenda_locked && Array.isArray(body.presenters)) {
     await service.from('board_meeting_presenters').delete().eq('agenda_item_id', item_id)
     const presenters = body.presenters as { name: string; title?: string | null }[]
     if (presenters.length > 0) {
@@ -78,6 +96,8 @@ export async function PATCH(
       )
     }
   }
+
+  if (bm.agenda_locked) clearLockedAgendaCache(bm.id)
 
   return NextResponse.json({ success: true })
 }

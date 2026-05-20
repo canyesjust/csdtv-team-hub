@@ -250,6 +250,67 @@
   color: var(--semantic-danger-text);
 }
 
+.cs-agenda-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 4px;
+  flex-shrink: 0;
+}
+
+.cs-agenda-edit-hint {
+  margin: 0 4px 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted, #6b7385);
+}
+
+.cs-agenda-item-edit {
+  cursor: default;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.cs-agenda-item-edit:hover {
+  background: var(--surface-1, #131b2e);
+}
+
+.cs-agenda-item-skipped {
+  opacity: 0.55;
+}
+
+.cs-agenda-edit-tools {
+  display: flex;
+  gap: 6px;
+}
+
+.cs-agenda-edit-title {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--surface-0, #0b1120);
+  color: var(--text-primary, #f8fafc);
+  font: inherit;
+  font-size: 13px;
+}
+
+.cs-agenda-edit-skip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #6b7385);
+  margin-top: 4px;
+}
+
+.cs-agenda-go-btn {
+  margin-top: 6px;
+  width: 100%;
+}
+
 .cs-onair {
   display: flex;
   flex-direction: column;

@@ -4,6 +4,7 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction, loadBoardMeetingBundle } from '@/lib/board-meetings/meeting-api'
 import { insertAgendaItemTree, updateAgendaItemFromExtracted } from '@/lib/board-meetings/persist-agenda'
 import type { ExtractedAgendaItem } from '@/lib/board-meetings/extraction'
+import { clearLockedAgendaCache } from '@/lib/board-meetings/control-meeting-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,6 +88,8 @@ export async function POST(
       .from('board_meetings')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', bmId)
+
+    clearLockedAgendaCache(bmId)
 
     return NextResponse.json({ success: true })
   } catch (e) {

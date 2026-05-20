@@ -9,7 +9,7 @@ import ControlSurfaceView from './ControlSurfaceView'
 import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
 import type { ControlLivePatch } from '@/lib/board-meetings/control-live-bundle'
 import { normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
-import type { ControlBundle, LowerThirdPerson, ResultOverlayState } from '@/lib/board-meetings/types'
+import type { ControlAgendaItem, ControlBundle, LowerThirdPerson, ResultOverlayState } from '@/lib/board-meetings/types'
 
 const MOTION_ACTIONS = new Set([
   'open',
@@ -83,9 +83,10 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   const [busy, setBusy] = useState(false)
   const utilitiesLoadedRef = useRef(!!initialBundle?.meeting_playlist)
   const stableWhenLockedRef = useRef<{
-    agenda_items: ControlBundle['agenda_items']
     lower_third_people: ControlBundle['lower_third_people']
   } | null>(null)
+  const [agendaEditMode, setAgendaEditMode] = useState(false)
+  const [agendaEditBusy, setAgendaEditBusy] = useState(false)
   const suppressRealtimeUntilRef = useRef(0)
   const liveFetchGenRef = useRef(0)
   const optimisticEpochRef = useRef(0)
@@ -106,7 +107,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       if (body.board_meeting.agenda_locked) {
         if (!stableWhenLockedRef.current) {
           stableWhenLockedRef.current = {
-            agenda_items: body.agenda_items,
             lower_third_people: body.lower_third_people,
           }
         }
@@ -114,8 +114,8 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         setBundle(prev =>
           preserveUtilities(prev, {
             ...body,
-            agenda_items: stable.agenda_items,
-            items: stable.agenda_items,
+            agenda_items: body.agenda_items,
+            items: body.agenda_items,
             lower_third_people: stable.lower_third_people,
           }),
         )
@@ -646,6 +646,116 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     }
   }
 
+  const loadAgendaForEdit = useCallback(async () => {
+    const res = await fetch(`/api/board-meetings/${productionId}`)
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || !Array.isArray(body.items)) {
+      toast((body as { error?: string }).error || 'Failed to load agenda for editing', 'error')
+      return
+    }
+    const agenda_items: ControlAgendaItem[] = body.items
+      .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
+      .map((it: ControlAgendaItem & { sort_order: number }) => ({
+        id: it.id,
+        sort_order: it.sort_order,
+        section_number: it.section_number,
+        section_title: it.section_title,
+        item_number: it.item_number,
+        title: it.title,
+        type: it.type,
+        action_requested: it.action_requested,
+        is_broadcastable: it.is_broadcastable,
+        consent_block: it.consent_block ?? null,
+      }))
+    setBundle(prev => (prev ? { ...prev, agenda_items, items: agenda_items } : prev))
+  }, [productionId])
+
+  const patchAgendaItem = useCallback(
+    async (itemId: string, patch: Partial<ControlAgendaItem>) => {
+      setBundle(prev => {
+        if (!prev) return prev
+        const agenda_items = prev.agenda_items.map(it =>
+          it.id === itemId ? { ...it, ...patch } : it,
+        )
+        return { ...prev, agenda_items, items: agenda_items }
+      })
+
+      setAgendaEditBusy(true)
+      try {
+        const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/${itemId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast((data as { error?: string }).error || 'Failed to update agenda item', 'error')
+          void load()
+        }
+      } finally {
+        setAgendaEditBusy(false)
+      }
+    },
+    [productionId, load],
+  )
+
+  const moveAgendaItem = useCallback(
+    async (itemId: string, direction: 'up' | 'down') => {
+      if (!bundle) return
+      const ordered = [...bundle.agenda_items].sort((a, b) => a.sort_order - b.sort_order)
+      const idx = ordered.findIndex(it => it.id === itemId)
+      if (idx < 0) return
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+      if (swapIdx < 0 || swapIdx >= ordered.length) return
+
+      const broadcastable = ordered.filter(it => it.is_broadcastable)
+      const bIdx = broadcastable.findIndex(it => it.id === itemId)
+      if (bIdx < 0) return
+      const bSwapIdx = direction === 'up' ? bIdx - 1 : bIdx + 1
+      if (bSwapIdx < 0 || bSwapIdx >= broadcastable.length) return
+
+      const nextBroadcastable = [...broadcastable]
+      ;[nextBroadcastable[bIdx], nextBroadcastable[bSwapIdx]] = [
+        nextBroadcastable[bSwapIdx],
+        nextBroadcastable[bIdx],
+      ]
+
+      const broadcastableIdOrder = new Map(nextBroadcastable.map((it, i) => [it.id, i]))
+      const renumbered = [...ordered]
+        .sort((a, b) => {
+          const aB = broadcastableIdOrder.get(a.id)
+          const bB = broadcastableIdOrder.get(b.id)
+          if (aB != null && bB != null) return aB - bB
+          return a.sort_order - b.sort_order
+        })
+        .map((it, i) => ({ ...it, sort_order: i }))
+
+      setBundle(prev =>
+        prev ? { ...prev, agenda_items: renumbered, items: renumbered } : prev,
+      )
+
+      setAgendaEditBusy(true)
+      try {
+        const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ordered_ids: nextBroadcastable.map(it => it.id),
+            broadcastable_only: true,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast((data as { error?: string }).error || 'Failed to reorder agenda', 'error')
+          void load()
+        }
+      } finally {
+        setAgendaEditBusy(false)
+      }
+    },
+    [bundle, productionId, load],
+  )
+
   const viewBundle = useMemo(
     () => (bundle ? { ...bundle, result_overlay: resultOverlay } : null),
     [bundle, resultOverlay],
@@ -671,6 +781,18 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       busy={busy}
       canControl={canControl}
       onAction={onAction}
+      agendaEditMode={agendaEditMode}
+      agendaEditBusy={agendaEditBusy}
+      onToggleAgendaEdit={() => {
+        setAgendaEditMode(v => {
+          const next = !v
+          if (next) void loadAgendaForEdit()
+          else void load()
+          return next
+        })
+      }}
+      onPatchAgendaItem={patchAgendaItem}
+      onMoveAgendaItem={moveAgendaItem}
     />
   )
 }

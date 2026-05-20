@@ -21,9 +21,25 @@ type Props = {
   canControl: boolean
   onAction: (action: string, body?: unknown) => Promise<void>
   busy: boolean
+  agendaEditMode?: boolean
+  agendaEditBusy?: boolean
+  onToggleAgendaEdit?: () => void
+  onPatchAgendaItem?: (itemId: string, patch: Partial<ControlBundle['agenda_items'][number]>) => void | Promise<void>
+  onMoveAgendaItem?: (itemId: string, direction: 'up' | 'down') => void | Promise<void>
 }
 
-export default function ControlSurfaceView({ productionId, bundle, canControl, onAction, busy }: Props) {
+export default function ControlSurfaceView({
+  productionId,
+  bundle,
+  canControl,
+  onAction,
+  busy,
+  agendaEditMode = false,
+  agendaEditBusy = false,
+  onToggleAgendaEdit,
+  onPatchAgendaItem,
+  onMoveAgendaItem,
+}: Props) {
   const { meeting, broadcast_state, agenda_items, motion_lifecycle, lower_third_active, result_overlay } = bundle
   const meetingTitle = meeting?.title || 'Board Meeting'
   const status = broadcast_state?.status || 'draft'
@@ -82,14 +98,35 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
 
       <div className="cs-main">
         <div className="cs-agenda">
-          <div className="cs-eyebrow" style={{ paddingLeft: 4 }}>AGENDA</div>
+          <div className="cs-agenda-header">
+            <div className="cs-eyebrow" style={{ paddingLeft: 4 }}>AGENDA</div>
+            {canControl && onToggleAgendaEdit ? (
+              <button
+                type="button"
+                className={`cs-touchbtn cs-touchbtn-small${agendaEditMode ? ' cs-touchbtn-primary' : ''}`}
+                onClick={onToggleAgendaEdit}
+                disabled={agendaEditBusy}
+              >
+                {agendaEditMode ? 'Done editing' : 'Edit agenda'}
+              </button>
+            ) : null}
+          </div>
+          {agendaEditMode ? (
+            <p className="cs-agenda-edit-hint">
+              Fix titles, reorder with arrows, or uncheck On air to skip an item. Use branding hold before large changes.
+            </p>
+          ) : null}
           <AgendaPanel
             items={agenda_items}
             currentItemId={broadcast_state?.current_agenda_item_id}
             brandingHold={!!broadcast_state?.agenda_branding_hold}
             disabled={!canControl}
+            editMode={agendaEditMode}
+            agendaEditBusy={agendaEditBusy}
             onJump={(itemId) => onAction('jump-to', { agenda_item_id: itemId })}
             onBrandingHold={() => onAction('show-agenda-branding')}
+            onPatchItem={onPatchAgendaItem}
+            onMoveItem={onMoveAgendaItem}
           />
         </div>
 

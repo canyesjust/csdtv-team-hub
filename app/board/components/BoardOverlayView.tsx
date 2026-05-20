@@ -100,6 +100,12 @@ export default function BoardOverlayView({
   }
 
   const b = state.state
+
+  /** Overlay off = fully transparent output for OBS (no graphics of any kind). */
+  if (b?.overlay_visible === false) {
+    return null
+  }
+
   const item = state.current_item
   const mode = b?.mode || 'normal'
   const voteResult = b?.active_vote_result
