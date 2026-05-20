@@ -3,7 +3,6 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { loadAttendance } from '@/lib/board-meetings/attendance-control'
 import { resolveBoardMeetingRouteContext } from '@/lib/board-meetings/meeting-api'
 import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting-cache'
-import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
 import {
   cancelMotionThread,
   confirmOpenDiscussion,
@@ -19,21 +18,19 @@ import {
   withdrawMotion,
 } from '@/lib/board-meetings/motion-control'
 import type {
-  ActiveMotion,
   AgendaItem,
   MotionScreenBundle,
   VoteRecord,
   VotingMember,
 } from '@/lib/board-meetings/motion-types'
 import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
+import { pickActiveMotions } from '@/lib/board-meetings/motion-active-pick'
 
 export type MotionActionContext = {
   service: SupabaseClient
   boardMeetingId: string
   teamUserId: string
 }
-
-const CLOSED_MOTION_STATUSES = new Set(['withdrawn', 'tabled', 'superseded', 'replaced'])
 
 function initials(name: string): string {
   return (name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase()
@@ -60,59 +57,6 @@ function suggestedTextForItem(item: AgendaItem | null): string {
   return `Move to approve ${title}`
 }
 
-function isMotionDrafting(m: EnrichedMotion): boolean {
-  return m.status === 'open_for_discussion' && (!m.moved_by_person_id || !m.seconded_by_person_id)
-}
-
-function isSubstituteInPlay(m: EnrichedMotion): boolean {
-  return (
-    m.motion_type === 'substitute' &&
-    (isMotionDrafting(m) || m.status === 'open_for_discussion' || m.status === 'voting')
-  )
-}
-
-function toActiveMotion(m: EnrichedMotion): ActiveMotion {
-  const motionType: ActiveMotion['motion_type'] =
-    m.motion_type === 'substitute' || m.motion_type === 'amendment' ? m.motion_type : 'main'
-  const status = isMotionDrafting(m) ? 'drafting' : m.status
-  return {
-    id: m.id,
-    motion_type: motionType,
-    text: m.motion_text,
-    agenda_item_id: m.agenda_item_id,
-    mover_id: m.moved_by_person_id,
-    mover_name: m.moved_by?.display_name ?? null,
-    seconder_id: m.seconded_by_person_id,
-    seconder_name: m.seconded_by?.display_name ?? null,
-    vote_type: (m.vote_mode || 'voice') as 'voice' | 'roll_call',
-    status,
-    parent_motion_id: m.parent_motion_id,
-    created_at: m.opened_at,
-  }
-}
-
-function pickActiveMotions(motions: EnrichedMotion[]): {
-  active: ActiveMotion | null
-  parent: ActiveMotion | null
-} {
-  const openMotions = motions
-    .filter(m => !CLOSED_MOTION_STATUSES.has(m.status))
-    .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
-
-  const substitute = openMotions.find(isSubstituteInPlay)
-  const activeRow = substitute ?? openMotions[0]
-  if (!activeRow) return { active: null, parent: null }
-
-  const parentRow = substitute?.parent_motion_id
-    ? motions.find(m => m.id === substitute.parent_motion_id) ?? null
-    : null
-
-  return {
-    active: toActiveMotion(activeRow),
-    parent: parentRow ? toActiveMotion(parentRow) : null,
-  }
-}
-
 /**
  * Loads the full bundle the motion screen needs (uses real schema via motion-control).
  */
@@ -128,10 +72,10 @@ export async function loadMotionScreenBundle(
   const [{ data: state }, motions, people, attendance] = await Promise.all([
     service
       .from('meeting_broadcast_state')
-      .select('current_agenda_item_id, elapsed_started_at')
+      .select('current_agenda_item_id, elapsed_started_at, active_motion_id')
       .eq('board_meeting_id', meetingId)
       .maybeSingle(),
-    listMotionsEnriched(service, meetingId),
+    listMotionsEnriched(service, meetingId, { openOnly: true }),
     getCachedBoardMemberPeople(service),
     loadAttendance(service, meetingId),
   ])
@@ -148,8 +92,7 @@ export async function loadMotionScreenBundle(
     }
   }
 
-  const { active, parent } = pickActiveMotions(motions)
-  const activeRow = active ? motions.find(m => m.id === active.id) : null
+  const { active, parent, activeRow } = pickActiveMotions(motions, state?.active_motion_id)
 
   const voting_members: VotingMember[] = (people || [])
     .filter(p => p.category === 'board_member')

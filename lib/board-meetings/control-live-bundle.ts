@@ -8,6 +8,7 @@ import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting
 import { normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import type { ControlBundle, MotionLifecycleState, ResultOverlayState } from '@/lib/board-meetings/types'
 import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
+import { isMotionDrafting, pickActiveMotions } from '@/lib/board-meetings/motion-active-pick'
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 
@@ -25,38 +26,20 @@ export type ControlLivePatch = Pick<
   | 'channel_assignments'
 >
 
-const CLOSED_MOTION_STATUSES = new Set(['withdrawn', 'tabled', 'superseded', 'replaced'])
-
-function isMotionDrafting(m: EnrichedMotion): boolean {
-  return m.status === 'open_for_discussion' && (!m.moved_by_person_id || !m.seconded_by_person_id)
-}
-
-function isSubstituteInPlay(m: EnrichedMotion): boolean {
-  return (
-    m.motion_type === 'substitute' &&
-    (isMotionDrafting(m) || m.status === 'open_for_discussion' || m.status === 'voting')
-  )
-}
-
 function buildMotionLifecycle(
   state: Record<string, unknown> | null,
   motions: EnrichedMotion[],
 ): MotionLifecycleState {
-  const openMotions = motions
-    .filter(m => !CLOSED_MOTION_STATUSES.has(m.status))
-    .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
+  const { active, parent, activeRow } = pickActiveMotions(
+    motions,
+    (state?.active_motion_id as string | null | undefined) ?? null,
+  )
 
-  const substitute = openMotions.find(isSubstituteInPlay)
-  const activeRow = substitute ?? openMotions[0]
-
-  if (!activeRow) {
+  if (!activeRow || !active) {
     return { state: 'no_motion', active_motion: null, parent_motion: null, recorded_votes_count: 0 }
   }
 
   const overlayActive = !!state && isVoteResultActive(state as Parameters<typeof isVoteResultActive>[0])
-  const parentRow = substitute?.parent_motion_id
-    ? motions.find(m => m.id === substitute.parent_motion_id) ?? null
-    : null
 
   const mapState = (): MotionLifecycleState['state'] => {
     const resultMotionId = state?.active_vote_result_motion_id as string | undefined
@@ -70,42 +53,8 @@ function buildMotionLifecycle(
 
   return {
     state: mapState(),
-    active_motion: {
-      id: activeRow.id,
-      motion_type:
-        activeRow.motion_type === 'substitute' || activeRow.motion_type === 'amendment'
-          ? activeRow.motion_type
-          : 'main',
-      text: activeRow.motion_text,
-      agenda_item_id: activeRow.agenda_item_id,
-      mover_id: activeRow.moved_by_person_id,
-      mover_name: activeRow.moved_by?.display_name ?? null,
-      seconder_id: activeRow.seconded_by_person_id,
-      seconder_name: activeRow.seconded_by?.display_name ?? null,
-      vote_type: (activeRow.vote_mode || 'voice') as 'voice' | 'roll_call',
-      status: activeRow.status,
-      parent_motion_id: activeRow.parent_motion_id,
-      created_at: activeRow.opened_at,
-    },
-    parent_motion: parentRow
-      ? {
-          id: parentRow.id,
-          motion_type:
-            parentRow.motion_type === 'substitute' || parentRow.motion_type === 'amendment'
-              ? parentRow.motion_type
-              : 'main',
-          text: parentRow.motion_text,
-          agenda_item_id: parentRow.agenda_item_id,
-          mover_id: parentRow.moved_by_person_id,
-          mover_name: parentRow.moved_by?.display_name ?? null,
-          seconder_id: parentRow.seconded_by_person_id,
-          seconder_name: parentRow.seconded_by?.display_name ?? null,
-          vote_type: (parentRow.vote_mode || 'voice') as 'voice' | 'roll_call',
-          status: parentRow.status,
-          parent_motion_id: parentRow.parent_motion_id,
-          created_at: parentRow.opened_at,
-        }
-      : null,
+    active_motion: active,
+    parent_motion: parent,
     recorded_votes_count: activeRow.votes?.length ?? 0,
   }
 }

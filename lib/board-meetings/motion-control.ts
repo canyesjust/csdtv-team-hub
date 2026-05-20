@@ -20,6 +20,41 @@ import type {
 
 const VOTE_RESULT_DEFAULT_SECONDS = 8
 
+/** One active vote per (motion, person); update in place when already recorded. */
+async function upsertActiveMotionVote(
+  service: SupabaseClient,
+  motionId: string,
+  personId: string,
+  vote: VoteValue,
+  operatorId: string,
+) {
+  const now = new Date().toISOString()
+  const { data: prev } = await service
+    .from('meeting_motion_votes')
+    .select('id')
+    .eq('motion_id', motionId)
+    .eq('person_id', personId)
+    .is('superseded_by_vote_id', null)
+    .maybeSingle()
+
+  if (prev) {
+    const { error } = await service
+      .from('meeting_motion_votes')
+      .update({ vote, recorded_by: operatorId, recorded_at: now })
+      .eq('id', prev.id)
+    if (error) throw new Error(error.message)
+    return
+  }
+
+  const { error } = await service.from('meeting_motion_votes').insert({
+    motion_id: motionId,
+    person_id: personId,
+    vote,
+    recorded_by: operatorId,
+  })
+  if (error) throw new Error(error.message)
+}
+
 export function computeTally(votes: { vote: VoteValue }[]): VoteTally {
   const tally: VoteTally = { yea: 0, nay: 0, abstain: 0, absent: 0, recused: 0 }
   for (const v of votes) {
@@ -328,6 +363,8 @@ export async function openVote(
     throw new Error('Select mover and seconder before opening the vote')
   }
 
+  await ensureDefaultAttendance(service, boardMeetingId)
+
   const now = new Date().toISOString()
   await service
     .from('meeting_motions')
@@ -339,20 +376,7 @@ export async function openVote(
     const at = new Date()
     for (const record of attendance.records) {
       if (!isEligibleToVote(record.status, at, record.arrived_at, record.left_at)) continue
-      const { data: existing } = await service
-        .from('meeting_motion_votes')
-        .select('id')
-        .eq('motion_id', motionId)
-        .eq('person_id', record.person_id)
-        .is('superseded_by_vote_id', null)
-        .maybeSingle()
-      if (existing) continue
-      await service.from('meeting_motion_votes').insert({
-        motion_id: motionId,
-        person_id: record.person_id,
-        vote: 'yea',
-        recorded_by: operatorId,
-      })
+      await upsertActiveMotionVote(service, motionId, record.person_id, 'yea', operatorId)
     }
     const { data: activeVotes } = await service
       .from('meeting_motion_votes')
@@ -433,32 +457,7 @@ export async function recordMotionVote(
       .eq('id', motionId)
   }
 
-  const { data: prev } = await service
-    .from('meeting_motion_votes')
-    .select('id')
-    .eq('motion_id', motionId)
-    .eq('person_id', personId)
-    .is('superseded_by_vote_id', null)
-    .maybeSingle()
-
-  const { data: inserted, error } = await service
-    .from('meeting_motion_votes')
-    .insert({
-      motion_id: motionId,
-      person_id: personId,
-      vote,
-      recorded_by: operatorId,
-    })
-    .select('id')
-    .single()
-  if (error || !inserted) throw new Error(error?.message || 'Failed to record vote')
-
-  if (prev) {
-    await service
-      .from('meeting_motion_votes')
-      .update({ superseded_by_vote_id: inserted.id })
-      .eq('id', prev.id)
-  }
+  await upsertActiveMotionVote(service, motionId, personId, vote, operatorId)
 
   const { data: activeVotes } = await service
     .from('meeting_motion_votes')
@@ -626,33 +625,7 @@ export async function recordVotes(
     const previousIds = (oldVotes || []).map(v => v.id)
 
     for (const v of normalizedVotes) {
-      const { data: inserted, error } = await service
-        .from('meeting_motion_votes')
-        .insert({
-          motion_id: motionId,
-          person_id: v.person_id,
-          vote: v.vote,
-          recorded_by: operatorId,
-        })
-        .select('id')
-        .single()
-      if (error || !inserted) throw new Error(error?.message || 'Failed to record vote')
-
-      const { data: prev } = await service
-        .from('meeting_motion_votes')
-        .select('id')
-        .eq('motion_id', motionId)
-        .eq('person_id', v.person_id)
-        .is('superseded_by_vote_id', null)
-        .neq('id', inserted.id)
-        .maybeSingle()
-
-      if (prev) {
-        await service
-          .from('meeting_motion_votes')
-          .update({ superseded_by_vote_id: inserted.id })
-          .eq('id', prev.id)
-      }
+      await upsertActiveMotionVote(service, motionId, v.person_id, v.vote, operatorId)
     }
 
     await logMeetingEvent(service, boardMeetingId, 'vote_re_recorded', operatorId, {
@@ -661,13 +634,7 @@ export async function recordVotes(
     })
   } else {
     for (const v of normalizedVotes) {
-      const { error } = await service.from('meeting_motion_votes').insert({
-        motion_id: motionId,
-        person_id: v.person_id,
-        vote: v.vote,
-        recorded_by: operatorId,
-      })
-      if (error) throw new Error(error.message)
+      await upsertActiveMotionVote(service, motionId, v.person_id, v.vote, operatorId)
     }
   }
 

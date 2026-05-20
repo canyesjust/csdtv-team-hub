@@ -6,6 +6,17 @@ import { createBrowserClient } from '@supabase/ssr'
 import MotionScreenView from './MotionScreenView'
 import type { MotionScreenBundle } from '@/lib/board-meetings/motion-types'
 
+async function readApiError(res: Response): Promise<string> {
+  const txt = await res.text()
+  try {
+    const parsed = JSON.parse(txt) as { error?: string }
+    if (parsed.error) return parsed.error
+  } catch {
+    // not JSON
+  }
+  return txt || `Request failed (${res.status})`
+}
+
 type Props = {
   productionId: string
   initialBundle: MotionScreenBundle
@@ -80,10 +91,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
         headers: { 'Content-Type': 'application/json' },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       })
-      if (!res.ok) {
-        const txt = await res.text()
-        throw new Error(txt || `Action failed (${res.status})`)
-      }
+      if (!res.ok) throw new Error(await readApiError(res))
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Action failed')
@@ -103,7 +111,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     setError(null)
     try {
       const res = await fetch(`/api/board-meetings/${productionId}/motion/${motionId}/push-result`, { method: 'POST' })
-      if (!res.ok) throw new Error(await res.text() || 'Push failed')
+      if (!res.ok) throw new Error(await readApiError(res))
       router.push(`/control/${productionId}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Push failed')

@@ -204,37 +204,7 @@ export async function buildControlSurfaceBundle(
 /** Full utilities payload for background hydration after slim SSR. */
 export { loadControlUtilities }
 
-const CLOSED_MOTION_STATUSES = new Set(['withdrawn', 'tabled', 'superseded', 'replaced'])
-
-function isMotionDrafting(m: EnrichedMotion): boolean {
-  return m.status === 'open_for_discussion' && (!m.moved_by_person_id || !m.seconded_by_person_id)
-}
-
-function isSubstituteInPlay(m: EnrichedMotion): boolean {
-  return (
-    m.motion_type === 'substitute' &&
-    (isMotionDrafting(m) || m.status === 'open_for_discussion' || m.status === 'voting')
-  )
-}
-
-function toActiveMotion(m: EnrichedMotion): ActiveMotion {
-  const motionType: ActiveMotion['motion_type'] =
-    m.motion_type === 'substitute' || m.motion_type === 'amendment' ? m.motion_type : 'main'
-  return {
-    id: m.id,
-    motion_type: motionType,
-    text: m.motion_text,
-    agenda_item_id: m.agenda_item_id,
-    mover_id: m.moved_by_person_id,
-    mover_name: m.moved_by?.display_name ?? null,
-    seconder_id: m.seconded_by_person_id,
-    seconder_name: m.seconded_by?.display_name ?? null,
-    vote_type: (m.vote_mode || 'voice') as 'voice' | 'roll_call',
-    status: m.status,
-    parent_motion_id: m.parent_motion_id,
-    created_at: m.opened_at,
-  }
-}
+import { isMotionDrafting, pickActiveMotions } from '@/lib/board-meetings/motion-active-pick'
 
 function mapLifecycleState(
   motion: EnrichedMotion,
@@ -254,26 +224,21 @@ function buildMotionLifecycle(
   state: Record<string, unknown> | null,
   motions: EnrichedMotion[],
 ): MotionLifecycleState {
-  const openMotions = motions
-    .filter(m => !CLOSED_MOTION_STATUSES.has(m.status))
-    .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
+  const { active, parent, activeRow } = pickActiveMotions(
+    motions,
+    (state?.active_motion_id as string | null | undefined) ?? null,
+  )
 
-  const substitute = openMotions.find(isSubstituteInPlay)
-  const activeRow = substitute ?? openMotions[0]
-
-  if (!activeRow) {
+  if (!activeRow || !active) {
     return { state: 'no_motion', active_motion: null, parent_motion: null, recorded_votes_count: 0 }
   }
 
   const overlayActive = !!state && isVoteResultActive(state as Parameters<typeof isVoteResultActive>[0])
-  const parentRow = substitute?.parent_motion_id
-    ? motions.find(m => m.id === substitute.parent_motion_id) ?? null
-    : null
 
   return {
     state: mapLifecycleState(activeRow, state, overlayActive),
-    active_motion: toActiveMotion(activeRow),
-    parent_motion: parentRow ? toActiveMotion(parentRow) : null,
+    active_motion: active,
+    parent_motion: parent,
     recorded_votes_count: activeRow.votes?.length ?? 0,
   }
 }

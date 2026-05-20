@@ -20,10 +20,6 @@ export default function MotionScreenView(props: Props) {
   const active = bundle.active_motion
   const parent = bundle.parent_motion
 
-  if (active?.motion_type === 'substitute' && parent) {
-    return <SubstituteVotingState {...props} active={active} parent={parent} />
-  }
-
   if (!active) {
     return <DraftingState {...props} active={null} />
   }
@@ -32,10 +28,18 @@ export default function MotionScreenView(props: Props) {
     return <DraftingState {...props} active={active} />
   }
 
+  if (active.status === 'open_for_discussion') {
+    return <OpenForDiscussionState {...props} active={active} />
+  }
+
+  if (active?.motion_type === 'substitute' && parent) {
+    return <SubstituteVotingState {...props} active={active} parent={parent} />
+  }
+
   switch (active.status) {
-    case 'open_for_discussion':
-      return <OpenForDiscussionState {...props} active={active} />
     case 'voting':
+    case 'passed':
+    case 'failed':
       return <VotingState {...props} active={active} />
     default:
       return <DraftingState {...props} active={active} />
