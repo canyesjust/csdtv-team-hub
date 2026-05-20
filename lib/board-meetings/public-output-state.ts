@@ -256,11 +256,12 @@ export async function buildPublicChannelState(
   const currentIdx = bstate?.current_agenda_item_id
     ? items.findIndex(i => i.id === bstate.current_agenda_item_id)
     : -1
+  const currentRow = agendaNav.current_item
   const completedSource =
     currentIdx >= 0
       ? items.slice(0, currentIdx)
-      : agendaNav.current_item
-        ? items.filter(i => i.sort_order < agendaNav.current_item.sort_order)
+      : currentRow
+        ? items.filter(i => i.sort_order < currentRow.sort_order)
         : []
 
   const { data: events } = await service
