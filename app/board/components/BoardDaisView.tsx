@@ -8,6 +8,7 @@ import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-mee
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
+import { AgendaContextStrip, motionDisplayText } from '@/app/board/components/MotionFloorGraphics'
 
 const LS_KEY = 'board-dais-person'
 
@@ -201,25 +202,32 @@ export default function BoardDaisView({
             ) : item ? (
               <div style={nowBlock}>
                 <p style={nowLabel}>Now</p>
-                <div style={itemBadgeRow}>
-                  <span style={itemBadge}>{item.item_number}</span>
-                  {item.type && <span style={typePill}>{item.type.replace('_', ' ')}</span>}
-                </div>
-                <h1 style={itemTitle}>{item.title}</h1>
-                {item.presenters?.[0] && (
-                  <p style={presenterLine}>
-                    <span style={presenterName}>{item.presenters[0].name}</span>
-                    {item.presenters[0].title && (
-                      <span style={presenterTitle}> · {item.presenters[0].title}</span>
+                {motion || (voteResult && (voteResult.remaining_seconds ?? 0) > 0) ? (
+                  <>
+                    <AgendaContextStrip item={item} variant="dais" />
+                    {voteResult && (voteResult.remaining_seconds ?? 0) > 0 ? (
+                      <VoteResultCard result={voteResult} />
+                    ) : motion ? (
+                      <DaisMotionPanel motion={motion} hero />
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <div style={itemBadgeRow}>
+                      <span style={itemBadge}>{item.item_number}</span>
+                      {item.type && <span style={typePill}>{item.type.replace('_', ' ')}</span>}
+                    </div>
+                    <h1 style={itemTitle}>{item.title}</h1>
+                    {item.presenters?.[0] && (
+                      <p style={presenterLine}>
+                        <span style={presenterName}>{item.presenters[0].name}</span>
+                        {item.presenters[0].title && (
+                          <span style={presenterTitle}> · {item.presenters[0].title}</span>
+                        )}
+                      </p>
                     )}
-                  </p>
+                  </>
                 )}
-
-                {voteResult && (voteResult.remaining_seconds ?? 0) > 0 ? (
-                  <VoteResultCard result={voteResult} />
-                ) : motion ? (
-                  <DaisMotionPanel motion={motion} />
-                ) : null}
 
                 {(item.documents?.length ?? 0) > 0 && (
                   <div style={docList}>
@@ -396,10 +404,12 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
   )
 }
 
-function DaisMotionPanel({ motion }: { motion: PublicActiveMotion }) {
+function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion; hero?: boolean }) {
   const isVoting = motion.status === 'voting'
   const hasMover = !!motion.moved_by_name
   const hasSeconder = !!motion.seconded_by_name
+  const text = motionDisplayText(motion, hero ? 480 : 320)
+  const textStyle = hero ? motionTextHero : motionText
 
   if (isVoting) {
     return (
@@ -408,8 +418,17 @@ function DaisMotionPanel({ motion }: { motion: PublicActiveMotion }) {
         accent={C.blue}
         glow={C.blueGlow}
         pulse
+        hero={hero}
       >
-        <p style={motionText}>{motion.motion_text}</p>
+        {text ? <p style={textStyle}>{text}</p> : null}
+        {motion.tally && (motion.tally.yea > 0 || motion.tally.nay > 0) ? (
+          <p style={voteTallyLine}>
+            <span style={{ color: C.green }}>Yea {motion.tally.yea}</span>
+            {' · '}
+            <span style={{ color: C.red }}>Nay {motion.tally.nay}</span>
+            {motion.tally.abstain > 0 ? ` · Abstain ${motion.tally.abstain}` : ''}
+          </p>
+        ) : null}
         {hasMover && hasSeconder && (
           <p style={motionMeta}>
             <span style={metaHighlight}>{motion.moved_by_name}</span>
@@ -431,8 +450,8 @@ function DaisMotionPanel({ motion }: { motion: PublicActiveMotion }) {
 
   if (!hasSeconder) {
     return (
-      <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow}>
-        <p style={motionText}>{motion.motion_text}</p>
+      <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow} hero={hero}>
+        {text ? <p style={textStyle}>{text}</p> : null}
         <p style={motionMeta}>
           <span style={metaDim}>Moved by </span>
           <span style={metaHighlight}>{motion.moved_by_name}</span>
@@ -443,8 +462,8 @@ function DaisMotionPanel({ motion }: { motion: PublicActiveMotion }) {
   }
 
   return (
-    <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow}>
-      <p style={motionText}>{motion.motion_text}</p>
+    <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow} hero={hero}>
+      {text ? <p style={textStyle}>{text}</p> : null}
       <p style={motionMeta}>
         <span style={metaHighlight}>{motion.moved_by_name}</span>
         <span style={metaDim}> · seconded by </span>
@@ -461,6 +480,7 @@ function MotionCard({
   children,
   pulse,
   shimmer,
+  hero,
 }: {
   label: string
   accent: string
@@ -468,12 +488,13 @@ function MotionCard({
   children: React.ReactNode
   pulse?: boolean
   shimmer?: boolean
+  hero?: boolean
 }) {
   return (
     <div
       style={{
-        marginTop: '28px',
-        padding: '26px 28px',
+        marginTop: hero ? '8px' : '28px',
+        padding: hero ? '30px 32px' : '26px 28px',
         borderRadius: '18px',
         position: 'relative',
         overflow: 'hidden',
@@ -897,6 +918,20 @@ const motionText: React.CSSProperties = {
   lineHeight: 1.4,
   color: C.text,
   fontWeight: 500,
+}
+const motionTextHero: React.CSSProperties = {
+  margin: '0 0 14px',
+  fontSize: 'clamp(28px, 3.2vw, 40px)',
+  lineHeight: 1.28,
+  color: C.text,
+  fontWeight: 600,
+  letterSpacing: '-0.02em',
+}
+const voteTallyLine: React.CSSProperties = {
+  margin: '0 0 12px',
+  fontSize: '16px',
+  fontWeight: 600,
+  fontVariantNumeric: 'tabular-nums',
 }
 const formingText: React.CSSProperties = {
   margin: 0,

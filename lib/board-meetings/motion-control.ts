@@ -935,6 +935,14 @@ export async function buildPublicMotionPayload(
     }
   }
 
+  const tally: VoteTally = {
+    yea: motion.tally_yea ?? 0,
+    nay: motion.tally_nay ?? 0,
+    abstain: motion.tally_abstain ?? 0,
+    absent: motion.tally_absent ?? 0,
+    recused: motion.tally_recused ?? 0,
+  }
+
   return {
     id: motion.id,
     motion_text: motion.motion_text,
@@ -945,6 +953,7 @@ export async function buildPublicMotionPayload(
     is_consent_block: !!motion.consent_block,
     consent_block_label: consentBlockLabel,
     parent_motion_text: parentText,
+    tally: motion.status === 'voting' ? tally : undefined,
   }
 }
 

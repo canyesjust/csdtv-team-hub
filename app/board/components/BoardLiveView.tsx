@@ -35,7 +35,9 @@ function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
         <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: isVoting ? '#1d4ed8' : '#92400e' }}>
           {label}
         </p>
-        {hasMover && <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{motion.motion_text}</p>}
+        {motion.motion_text?.trim() ? (
+          <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{motion.motion_text}</p>
+        ) : null}
         {hasMover && hasSeconder && (
           <p style={{ margin: 0, fontSize: '13px', color: '#78716c' }}>
             {motion.moved_by_name} · seconded by {motion.seconded_by_name}

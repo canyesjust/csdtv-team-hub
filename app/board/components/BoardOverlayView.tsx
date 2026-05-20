@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
-import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
+import type { PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
@@ -15,6 +15,7 @@ import {
   OVERLAY_TEXT_PRIMARY,
   OVERLAY_TEXT_SUBTLE,
 } from '@/app/board/overlay-graphics'
+import { OverlayMotionCard, OverlayVoteSidePanel } from '@/app/board/components/MotionFloorGraphics'
 
 function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {
   return (
@@ -107,6 +108,7 @@ export default function BoardOverlayView({
     !!voteResult &&
     (!!voteResult.held || !!state.result_overlay?.held || (voteResult.remaining_seconds ?? 0) > 0)
   const showMotion = !showVoteResult && !!activeMotion
+  const motionIsVoting = showMotion && activeMotion?.status === 'voting'
   const brandingHold = !!(state.agenda_branding_hold || b?.agenda_branding_hold)
   const showItem =
     b?.overlay_visible && mode === 'normal' && item && !showVoteResult && !showMotion && !brandingHold
@@ -178,10 +180,15 @@ export default function BoardOverlayView({
 
   return (
     <>
-      {(showVoteResult || showMotion || showItem) ? (
+      {motionIsVoting && activeMotion ? (
+        <OverlayVoteSidePanel motion={activeMotion} item={item} />
+      ) : null}
+      {(showVoteResult || (showMotion && !motionIsVoting) || showItem) ? (
         <div style={stackAnchor}>
           {showVoteResult && voteResult ? <VoteResultCard result={voteResult} /> : null}
-          {showMotion && activeMotion ? <MotionCard motion={activeMotion} /> : null}
+          {showMotion && activeMotion && !motionIsVoting ? (
+            <OverlayMotionCard motion={activeMotion} item={item} />
+          ) : null}
           {showItem && item ? (
             <div
               className="obs-overlay-graphic"
@@ -206,46 +213,6 @@ export default function BoardOverlayView({
         <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
       ) : null}
     </>
-  )
-}
-
-function MotionCard({ motion }: { motion: PublicActiveMotion }) {
-  const isVoting = motion.status === 'voting'
-  const hasMover = !!motion.moved_by_name
-  const hasSeconder = !!motion.seconded_by_name
-  const text = motion.motion_text.length > 200 ? `${motion.motion_text.slice(0, 200)}…` : motion.motion_text
-  const label = isVoting
-    ? 'Voting open'
-    : !hasMover
-      ? 'Motion being made'
-      : motion.motion_type === 'substitute'
-        ? 'Substitute motion'
-        : 'Motion on floor'
-
-  return (
-    <div
-      className="obs-overlay-graphic"
-      style={overlayPanelStyle({
-        borderLeft: `4px solid ${isVoting ? '#60a5fa' : '#f59e0b'}`,
-        padding: '16px 20px',
-        borderRadius: '4px',
-        color: OVERLAY_TEXT_PRIMARY,
-      })}
-    >
-      <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: isVoting ? '#93c5fd' : '#fbbf24' }}>
-        {label}
-        {motion.is_consent_block && motion.consent_block_label ? ` · ${motion.consent_block_label}` : ''}
-      </p>
-      {hasMover && <p style={{ margin: '0 0 10px', fontSize: '20px', fontWeight: 600, lineHeight: 1.35 }}>{text}</p>}
-      {hasMover && hasSeconder && (
-        <p style={{ margin: 0, fontSize: '14px', color: '#94a3b8' }}>
-          {motion.moved_by_name}, seconded by {motion.seconded_by_name}
-        </p>
-      )}
-      {hasMover && !hasSeconder && (
-        <p style={{ margin: 0, fontSize: '14px', color: '#94a3b8' }}>Moved by {motion.moved_by_name}</p>
-      )}
-    </div>
   )
 }
 
