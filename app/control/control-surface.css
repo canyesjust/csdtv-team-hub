@@ -313,6 +313,48 @@
   font-size: 14px;
 }
 
+.cs-transport {
+  padding: 10px 12px;
+}
+
+.cs-transport-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  flex-wrap: wrap;
+}
+
+.cs-transport-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.cs-transport-clock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.cs-transport-elapsed {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  min-width: 4.5ch;
+  color: var(--text-primary, #f8fafc);
+}
+
+.cs-transport-clock-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .cs-utilities {
   flex: 0 0 auto;
   padding: 14px 16px;

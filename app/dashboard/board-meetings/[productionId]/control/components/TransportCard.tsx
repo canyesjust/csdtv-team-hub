@@ -35,58 +35,44 @@ export default function TransportCard({
     : null
 
   return (
-    <div className="cs-card">
-      <div className="cs-eyebrow" style={{ marginBottom: 8 }}>
-        Transport
-      </div>
-      <div className="cs-eyebrow" style={{ marginBottom: 6, marginTop: 10 }}>
-        Meeting elapsed
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          flexWrap: 'wrap',
-          marginBottom: 10,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'ui-monospace, monospace',
-            fontSize: 28,
-            fontWeight: 700,
-            letterSpacing: '0.02em',
-            minWidth: '4.5ch',
-          }}
-        >
-          {elapsedLabel ?? '—:—'}
-        </span>
-        {!elapsedStartedAt ? (
-          <button type="button" className="cs-touchbtn" disabled={disabled} onClick={onStartElapsed}>
-            Start clock
+    <div className="cs-card cs-transport">
+      <div className="cs-transport-row">
+        <div className="cs-transport-nav">
+          <button type="button" className="cs-touchbtn cs-touchbtn-small" disabled={disabled} onClick={onBack}>
+            ← Back
           </button>
-        ) : (
-          <>
-            <button type="button" className="cs-touchbtn" disabled={disabled} onClick={onResetElapsed}>
-              Reset
-            </button>
-            <button type="button" className="cs-touchbtn" disabled={disabled} onClick={onClearElapsed}>
-              Stop
-            </button>
-          </>
-        )}
-      </div>
-      <div className="control-btn-row" style={{ marginBottom: 8 }}>
-        <button type="button" className="cs-touchbtn" disabled={disabled} onClick={onBack}>
-          ← Back
-        </button>
-        <button type="button" className="cs-touchbtn cs-touchbtn-primary" disabled={disabled} onClick={onAdvance}>
-          Advance →
-        </button>
-        <button type="button" className="cs-touchbtn" disabled={disabled} onClick={onToggleOverlay}>
-          Overlay {agendaOverlayOn ? 'on' : 'off'}
-        </button>
+          <button
+            type="button"
+            className="cs-touchbtn cs-touchbtn-small cs-touchbtn-primary"
+            disabled={disabled}
+            onClick={onAdvance}
+          >
+            Advance →
+          </button>
+          <button type="button" className="cs-touchbtn cs-touchbtn-small" disabled={disabled} onClick={onToggleOverlay}>
+            Overlay {agendaOverlayOn ? 'on' : 'off'}
+          </button>
+        </div>
+
+        <div className="cs-transport-clock" aria-label="Meeting elapsed">
+          <span className="cs-transport-elapsed">{elapsedLabel ?? '—:—'}</span>
+          <div className="cs-transport-clock-actions">
+            {!elapsedStartedAt ? (
+              <button type="button" className="cs-touchbtn cs-touchbtn-small" disabled={disabled} onClick={onStartElapsed}>
+                Start clock
+              </button>
+            ) : (
+              <>
+                <button type="button" className="cs-touchbtn cs-touchbtn-small" disabled={disabled} onClick={onResetElapsed}>
+                  Reset
+                </button>
+                <button type="button" className="cs-touchbtn cs-touchbtn-small" disabled={disabled} onClick={onClearElapsed}>
+                  Stop
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

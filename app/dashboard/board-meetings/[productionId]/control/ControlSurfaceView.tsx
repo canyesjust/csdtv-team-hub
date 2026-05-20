@@ -100,20 +100,6 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             isLive={isLive}
           />
 
-          <TransportCard
-            canControl={canControl}
-            agendaOverlayOn={broadcast_state?.agenda_overlay_visible !== false}
-            busy={busy}
-            elapsedStartedAt={elapsedStartedAt}
-            clockNowMs={clockNowMs}
-            onBack={() => onAction('go-back')}
-            onAdvance={() => onAction('advance')}
-            onToggleOverlay={() => onAction('toggle-overlay')}
-            onStartElapsed={() => onAction('reset-elapsed')}
-            onResetElapsed={() => onAction('reset-elapsed')}
-            onClearElapsed={() => onAction('clear-elapsed')}
-          />
-
           <LowerThirdPanel
             active={lower_third_active}
             people={bundle.lower_third_people || []}
@@ -128,6 +114,20 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             }
             onPositionChange={pos => onAction('set-lower-third-position', { position: pos })}
             onClear={() => onAction('clear-lower-third')}
+          />
+
+          <TransportCard
+            canControl={canControl}
+            agendaOverlayOn={broadcast_state?.agenda_overlay_visible !== false}
+            busy={busy}
+            elapsedStartedAt={elapsedStartedAt}
+            clockNowMs={clockNowMs}
+            onBack={() => onAction('go-back')}
+            onAdvance={() => onAction('advance')}
+            onToggleOverlay={() => onAction('toggle-overlay')}
+            onStartElapsed={() => onAction('reset-elapsed')}
+            onResetElapsed={() => onAction('reset-elapsed')}
+            onClearElapsed={() => onAction('clear-elapsed')}
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
