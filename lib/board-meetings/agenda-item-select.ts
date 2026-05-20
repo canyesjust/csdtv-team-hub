@@ -27,6 +27,16 @@ export function isMissingSuggestedMotionTextColumn(error: { message?: string } |
   )
 }
 
+function asAgendaRowList(data: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(data)) return []
+  return data as Record<string, unknown>[]
+}
+
+function asAgendaRow(data: unknown): Record<string, unknown> | null {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+  return data as Record<string, unknown>
+}
+
 function normalizeAgendaRow(row: Record<string, unknown>): AgendaItemRow {
   return {
     id: String(row.id),
@@ -74,7 +84,7 @@ export async function loadAgendaItemRows(
   )
 
   if (!withTemplate.error) {
-    return ((withTemplate.data as Record<string, unknown>[]) || []).map(normalizeAgendaRow)
+    return asAgendaRowList(withTemplate.data).map(normalizeAgendaRow)
   }
 
   if (!isMissingSuggestedMotionTextColumn(withTemplate.error)) {
@@ -84,7 +94,7 @@ export async function loadAgendaItemRows(
   const fallback = await selectAgendaQuery(service, AGENDA_ITEM_SELECT_BASE, boardMeetingId)
   if (fallback.error) throw new Error(fallback.error.message)
 
-  return ((fallback.data as Record<string, unknown>[]) || []).map(row =>
+  return asAgendaRowList(fallback.data).map(row =>
     normalizeAgendaRow({ ...row, suggested_motion_text: null }),
   )
 }
@@ -102,7 +112,7 @@ export async function loadAgendaItemRowById(
   )
 
   if (!withTemplate.error) {
-    const row = withTemplate.data as Record<string, unknown> | null
+    const row = asAgendaRow(withTemplate.data)
     return row ? normalizeAgendaRow(row) : null
   }
 
@@ -113,6 +123,6 @@ export async function loadAgendaItemRowById(
   const fallback = await selectAgendaQuery(service, AGENDA_ITEM_SELECT_BASE, boardMeetingId, itemId)
   if (fallback.error) throw new Error(fallback.error.message)
 
-  const row = fallback.data as Record<string, unknown> | null
+  const row = asAgendaRow(fallback.data)
   return row ? normalizeAgendaRow({ ...row, suggested_motion_text: null }) : null
 }
