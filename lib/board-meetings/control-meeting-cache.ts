@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { loadAgendaItemRowById, loadAgendaItemRows } from '@/lib/board-meetings/agenda-item-select'
 import type { ControlAgendaItem, LowerThirdPerson } from '@/lib/board-meetings/types'
 
 /** Locked agenda items per meeting — immutable until agenda is unlocked. */
@@ -9,9 +10,6 @@ let boardMembersForAttendanceCache: LowerThirdPerson[] | null = null
 
 /** Priority lower-third directory (board members + frequent staff). Changes rarely. */
 let priorityLowerThirdPeopleCache: LowerThirdPerson[] | null = null
-
-const AGENDA_SELECT =
-  'id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested, consent_block, suggested_motion_text'
 
 const PEOPLE_SELECT =
   'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active'
@@ -74,16 +72,13 @@ export async function getAgendaItemsForControl(
     if (cached) return cached
   }
 
-  const { data: items } = await service
-    .from('board_meeting_agenda_items')
-    .select(AGENDA_SELECT)
-    .eq('board_meeting_id', boardMeetingId)
-    .order('sort_order', { ascending: true })
+  const rows = await loadAgendaItemRows(service, boardMeetingId)
+  const broadcastable = rows.filter(i => i.is_broadcastable !== false) as ControlAgendaItem[]
 
-  const broadcastable = (items || []).filter(i => i.is_broadcastable) as ControlAgendaItem[]
-
-  if (agendaLocked) {
+  if (agendaLocked && rows.length > 0) {
     lockedAgendaByMeeting.set(boardMeetingId, broadcastable)
+  } else if (agendaLocked) {
+    lockedAgendaByMeeting.delete(boardMeetingId)
   }
 
   return broadcastable
@@ -94,14 +89,8 @@ export async function loadControlAgendaItemById(
   boardMeetingId: string,
   itemId: string,
 ): Promise<ControlAgendaItem | null> {
-  const { data } = await service
-    .from('board_meeting_agenda_items')
-    .select(AGENDA_SELECT)
-    .eq('id', itemId)
-    .eq('board_meeting_id', boardMeetingId)
-    .maybeSingle()
-
-  return (data as ControlAgendaItem | null) ?? null
+  const row = await loadAgendaItemRowById(service, boardMeetingId, itemId)
+  return (row as ControlAgendaItem | null) ?? null
 }
 
 export type AgendaNavigation = {

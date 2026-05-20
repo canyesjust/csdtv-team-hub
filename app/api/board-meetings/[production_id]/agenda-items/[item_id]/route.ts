@@ -8,6 +8,7 @@ import {
   canEditAgendaWhileLocked,
   liveLockedAgendaPatchHasChanges,
 } from '@/lib/board-meetings/agenda-live-edit'
+import { isMissingSuggestedMotionTextColumn } from '@/lib/board-meetings/agenda-item-select'
 import { clearLockedAgendaCache } from '@/lib/board-meetings/control-meeting-cache'
 
 export const dynamic = 'force-dynamic'
@@ -81,10 +82,15 @@ export async function PATCH(
     if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
   }
 
-  const { error } = await service
-    .from('board_meeting_agenda_items')
-    .update(patch)
-    .eq('id', item_id)
+  let { error } = await service.from('board_meeting_agenda_items').update(patch).eq('id', item_id)
+
+  if (error && isMissingSuggestedMotionTextColumn(error) && patch.suggested_motion_text !== undefined) {
+    const { suggested_motion_text: _removed, ...patchWithoutTemplate } = patch
+    ;({ error } = await service
+      .from('board_meeting_agenda_items')
+      .update(patchWithoutTemplate)
+      .eq('id', item_id))
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

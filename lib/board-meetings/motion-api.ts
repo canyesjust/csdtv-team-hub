@@ -24,6 +24,7 @@ import type {
   VotingMember,
 } from '@/lib/board-meetings/motion-types'
 import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
+import { loadAgendaItemRowById } from '@/lib/board-meetings/agenda-item-select'
 import { pickActiveMotions } from '@/lib/board-meetings/motion-active-pick'
 
 export type MotionActionContext = {
@@ -89,11 +90,7 @@ export async function loadMotionScreenBundle(
 
   let currentItem: AgendaItem | null = null
   if (state?.current_agenda_item_id) {
-    const { data: ai } = await service
-      .from('board_meeting_agenda_items')
-      .select('id, item_number, title, type, suggested_motion_text')
-      .eq('id', state.current_agenda_item_id)
-      .maybeSingle()
+    const ai = await loadAgendaItemRowById(service, meetingId, state.current_agenda_item_id)
     if (ai) {
       currentItem = {
         id: ai.id,
@@ -175,14 +172,11 @@ export async function loadMotionScreenBundleByProductionId(
 
 async function suggestedTextForAgendaItem(
   service: SupabaseClient,
+  boardMeetingId: string,
   agendaItemId: string | null,
 ): Promise<string> {
   if (!agendaItemId) return 'Move to approve the item'
-  const { data: ai } = await service
-    .from('board_meeting_agenda_items')
-    .select('id, item_number, title, type, suggested_motion_text')
-    .eq('id', agendaItemId)
-    .maybeSingle()
+  const ai = await loadAgendaItemRowById(service, boardMeetingId, agendaItemId)
   if (!ai) return 'Move to approve the item'
   return resolveSuggestedMotionText({
     id: ai.id,
@@ -202,7 +196,7 @@ export async function openMotion(
   const trimmedOverride = motionTextOverride?.trim()
   const motionText =
     trimmedOverride ||
-    (await suggestedTextForAgendaItem(ctx.service, agendaItemId))
+    (await suggestedTextForAgendaItem(ctx.service, ctx.boardMeetingId, agendaItemId))
   const motion = await openMotionRecord(ctx.service, ctx.boardMeetingId, ctx.teamUserId, {
     agenda_item_id: agendaItemId,
     motion_type: 'main',
@@ -293,7 +287,7 @@ export async function proposeSubstitute(
   parentMotionId: string,
   agendaItemId: string,
 ) {
-  const motionText = await suggestedTextForAgendaItem(ctx.service, agendaItemId)
+  const motionText = await suggestedTextForAgendaItem(ctx.service, ctx.boardMeetingId, agendaItemId)
   const motion = await openMotionRecord(ctx.service, ctx.boardMeetingId, ctx.teamUserId, {
     agenda_item_id: agendaItemId,
     motion_type: 'substitute',
