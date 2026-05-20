@@ -588,7 +588,7 @@ export async function recordMotionVote(
   const tally = applyVoteTallyDelta(tallyFromMotionRow(motion), priorVote, vote)
 
   const statusToVoting = motion.status === 'open_for_discussion'
-  const writes: Promise<unknown>[] = [
+  const [, motionUpdate] = await Promise.all([
     upsertActiveMotionVote(service, motionId, personId, vote, operatorId),
     service
       .from('meeting_motions')
@@ -602,9 +602,8 @@ export async function recordMotionVote(
         updated_at: nowIso,
       })
       .eq('id', motionId),
-  ]
-
-  await Promise.all(writes)
+  ])
+  if (motionUpdate.error) throw new Error(motionUpdate.error.message)
 
   void computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId).then(fullTally => {
     void service
