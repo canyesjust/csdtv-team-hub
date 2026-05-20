@@ -253,6 +253,16 @@ export async function buildPublicChannelState(
   const agenda_preview_items = toAgendaItemSummaries(items)
   const upcoming_items = toAgendaItemSummaries(agendaNav.upcoming_items)
 
+  const currentIdx = bstate?.current_agenda_item_id
+    ? items.findIndex(i => i.id === bstate.current_agenda_item_id)
+    : -1
+  const completedSource =
+    currentIdx >= 0
+      ? items.slice(0, currentIdx)
+      : agendaNav.current_item
+        ? items.filter(i => i.sort_order < agendaNav.current_item.sort_order)
+        : []
+
   const { data: events } = await service
     .from('meeting_event_log')
     .select('event_type, event_data, occurred_at')
@@ -264,9 +274,8 @@ export async function buildPublicChannelState(
   const t0 = live_started_at ? new Date(live_started_at).getTime() : null
 
   const completed_items: PublicChannelState['completed_items'] = []
-  if (t0 && currentIdx > 0) {
-    for (let i = 0; i < currentIdx; i++) {
-      const it = items[i]
+  if (t0 && completedSource.length > 0) {
+    for (const it of completedSource) {
       let offset = 0
       const adv = (events || []).find(e => {
         if (!ADVANCE_EVENT_TYPES.includes(e.event_type)) return false
