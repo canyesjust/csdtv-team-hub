@@ -99,6 +99,20 @@ export type AgendaNavigation = {
   upcoming_items: ControlAgendaItem[]
 }
 
+/** On-air row for UI — prefer list lookup by id so optimistic jumps update immediately. */
+export function resolveCurrentAgendaItem(
+  agendaItems: ControlAgendaItem[],
+  currentId: string | null | undefined,
+  existing: ControlAgendaItem | null | undefined,
+): ControlAgendaItem | null {
+  if (!currentId) return null
+  return (
+    agendaItems.find(i => i.id === currentId) ??
+    (existing?.id === currentId ? existing : null) ??
+    null
+  )
+}
+
 /** Resolves on-air item even when skipped (not broadcastable); upcoming stays broadcastable-only. */
 export async function resolveAgendaNavigation(
   service: SupabaseClient,

@@ -9,6 +9,7 @@ import ControlSurfaceView from './ControlSurfaceView'
 import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
 import type { ControlLivePatch } from '@/lib/board-meetings/control-live-bundle'
 import { normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
+import { resolveCurrentAgendaItem } from '@/lib/board-meetings/control-meeting-cache'
 import type { ControlAgendaItem, ControlBundle, LowerThirdPerson, ResultOverlayState } from '@/lib/board-meetings/types'
 
 const MOTION_ACTIONS = new Set([
@@ -146,7 +147,19 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   )
 
   const applyLivePatch = useCallback((live: ControlLivePatch) => {
-    setBundle(prev => (prev ? { ...prev, ...live } : prev))
+    setBundle(prev => {
+      if (!prev) return prev
+      const merged = { ...prev, ...live }
+      const currentId = merged.broadcast_state?.current_agenda_item_id ?? null
+      return {
+        ...merged,
+        current_agenda_item: resolveCurrentAgendaItem(
+          merged.agenda_items || [],
+          currentId,
+          prev.current_agenda_item,
+        ),
+      }
+    })
     setResultOverlay(live.result_overlay ?? null)
   }, [])
 
@@ -361,6 +374,11 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         if (!agendaItemId) return prev
         return {
           ...prev,
+          current_agenda_item: resolveCurrentAgendaItem(
+            prev.agenda_items || [],
+            agendaItemId,
+            prev.current_agenda_item,
+          ),
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
             current_agenda_item_id: agendaItemId,
             agenda_branding_hold: false,
@@ -469,12 +487,14 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   const applyServerHints = useCallback(
     (action: string, data: Record<string, unknown>) => {
       if (action === 'advance' || action === 'go-back') {
-        const item = data.current_item as { id?: string } | undefined
+        const item = data.current_item as ControlAgendaItem | undefined
         if (item?.id) {
           patchBundle(prev => ({
             ...prev,
+            current_agenda_item: item,
             broadcast_state: patchBroadcastState(prev.broadcast_state, {
               current_agenda_item_id: item.id,
+              agenda_branding_hold: false,
             }),
           }))
         }

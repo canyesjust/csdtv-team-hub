@@ -13,6 +13,7 @@ import PreRollPanel from './components/PreRollPanel'
 import ModesTimersPanel from './components/ModesTimersPanel'
 import OutputChannelsPanel from './components/OutputChannelsPanel'
 import ModeBanner from './components/ModeBanner'
+import { resolveCurrentAgendaItem } from '@/lib/board-meetings/control-meeting-cache'
 import type { ControlBundle } from '@/lib/board-meetings/types'
 
 type Props = {
@@ -132,10 +133,11 @@ export default function ControlSurfaceView({
 
         <div className="cs-onair">
           <OnAirCard
-            item={
-              bundle.current_agenda_item ??
-              getCurrentAgendaItem(agenda_items, broadcast_state?.current_agenda_item_id)
-            }
+            item={resolveCurrentAgendaItem(
+              agenda_items,
+              broadcast_state?.current_agenda_item_id,
+              bundle.current_agenda_item,
+            )}
             brandingHold={!!broadcast_state?.agenda_branding_hold}
             isLive={isLive}
           />
@@ -237,11 +239,6 @@ export default function ControlSurfaceView({
       </div>
     </div>
   )
-}
-
-function getCurrentAgendaItem(items: ControlBundle['agenda_items'], currentId: string | undefined | null) {
-  if (!currentId) return null
-  return (items || []).find(i => i.id === currentId) || null
 }
 
 function resolveActiveQR(state: ControlBundle['broadcast_state']) {
