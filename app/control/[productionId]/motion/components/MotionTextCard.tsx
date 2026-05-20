@@ -33,9 +33,11 @@ export default function MotionTextCard(props: Props) {
       }
 
   const commitEdit = () => {
+    const next = draft.trim()
+    const prev = (props.text || '').trim()
     setEditing(false)
-    if (props.onEditText && draft !== props.text) {
-      props.onEditText(draft)
+    if (props.onEditText && next !== prev) {
+      props.onEditText(next)
     }
   }
 
@@ -51,6 +53,16 @@ export default function MotionTextCard(props: Props) {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={commitEdit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  commitEdit()
+                }
+                if (e.key === 'Escape') {
+                  setDraft(props.text || '')
+                  setEditing(false)
+                }
+              }}
               autoFocus
               rows={2}
               style={{
@@ -71,23 +83,44 @@ export default function MotionTextCard(props: Props) {
             </div>
           )}
         </div>
-        {!props.readonly && props.onEditText && !editing && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            style={{
-              fontSize: 11,
-              padding: '5px 10px',
-              background: 'var(--surface-2, #1a2236)',
-              border: '0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-              borderRadius: 8,
-              color: 'var(--text-primary, #f8fafc)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            Edit
-          </button>
+        {!props.readonly && props.onEditText && (
+          editing ? (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={commitEdit}
+              style={{
+                fontSize: 11,
+                padding: '5px 10px',
+                background: 'var(--semantic-info-bg)',
+                border: '0.5px solid var(--semantic-info-border, rgba(255,255,255,0.12))',
+                borderRadius: 8,
+                color: 'var(--semantic-info-text)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+              }}
+            >
+              Save
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              style={{
+                fontSize: 11,
+                padding: '5px 10px',
+                background: 'var(--surface-2, #1a2236)',
+                border: '0.5px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+                borderRadius: 8,
+                color: 'var(--text-primary, #f8fafc)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Edit
+            </button>
+          )
         )}
       </div>
       <div style={{

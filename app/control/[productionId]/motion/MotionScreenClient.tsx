@@ -25,8 +25,14 @@ type Props = {
 export default function MotionScreenClient({ productionId, initialBundle }: Props) {
   const router = useRouter()
   const [bundle, setBundle] = useState<MotionScreenBundle>(initialBundle)
+  const [pendingMotionText, setPendingMotionText] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const bundleForView: MotionScreenBundle = {
+    ...bundle,
+    suggested_motion_text: pendingMotionText ?? bundle.suggested_motion_text,
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -71,7 +77,14 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     setBusy(true)
     setError(null)
     try {
-      const motionId = bundle.active_motion?.id || bundle.parent_motion?.id || ''
+      const activeId = bundle.active_motion?.id
+      const motionId = activeId || bundle.parent_motion?.id || ''
+
+      if (action === 'set-text' && !activeId) {
+        const text = (body as { text?: string } | undefined)?.text ?? ''
+        setPendingMotionText(text)
+        return
+      }
 
       let url: string
       if (action === 'open') {
@@ -86,19 +99,25 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
         throw new Error('No active motion for action: ' + action)
       }
 
+      const payload =
+        action === 'open' && pendingMotionText
+          ? { ...(body as Record<string, unknown>), motion_text: pendingMotionText }
+          : body
+
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        body: payload !== undefined ? JSON.stringify(payload) : undefined,
       })
       if (!res.ok) throw new Error(await readApiError(res))
+      if (action === 'open' || action === 'set-text') setPendingMotionText(null)
       await refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Action failed')
     } finally {
       setBusy(false)
     }
-  }, [productionId, bundle.active_motion?.id, bundle.parent_motion?.id, refresh])
+  }, [productionId, bundle.active_motion?.id, bundle.parent_motion?.id, pendingMotionText, refresh])
 
   const onMinimize = useCallback(() => {
     router.push(`/control/${productionId}`)
@@ -121,7 +140,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
 
   return (
     <MotionScreenView
-      bundle={bundle}
+      bundle={bundleForView}
       busy={busy}
       error={error}
       onAction={onAction}

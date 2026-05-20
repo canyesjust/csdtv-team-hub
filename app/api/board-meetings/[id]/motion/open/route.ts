@@ -9,7 +9,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   return withControlContext(id, async c => {
     try {
       const body = await req.json()
-      const result = await openMotion(c, body.agenda_item_id ?? null, body.mover_id ?? null)
+      const result = await openMotion(
+        c,
+        body.agenda_item_id ?? null,
+        body.mover_id ?? null,
+        body.motion_text ?? null,
+      )
       return NextResponse.json(result)
     } catch (e) {
       return controlError(e instanceof Error ? e.message : 'Failed to open motion', 500)

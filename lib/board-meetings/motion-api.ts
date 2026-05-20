@@ -183,8 +183,12 @@ export async function openMotion(
   ctx: MotionActionContext,
   agendaItemId: string | null,
   moverPersonId: string | null,
+  motionTextOverride?: string | null,
 ) {
-  const motionText = await suggestedTextForAgendaItem(ctx.service, agendaItemId)
+  const trimmedOverride = motionTextOverride?.trim()
+  const motionText =
+    trimmedOverride ||
+    (await suggestedTextForAgendaItem(ctx.service, agendaItemId))
   const motion = await openMotionRecord(ctx.service, ctx.boardMeetingId, ctx.teamUserId, {
     agenda_item_id: agendaItemId,
     motion_type: 'main',

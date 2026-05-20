@@ -32,7 +32,8 @@ export default function OpenForDiscussionState({ bundle, active, busy, error, on
           moverName={active.mover_name}
           seconderName={active.seconder_name}
           voteType={active.vote_type}
-          readonly
+          onEditText={(txt) => onAction('set-text', { text: txt })}
+          onChangeVoteType={(t) => onAction('set-vote-type', { vote_type: t })}
         />
 
         <div style={{
