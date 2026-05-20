@@ -127,6 +127,7 @@ export type AgendaItem = {
   item_number: string
   title: string
   type?: string | null
+  suggested_motion_text?: string | null
 }
 
 export type MotionScreenBundle = {

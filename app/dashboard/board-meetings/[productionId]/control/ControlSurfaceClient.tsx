@@ -172,13 +172,17 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   }, [])
 
   const refreshInBackground = useCallback(() => {
-    suppressRealtimeUntilRef.current = Date.now() + REALTIME_SUPPRESS_MS
     void loadLive()
   }, [loadLive])
 
   /** Slim bundle — skips full playlist items and timer templates. */
   const loadDebounced = useDebouncedCallback(() => {
     if (Date.now() < suppressRealtimeUntilRef.current) return
+    void loadLive()
+  }, REALTIME_DEBOUNCE_MS)
+
+  /** Motion/broadcast updates always refresh — not blocked by agenda optimistic suppress. */
+  const loadMotionDebounced = useDebouncedCallback(() => {
     void loadLive()
   }, REALTIME_DEBOUNCE_MS)
 
@@ -252,7 +256,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       'postgres_changes',
       { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` },
       () => {
-        loadDebounced()
+        loadMotionDebounced()
       },
     )
 
@@ -268,7 +272,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` },
         () => {
-          loadDebounced()
+          loadMotionDebounced()
         },
       )
       .on(
@@ -285,7 +289,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_motion_votes', filter: `motion_id=eq.${motionId}` },
         () => {
-          loadDebounced()
+          loadMotionDebounced()
         },
       )
     }
@@ -294,7 +298,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadUtilitiesDebounced, motionIds])
+  }, [bundle?.board_meeting?.id, supabase, loadDebounced, loadMotionDebounced, loadUtilitiesDebounced, motionIds])
 
   const patchBundle = useCallback((patch: (prev: ControlBundle) => ControlBundle) => {
     setBundle(prev => (prev ? patch(prev) : prev))

@@ -45,8 +45,7 @@ function formatElapsed(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function suggestedTextForItem(item: AgendaItem | null): string {
-  if (!item) return 'Move to approve the item'
+function suggestedTextFromTitleHeuristic(item: AgendaItem): string {
   const title = item.title
   if (item.type === 'action' || /approval of|approve /i.test(title)) {
     if (/^approval of /i.test(title)) {
@@ -55,6 +54,14 @@ function suggestedTextForItem(item: AgendaItem | null): string {
     return `Move to ${title.replace(/^approve /i, 'approve ').toLowerCase()}`
   }
   return `Move to approve ${title}`
+}
+
+/** Agenda template when set; otherwise title/type heuristics. */
+export function resolveSuggestedMotionText(item: AgendaItem | null): string {
+  if (!item) return 'Move to approve the item'
+  const template = item.suggested_motion_text?.trim()
+  if (template) return template
+  return suggestedTextFromTitleHeuristic(item)
 }
 
 /**
@@ -84,11 +91,17 @@ export async function loadMotionScreenBundle(
   if (state?.current_agenda_item_id) {
     const { data: ai } = await service
       .from('board_meeting_agenda_items')
-      .select('id, item_number, title, type')
+      .select('id, item_number, title, type, suggested_motion_text')
       .eq('id', state.current_agenda_item_id)
       .maybeSingle()
     if (ai) {
-      currentItem = { id: ai.id, item_number: ai.item_number, title: ai.title, type: ai.type }
+      currentItem = {
+        id: ai.id,
+        item_number: ai.item_number,
+        title: ai.title,
+        type: ai.type,
+        suggested_motion_text: ai.suggested_motion_text,
+      }
     }
   }
 
@@ -146,7 +159,7 @@ export async function loadMotionScreenBundle(
     votes,
     tally,
     quorum_size: attendance.quorum.threshold,
-    suggested_motion_text: suggestedTextForItem(currentItem),
+    suggested_motion_text: resolveSuggestedMotionText(currentItem),
     live_elapsed: liveElapsed,
   }
 }
@@ -167,15 +180,16 @@ async function suggestedTextForAgendaItem(
   if (!agendaItemId) return 'Move to approve the item'
   const { data: ai } = await service
     .from('board_meeting_agenda_items')
-    .select('id, item_number, title, type')
+    .select('id, item_number, title, type, suggested_motion_text')
     .eq('id', agendaItemId)
     .maybeSingle()
   if (!ai) return 'Move to approve the item'
-  return suggestedTextForItem({
+  return resolveSuggestedMotionText({
     id: ai.id,
     item_number: ai.item_number,
     title: ai.title,
     type: ai.type,
+    suggested_motion_text: ai.suggested_motion_text,
   })
 }
 

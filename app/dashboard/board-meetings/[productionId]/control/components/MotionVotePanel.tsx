@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from '@/lib/toast'
 import VoteInterface, { type VoterRow } from './VoteInterface'
 import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
+import { resolveSuggestedMotionText } from '@/lib/board-meetings/motion-api'
 
 type AgendaItem = {
   id: string
@@ -11,6 +12,7 @@ type AgendaItem = {
   type: string
   item_number: string
   consent_block?: string | null
+  suggested_motion_text?: string | null
 }
 
 type Motion = {
@@ -157,7 +159,15 @@ export default function MotionVotePanel({
   }
 
   const startMotion = async (kind: OpenKind) => {
-    let motion_text = currentItem ? `Move to approve ${currentItem.title}` : ''
+    let motion_text = currentItem
+      ? resolveSuggestedMotionText({
+          id: currentItem.id,
+          item_number: currentItem.item_number,
+          title: currentItem.title,
+          type: currentItem.type,
+          suggested_motion_text: currentItem.suggested_motion_text,
+        })
+      : ''
     const body: Record<string, unknown> = {
       motion_type: kind === 'substitute' ? 'substitute' : 'main',
     }

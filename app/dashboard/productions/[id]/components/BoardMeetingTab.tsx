@@ -438,6 +438,30 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                     }}
                     style={{ ...inputStyle, marginBottom: '8px', fontWeight: 600 }}
                   />
+                  <label style={{ display: 'block', fontSize: '12px', color: muted, marginBottom: '4px' }}>
+                    Suggested motion text (optional)
+                  </label>
+                  <textarea
+                    value={it.suggested_motion_text ?? ''}
+                    placeholder="e.g. Move to approve the consent agenda as presented"
+                    rows={2}
+                    onChange={e =>
+                      updateItemById(itemId, {
+                        suggested_motion_text: e.target.value || null,
+                      })
+                    }
+                    onBlur={() => {
+                      const current = items.find(x => x.id === itemId)
+                      if (current) saveItemPatch(current)
+                    }}
+                    style={{
+                      ...inputStyle,
+                      marginBottom: '8px',
+                      resize: 'vertical',
+                      minHeight: '52px',
+                      fontWeight: 400,
+                    }}
+                  />
                   {it.review_notes && <p style={{ fontSize: '12px', color: '#e8a020', margin: '0 0 8px' }}>{it.review_notes}</p>}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
                     <select

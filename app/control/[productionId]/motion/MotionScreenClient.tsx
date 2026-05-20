@@ -91,6 +91,12 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
   }, [refresh])
 
   useEffect(() => {
+    if (!bundleRef.current.active_motion) {
+      setPendingMotionText(null)
+    }
+  }, [bundle.current_agenda_item_id])
+
+  useEffect(() => {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
 
     const supabase = createBrowserClient(

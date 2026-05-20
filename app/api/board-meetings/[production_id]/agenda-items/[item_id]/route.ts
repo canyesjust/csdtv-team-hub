@@ -65,11 +65,18 @@ export async function PATCH(
     const fields = [
       'section_number', 'section_title', 'item_number', 'sort_order', 'title', 'original_title',
       'type', 'action_requested', 'is_broadcastable', 'consent_block', 'notes', 'subitems',
-      'needs_review', 'review_notes',
+      'needs_review', 'review_notes', 'suggested_motion_text',
     ] as const
 
     for (const f of fields) {
-      if (body[f] !== undefined) patch[f] = body[f]
+      if (body[f] !== undefined) {
+        if (f === 'suggested_motion_text' && typeof body[f] === 'string') {
+          const trimmed = body[f].trim()
+          patch[f] = trimmed.length > 0 ? trimmed : null
+        } else {
+          patch[f] = body[f]
+        }
+      }
     }
     if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
   }

@@ -37,6 +37,8 @@ export type AgendaItemUI = {
   subitems?: unknown
   needs_review: boolean
   review_notes?: string | null
+  /** Optional template auto-filled on the motion screen for this item. */
+  suggested_motion_text?: string | null
   presenters?: { name: string; title?: string | null }[]
   documents?: { title: string; filename: string }[]
 }
@@ -74,6 +76,7 @@ export type ControlAgendaItem = {
   action_requested?: boolean
   is_broadcastable: boolean
   consent_block?: string | null
+  suggested_motion_text?: string | null
 }
 
 /** Agenda item shape for the motion screen UI. */

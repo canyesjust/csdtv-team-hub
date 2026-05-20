@@ -58,15 +58,17 @@ export function pickActiveMotions(
 
   if (!activeRow && broadcastActiveMotionId) {
     const fromBroadcast = motions.find(m => m.id === broadcastActiveMotionId)
-    if (fromBroadcast && !CLOSED_MOTION_STATUSES.has(fromBroadcast.status)) {
+    if (
+      fromBroadcast &&
+      !CLOSED_MOTION_STATUSES.has(fromBroadcast.status) &&
+      !TERMINAL_VOTE_STATUSES.has(fromBroadcast.status)
+    ) {
       activeRow = fromBroadcast
     }
   }
 
   if (!activeRow) {
-    activeRow =
-      openMotions.find(m => !TERMINAL_VOTE_STATUSES.has(m.status)) ??
-      openMotions[0]
+    activeRow = openMotions.find(m => !TERMINAL_VOTE_STATUSES.has(m.status))
   }
 
   if (!activeRow) {

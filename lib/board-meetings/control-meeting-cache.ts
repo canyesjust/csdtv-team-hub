@@ -11,7 +11,7 @@ let boardMembersForAttendanceCache: LowerThirdPerson[] | null = null
 let priorityLowerThirdPeopleCache: LowerThirdPerson[] | null = null
 
 const AGENDA_SELECT =
-  'id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested, consent_block'
+  'id, section_number, section_title, item_number, sort_order, title, type, is_broadcastable, action_requested, consent_block, suggested_motion_text'
 
 const PEOPLE_SELECT =
   'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active'
