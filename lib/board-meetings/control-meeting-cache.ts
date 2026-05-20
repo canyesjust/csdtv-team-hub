@@ -88,3 +88,63 @@ export async function getAgendaItemsForControl(
 
   return broadcastable
 }
+
+export async function loadControlAgendaItemById(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  itemId: string,
+): Promise<ControlAgendaItem | null> {
+  const { data } = await service
+    .from('board_meeting_agenda_items')
+    .select(AGENDA_SELECT)
+    .eq('id', itemId)
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+
+  return (data as ControlAgendaItem | null) ?? null
+}
+
+export type AgendaNavigation = {
+  broadcastable_items: ControlAgendaItem[]
+  current_item: ControlAgendaItem | null
+  upcoming_items: ControlAgendaItem[]
+}
+
+/** Resolves on-air item even when skipped (not broadcastable); upcoming stays broadcastable-only. */
+export async function resolveAgendaNavigation(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  agendaLocked: boolean,
+  currentAgendaItemId: string | null | undefined,
+): Promise<AgendaNavigation> {
+  const broadcastable_items = await getAgendaItemsForControl(service, boardMeetingId, agendaLocked)
+
+  if (!currentAgendaItemId) {
+    return {
+      broadcastable_items,
+      current_item: null,
+      upcoming_items: broadcastable_items.slice(0, 3),
+    }
+  }
+
+  let currentIdx = broadcastable_items.findIndex(i => i.id === currentAgendaItemId)
+  let current_item: ControlAgendaItem | null =
+    currentIdx >= 0 ? broadcastable_items[currentIdx] : null
+
+  if (!current_item) {
+    current_item = await loadControlAgendaItemById(service, boardMeetingId, currentAgendaItemId)
+  }
+
+  let upcoming_items: ControlAgendaItem[]
+  if (currentIdx >= 0) {
+    upcoming_items = broadcastable_items.slice(currentIdx + 1, currentIdx + 4)
+  } else if (current_item) {
+    upcoming_items = broadcastable_items
+      .filter(i => i.sort_order > current_item!.sort_order)
+      .slice(0, 3)
+  } else {
+    upcoming_items = broadcastable_items.slice(0, 3)
+  }
+
+  return { broadcastable_items, current_item, upcoming_items }
+}

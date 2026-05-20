@@ -30,6 +30,9 @@ const INSTANT_ACTIONS = new Set([
   'set-vote-type',
 ])
 
+/** Optimistic actions that should not refetch the full bundle after success. */
+const SKIP_SUCCESS_REFRESH = new Set([...INSTANT_ACTIONS, 'open-vote', 'open-discussion'])
+
 type Props = {
   productionId: string
   initialBundle: MotionScreenBundle
@@ -222,10 +225,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
         if (action === 'open') {
           setPendingMotionText(null)
           refreshInBackground()
-        } else if (instant || action === 'record-vote') {
-          // Already optimistic; reconcile in background without blocking taps.
-          refreshInBackground()
-        } else {
+        } else if (!SKIP_SUCCESS_REFRESH.has(action)) {
           refreshInBackground()
         }
       } catch (e) {

@@ -72,12 +72,36 @@ function incrementTally(tally: VoteTally, vote: VoteValue) {
   else if (vote === 'recused') tally.recused++
 }
 
-function decrementTally(tally: VoteTally, vote: VoteValue) {
-  if (vote === 'yea') tally.yea = Math.max(0, tally.yea - 1)
-  else if (vote === 'nay') tally.nay = Math.max(0, tally.nay - 1)
-  else if (vote === 'abstain') tally.abstain = Math.max(0, tally.abstain - 1)
-  else if (vote === 'absent') tally.absent = Math.max(0, tally.absent - 1)
-  else if (vote === 'recused') tally.recused = Math.max(0, tally.recused - 1)
+/** Tally for UI / motion row — unrecorded eligible members default to yea (matches motion screen). */
+export async function computeMotionVoteTallyForDisplay(
+  service: SupabaseClient,
+  motionId: string,
+  boardMeetingId: string,
+): Promise<VoteTally> {
+  const [attendance, { data: activeVotes }] = await Promise.all([
+    loadAttendance(service, boardMeetingId),
+    service
+      .from('meeting_motion_votes')
+      .select('person_id, vote')
+      .eq('motion_id', motionId)
+      .is('superseded_by_vote_id', null),
+  ])
+
+  const voteByPerson = new Map(
+    (activeVotes || []).map(v => [v.person_id, v.vote as VoteValue]),
+  )
+  const tally: VoteTally = { yea: 0, nay: 0, abstain: 0, absent: 0, recused: 0 }
+  const at = new Date()
+
+  for (const r of attendance.records) {
+    let v = voteByPerson.get(r.person_id)
+    if (!v) {
+      v = isEligibleToVote(r.status, at, r.arrived_at, r.left_at) ? 'yea' : 'absent'
+    }
+    incrementTally(tally, v)
+  }
+
+  return tally
 }
 
 export function computeMotionResult(
@@ -484,26 +508,9 @@ export async function recordMotionVote(
       .eq('id', motionId)
   }
 
-  const { data: priorVoteRow } = await service
-    .from('meeting_motion_votes')
-    .select('vote')
-    .eq('motion_id', motionId)
-    .eq('person_id', personId)
-    .is('superseded_by_vote_id', null)
-    .maybeSingle()
-
   await upsertActiveMotionVote(service, motionId, personId, vote, operatorId)
 
-  const priorVote = (priorVoteRow?.vote as VoteValue | undefined) ?? null
-  const tally: VoteTally = {
-    yea: motion.tally_yea ?? 0,
-    nay: motion.tally_nay ?? 0,
-    abstain: motion.tally_abstain ?? 0,
-    absent: motion.tally_absent ?? 0,
-    recused: motion.tally_recused ?? 0,
-  }
-  if (priorVote) decrementTally(tally, priorVote)
-  incrementTally(tally, vote)
+  const tally = await computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId)
 
   await service
     .from('meeting_motions')

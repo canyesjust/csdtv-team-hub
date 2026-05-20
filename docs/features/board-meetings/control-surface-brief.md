@@ -79,17 +79,22 @@ Breakpoints:
 
 ### 2. Agenda (left column)
 
-- Lists **broadcastable** agenda items only
+- Lists **broadcastable** agenda items only (navigation / jump)
 - Tap item → `POST .../control/jump-to` with `agenda_item_id`
 - Current item highlighted (matches `broadcast_state.current_agenda_item_id`)
 - Scrollable list; should use full column height
+- **Edit agenda** (when agenda is locked and meeting is `prepared` or `live`): toggle in column header
+  - Edit titles, reorder on-air items (↑/↓), uncheck **On air** to skip an item
+  - Uses `PATCH .../agenda-items/{id}` and `POST .../agenda-items/reorder` with `broadcastable_only: true`
+  - Skipped items stay visible while editing; on-air card still shows the current item even if skipped
+  - Use **branding hold** before large on-air title changes
 
 ### 3. On air (center column — highest priority)
 
 | Subsection | API / behavior |
 |------------|----------------|
 | **Current item** | Read-only display of item number + title |
-| **Transport** | `go-back`, `advance`, `toggle-overlay` (label: **Agenda overlay** on/off — only hides agenda card on overlay, not lower thirds) |
+| **Transport** | `go-back`, `advance`, `toggle-overlay` (label: **Overlay** on/off — when off, the main `/board/{n}/overlay` browser source is fully blank/transparent; no agenda, lower third, QR, motion, or timers on that layer) |
 | **Meeting lifecycle** | `end-preroll` when not live (stops pre-roll, starts meeting); `end-meeting` when live |
 | **Lower third** | See § Lower third |
 | **QR code** | `QRPushPanel` — push URL to overlay; live only |
@@ -118,6 +123,8 @@ Tap-based flow (no dropdowns):
 
 Substitute motions and consent blocks supported.
 
+Dedicated motion screen (`/control/{productionId}/motion`): vote grid updates optimistically; successful vote taps do not refetch the full motion bundle (errors and realtime still reconcile).
+
 ---
 
 ## Lower third
@@ -145,7 +152,7 @@ Matched by **first name** against `lower_third_people` library. Missing names sh
 - `POST .../control/set-lower-third` `{ person_id }`
 - `POST .../control/clear-lower-third`
 
-**Public outputs:** `active_lower_third` on `/api/board/output/{channel}/state` — shown on overlay (`/board/{n}/overlay`) and live view. Lower thirds are **independent** of “Agenda overlay” toggle.
+**Public outputs:** `active_lower_third` on `/api/board/output/{channel}/state` — shown on overlay (`/board/{n}/overlay`) and live view when **Overlay** is on. When overlay is off, the main overlay output shows nothing (use a separate OBS source or dais if you need lower thirds while overlay is blank).
 
 ---
 
@@ -196,7 +203,7 @@ Dark/light class on `<html>` from `ThemeProvider`.
 6. **Disable vs hide** — When not `canControl` or not `live`, disable controls but keep layout stable.
 7. **Busy state** — Global `busy` during POSTs; reduce double-taps.
 8. **No modal-heavy flows** — Especially motions; prefer in-panel tap grids (current direction).
-9. **Label clarity** — “Agenda overlay” not “Overlay” (lower thirds are separate).
+9. **Label clarity** — Transport button is **Overlay** on/off (main OBS overlay layer). Dais and live views are separate channels.
 
 ---
 

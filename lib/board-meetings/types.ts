@@ -190,6 +190,8 @@ export type ControlBundle = {
     active_qr_duration_seconds?: number | null
   } | null
   agenda_items: ControlAgendaItem[]
+  /** On-air row even when skipped (not in agenda_items). */
+  current_agenda_item?: ControlAgendaItem | null
   motion_lifecycle: MotionLifecycleState | null
   attendance: {
     records: ControlAttendanceRecord[]

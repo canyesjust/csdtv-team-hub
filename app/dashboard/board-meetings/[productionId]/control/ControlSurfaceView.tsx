@@ -132,7 +132,10 @@ export default function ControlSurfaceView({
 
         <div className="cs-onair">
           <OnAirCard
-            item={getCurrentAgendaItem(agenda_items, broadcast_state?.current_agenda_item_id)}
+            item={
+              bundle.current_agenda_item ??
+              getCurrentAgendaItem(agenda_items, broadcast_state?.current_agenda_item_id)
+            }
             brandingHold={!!broadcast_state?.agenda_branding_hold}
             isLive={isLive}
           />

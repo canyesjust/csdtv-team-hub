@@ -674,10 +674,28 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     async (itemId: string, patch: Partial<ControlAgendaItem>) => {
       setBundle(prev => {
         if (!prev) return prev
-        const agenda_items = prev.agenda_items.map(it =>
-          it.id === itemId ? { ...it, ...patch } : it,
-        )
-        return { ...prev, agenda_items, items: agenda_items }
+        const existing =
+          prev.agenda_items.find(it => it.id === itemId) ??
+          (prev.current_agenda_item?.id === itemId ? prev.current_agenda_item : null)
+        if (!existing) return prev
+
+        const merged = { ...existing, ...patch }
+        const isCurrent = prev.broadcast_state?.current_agenda_item_id === itemId
+
+        let agenda_items = prev.agenda_items.map(it => (it.id === itemId ? merged : it))
+        if (!agenda_items.some(it => it.id === itemId)) {
+          agenda_items = [...agenda_items, merged].sort((a, b) => a.sort_order - b.sort_order)
+        }
+        if (patch.is_broadcastable === false) {
+          agenda_items = agenda_items.filter(it => it.is_broadcastable)
+        }
+
+        return {
+          ...prev,
+          agenda_items,
+          items: agenda_items,
+          current_agenda_item: isCurrent ? merged : prev.current_agenda_item,
+        }
       })
 
       setAgendaEditBusy(true)

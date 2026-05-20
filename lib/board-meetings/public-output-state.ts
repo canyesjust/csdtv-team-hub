@@ -14,6 +14,7 @@ import {
   shouldPlaylistRun,
   tickMeetingPlaylist,
 } from '@/lib/board-meetings/playlist-playback'
+import { resolveAgendaNavigation } from '@/lib/board-meetings/control-meeting-cache'
 
 export type { PublicActiveMotion, PublicActiveVoteResult, PublicActiveLowerThird }
 
@@ -217,7 +218,7 @@ export async function buildPublicChannelState(
 
   const { data: bm } = await service
     .from('board_meetings')
-    .select('id, production_id, broadcast_status, scheduled_public_start')
+    .select('id, production_id, broadcast_status, scheduled_public_start, agenda_locked')
     .eq('id', assignment.board_meeting_id)
     .maybeSingle()
 
@@ -235,27 +236,22 @@ export async function buildPublicChannelState(
     .eq('board_meeting_id', bm.id)
     .maybeSingle()
 
-  const { data: broadcastable } = await service
-    .from('board_meeting_agenda_items')
-    .select('id, section_number, section_title, item_number, title, type, sort_order')
-    .eq('board_meeting_id', bm.id)
-    .eq('is_broadcastable', true)
-    .order('sort_order', { ascending: true })
-
-  const items = broadcastable || []
-  const currentIdx = items.findIndex(i => i.id === bstate?.current_agenda_item_id)
-  const currentRow = currentIdx >= 0 ? items[currentIdx] : null
+  const agendaNav = await resolveAgendaNavigation(
+    service,
+    bm.id,
+    !!bm.agenda_locked,
+    bstate?.current_agenda_item_id,
+  )
+  const items = agendaNav.broadcastable_items
 
   let current_item: PublicAgendaItem | null = null
-  if (currentRow) {
-    const extras = await loadItemExtras(service, currentRow.id)
-    current_item = { ...currentRow, ...extras }
+  if (agendaNav.current_item) {
+    const extras = await loadItemExtras(service, agendaNav.current_item.id)
+    current_item = { ...agendaNav.current_item, ...extras }
   }
 
   const agenda_preview_items = toAgendaItemSummaries(items)
-  const upcoming_items = toAgendaItemSummaries(
-    items.slice(currentIdx >= 0 ? currentIdx + 1 : 0, currentIdx >= 0 ? currentIdx + 4 : 3),
-  )
+  const upcoming_items = toAgendaItemSummaries(agendaNav.upcoming_items)
 
   const { data: events } = await service
     .from('meeting_event_log')

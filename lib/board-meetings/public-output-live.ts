@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getAgendaItemsForControl } from '@/lib/board-meetings/control-meeting-cache'
+import { resolveAgendaNavigation } from '@/lib/board-meetings/control-meeting-cache'
 import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
 import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import { buildPublicLowerThirdPayload, normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
@@ -154,19 +154,23 @@ export async function buildPublicChannelLivePatch(
     .eq('id', bm.id)
     .maybeSingle()
 
-  const items = await getAgendaItemsForControl(service, bm.id, !!bmMeta?.agenda_locked)
-  const currentIdx = bstate?.current_agenda_item_id
-    ? items.findIndex(i => i.id === bstate.current_agenda_item_id)
-    : -1
-  const currentRow = currentIdx >= 0 ? items[currentIdx] : null
+  const agendaNav = await resolveAgendaNavigation(
+    service,
+    bm.id,
+    !!bmMeta?.agenda_locked,
+    bstate?.current_agenda_item_id,
+  )
 
-  const current_item: PublicAgendaItem | null = currentRow
-    ? { ...currentRow, presenters: [], documents: [] }
+  const current_item: PublicAgendaItem | null = agendaNav.current_item
+    ? { ...agendaNav.current_item, presenters: [], documents: [] }
     : null
 
-  const upcoming_items = items
-    .slice(currentIdx >= 0 ? currentIdx + 1 : 0, currentIdx >= 0 ? currentIdx + 4 : 3)
-    .map(i => ({ id: i.id, item_number: i.item_number, title: i.title, type: i.type }))
+  const upcoming_items = agendaNav.upcoming_items.map(i => ({
+    id: i.id,
+    item_number: i.item_number,
+    title: i.title,
+    type: i.type,
+  }))
 
   let timerPayload: PublicChannelState['timer'] = null
   if (bstate?.active_timer_id) {

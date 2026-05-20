@@ -10,8 +10,8 @@ import { loadMeetingPlaylistBundle } from '@/lib/board-meetings/playlist-playbac
 import { mediaPublicUrl } from '@/lib/board-meetings/media-library'
 import { getCachedOutputChannels, getCachedTimerTemplates } from '@/lib/board-meetings/control-static-cache'
 import {
-  getAgendaItemsForControl,
   getCachedBoardMemberPeople,
+  resolveAgendaNavigation,
 } from '@/lib/board-meetings/control-meeting-cache'
 import { loadControlUtilities } from '@/lib/board-meetings/control-utilities'
 import type {
@@ -60,7 +60,6 @@ export async function buildControlSurfaceBundle(
   if (!bm) return null
 
   const [
-    agenda_items,
     { data: state },
     { data: assignments },
     { data: timers },
@@ -73,7 +72,6 @@ export async function buildControlSurfaceBundle(
     motions,
     playlistBundle,
   ] = await Promise.all([
-    getAgendaItemsForControl(service, bm.id, !!bm.agenda_locked),
     service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', bm.id).maybeSingle(),
     service
       .from('channel_assignments')
@@ -135,6 +133,15 @@ export async function buildControlSurfaceBundle(
   const motion_lifecycle = buildMotionLifecycle(state, motions)
   const result_overlay = buildResultOverlay(state, motions)
 
+  const agendaNav = await resolveAgendaNavigation(
+    service,
+    bm.id,
+    !!bm.agenda_locked,
+    state?.current_agenda_item_id,
+  )
+  const agenda_items = agendaNav.broadcastable_items
+  const current_agenda_item = agendaNav.current_item
+
   const broadcast_state = {
     ...(state || {}),
     status: bm.broadcast_status,
@@ -176,6 +183,7 @@ export async function buildControlSurfaceBundle(
     },
     broadcast_state,
     agenda_items,
+    current_agenda_item,
     items: agenda_items,
     motion_lifecycle,
     attendance: null,
