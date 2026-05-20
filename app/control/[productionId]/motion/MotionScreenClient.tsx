@@ -4,7 +4,11 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import MotionScreenView from './MotionScreenView'
-import type { MotionScreenBundle } from '@/lib/board-meetings/motion-types'
+import type { MotionScreenBundle, VoteValue } from '@/lib/board-meetings/motion-types'
+import {
+  applyVoiceVoteDefaults,
+  applyVoteToBundle,
+} from '@/lib/board-meetings/motion-screen-optimistic'
 
 async function readApiError(res: Response): Promise<string> {
   const txt = await res.text()
@@ -16,6 +20,15 @@ async function readApiError(res: Response): Promise<string> {
   }
   return txt || `Request failed (${res.status})`
 }
+
+/** Actions that update local state immediately; no global busy lock. */
+const INSTANT_ACTIONS = new Set([
+  'record-vote',
+  'set-mover',
+  'set-seconder',
+  'set-text',
+  'set-vote-type',
+])
 
 type Props = {
   productionId: string
@@ -29,16 +42,26 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const bundleRef = useRef(bundle)
+  bundleRef.current = bundle
+
+  const suppressRefreshUntilRef = useRef(0)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const bundleForView: MotionScreenBundle = {
     ...bundle,
     suggested_motion_text: pendingMotionText ?? bundle.suggested_motion_text,
   }
 
+  const markLocalMutation = useCallback(() => {
+    suppressRefreshUntilRef.current = Date.now() + 1200
+  }, [])
+
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`/api/board-meetings/${productionId}/motion/bundle`, { cache: 'no-store' })
       if (res.ok) {
-        const data = await res.json()
+        const data = (await res.json()) as MotionScreenBundle
         setBundle(data)
       }
     } catch {
@@ -46,12 +69,16 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     }
   }, [productionId])
 
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refreshInBackground = useCallback(() => {
+    void refresh()
+  }, [refresh])
+
   const refreshDebounced = useCallback(() => {
+    if (Date.now() < suppressRefreshUntilRef.current) return
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
     refreshTimerRef.current = setTimeout(() => {
       void refresh()
-    }, 200)
+    }, 400)
   }, [refresh])
 
   useEffect(() => {
@@ -59,84 +86,186 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
 
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     )
 
     const meetingId = initialBundle.meeting.id
     const channel = supabase
       .channel(`motion-screen-${meetingId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` },
+        refreshDebounced,
+      )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motion_votes' }, refreshDebounced)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` }, refreshDebounced)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` },
+        refreshDebounced,
+      )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [initialBundle.meeting.id, refreshDebounced])
 
-  const onAction = useCallback(async (action: string, body?: unknown) => {
-    setBusy(true)
-    setError(null)
-    try {
-      const activeId = bundle.active_motion?.id
-      const motionId = activeId || bundle.parent_motion?.id || ''
-
-      if (action === 'set-text' && !activeId) {
-        const text = (body as { text?: string } | undefined)?.text ?? ''
-        setPendingMotionText(text)
+  const applyOptimistic = useCallback(
+    (action: string, body?: unknown) => {
+      const b = bundleRef.current
+      if (action === 'record-vote') {
+        const { person_id, vote } = body as { person_id: string; vote: VoteValue }
+        setBundle(applyVoteToBundle(b, person_id, vote))
         return
       }
-
-      let url: string
-      if (action === 'open') {
-        url = `/api/board-meetings/${productionId}/motion/open`
-      } else if (action === 'result-hold') {
-        url = `/api/board-meetings/${productionId}/motion/result/hold`
-      } else if (action === 'result-dismiss') {
-        url = `/api/board-meetings/${productionId}/motion/result/dismiss`
-      } else if (motionId) {
-        url = `/api/board-meetings/${productionId}/motion/${motionId}/${action}`
-      } else {
-        throw new Error('No active motion for action: ' + action)
+      if (action === 'set-mover') {
+        const personId = (body as { person_id?: string | null }).person_id ?? null
+        const name = personId ? b.voting_members.find(m => m.id === personId)?.display_name ?? null : null
+        setBundle({
+          ...b,
+          active_motion: b.active_motion
+            ? { ...b.active_motion, mover_id: personId, mover_name: name }
+            : null,
+        })
+        return
       }
+      if (action === 'set-seconder') {
+        const personId = (body as { person_id?: string | null }).person_id ?? null
+        const name = personId ? b.voting_members.find(m => m.id === personId)?.display_name ?? null : null
+        setBundle({
+          ...b,
+          active_motion: b.active_motion
+            ? { ...b.active_motion, seconder_id: personId, seconder_name: name }
+            : null,
+        })
+        return
+      }
+      if (action === 'set-text') {
+        const text = (body as { text?: string }).text ?? ''
+        setBundle({
+          ...b,
+          active_motion: b.active_motion ? { ...b.active_motion, text } : null,
+        })
+        return
+      }
+      if (action === 'set-vote-type') {
+        const voteType = (body as { vote_type?: 'voice' | 'roll_call' }).vote_type ?? 'voice'
+        setBundle({
+          ...b,
+          active_motion: b.active_motion ? { ...b.active_motion, vote_type: voteType } : null,
+        })
+        return
+      }
+      if (action === 'open-vote') {
+        setBundle(applyVoiceVoteDefaults(b))
+        return
+      }
+      if (action === 'open-discussion' && b.active_motion) {
+        setBundle({
+          ...b,
+          active_motion: { ...b.active_motion, status: 'open_for_discussion' },
+        })
+      }
+    },
+    [],
+  )
 
-      const payload =
-        action === 'open' && pendingMotionText
-          ? { ...(body as Record<string, unknown>), motion_text: pendingMotionText }
-          : body
+  const onAction = useCallback(
+    async (action: string, body?: unknown) => {
+      const instant = INSTANT_ACTIONS.has(action)
+      if (!instant) {
+        setBusy(true)
+      }
+      setError(null)
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload !== undefined ? JSON.stringify(payload) : undefined,
-      })
-      if (!res.ok) throw new Error(await readApiError(res))
-      if (action === 'open' || action === 'set-text') setPendingMotionText(null)
-      await refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Action failed')
-    } finally {
-      setBusy(false)
-    }
-  }, [productionId, bundle.active_motion?.id, bundle.parent_motion?.id, pendingMotionText, refresh])
+      try {
+        const activeId = bundleRef.current.active_motion?.id
+        const motionId = activeId || bundleRef.current.parent_motion?.id || ''
+
+        if (action === 'set-text' && !activeId) {
+          const text = (body as { text?: string } | undefined)?.text ?? ''
+          setPendingMotionText(text)
+          return
+        }
+
+        markLocalMutation()
+        if (instant || action === 'open-vote' || action === 'open-discussion') {
+          applyOptimistic(action, body)
+        }
+
+        let url: string
+        if (action === 'open') {
+          url = `/api/board-meetings/${productionId}/motion/open`
+        } else if (action === 'result-hold') {
+          url = `/api/board-meetings/${productionId}/motion/result/hold`
+        } else if (action === 'result-dismiss') {
+          url = `/api/board-meetings/${productionId}/motion/result/dismiss`
+        } else if (motionId) {
+          url = `/api/board-meetings/${productionId}/motion/${motionId}/${action}`
+        } else {
+          throw new Error('No active motion for action: ' + action)
+        }
+
+        const payload =
+          action === 'open' && pendingMotionText
+            ? { ...(body as Record<string, unknown>), motion_text: pendingMotionText }
+            : body
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload !== undefined ? JSON.stringify(payload) : undefined,
+        })
+
+        if (!res.ok) throw new Error(await readApiError(res))
+
+        if (action === 'open') {
+          setPendingMotionText(null)
+          refreshInBackground()
+        } else if (instant || action === 'record-vote') {
+          // Already optimistic; reconcile in background without blocking taps.
+          refreshInBackground()
+        } else {
+          refreshInBackground()
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Action failed')
+        refreshInBackground()
+      } finally {
+        if (!instant) {
+          setBusy(false)
+        }
+      }
+    },
+    [
+      productionId,
+      pendingMotionText,
+      markLocalMutation,
+      applyOptimistic,
+      refreshInBackground,
+    ],
+  )
 
   const onMinimize = useCallback(() => {
     router.push(`/control/${productionId}`)
   }, [router, productionId])
 
   const onPushResult = useCallback(async () => {
-    const motionId = bundle.active_motion?.id
+    const motionId = bundleRef.current.active_motion?.id
     if (!motionId) return
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch(`/api/board-meetings/${productionId}/motion/${motionId}/push-result`, { method: 'POST' })
+      const res = await fetch(`/api/board-meetings/${productionId}/motion/${motionId}/push-result`, {
+        method: 'POST',
+      })
       if (!res.ok) throw new Error(await readApiError(res))
       router.push(`/control/${productionId}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Push failed')
       setBusy(false)
     }
-  }, [productionId, bundle.active_motion?.id, router])
+  }, [productionId, router])
 
   return (
     <MotionScreenView

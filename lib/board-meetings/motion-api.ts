@@ -255,7 +255,7 @@ export async function recordVote(
   personId: string,
   vote: VoteValue,
 ) {
-  await recordMotionVote(
+  return recordMotionVote(
     ctx.service,
     ctx.boardMeetingId,
     motionId,

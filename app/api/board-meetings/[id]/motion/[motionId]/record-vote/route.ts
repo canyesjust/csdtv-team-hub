@@ -10,8 +10,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   return withControlContext(id, async c => {
     try {
       const body = await req.json()
-      await recordVote(c, motionId, body.person_id, body.vote as VoteValue)
-      return NextResponse.json({ ok: true })
+      const result = await recordVote(c, motionId, body.person_id, body.vote as VoteValue)
+      return NextResponse.json({
+        ok: true,
+        person_id: result.person_id,
+        vote: result.vote,
+        tally: {
+          yea: result.tally.yea,
+          nay: result.tally.nay,
+          abstain: result.tally.abstain,
+          absent: result.tally.absent,
+        },
+        motion_status: result.motion_status,
+      })
     } catch (e) {
       return controlError(e instanceof Error ? e.message : 'Failed to record vote', 500)
     }
