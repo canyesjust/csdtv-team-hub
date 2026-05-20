@@ -8,6 +8,7 @@ import {
   loadBoardMembers,
 } from '@/lib/board-meetings/attendance-control'
 import type {
+  AttendanceStatus,
   EnrichedMotion,
   EnrichedMotionVote,
   MotionResult,
@@ -21,7 +22,7 @@ import type {
 
 const VOTE_RESULT_DEFAULT_SECONDS = 8
 
-/** One active vote per (motion, person); update in place when already recorded. */
+/** One active vote per (motion, person); upsert without a prior select. */
 async function upsertActiveMotionVote(
   service: SupabaseClient,
   motionId: string,
@@ -30,30 +31,62 @@ async function upsertActiveMotionVote(
   operatorId: string,
 ) {
   const now = new Date().toISOString()
-  const { data: prev } = await service
-    .from('meeting_motion_votes')
-    .select('id')
-    .eq('motion_id', motionId)
+  const { error } = await service.from('meeting_motion_votes').upsert(
+    {
+      motion_id: motionId,
+      person_id: personId,
+      vote,
+      recorded_by: operatorId,
+      recorded_at: now,
+    },
+    { onConflict: 'motion_id,person_id' },
+  )
+  if (error) throw new Error(error.message)
+}
+
+async function loadAttendanceForPerson(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  personId: string,
+) {
+  const { data: row } = await service
+    .from('meeting_attendance')
+    .select('person_id, status, arrived_at, left_at')
+    .eq('board_meeting_id', boardMeetingId)
     .eq('person_id', personId)
-    .is('superseded_by_vote_id', null)
     .maybeSingle()
 
-  if (prev) {
-    const { error } = await service
-      .from('meeting_motion_votes')
-      .update({ vote, recorded_by: operatorId, recorded_at: now })
-      .eq('id', prev.id)
-    if (error) throw new Error(error.message)
-    return
+  if (row) {
+    return {
+      person_id: row.person_id,
+      status: row.status as AttendanceStatus,
+      arrived_at: row.arrived_at,
+      left_at: row.left_at,
+    }
   }
 
-  const { error } = await service.from('meeting_motion_votes').insert({
-    motion_id: motionId,
+  return {
     person_id: personId,
-    vote,
-    recorded_by: operatorId,
-  })
-  if (error) throw new Error(error.message)
+    status: 'present' as const,
+    arrived_at: null,
+    left_at: null,
+  }
+}
+
+async function loadMotionForVote(
+  service: SupabaseClient,
+  motionId: string,
+  boardMeetingId: string,
+) {
+  const { data } = await service
+    .from('meeting_motions')
+    .select(
+      'id, status, tally_yea, tally_nay, tally_abstain, tally_absent, tally_recused',
+    )
+    .eq('id', motionId)
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+  return data
 }
 
 export function computeTally(votes: { vote: VoteValue }[]): VoteTally {
@@ -70,6 +103,41 @@ function incrementTally(tally: VoteTally, vote: VoteValue) {
   else if (vote === 'abstain') tally.abstain++
   else if (vote === 'absent') tally.absent++
   else if (vote === 'recused') tally.recused++
+}
+
+function decrementTally(tally: VoteTally, vote: VoteValue) {
+  if (vote === 'yea') tally.yea = Math.max(0, tally.yea - 1)
+  else if (vote === 'nay') tally.nay = Math.max(0, tally.nay - 1)
+  else if (vote === 'abstain') tally.abstain = Math.max(0, tally.abstain - 1)
+  else if (vote === 'absent') tally.absent = Math.max(0, tally.absent - 1)
+  else if (vote === 'recused') tally.recused = Math.max(0, tally.recused - 1)
+}
+
+function tallyFromMotionRow(motion: {
+  tally_yea?: number | null
+  tally_nay?: number | null
+  tally_abstain?: number | null
+  tally_absent?: number | null
+  tally_recused?: number | null
+}): VoteTally {
+  return {
+    yea: motion.tally_yea ?? 0,
+    nay: motion.tally_nay ?? 0,
+    abstain: motion.tally_abstain ?? 0,
+    absent: motion.tally_absent ?? 0,
+    recused: motion.tally_recused ?? 0,
+  }
+}
+
+function applyVoteTallyDelta(tally: VoteTally, prior: VoteValue | null, next: VoteValue): VoteTally {
+  const out = { ...tally }
+  if (prior && prior !== next) {
+    decrementTally(out, prior)
+    incrementTally(out, next)
+  } else if (!prior) {
+    incrementTally(out, next)
+  }
+  return out
 }
 
 /** Tally for UI / motion row — unrecorded eligible members default to yea (matches motion screen). */
@@ -355,8 +423,8 @@ export async function updateMotion(
   const { error } = await service.from('meeting_motions').update(row).eq('id', motionId)
   if (error) throw new Error(error.message)
 
-  await setActiveMotion(service, boardMeetingId, motionId, operatorId)
-  await logMeetingEvent(service, boardMeetingId, 'motion_updated', operatorId, {
+  void setActiveMotion(service, boardMeetingId, motionId, operatorId)
+  void logMeetingEvent(service, boardMeetingId, 'motion_updated', operatorId, {
     motion_id: motionId,
     moved_by_person_id: movedBy,
     seconded_by_person_id: secondedBy,
@@ -382,7 +450,7 @@ export async function setMotionVoteType(
     .eq('id', motionId)
   if (error) throw new Error(error.message)
 
-  await logMeetingEvent(service, boardMeetingId, 'vote_type_set', operatorId, {
+  void logMeetingEvent(service, boardMeetingId, 'vote_type_set', operatorId, {
     motion_id: motionId,
     vote_mode: voteMode,
   })
@@ -418,30 +486,37 @@ export async function openVote(
     const eligible = attendance.records.filter(r =>
       isEligibleToVote(r.status, at, r.arrived_at, r.left_at),
     )
-    await Promise.all(
-      eligible.map(r => upsertActiveMotionVote(service, motionId, r.person_id, 'yea', operatorId)),
-    )
-    const { data: activeVotes } = await service
-      .from('meeting_motion_votes')
-      .select('vote')
-      .eq('motion_id', motionId)
-      .is('superseded_by_vote_id', null)
-    const tally = computeTally(activeVotes || [])
+    if (eligible.length > 0) {
+      const { error: seedError } = await service.from('meeting_motion_votes').upsert(
+        eligible.map(r => ({
+          motion_id: motionId,
+          person_id: r.person_id,
+          vote: 'yea' as const,
+          recorded_by: operatorId,
+          recorded_at: now,
+        })),
+        { onConflict: 'motion_id,person_id' },
+      )
+      if (seedError) throw new Error(seedError.message)
+    }
     await service
       .from('meeting_motions')
       .update({
-        tally_yea: tally.yea,
-        tally_nay: tally.nay,
-        tally_abstain: tally.abstain,
-        tally_absent: tally.absent,
-        tally_recused: tally.recused,
+        tally_yea: eligible.length,
+        tally_nay: 0,
+        tally_abstain: 0,
+        tally_absent: 0,
+        tally_recused: 0,
         updated_at: now,
       })
       .eq('id', motionId)
   }
 
-  await setActiveMotion(service, boardMeetingId, motionId, operatorId)
-  await logMeetingEvent(service, boardMeetingId, 'vote_opened', operatorId, { motion_id: motionId, vote_mode: voteMode })
+  void setActiveMotion(service, boardMeetingId, motionId, operatorId)
+  void logMeetingEvent(service, boardMeetingId, 'vote_opened', operatorId, {
+    motion_id: motionId,
+    vote_mode: voteMode,
+  })
 }
 
 export async function confirmOpenDiscussion(
@@ -481,18 +556,26 @@ export async function recordMotionVote(
   personId: string,
   vote: VoteValue,
 ): Promise<RecordMotionVoteResult> {
-  const [motion, attendance] = await Promise.all([
-    loadMotion(service, motionId, boardMeetingId),
-    loadAttendance(service, boardMeetingId),
+  const now = new Date()
+  const nowIso = now.toISOString()
+
+  const [motion, att, priorVoteRow] = await Promise.all([
+    loadMotionForVote(service, motionId, boardMeetingId),
+    loadAttendanceForPerson(service, boardMeetingId, personId),
+    service
+      .from('meeting_motion_votes')
+      .select('vote')
+      .eq('motion_id', motionId)
+      .eq('person_id', personId)
+      .is('superseded_by_vote_id', null)
+      .maybeSingle(),
   ])
+
   if (!motion) throw new Error('Motion not found')
   if (!['open_for_discussion', 'voting', 'passed', 'failed'].includes(motion.status)) {
     throw new Error('Motion is not open for voting')
   }
-  const att = attendance.records.find(r => r.person_id === personId)
-  if (!att) throw new Error('Voter must have an attendance record')
 
-  const now = new Date()
   if (
     !isEligibleToVote(att.status, now, att.arrived_at, att.left_at) &&
     vote !== 'absent' &&
@@ -501,28 +584,41 @@ export async function recordMotionVote(
     vote = 'absent'
   }
 
-  if (motion.status === 'open_for_discussion') {
-    await service
+  const priorVote = (priorVoteRow.data?.vote as VoteValue | undefined) ?? null
+  const tally = applyVoteTallyDelta(tallyFromMotionRow(motion), priorVote, vote)
+
+  const statusToVoting = motion.status === 'open_for_discussion'
+  const writes: Promise<unknown>[] = [
+    upsertActiveMotionVote(service, motionId, personId, vote, operatorId),
+    service
       .from('meeting_motions')
-      .update({ status: 'voting', updated_at: now.toISOString() })
+      .update({
+        ...(statusToVoting ? { status: 'voting' } : {}),
+        tally_yea: tally.yea,
+        tally_nay: tally.nay,
+        tally_abstain: tally.abstain,
+        tally_absent: tally.absent,
+        tally_recused: tally.recused,
+        updated_at: nowIso,
+      })
+      .eq('id', motionId),
+  ]
+
+  await Promise.all(writes)
+
+  void computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId).then(fullTally => {
+    void service
+      .from('meeting_motions')
+      .update({
+        tally_yea: fullTally.yea,
+        tally_nay: fullTally.nay,
+        tally_abstain: fullTally.abstain,
+        tally_absent: fullTally.absent,
+        tally_recused: fullTally.recused,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', motionId)
-  }
-
-  await upsertActiveMotionVote(service, motionId, personId, vote, operatorId)
-
-  const tally = await computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId)
-
-  await service
-    .from('meeting_motions')
-    .update({
-      tally_yea: tally.yea,
-      tally_nay: tally.nay,
-      tally_abstain: tally.abstain,
-      tally_absent: tally.absent,
-      tally_recused: tally.recused,
-      updated_at: now.toISOString(),
-    })
-    .eq('id', motionId)
+  })
 
   void logMeetingEvent(service, boardMeetingId, 'vote_recorded_incremental', operatorId, {
     motion_id: motionId,
@@ -531,7 +627,7 @@ export async function recordMotionVote(
   })
 
   const motion_status: MotionStatus =
-    motion.status === 'open_for_discussion' ? 'voting' : motion.status
+    motion.status === 'open_for_discussion' ? 'voting' : (motion.status as MotionStatus)
 
   return { person_id: personId, vote, tally, motion_status }
 }

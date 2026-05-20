@@ -33,6 +33,11 @@ const INSTANT_ACTIONS = new Set([
 /** Optimistic actions that should not refetch the full bundle after success. */
 const SKIP_SUCCESS_REFRESH = new Set([...INSTANT_ACTIONS, 'open-vote', 'open-discussion'])
 
+/** POST in background — UI already updated optimistically. */
+const FIRE_AND_FORGET_ACTIONS = SKIP_SUCCESS_REFRESH
+
+const LOCAL_SUPPRESS_MS = 5000
+
 type Props = {
   productionId: string
   initialBundle: MotionScreenBundle
@@ -56,8 +61,9 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     suggested_motion_text: pendingMotionText ?? bundle.suggested_motion_text,
   }
 
-  const markLocalMutation = useCallback(() => {
-    suppressRefreshUntilRef.current = Date.now() + 1200
+  const markLocalMutation = useCallback((action?: string) => {
+    const ms = action === 'record-vote' ? LOCAL_SUPPRESS_MS : 1200
+    suppressRefreshUntilRef.current = Date.now() + ms
   }, [])
 
   const refresh = useCallback(async () => {
@@ -100,7 +106,6 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
         { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` },
         refreshDebounced,
       )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_motion_votes' }, refreshDebounced)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` },
@@ -173,9 +178,39 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     [],
   )
 
+  const postActionInBackground = useCallback(
+    (url: string, payload: unknown, action: string) => {
+      void fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: payload !== undefined ? JSON.stringify(payload) : undefined,
+      })
+        .then(async res => {
+          if (!res.ok) {
+            setError(await readApiError(res))
+            refreshInBackground()
+            return
+          }
+          if (action === 'open') {
+            setPendingMotionText(null)
+            refreshInBackground()
+          } else if (!SKIP_SUCCESS_REFRESH.has(action)) {
+            refreshInBackground()
+          }
+        })
+        .catch(() => {
+          setError('Action failed')
+          refreshInBackground()
+        })
+    },
+    [refreshInBackground],
+  )
+
   const onAction = useCallback(
     async (action: string, body?: unknown) => {
       const instant = INSTANT_ACTIONS.has(action)
+      const fireAndForget = FIRE_AND_FORGET_ACTIONS.has(action)
       if (!instant) {
         setBusy(true)
       }
@@ -191,7 +226,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
           return
         }
 
-        markLocalMutation()
+        markLocalMutation(action)
         if (instant || action === 'open-vote' || action === 'open-discussion') {
           applyOptimistic(action, body)
         }
@@ -213,6 +248,11 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
           action === 'open' && pendingMotionText
             ? { ...(body as Record<string, unknown>), motion_text: pendingMotionText }
             : body
+
+        if (fireAndForget) {
+          postActionInBackground(url, payload, action)
+          return
+        }
 
         const res = await fetch(url, {
           method: 'POST',
@@ -243,6 +283,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
       markLocalMutation,
       applyOptimistic,
       refreshInBackground,
+      postActionInBackground,
     ],
   )
 

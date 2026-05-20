@@ -11,6 +11,9 @@ export type ControlContext = {
   boardMeetingId: string
 }
 
+const boardMeetingIdCache = new Map<string, { boardMeetingId: string; expires: number }>()
+const BOARD_MEETING_CACHE_MS = 60_000
+
 export async function withControlContext(
   productionId: string,
   handler: (ctx: ControlContext) => Promise<NextResponse>,
@@ -28,6 +31,16 @@ export async function withControlContext(
 
   const resolvedProductionId = prodCheck.productionId
 
+  const cached = boardMeetingIdCache.get(resolvedProductionId)
+  if (cached && cached.expires > Date.now()) {
+    return handler({
+      service,
+      teamUserId: teamUser.id,
+      productionId: resolvedProductionId,
+      boardMeetingId: cached.boardMeetingId,
+    })
+  }
+
   const { data: bm } = await service
     .from('board_meetings')
     .select('id, broadcast_status, agenda_locked')
@@ -35,6 +48,11 @@ export async function withControlContext(
     .maybeSingle()
 
   if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
+
+  boardMeetingIdCache.set(resolvedProductionId, {
+    boardMeetingId: bm.id,
+    expires: Date.now() + BOARD_MEETING_CACHE_MS,
+  })
 
   return handler({
     service,
