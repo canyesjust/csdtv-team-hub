@@ -9,8 +9,7 @@ import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import { AgendaContextStrip, motionDisplayText } from '@/app/board/components/MotionFloorGraphics'
-
-const LS_KEY = 'board-dais-person'
+import { CANYONS_LOGO_SRC } from '@/app/board/branding-assets'
 
 const C = {
   bg0: '#04080f',
@@ -49,16 +48,8 @@ export default function BoardDaisView({
   const wantAutoFullscreen = autoFullscreen
   const state = useBoardChannelState(channelNumber, { livePriority: true })
   const fullscreen = useElementFullscreen()
-  const [personName, setPersonName] = useState<string | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [boardMembers, setBoardMembers] = useState<{ id: string; display_name: string }[]>([])
   const [now, setNow] = useState(() => Date.now())
   const [autoFsPrompt, setAutoFsPrompt] = useState(false)
-
-  useEffect(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null
-    if (saved) setPersonName(saved)
-  }, [])
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
@@ -78,26 +69,6 @@ export default function BoardDaisView({
     () => new Date(now).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
     [now],
   )
-
-  const openPicker = async () => {
-    setPickerOpen(true)
-    if (boardMembers.length > 0) return
-    try {
-      const res = await fetch('/api/board/public/board-members')
-      if (!res.ok) return
-      const body = await res.json()
-      setBoardMembers((body.members || []).map((p: { id: string; display_name: string }) => ({
-        id: p.id,
-        display_name: p.display_name,
-      })))
-    } catch { /* ignore */ }
-  }
-
-  const selectPerson = (name: string) => {
-    localStorage.setItem(LS_KEY, name)
-    setPersonName(name)
-    setPickerOpen(false)
-  }
 
   const screenNameForIdle = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
 
@@ -147,41 +118,16 @@ export default function BoardDaisView({
 
         <header style={header}>
           <div style={headerLeft}>
+            <img src={CANYONS_LOGO_SRC} alt="Canyons School District" style={headerLogo} />
+          </div>
+          <div style={headerRight}>
             <span style={livePill}>
               <span style={liveDot} />
               LIVE
             </span>
             <span style={channelTag}>Dais · Ch {channelNumber}</span>
           </div>
-          <div style={headerRight}>
-            {personName ? (
-              <span style={personChip}>{personName}</span>
-            ) : (
-              <button type="button" onClick={openPicker} style={ghostBtn}>
-                Identify monitor
-              </button>
-            )}
-          </div>
         </header>
-
-        {pickerOpen && (
-          <div style={pickerOverlay} role="presentation">
-            <div style={pickerCard} role="dialog" aria-label="Select board member">
-              <p style={pickerTitle}>This monitor</p>
-              <p style={pickerSub}>Select your name for a personalized welcome.</p>
-              <div style={pickerList}>
-                {boardMembers.map(m => (
-                  <button key={m.id} type="button" onClick={() => selectPerson(m.display_name)} style={pickerItem}>
-                    {m.display_name}
-                  </button>
-                ))}
-              </div>
-              <button type="button" onClick={() => setPickerOpen(false)} style={pickerCancel}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
 
         <main style={mainGrid}>
           <section style={heroCol}>
@@ -655,8 +601,16 @@ const header: React.CSSProperties = {
   marginBottom: '28px',
 }
 
-const headerLeft: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '14px' }
-const headerRight: React.CSSProperties = { display: 'flex', alignItems: 'center' }
+const headerLeft: React.CSSProperties = { display: 'flex', alignItems: 'center', minWidth: 0 }
+const headerRight: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }
+
+const headerLogo: React.CSSProperties = {
+  height: '40px',
+  width: 'auto',
+  maxWidth: 'min(320px, 50vw)',
+  objectFit: 'contain',
+  display: 'block',
+}
 
 const livePill: React.CSSProperties = {
   display: 'inline-flex',
@@ -686,28 +640,6 @@ const channelTag: React.CSSProperties = {
   color: C.textDim,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
-}
-
-const personChip: React.CSSProperties = {
-  fontSize: '14px',
-  color: C.textSoft,
-  padding: '8px 16px',
-  borderRadius: '10px',
-  background: C.glassHi,
-  border: `1px solid ${C.glassBorder}`,
-}
-
-const ghostBtn: React.CSSProperties = {
-  background: 'transparent',
-  border: `1px solid ${C.glassBorder}`,
-  borderRadius: '10px',
-  color: C.accent,
-  padding: '8px 16px',
-  fontSize: '13px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-  letterSpacing: '0.02em',
 }
 
 const mainGrid: React.CSSProperties = {
@@ -952,50 +884,3 @@ const awaitingSecond: React.CSSProperties = {
   color: C.amber,
 }
 
-const pickerOverlay: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(4, 8, 15, 0.85)',
-  backdropFilter: 'blur(8px)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 100,
-  padding: '24px',
-}
-
-const pickerCard: React.CSSProperties = {
-  width: '100%',
-  maxWidth: '400px',
-  padding: '28px',
-  borderRadius: '20px',
-  background: 'linear-gradient(160deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)',
-  border: `1px solid ${C.glassBorder}`,
-  boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
-}
-
-const pickerTitle: React.CSSProperties = { margin: '0 0 6px', fontSize: '20px', fontWeight: 700, color: C.text }
-const pickerSub: React.CSSProperties = { margin: '0 0 20px', fontSize: '14px', color: C.textSoft, lineHeight: 1.45 }
-const pickerList: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '50vh', overflowY: 'auto' }
-const pickerItem: React.CSSProperties = {
-  display: 'block',
-  width: '100%',
-  textAlign: 'left',
-  padding: '14px 16px',
-  borderRadius: '12px',
-  background: C.glassHi,
-  border: `1px solid ${C.glassBorder}`,
-  color: C.text,
-  fontSize: '16px',
-  fontWeight: 500,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-  transition: 'border-color 0.15s',
-}
-const pickerCancel: React.CSSProperties = {
-  ...pickerItem,
-  marginTop: '12px',
-  textAlign: 'center',
-  color: C.textDim,
-  background: 'transparent',
-}
