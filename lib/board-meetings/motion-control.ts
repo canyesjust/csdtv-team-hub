@@ -295,10 +295,10 @@ export async function updateMotion(
   const motion = await loadMotion(service, motionId, boardMeetingId)
   if (!motion) throw new Error('Motion not found')
   const textOnly = patch.motion_text !== undefined && Object.keys(patch).length === 1
-  const editableStatuses = textOnly
-    ? (['open_for_discussion', 'voting', 'passed', 'failed'] as const)
-    : (['open_for_discussion', 'voting'] as const)
-  if (!editableStatuses.includes(motion.status as (typeof editableStatuses)[number])) {
+  const allowedStatuses: string[] = textOnly
+    ? ['open_for_discussion', 'voting', 'passed', 'failed']
+    : ['open_for_discussion', 'voting']
+  if (!allowedStatuses.includes(motion.status)) {
     throw new Error('Motion cannot be edited in its current state')
   }
 
