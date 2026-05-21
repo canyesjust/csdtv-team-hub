@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
 import { isStudentInternRole } from '@/lib/roles'
+import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
 
 interface Article {
   id: string
@@ -38,61 +39,6 @@ const STARTER_ARTICLES = [
   { title: 'Board meeting workflow', category: 'Workflow', content: '<p>Complete board meeting production checklist and workflow...</p>' },
   { title: 'Equipment checkout policy', category: 'Policy', content: '<p>Rules and procedures for checking out equipment...</p>' },
 ]
-
-const stripHtml = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-
-const ALLOWED_TAGS = new Set(['P', 'H2', 'H3', 'UL', 'OL', 'LI', 'STRONG', 'EM', 'HR', 'BR', 'A'])
-const ALLOWED_ATTRS: Record<string, Set<string>> = {
-  A: new Set(['href', 'target', 'rel']),
-}
-
-function sanitizeArticleHtml(input: string): string {
-  if (!input) return ''
-  if (typeof window === 'undefined') return input
-
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(input, 'text/html')
-
-  const walk = (node: Node) => {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement
-      const tag = el.tagName.toUpperCase()
-
-      if (!ALLOWED_TAGS.has(tag)) {
-        const parent = el.parentNode
-        if (parent) {
-          while (el.firstChild) parent.insertBefore(el.firstChild, el)
-          parent.removeChild(el)
-        }
-        return
-      }
-
-      const allowed = ALLOWED_ATTRS[tag] || new Set<string>()
-      for (const attr of Array.from(el.attributes)) {
-        const name = attr.name.toLowerCase()
-        if (!allowed.has(attr.name)) {
-          el.removeAttribute(attr.name)
-          continue
-        }
-        if (name === 'href') {
-          const href = (attr.value || '').trim()
-          if (!/^https?:\/\//i.test(href) && !href.startsWith('/')) {
-            el.removeAttribute('href')
-          }
-        }
-      }
-      if (tag === 'A') {
-        el.setAttribute('rel', 'noopener noreferrer')
-        if (!el.getAttribute('target')) el.setAttribute('target', '_blank')
-      }
-    }
-
-    for (const child of Array.from(node.childNodes)) walk(child)
-  }
-
-  walk(doc.body)
-  return doc.body.innerHTML
-}
 
 export default function KnowledgePage() {
   const { theme } = useTheme()
@@ -193,7 +139,7 @@ export default function KnowledgePage() {
   const readOnlyKb = isStudentInternRole(currentUser?.role)
 
   const filtered = articles.filter(a => {
-    const matchSearch = search === '' || a.title.toLowerCase().includes(search.toLowerCase()) || stripHtml(a.content).toLowerCase().includes(search.toLowerCase())
+    const matchSearch = search === '' || a.title.toLowerCase().includes(search.toLowerCase()) || stripArticleHtml(a.content).toLowerCase().includes(search.toLowerCase())
     const matchCat = catFilter === 'all' || a.category === catFilter
     return matchSearch && matchCat
   })
@@ -375,7 +321,7 @@ export default function KnowledgePage() {
                       <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '6px', background: cs.bg, color: cs.color, flexShrink: 0, fontWeight: 500 }}>{article.category}</span>
                     </div>
                     <p style={{ fontSize: '14px', color: muted, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                      {stripHtml(article.content).slice(0, 90)}
+                      {stripArticleHtml(article.content).slice(0, 90)}
                     </p>
                     {editedBy && <p style={{ fontSize: '11px', color: muted, margin: 0, opacity: 0.6 }}>Last edited by {editedBy}</p>}
                   </div>

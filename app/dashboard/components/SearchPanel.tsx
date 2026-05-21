@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 interface SearchResult {
   id: string
   title: string
-  type: 'production' | 'task' | 'knowledge'
+  type: 'production' | 'task' | 'knowledge' | 'idea'
   subtitle: string | null
   href: string
 }
@@ -41,15 +41,17 @@ export default function SearchPanel({ onClose }: Props) {
   const search = useCallback(async (q: string) => {
     if (q.length < 2) { setResults([]); return }
     setLoading(true)
-    const [prodsRes, tasksRes, kbRes] = await Promise.all([
+    const [prodsRes, tasksRes, kbRes, ideasRes] = await Promise.all([
       supabase.from('productions').select('id, title, production_number, request_type_label, organizer_name').ilike('title', `%${q}%`).limit(5),
       supabase.from('tasks').select('id, title, status').ilike('title', `%${q}%`).neq('status', 'complete').limit(5),
       supabase.from('knowledge_base').select('id, title, category').ilike('title', `%${q}%`).limit(5),
+      supabase.from('project_ideas').select('id, title, archived_at').ilike('title', `%${q}%`).is('archived_at', null).limit(5),
     ])
     const combined: SearchResult[] = [
       ...(prodsRes.data || []).map(p => ({ id: p.id, title: p.title, type: 'production' as const, subtitle: p.request_type_label || p.organizer_name, href: `/dashboard/productions/${p.production_number}` })),
       ...(tasksRes.data || []).map(t => ({ id: t.id, title: t.title, type: 'task' as const, subtitle: t.status, href: `/dashboard/tasks` })),
       ...(kbRes.data || []).map(k => ({ id: k.id, title: k.title, type: 'knowledge' as const, subtitle: k.category, href: `/dashboard/knowledge` })),
+      ...(ideasRes.data || []).map(i => ({ id: i.id, title: i.title, type: 'idea' as const, subtitle: 'Idea', href: `/dashboard/ideas` })),
     ]
     setResults(combined)
     setLoading(false)
@@ -67,6 +69,9 @@ export default function SearchPanel({ onClose }: Props) {
     if (type === 'task') return (
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
     )
+    if (type === 'idea') return (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    )
     return (
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
     )
@@ -75,6 +80,7 @@ export default function SearchPanel({ onClose }: Props) {
   const typeColor = (type: SearchResult['type']) => {
     if (type === 'production') return '#5ba3e0'
     if (type === 'task') return '#e8a020'
+    if (type === 'idea') return '#22c55e'
     return '#9b85e0'
   }
 
@@ -95,7 +101,7 @@ export default function SearchPanel({ onClose }: Props) {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search productions, tasks, knowledge base..."
+            placeholder="Search productions, tasks, ideas, knowledge base..."
             style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: '15px', color: text, fontFamily: 'inherit' }}
             onKeyDown={e => e.key === 'Escape' && onClose()}
           />
@@ -132,7 +138,7 @@ export default function SearchPanel({ onClose }: Props) {
 
         {query.length === 0 && (
           <div style={{ padding: '12px 16px' }}>
-            <p style={{ fontSize: '13px', color: muted, margin: 0 }}>Search productions, tasks, and knowledge base articles</p>
+            <p style={{ fontSize: '13px', color: muted, margin: 0 }}>Search productions, tasks, ideas, and knowledge base articles</p>
           </div>
         )}
       </div>

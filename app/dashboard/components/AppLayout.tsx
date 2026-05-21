@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
   { section: 'Work', items: [
     { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
+    { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
     { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
     { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
     { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
@@ -38,12 +39,14 @@ const NAV_ITEMS = [
 const BOTTOM_NAV = [
   { label: 'Home', href: '/dashboard', icon: 'home' },
   { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
+  { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
   { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
   { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
   { label: 'More', href: '#more', icon: 'more' },
 ]
 
 const MORE_ITEMS = [
+  { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
   { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
   { label: 'Board update', href: '/dashboard/board-update', icon: 'mail' },
   { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
@@ -113,6 +116,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           section: 'Work',
           items: [
             { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
+            { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
             { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
             { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
             { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
@@ -136,6 +140,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { label: 'More', href: '#more', icon: 'more' },
       ] as typeof BOTTOM_NAV,
       moreItems: [
+        { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
         { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
         { label: 'Equipment scan', href: '/dashboard/equipment/scan', icon: 'equipment' },
         { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
