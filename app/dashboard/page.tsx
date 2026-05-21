@@ -11,6 +11,8 @@ import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
+import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
+import { loadInsightsData, loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
@@ -44,18 +46,6 @@ interface Activity { id: string; action: string; detail: string | null; created_
 interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
 interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
 const SCHEDULE_DAY_SELECT = 'monday,tuesday,wednesday,thursday,friday'
-
-const DAY_MS = 86400000
-
-function dayDiffFromToday(input: string | Date | null): number | null {
-  if (!input) return null
-  const target = new Date(input)
-  if (Number.isNaN(target.getTime())) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  target.setHours(0, 0, 0, 0)
-  return Math.round((target.getTime() - today.getTime()) / DAY_MS)
-}
 
 export default function DashboardPage() {
   const { theme } = useTheme()
@@ -94,6 +84,10 @@ export default function DashboardPage() {
   const [schoolYearFilter, setSchoolYearFilter] = useState(currentSchoolYearKey())
   const [schoolYearOptions, setSchoolYearOptions] = useState<string[]>([])
   const [productionYearRows, setProductionYearRows] = useState<Array<{ school_year: string | null; start_datetime: string | null; status: string | null }>>([])
+  const [managerDataLoaded, setManagerDataLoaded] = useState(false)
+  const [insightsDataLoaded, setInsightsDataLoaded] = useState(false)
+  const [managerOpsLoading, setManagerOpsLoading] = useState(false)
+  const [insightsLoading, setInsightsLoading] = useState(false)
 
   const text     = 'var(--text-primary)'
   const muted    = 'var(--text-muted)'
@@ -133,14 +127,13 @@ export default function DashboardPage() {
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
       const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
 
-      const [tasksRes, prodMembersRes, teamRes, countRes, todayProdsRes, schedDefaultRes, activityRes, schoolYearRowsRes] = await Promise.all([
+      const [tasksRes, prodMembersRes, teamRes, countRes, todayProdsRes, schedDefaultRes, schoolYearRowsRes] = await Promise.all([
         supabase.from('tasks').select('*, productions(title)').eq('assigned_to', user.id).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(20),
         supabase.from('production_members').select('production_id').eq('user_id', user.id),
         supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
         supabase.from('productions').select('id', { count: 'exact', head: true }),
         supabase.from('productions').select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
         supabase.from('schedule_defaults').select(SCHEDULE_DAY_SELECT).eq('user_id', user.id).single(),
-        supabase.from('production_activity').select('id, action, detail, created_at, production_id, user_id').order('created_at', { ascending: false }).limit(10),
         supabase.from('productions').select('school_year,start_datetime,status'),
       ])
 
@@ -156,48 +149,6 @@ export default function DashboardPage() {
       yearSet.add(currentSchoolYearKey())
       setSchoolYearOptions(Array.from(yearSet).sort((a, b) => b.localeCompare(a)))
       setProductionYearRows((schoolYearRowsRes.data as Array<{ school_year: string | null; start_datetime: string | null; status: string | null }> | null) || [])
-
-      const activityRows = activityRes.error ? [] : (activityRes.data || [])
-      const actUserIds = [...new Set(activityRows.map((a: { user_id: string | null }) => a.user_id).filter(Boolean))] as string[]
-      let enrichedActivity: Activity[] = activityRows.map((a: Activity) => ({ ...a, team: null }))
-      if (actUserIds.length > 0) {
-        const { data: nameRows } = await supabase.from('team').select('id, name').in('id', actUserIds)
-        const nameById = Object.fromEntries((nameRows || []).map((t: { id: string; name: string }) => [t.id, t.name]))
-        enrichedActivity = activityRows.map((a: Activity & { user_id?: string | null }) => ({
-          ...a,
-          team: a.user_id && nameById[a.user_id] ? { name: nameById[a.user_id] } : null,
-        }))
-      }
-      setRecentActivity(enrichedActivity)
-
-      const { data: ytRows, error: ytErr } = await supabase
-        .from('productions')
-        .select('id, request_type_label, type, status, livestream_url, youtube_link_email_sent_at')
-        .neq('status', 'Abandoned')
-      if (ytErr) {
-        setYtEmailPendingCount(0)
-        setYtMissingLinkCount(0)
-      } else {
-        const relevant = (ytRows || []).filter((p: {
-          request_type_label?: string | null
-          type?: string | null
-        }) => {
-          const t = `${p.request_type_label || ''} ${p.type || ''}`.toLowerCase()
-          return t.includes('livestream') || t.includes('live stream') || t.includes('board')
-        })
-        const allowedStatus = (status: string | null | undefined): boolean => {
-          const s = (status || '').toLowerCase()
-          return s.includes('approved') || s.includes('in progress')
-        }
-        const activeRelevant = relevant.filter((p: { status?: string | null }) => allowedStatus(p.status))
-        const withLinkNoSend = activeRelevant.filter((p: {
-          livestream_url?: string | null
-          youtube_link_email_sent_at?: string | null
-        }) => !!(p.livestream_url || '').trim() && !p.youtube_link_email_sent_at).length
-        const missingLink = activeRelevant.filter((p: { livestream_url?: string | null }) => !(p.livestream_url || '').trim()).length
-        setYtEmailPendingCount(withLinkNoSend)
-        setYtMissingLinkCount(missingLink)
-      }
 
       const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
       const todayDayName = dayNames[new Date().getDay()]
@@ -222,35 +173,6 @@ export default function DashboardPage() {
         }
       }
 
-      const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7)); monday.setHours(0,0,0,0)
-      const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0)
-      const [weekProds, monthProds, weekTasks, monthTasks, weekVids, monthVids, yearProds, delivAggRes, ytAggRes] = await Promise.all([
-        supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monday.toISOString()),
-        supabase.from('production_activity').select('id', { count: 'exact', head: true }).eq('action', 'marked_complete').gte('created_at', monthStart.toISOString()),
-        supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monday.toISOString()),
-        supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'complete').gte('completed_at', monthStart.toISOString()),
-        supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monday.toISOString().split('T')[0]),
-        supabase.from('videos').select('id', { count: 'exact', head: true }).eq('status', 'Published').gte('date_published', monthStart.toISOString().split('T')[0]),
-        supabase.from('productions').select('id', { count: 'exact', head: true }).eq('status', 'Complete'),
-        supabase.from('productions').select('sum_deliverables:deliverables_count.sum()').gt('deliverables_count', 0).maybeSingle(),
-        supabase.from('videos').select('sum_views:youtube_views.sum()').not('youtube_views', 'is', null).maybeSingle(),
-      ])
-      let delivSum = Number((delivAggRes.data as { sum_deliverables?: number | null } | null)?.sum_deliverables || 0)
-      let viewsSum = Number((ytAggRes.data as { sum_views?: number | null } | null)?.sum_views || 0)
-      if (!Number.isFinite(delivSum) || !Number.isFinite(viewsSum)) {
-        const [delivRes, ytRes] = await Promise.all([
-          supabase.from('productions').select('deliverables_count').not('deliverables_count', 'is', null).gt('deliverables_count', 0),
-          supabase.from('videos').select('youtube_views').not('youtube_views', 'is', null),
-        ])
-        delivSum = (delivRes.data || []).reduce((s: number, p: { deliverables_count?: number | null }) => s + (p.deliverables_count || 0), 0)
-        viewsSum = (ytRes.data || []).reduce((s: number, v: { youtube_views?: number | null }) => s + (v.youtube_views || 0), 0)
-      }
-      setWeekStats({ prodsCompleted: weekProds.count || 0, tasksCompleted: weekTasks.count || 0, videosPublished: weekVids.count || 0 })
-      setMonthStats({ prodsCompleted: monthProds.count || 0, tasksCompleted: monthTasks.count || 0, videosPublished: monthVids.count || 0 })
-      setYearProdCount(yearProds.count || 0)
-      setTotalVidsProduced(delivSum)
-      setTotalYtViews(viewsSum)
-
       if (prodMembersRes.data && prodMembersRes.data.length > 0) {
         const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
         const { data: prods } = await supabase
@@ -264,83 +186,8 @@ export default function DashboardPage() {
       } else {
         setMyProductions([])
       }
-      if ((user.role || '').toLowerCase() === 'manager') {
-        const { data: allManagerProds } = await supabase
-          .from('productions')
-          .select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)')
-          .not('status', 'in', '("Complete","Abandoned")')
-          .order('start_datetime', { ascending: true, nullsFirst: false })
-          .limit(200)
-        const managerProds = (allManagerProds as any) || []
-        setManagerProductions(managerProds)
-
-        const soonProdIds = managerProds
-          .filter((p: Production) => {
-            const days = dayDiffFromToday(p.start_datetime)
-            return days !== null && days >= 0 && days <= 7
-          })
-          .map((p: Production) => p.id)
-
-        const todayIso = new Date().toISOString().split('T')[0]
-        const [unassignedRes, blockedRes, overdueRes, overdueOwnerRes] = await Promise.all([
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'complete').is('assigned_to', null),
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'complete').not('blocked_by', 'is', null),
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).neq('status', 'complete').lt('due_date', todayIso),
-          supabase.from('tasks').select('assigned_to,due_date').neq('status', 'complete').not('assigned_to', 'is', null).lt('due_date', todayIso).limit(3000),
-        ])
-        setManagerRiskCounts({
-          unassigned: unassignedRes.count || 0,
-          blocked: blockedRes.count || 0,
-          overdue: overdueRes.count || 0,
-        })
-        setOverdueOwnerRows((overdueOwnerRes.data as OverdueOwnerRow[]) || [])
-
-        if (soonProdIds.length > 0) {
-          const { data: crewRows, error: crewErr } = await supabase
-            .from('production_crew')
-            .select('id')
-            .in('production_id', soonProdIds)
-          const crewIds = (crewRows || []).map(c => c.id)
-          if (crewErr || crewIds.length === 0) {
-            setCrewSlotsTotal(0)
-            setCrewSlotsFilled(0)
-          } else {
-            const { data: slotRows, error: slotErr } = await supabase
-              .from('crew_role_slots')
-              .select('id, capacity')
-              .in('production_crew_id', crewIds)
-            if (slotErr) {
-              setCrewSlotsTotal(0)
-              setCrewSlotsFilled(0)
-            } else {
-              const slots = slotRows || []
-              const totalSpots = slots.reduce((s, r) => s + (Number((r as { capacity?: number }).capacity) || 0), 0)
-              const slotIds = slots.map(s => (s as { id: string }).id)
-              let filled = 0
-              const CHUNK = 120
-              for (let i = 0; i < slotIds.length; i += CHUNK) {
-                const chunk = slotIds.slice(i, i + CHUNK)
-                const { count } = await supabase
-                  .from('crew_signups')
-                  .select('id', { count: 'exact', head: true })
-                  .in('crew_role_slot_id', chunk)
-                filled += count || 0
-              }
-              setCrewSlotsTotal(totalSpots)
-              setCrewSlotsFilled(filled)
-            }
-          }
-        } else {
-          setCrewSlotsTotal(0)
-          setCrewSlotsFilled(0)
-        }
-      } else {
-        setManagerProductions([])
-        setCrewSlotsTotal(0)
-        setCrewSlotsFilled(0)
-        setManagerRiskCounts({ unassigned: 0, blocked: 0, overdue: 0 })
-        setOverdueOwnerRows([])
-      }
+      setManagerDataLoaded(false)
+      setInsightsDataLoaded(false)
       setDashboardUpdatedAt(new Date().toISOString())
     } catch (err) {
       console.error('Failed to load dashboard', err)
@@ -355,6 +202,57 @@ export default function DashboardPage() {
     const timer = setInterval(() => setClockTickMs(Date.now()), 60000)
     return () => clearInterval(timer)
   }, [])
+
+  const isManagerRole = (currentUser?.role || '').toLowerCase() === 'manager'
+
+  useEffect(() => {
+    if (loading || !currentUser || !isManagerRole || !managerOpen || managerDataLoaded) return
+    let cancelled = false
+    setManagerOpsLoading(true)
+    loadManagerOpsData(supabase)
+      .then((data) => {
+        if (cancelled) return
+        setManagerProductions(data.managerProductions as Production[])
+        setManagerRiskCounts(data.managerRiskCounts)
+        setOverdueOwnerRows(data.overdueOwnerRows)
+        setCrewSlotsTotal(data.crewSlotsTotal)
+        setCrewSlotsFilled(data.crewSlotsFilled)
+        setYtEmailPendingCount(data.ytEmailPendingCount)
+        setYtMissingLinkCount(data.ytMissingLinkCount)
+        setManagerDataLoaded(true)
+      })
+      .catch((err) => console.error('Failed to load manager ops', err))
+      .finally(() => {
+        if (!cancelled) setManagerOpsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [loading, currentUser, isManagerRole, managerOpen, managerDataLoaded, supabase])
+
+  useEffect(() => {
+    if (loading || !currentUser || !insightsOpen || insightsDataLoaded) return
+    let cancelled = false
+    setInsightsLoading(true)
+    loadInsightsData(supabase)
+      .then((data) => {
+        if (cancelled) return
+        setRecentActivity(data.recentActivity as Activity[])
+        setWeekStats(data.weekStats)
+        setMonthStats(data.monthStats)
+        setYearProdCount(data.yearProdCount)
+        setTotalVidsProduced(data.totalVidsProduced)
+        setTotalYtViews(data.totalYtViews)
+        setInsightsDataLoaded(true)
+      })
+      .catch((err) => console.error('Failed to load insights', err))
+      .finally(() => {
+        if (!cancelled) setInsightsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [loading, currentUser, insightsOpen, insightsDataLoaded, supabase])
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -825,6 +723,9 @@ export default function DashboardPage() {
           />
           {managerOpen && (
             <div id="manager-ops-content">
+              {managerOpsLoading && !managerDataLoaded && (
+                <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>Loading manager data…</p>
+              )}
               {/* 4 KPIs only */}
               <div className="manager-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '14px' }}>
                 {[
@@ -926,6 +827,9 @@ export default function DashboardPage() {
         />
         {insightsOpen && (
           <div id="insights-content">
+            {insightsLoading && !insightsDataLoaded && (
+              <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>Loading insights…</p>
+            )}
             <div className="stats-pulse" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '14px' }}>
               {[
                 { label: 'This week', items: [`${weekStats.prodsCompleted} productions`, `${weekStats.tasksCompleted} tasks`, `${weekStats.videosPublished} videos`], color: info },

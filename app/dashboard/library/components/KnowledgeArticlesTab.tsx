@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
-import { useEditor, EditorContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
+import type { Editor } from '@tiptap/react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../components/Loader'
 import { isStudentInternRole } from '@/lib/roles'
 import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
+
+const ArticleRichEditor = dynamic(() => import('../../components/ArticleRichEditor'), { ssr: false })
 
 interface Article {
   id: string
@@ -58,6 +59,8 @@ export default function KnowledgeArticlesTab() {
   const [form, setForm] = useState({ title: '', category: 'Process' })
   const [showMobileDetail, setShowMobileDetail] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [editor, setEditor] = useState<Editor | null>(null)
+  const pendingEditorContent = useRef<string | null>(null)
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -66,14 +69,16 @@ export default function KnowledgeArticlesTab() {
   const inputBg = 'var(--surface-2)'
   const hoverBg = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({ placeholder: 'Write your article here. Keep it practical and step-by-step.' }),
-    ],
-    content: '',
-    immediatelyRender: false,
-  })
+  const queueEditorContent = useCallback((html: string) => {
+    if (editor) editor.commands.setContent(html)
+    else pendingEditorContent.current = html
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor || pendingEditorContent.current === null) return
+    editor.commands.setContent(pendingEditorContent.current)
+    pendingEditorContent.current = null
+  }, [editor])
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -199,7 +204,7 @@ export default function KnowledgeArticlesTab() {
               onClick={() => {
                 setEditing(true)
                 setForm({ title: selected.title, category: selected.category })
-                editor?.commands.setContent(selected.content || '')
+                queueEditorContent(selected.content || '')
               }}
               style={{ fontSize: '15px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
               Edit
@@ -223,7 +228,10 @@ export default function KnowledgeArticlesTab() {
             </div>
             <div style={{ margin: '0 20px', border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden', background: inputBg }}>
               <Toolbar />
-              <EditorContent editor={editor} className="tiptap-editor" />
+              <ArticleRichEditor
+                placeholder="Write your article here. Keep it practical and step-by-step."
+                onEditorReady={setEditor}
+              />
             </div>
             <div style={{ display: 'flex', gap: '8px', margin: '14px 20px 20px' }}>
               <button onClick={saveArticle} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save article</button>
@@ -304,7 +312,7 @@ export default function KnowledgeArticlesTab() {
                   {!readOnlyKb && (
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                     {STARTER_ARTICLES.map(s => (
-                      <button key={s.title} onClick={() => { setForm({ title: s.title, category: s.category }); setShowNew(true); setShowMobileDetail(true); editor?.commands.setContent(s.content) }} style={{ fontSize: '14px', padding: '8px 14px', borderRadius: '8px', background: 'var(--surface-2)', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <button key={s.title} onClick={() => { setForm({ title: s.title, category: s.category }); setShowNew(true); setShowMobileDetail(true); queueEditorContent(s.content) }} style={{ fontSize: '14px', padding: '8px 14px', borderRadius: '8px', background: 'var(--surface-2)', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
                         + {s.title}
                       </button>
                     ))}

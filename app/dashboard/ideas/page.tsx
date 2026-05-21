@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import dynamic from 'next/dynamic'
+import type { Editor } from '@tiptap/react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
+
+const ArticleRichEditor = dynamic(() => import('../components/ArticleRichEditor'), { ssr: false })
 
 interface Idea {
   id: string
@@ -52,6 +53,8 @@ export default function IdeasPage() {
   const [formTitle, setFormTitle] = useState('')
   const [showMobileDetail, setShowMobileDetail] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [editor, setEditor] = useState<Editor | null>(null)
+  const pendingEditorContent = useRef<string | null>(null)
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -63,16 +66,16 @@ export default function IdeasPage() {
 
   const isManager = currentUser?.role === 'Manager'
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder: 'Describe the idea — goals, audience, timing, open questions…',
-      }),
-    ],
-    content: '',
-    immediatelyRender: false,
-  })
+  const queueEditorContent = useCallback((html: string) => {
+    if (editor) editor.commands.setContent(html)
+    else pendingEditorContent.current = html
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor || pendingEditorContent.current === null) return
+    editor.commands.setContent(pendingEditorContent.current)
+    pendingEditorContent.current = null
+  }, [editor])
 
   const loadData = useCallback(async () => {
     const {
@@ -184,7 +187,7 @@ export default function IdeasPage() {
 
   const startEdit = (idea: Idea) => {
     setFormTitle(idea.title)
-    editor?.commands.setContent(idea.description || '')
+    queueEditorContent(idea.description || '')
     setEditing(true)
     setShowNew(false)
   }
@@ -451,7 +454,10 @@ export default function IdeasPage() {
               }}
             >
               <Toolbar />
-              <EditorContent editor={editor} className="tiptap-editor" />
+              <ArticleRichEditor
+                placeholder="Describe the idea — goals, audience, timing, open questions…"
+                onEditorReady={setEditor}
+              />
             </div>
             <div style={{ display: 'flex', gap: '8px', margin: '14px 20px 20px', flexWrap: 'wrap' }}>
               <button
@@ -567,7 +573,7 @@ export default function IdeasPage() {
             setSelected(null)
             setEditing(false)
             setFormTitle('')
-            editor?.commands.setContent('')
+            queueEditorContent('')
             setShowMobileDetail(true)
           }}
           style={{

@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
+import { useOutlookEvents } from './use-outlook-events'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
 const toLocalDateStr = (d: Date): string =>
@@ -196,8 +197,8 @@ export default function SchedulePage() {
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [newEvent, setNewEvent]         = useState({ title: '', date: '', start_time: '', end_time: '', color: '#22c55e' })
   const [sendingReminder, setSendingReminder] = useState(false)
-  const [outlookEvents, setOutlookEvents] = useState<{ title: string; date: string; start_time: string | null; end_time: string | null; location: string | null; all_day: boolean }[]>([])
-  const [showOutlook, setShowOutlook] = useState(true)
+  const [showOutlook, setShowOutlook] = useState(false)
+  const { outlookEvents, setOutlookEvents } = useOutlookEvents(showOutlook)
   const [dismissedOutlook, setDismissedOutlook] = useState<Set<string>>(new Set())
   const [hoursTab, setHoursTab] = useState<'hours' | 'team' | 'pay'>('hours')
 
@@ -268,15 +269,6 @@ export default function SchedulePage() {
 
     const { data: eventsData } = await supabase.from('calendar_events').select('*').order('date')
     setCalEvents(eventsData || [])
-
-    // Load Outlook calendar
-    try {
-      const icalRes = await fetch('/api/ical')
-      if (icalRes.ok) {
-        const { events: oe } = await icalRes.json()
-        setOutlookEvents(oe || [])
-      }
-    } catch { /* ignore iCal errors */ }
 
     if (user) setViewingId(v => v || user.id)
     setLoading(false)

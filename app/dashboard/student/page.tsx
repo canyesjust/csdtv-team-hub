@@ -283,7 +283,7 @@ export default function StudentHomePage() {
       </div>
 
       <p style={{ marginTop: '20px', fontSize: '13px', color: muted }}>
-        Use the sidebar for Productions, Tasks, Knowledge base, Onboarding, and Settings.
+        Use the sidebar for Home, Productions, Tasks, Library, and More (Onboarding, Students, Settings).
       </p>
 
       <style>{`

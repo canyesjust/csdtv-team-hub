@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import Loader from '../../components/Loader'
 
 type BoardMember = { id: string; display_name: string; primary_title: string | null }

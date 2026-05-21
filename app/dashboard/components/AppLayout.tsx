@@ -9,7 +9,7 @@ import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
 import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
-import { isStudentInternRole } from '@/lib/roles'
+import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import {
   buildStaffDashboardNav,
   buildStudentInternDashboardNav,
@@ -218,7 +218,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === href
-    if (href === STUDENT_INTERN_HOME_PATH) return pathname === href || pathname.startsWith(`${href}/`)
+    if (href === STUDENT_INTERN_HOME_PATH) {
+      if (pathname === '/dashboard/students' || pathname.startsWith('/dashboard/students/')) return false
+      return pathname === href || pathname.startsWith(`${href}/`)
+    }
     return pathname.startsWith(href)
   }
 

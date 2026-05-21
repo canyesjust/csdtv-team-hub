@@ -320,26 +320,33 @@ export default function BoardUpdateTab() {
   })
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
     async function load() {
       setLoading(true)
-      const res = await fetch(`/api/board-update?date=${encodeURIComponent(selectedDate)}`, { cache: 'no-store' })
-      if (res.status === 401) {
-        router.push('/login')
-        return
+      try {
+        const res = await fetch(`/api/board-update?date=${encodeURIComponent(selectedDate)}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (res.status === 401) {
+          router.push('/login')
+          return
+        }
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast(body.error || 'Failed to load board update data', 'error')
+        } else {
+          setPayload(body as BoardUpdatePayload)
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return
+        toast('Failed to load board update data', 'error')
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
       }
-      const body = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast(body.error || 'Failed to load board update data', 'error')
-      } else if (!cancelled) {
-        setPayload(body as BoardUpdatePayload)
-      }
-      if (!cancelled) setLoading(false)
     }
     load()
-    return () => {
-      cancelled = true
-    }
+    return () => controller.abort()
   }, [router, selectedDate])
 
   const now = useMemo(() => {
