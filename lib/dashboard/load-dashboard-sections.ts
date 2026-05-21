@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dayDiffFromToday } from '@/lib/dashboard/day-diff'
+import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 
 export interface DashboardProduction {
   id: string
@@ -58,7 +59,7 @@ export async function loadManagerOpsData(
     .select(
       'id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
     )
-    .not('status', 'in', '("Complete","Abandoned")')
+    .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
     .order('start_datetime', { ascending: true, nullsFirst: false })
     .limit(200)
 

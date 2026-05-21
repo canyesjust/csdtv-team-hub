@@ -12,6 +12,10 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
+import {
+  isActiveProductionStatus,
+  SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES,
+} from '@/lib/productions/status-filters'
 import { loadInsightsData, loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
 
 interface Task {
@@ -132,7 +136,7 @@ export default function DashboardPage() {
         supabase.from('production_members').select('production_id').eq('user_id', user.id),
         supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
         supabase.from('productions').select('id', { count: 'exact', head: true }),
-        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
+        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES).gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
         supabase.from('schedule_defaults').select(SCHEDULE_DAY_SELECT).eq('user_id', user.id).single(),
         supabase.from('productions').select('school_year,start_datetime,status'),
       ])
@@ -179,7 +183,7 @@ export default function DashboardPage() {
           .from('productions')
           .select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, checklist_items(id, title, completed)')
           .in('id', ids)
-          .neq('status', 'Complete')
+          .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
           .order('start_datetime', { ascending: true, nullsFirst: false })
           .limit(8)
         setMyProductions(prods || [])
@@ -296,11 +300,21 @@ export default function DashboardPage() {
   }
 
   const filteredTodayProductions = useMemo(
-    () => todayProductions.filter(p => inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)),
+    () =>
+      todayProductions.filter(
+        (p) =>
+          isActiveProductionStatus(p.status) &&
+          inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
+      ),
     [todayProductions, schoolYearFilter]
   )
   const filteredMyProductions = useMemo(
-    () => myProductions.filter(p => inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)),
+    () =>
+      myProductions.filter(
+        (p) =>
+          isActiveProductionStatus(p.status) &&
+          inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
+      ),
     [myProductions, schoolYearFilter]
   )
   const filteredManagerProductions = useMemo(
