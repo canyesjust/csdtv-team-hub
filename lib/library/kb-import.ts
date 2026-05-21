@@ -56,7 +56,7 @@ export function normalizeKbCategory(raw: string): KbArticleCategory {
 export function normalizeKbContent(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed) return '<p></p>'
-  if /<\s*[a-z][\s\S]*>/i.test(trimmed) {
+  if (/<\s*[a-z][\s\S]*>/i.test(trimmed)) {
     return sanitizeArticleHtml(trimmed)
   }
   const paragraphs = trimmed.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
