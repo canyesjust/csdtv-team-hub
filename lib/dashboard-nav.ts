@@ -54,11 +54,18 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
     { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
   ]
 
+  /** Demoted links: mobile “More” sheet + desktop sidebar (no desktop More button). */
+  const sidebarMoreItems: DashboardNavItem[] = [
+    ...(!manager ? [BOARD_MEETINGS] : []),
+    ...MORE_BASE,
+  ]
+
   return {
     navItems: [
       { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
       { section: 'Work', items: workItems },
       { section: 'Resources', items: resourcesItems },
+      { section: 'Team', items: sidebarMoreItems },
       { section: 'Account', items: [{ label: 'Settings', href: '/dashboard/settings', icon: 'settings' }] },
     ],
     bottomNav: [
@@ -94,6 +101,14 @@ export function buildStudentInternDashboardNav(): {
       {
         section: 'Resources',
         items: [{ label: 'Library', href: '/dashboard/library', icon: 'book' }],
+      },
+      {
+        section: 'Team',
+        items: [
+          BOARD_MEETINGS,
+          { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
+          { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
+        ],
       },
       { section: 'Account', items: [{ label: 'Settings', href: '/dashboard/settings', icon: 'settings' }] },
     ],

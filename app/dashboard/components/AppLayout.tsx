@@ -222,6 +222,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       if (pathname === '/dashboard/students' || pathname.startsWith('/dashboard/students/')) return false
       return pathname === href || pathname.startsWith(`${href}/`)
     }
+    if (href === '/dashboard/onboarding') {
+      return pathname === href || pathname.startsWith(`${href}/`)
+    }
+    if (href === '/dashboard/library') {
+      return pathname === href || pathname.startsWith(`${href}/`) || pathname === '/dashboard/knowledge' || pathname === '/dashboard/links'
+    }
+    if (href === '/dashboard/board-meetings') {
+      return (
+        pathname === href ||
+        pathname.startsWith(`${href}/`) ||
+        pathname === '/dashboard/board-update' ||
+        pathname === '/dashboard/voting-records'
+      )
+    }
     return pathname.startsWith(href)
   }
 
@@ -246,10 +260,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Image src="/images/CSDtv Logo - New Logo Outlined.png" alt="CSDtv" width={110} height={48} style={{ objectFit: 'contain' }} priority />
       </div>
       <nav style={{ flex: 1, overflowY: 'auto' as const, padding: '8px' }}>
-        {navItemsResolved.map(({ section, items }) => (
+        {navItemsResolved.map(({ section, items }) =>
+          items.length === 0 ? null : (
           <div key={section}>
             <p style={{ fontSize: '10px', fontWeight: 600, color: muted, letterSpacing: '1.2px', textTransform: 'uppercase' as const, padding: '10px 8px 4px', margin: 0 }}>{section}</p>
-            {items.map(item => <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} onClick={onNavClick} />)}
+            {items.map(item => <NavLink key={`${section}-${item.href}`} href={item.href} icon={item.icon} label={item.label} onClick={onNavClick} />)}
           </div>
         ))}
       </nav>
@@ -326,7 +341,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!isStudentIntern ? (
             <button onClick={() => { setShowSearch(true); setShowNotifications(false) }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: searchBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '9px 14px', cursor: 'text', minHeight: '44px' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span className="csdtv-search-label" style={{ fontSize: '15px', color: muted }}>Search productions, tasks, knowledge base...</span>
+              <span className="csdtv-search-label" style={{ fontSize: '15px', color: muted }}>Search productions, tasks, library...</span>
             </button>
           ) : (
             <div style={{ flex: 1, minHeight: '44px' }} aria-hidden />
@@ -347,7 +362,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         <nav className="csdtv-mobile-nav" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, display: 'none', background: sidebar, borderTop: `0.5px solid ${border}`, zIndex: 10, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', width: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${bottomNavResolved.length}, 1fr)`, width: '100%' }}>
             {bottomNavResolved.map(item => {
               const active = item.href !== '#more' && isActive(item.href)
               const isMore = item.href === '#more'

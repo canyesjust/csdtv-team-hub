@@ -101,7 +101,7 @@ export default function SearchPanel({ onClose }: Props) {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search productions, tasks, ideas, knowledge base..."
+            placeholder="Search productions, tasks, ideas, library..."
             style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: '15px', color: text, fontFamily: 'inherit' }}
             onKeyDown={e => e.key === 'Escape' && onClose()}
           />
@@ -138,7 +138,7 @@ export default function SearchPanel({ onClose }: Props) {
 
         {query.length === 0 && (
           <div style={{ padding: '12px 16px' }}>
-            <p style={{ fontSize: '13px', color: muted, margin: 0 }}>Search productions, tasks, ideas, and knowledge base articles</p>
+            <p style={{ fontSize: '13px', color: muted, margin: 0 }}>Search productions, tasks, ideas, and library articles</p>
           </div>
         )}
       </div>
