@@ -3,7 +3,7 @@
 import { useTheme } from '@/lib/theme'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
@@ -64,6 +64,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [accessState, setAccessState] = useState<'loading' | 'ready' | 'not-on-team' | 'link-error'>('loading')
   const [linkErrorMsg, setLinkErrorMsg] = useState('')
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([])
+  const [sidebarNavScrolling, setSidebarNavScrolling] = useState(false)
+  const sidebarScrollHideRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleSidebarNavScroll = useCallback(() => {
+    setSidebarNavScrolling(true)
+    if (sidebarScrollHideRef.current) clearTimeout(sidebarScrollHideRef.current)
+    sidebarScrollHideRef.current = setTimeout(() => setSidebarNavScrolling(false), 800)
+  }, [])
+
+  useEffect(() => () => {
+    if (sidebarScrollHideRef.current) clearTimeout(sidebarScrollHideRef.current)
+  }, [])
 
   const isStudentIntern = isStudentInternRole(userRole)
   const navResolved = useMemo(() => {
@@ -259,7 +271,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div style={{ padding: '14px 16px', borderBottom: `0.5px solid ${border}` }}>
         <Image src="/images/CSDtv Logo - New Logo Outlined.png" alt="CSDtv" width={110} height={48} style={{ objectFit: 'contain' }} priority />
       </div>
-      <nav style={{ flex: 1, overflowY: 'auto' as const, padding: '8px' }}>
+      <nav
+        className={`csdtv-scroll csdtv-sidebar-nav${sidebarNavScrolling ? ' csdtv-scroll--active' : ''}`}
+        style={{ flex: 1, overflowY: 'auto' as const, padding: '8px 4px 8px 8px' }}
+        onScroll={handleSidebarNavScroll}
+      >
         {navItemsResolved.map(({ section, items }) =>
           items.length === 0 ? null : (
           <div key={section}>
@@ -291,7 +307,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: bg, color: text, fontFamily: 'var(--font-sans)' }}>
 
-      <aside className="csdtv-sidebar" style={{ width: '236px', flexShrink: 0, position: 'fixed', top: 0, left: 0, height: '100vh', borderRight: `0.5px solid ${border}`, display: 'none', flexDirection: 'column', boxShadow: 'var(--shadow-soft)' }}>
+      <aside className="csdtv-sidebar sidebar-bg" style={{ width: '236px', flexShrink: 0, position: 'fixed', top: 0, left: 0, height: '100vh', borderRight: `0.5px solid ${border}`, display: 'none', flexDirection: 'column', boxShadow: 'var(--shadow-soft)' }}>
         {sidebarContent()}
       </aside>
 
