@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -22,14 +21,10 @@ export default function ArticleRichEditor({
       Placeholder.configure({ placeholder }),
     ],
     content: initialContent,
-    immediatelyRender: false,
+    immediatelyRender: true,
     onCreate: ({ editor: ed }) => onEditorReady?.(ed),
     onDestroy: () => onEditorReady?.(null),
   })
-
-  useEffect(() => {
-    onEditorReady?.(editor ?? null)
-  }, [editor, onEditorReady])
 
   return <EditorContent editor={editor} className="tiptap-editor" />
 }

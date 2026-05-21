@@ -1,0 +1,293 @@
+'use client'
+
+import { useMemo, useRef, useState } from 'react'
+import {
+  KB_IMPORT_CSV_TEMPLATE,
+  parseKbImportPayload,
+  type KbImportRow,
+} from '@/lib/library/kb-import'
+import { toast } from '@/lib/toast'
+
+type Format = 'csv' | 'json'
+
+type Props = {
+  open: boolean
+  onClose: () => void
+  onImported: () => void
+  text: string
+  muted: string
+  border: string
+  cardBg: string
+  inputBg: string
+}
+
+const inputStyleBase: React.CSSProperties = {
+  borderRadius: '10px',
+  padding: '10px 14px',
+  fontSize: '14px',
+  fontFamily: 'inherit',
+  width: '100%',
+  boxSizing: 'border-box',
+  outline: 'none',
+}
+
+export default function KnowledgeArticlesImportModal({
+  open,
+  onClose,
+  onImported,
+  text,
+  muted,
+  border,
+  cardBg,
+  inputBg,
+}: Props) {
+  const [format, setFormat] = useState<Format>('csv')
+  const [input, setInput] = useState('')
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const parsed = useMemo(() => (input.trim() ? parseKbImportPayload(input, format) : []), [input, format])
+  const validCount = parsed.filter((r) => !r.error).length
+  const errorRows = parsed.filter((r) => r.error)
+
+  const inputStyle: React.CSSProperties = {
+    ...inputStyleBase,
+    background: inputBg,
+    border: `0.5px solid ${border}`,
+    color: text,
+  }
+
+  const close = () => {
+    setInput('')
+    setFormat('csv')
+    onClose()
+  }
+
+  const loadTemplate = () => {
+    setFormat('csv')
+    setInput(KB_IMPORT_CSV_TEMPLATE)
+  }
+
+  const handleFile = async (file: File) => {
+    const textContent = await file.text()
+    const name = file.name.toLowerCase()
+    if (name.endsWith('.json')) setFormat('json')
+    else setFormat('csv')
+    setInput(textContent)
+  }
+
+  const runImport = async () => {
+    if (!input.trim() || validCount === 0) return
+    setImporting(true)
+    try {
+      const body =
+        format === 'json'
+          ? { json: input }
+          : { csv: input }
+      const res = await fetch('/api/library/articles/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast(data.error || 'Import failed', 'error')
+        return
+      }
+      const parts = [
+        data.created ? `${data.created} imported` : null,
+        data.skipped ? `${data.skipped} skipped` : null,
+      ].filter(Boolean)
+      toast(parts.length ? parts.join(', ') : 'Import complete', 'success')
+      if (data.errors?.length) {
+        console.warn('KB import warnings:', data.errors)
+      }
+      close()
+      onImported()
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.5)',
+        zIndex: 200,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close()
+      }}
+    >
+      <div
+        style={{
+          background: cardBg,
+          border: `0.5px solid ${border}`,
+          borderRadius: '16px',
+          width: '100%',
+          maxWidth: '600px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          padding: '24px',
+        }}
+      >
+        <h2 style={{ fontSize: '17px', fontWeight: 600, margin: '0 0 8px', color: text }}>
+          Import articles
+        </h2>
+        <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px', lineHeight: 1.45 }}>
+          Bulk-add Library articles from CSV or JSON. CSV columns: <strong>title</strong>,{' '}
+          <strong>category</strong> (Process, Reference, Policy, Workflow, Other),{' '}
+          <strong>content</strong> (HTML or plain text). Multi-line content can sit in quoted CSV cells.
+        </p>
+
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          {(['csv', 'json'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFormat(f)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: `0.5px solid ${format === f ? 'var(--brand-primary)' : border}`,
+                background: format === f ? 'var(--status-info-bg)' : 'transparent',
+                color: format === f ? 'var(--brand-primary-strong)' : muted,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '13px',
+                fontWeight: 500,
+              }}
+            >
+              {f.toUpperCase()}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={loadTemplate}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: `0.5px solid ${border}`,
+              background: 'transparent',
+              color: 'var(--link)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '13px',
+            }}
+          >
+            Load CSV example
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: `0.5px solid ${border}`,
+              background: 'transparent',
+              color: 'var(--link)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '13px',
+            }}
+          >
+            Upload file
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,.json,text/csv,application/json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void handleFile(file)
+              e.target.value = ''
+            }}
+          />
+        </div>
+
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={
+            format === 'csv'
+              ? 'title,category,content\nMy article,Process,"Steps here..."'
+              : '[{"title":"My article","category":"Process","content":"<p>Steps here</p>"}]'
+          }
+          rows={12}
+          style={{
+            ...inputStyle,
+            resize: 'vertical',
+            minHeight: '200px',
+            fontFamily: 'ui-monospace, monospace',
+            fontSize: '13px',
+          }}
+        />
+
+        {parsed.length > 0 && (
+          <p style={{ fontSize: '13px', color: muted, margin: '10px 0 0' }}>
+            {validCount} ready to import
+            {errorRows.length > 0 ? ` · ${errorRows.length} with errors` : ''}
+          </p>
+        )}
+
+        {errorRows.length > 0 && errorRows.length <= 5 && (
+          <ul style={{ fontSize: '12px', color: '#ef4444', margin: '8px 0 0', paddingLeft: '18px' }}>
+            {errorRows.map((r: KbImportRow) => (
+              <li key={r.row}>
+                Row {r.row}: {r.error}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => void runImport()}
+            disabled={importing || validCount === 0}
+            style={{
+              flex: 1,
+              minHeight: '44px',
+              padding: '10px',
+              borderRadius: '8px',
+              background: '#1e6cb5',
+              color: '#fff',
+              border: 'none',
+              cursor: validCount === 0 ? 'default' : 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 500,
+              opacity: validCount === 0 ? 0.5 : 1,
+            }}
+          >
+            {importing ? 'Importing…' : `Import ${validCount || ''} article${validCount === 1 ? '' : 's'}`}
+          </button>
+          <button
+            type="button"
+            onClick={close}
+            style={{
+              minHeight: '44px',
+              padding: '10px 16px',
+              borderRadius: '8px',
+              background: 'transparent',
+              color: muted,
+              border: `0.5px solid ${border}`,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

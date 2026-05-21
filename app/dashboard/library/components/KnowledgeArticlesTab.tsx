@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import type { Editor } from '@tiptap/react'
@@ -9,8 +9,56 @@ import { useTheme } from '@/lib/theme'
 import Loader from '../../components/Loader'
 import { isStudentInternRole } from '@/lib/roles'
 import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
+import KnowledgeArticlesImportModal from './KnowledgeArticlesImportModal'
 
-const ArticleRichEditor = dynamic(() => import('../../components/ArticleRichEditor'), { ssr: false })
+function ArticleEditorShell() {
+  return (
+    <div
+      className="tiptap-editor"
+      style={{
+        minHeight: '280px',
+        padding: '14px 16px',
+        boxSizing: 'border-box',
+      }}
+      aria-hidden
+    >
+      <div
+        style={{
+          height: '14px',
+          width: '72%',
+          borderRadius: '6px',
+          background: 'var(--surface-3)',
+          marginBottom: '10px',
+          opacity: 0.5,
+        }}
+      />
+      <div
+        style={{
+          height: '14px',
+          width: '88%',
+          borderRadius: '6px',
+          background: 'var(--surface-3)',
+          marginBottom: '10px',
+          opacity: 0.35,
+        }}
+      />
+      <div
+        style={{
+          height: '14px',
+          width: '54%',
+          borderRadius: '6px',
+          background: 'var(--surface-3)',
+          opacity: 0.35,
+        }}
+      />
+    </div>
+  )
+}
+
+const ArticleRichEditor = dynamic(() => import('../../components/ArticleRichEditor'), {
+  ssr: false,
+  loading: ArticleEditorShell,
+})
 
 interface Article {
   id: string
@@ -60,7 +108,9 @@ export default function KnowledgeArticlesTab() {
   const [showMobileDetail, setShowMobileDetail] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [editor, setEditor] = useState<Editor | null>(null)
-  const pendingEditorContent = useRef<string | null>(null)
+  const [editorKey, setEditorKey] = useState(0)
+  const [composeInitialHtml, setComposeInitialHtml] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -69,16 +119,25 @@ export default function KnowledgeArticlesTab() {
   const inputBg = 'var(--surface-2)'
   const hoverBg = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
 
-  const queueEditorContent = useCallback((html: string) => {
-    if (editor) editor.commands.setContent(html)
-    else pendingEditorContent.current = html
-  }, [editor])
-
-  useEffect(() => {
-    if (!editor || pendingEditorContent.current === null) return
-    editor.commands.setContent(pendingEditorContent.current)
-    pendingEditorContent.current = null
-  }, [editor])
+  const beginCompose = useCallback(
+    (opts: { title: string; category: string; content: string; mode: 'new' | 'edit' }) => {
+      setEditor(null)
+      setComposeInitialHtml(opts.content)
+      setEditorKey((k) => k + 1)
+      setForm({ title: opts.title, category: opts.category })
+      setSaveError('')
+      if (opts.mode === 'new') {
+        setShowNew(true)
+        setSelected(null)
+        setEditing(false)
+      } else {
+        setEditing(true)
+        setShowNew(false)
+      }
+      setShowMobileDetail(true)
+    },
+    [],
+  )
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -202,9 +261,13 @@ export default function KnowledgeArticlesTab() {
             </button>
             <button
               onClick={() => {
-                setEditing(true)
-                setForm({ title: selected.title, category: selected.category })
-                queueEditorContent(selected.content || '')
+                if (!selected) return
+                beginCompose({
+                  title: selected.title,
+                  category: selected.category,
+                  content: selected.content || '',
+                  mode: 'edit',
+                })
               }}
               style={{ fontSize: '15px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>
               Edit
@@ -226,16 +289,29 @@ export default function KnowledgeArticlesTab() {
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <div style={{ margin: '0 20px', border: `0.5px solid ${border}`, borderRadius: '10px', overflow: 'hidden', background: inputBg }}>
-              <Toolbar />
+            <div
+              style={{
+                margin: '0 20px',
+                border: `0.5px solid ${border}`,
+                borderRadius: '10px',
+                overflow: 'hidden',
+                background: inputBg,
+                minHeight: '326px',
+              }}
+            >
+              {editor ? <Toolbar /> : (
+                <div style={{ height: '46px', borderBottom: `0.5px solid ${border}`, background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }} />
+              )}
               <ArticleRichEditor
+                key={editorKey}
                 placeholder="Write your article here. Keep it practical and step-by-step."
+                initialContent={composeInitialHtml}
                 onEditorReady={setEditor}
               />
             </div>
             <div style={{ display: 'flex', gap: '8px', margin: '14px 20px 20px' }}>
               <button onClick={saveArticle} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save article</button>
-              <button onClick={() => { setEditing(false); setShowNew(false); setSaveError('') }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
+              <button onClick={() => { setEditing(false); setShowNew(false); setSaveError(''); setEditor(null) }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
               {saveError && <span style={{ fontSize: '13px', color: '#ef4444' }}>{saveError}</span>}
             </div>
           </div>
@@ -267,18 +343,48 @@ export default function KnowledgeArticlesTab() {
           <p style={{ fontSize: '15px', color: muted, margin: '2px 0 0' }}>{articles.length} articles</p>
         </div>
         {!readOnlyKb && (
-        <button
-          onClick={() => {
-            setShowNew(true)
-            setSelected(null)
-            setForm({ title: '', category: 'Process' })
-            editor?.commands.setContent('')
-            setShowMobileDetail(true)
-          }}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New article
-        </button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            style={{
+              fontSize: '14px',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              background: 'transparent',
+              color: text,
+              border: `0.5px solid ${border}`,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 500,
+              minHeight: '44px',
+            }}
+          >
+            Import
+          </button>
+          <button
+            type="button"
+            onClick={() => beginCompose({ title: '', category: 'Process', content: '', mode: 'new' })}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '14px',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              background: '#1e6cb5',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: 500,
+              minHeight: '44px',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New article
+          </button>
+        </div>
         )}
       </div>
 
@@ -312,7 +418,7 @@ export default function KnowledgeArticlesTab() {
                   {!readOnlyKb && (
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
                     {STARTER_ARTICLES.map(s => (
-                      <button key={s.title} onClick={() => { setForm({ title: s.title, category: s.category }); setShowNew(true); setShowMobileDetail(true); queueEditorContent(s.content) }} style={{ fontSize: '14px', padding: '8px 14px', borderRadius: '8px', background: 'var(--surface-2)', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <button key={s.title} onClick={() => beginCompose({ title: s.title, category: s.category, content: s.content, mode: 'new' })} style={{ fontSize: '14px', padding: '8px 14px', borderRadius: '8px', background: 'var(--surface-2)', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>
                         + {s.title}
                       </button>
                     ))}
@@ -356,6 +462,17 @@ export default function KnowledgeArticlesTab() {
           </div>
         )}
       </div>
+
+      <KnowledgeArticlesImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={() => void loadData()}
+        text={text}
+        muted={muted}
+        border={border}
+        cardBg={cardBg}
+        inputBg={inputBg}
+      />
 
       <style>{`
         @media (min-width: 768px) {
