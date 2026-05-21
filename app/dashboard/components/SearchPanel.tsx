@@ -50,7 +50,7 @@ export default function SearchPanel({ onClose }: Props) {
     const combined: SearchResult[] = [
       ...(prodsRes.data || []).map(p => ({ id: p.id, title: p.title, type: 'production' as const, subtitle: p.request_type_label || p.organizer_name, href: `/dashboard/productions/${p.production_number}` })),
       ...(tasksRes.data || []).map(t => ({ id: t.id, title: t.title, type: 'task' as const, subtitle: t.status, href: `/dashboard/tasks` })),
-      ...(kbRes.data || []).map(k => ({ id: k.id, title: k.title, type: 'knowledge' as const, subtitle: k.category, href: `/dashboard/knowledge` })),
+      ...(kbRes.data || []).map(k => ({ id: k.id, title: k.title, type: 'knowledge' as const, subtitle: k.category, href: `/dashboard/library?tab=articles` })),
       ...(ideasRes.data || []).map(i => ({ id: i.id, title: i.title, type: 'idea' as const, subtitle: 'Idea', href: `/dashboard/ideas` })),
     ]
     setResults(combined)

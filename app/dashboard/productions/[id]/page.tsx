@@ -1002,7 +1002,7 @@ export default function ProductionDetailPage() {
     if (!selectedKB || !uuid) return
     const article = kbArticles.find(a => a.id === selectedKB)
     if (!article) return
-    const url = `${window.location.origin}/dashboard/knowledge?article=${selectedKB}`
+    const url = `${window.location.origin}/dashboard/library?tab=articles&article=${selectedKB}`
     const { data, error } = await supabase.from('production_links').insert({ production_id: uuid, title: `KB: ${article.title}`, url, added_by: currentUser?.id }).select().single()
     if (error) { toast('Failed to add KB link', 'error'); return }
     if (data) { setLinks(prev => [...prev, data]); setSelectedKB(''); setShowKBLink(false) }
@@ -1774,7 +1774,7 @@ export default function ProductionDetailPage() {
                         {item.title}
                         {item.kb_article_id && (() => {
                           const kb = kbArticles.find(a => a.id === item.kb_article_id)
-                          return kb ? <Link href="/dashboard/knowledge" style={{ fontSize: '11px', color: '#5ba3e0', marginLeft: '6px', textDecoration: 'none' }}>📖 {kb.title}</Link> : null
+                          return kb ? <Link href="/dashboard/library?tab=articles" style={{ fontSize: '11px', color: '#5ba3e0', marginLeft: '6px', textDecoration: 'none' }}>📖 {kb.title}</Link> : null
                         })()}
                       </span>
                       <select value={item.kb_article_id || ''} onChange={e => {

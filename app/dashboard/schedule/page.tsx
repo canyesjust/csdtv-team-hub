@@ -199,6 +199,7 @@ export default function SchedulePage() {
   const [outlookEvents, setOutlookEvents] = useState<{ title: string; date: string; start_time: string | null; end_time: string | null; location: string | null; all_day: boolean }[]>([])
   const [showOutlook, setShowOutlook] = useState(true)
   const [dismissedOutlook, setDismissedOutlook] = useState<Set<string>>(new Set())
+  const [hoursTab, setHoursTab] = useState<'hours' | 'team' | 'pay'>('hours')
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -441,7 +442,7 @@ export default function SchedulePage() {
         await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-          body: JSON.stringify({ type: 'calendar_reminder', recipientEmail: member.email, recipientName: member.name.split(' ')[0], subject: sanitizeEmailSubject(`Reminder: Fill in your schedule for ${weekStr}`), body: `Hey ${member.name.split(' ')[0]},\n\nPlease fill in your hours for the week of ${weekStr} in the Team Hub.\n\nThanks!`, actionUrl: '/dashboard/schedule', actionLabel: 'Open Schedule' }),
+          body: JSON.stringify({ type: 'calendar_reminder', recipientEmail: member.email, recipientName: member.name.split(' ')[0], subject: sanitizeEmailSubject(`Reminder: Fill in your schedule for ${weekStr}`), body: `Hey ${member.name.split(' ')[0]},\n\nPlease fill in your hours for the week of ${weekStr} in the Team Hub.\n\nThanks!`, actionUrl: '/dashboard/schedule', actionLabel: 'Open Team hours' }),
         })
       }
       toast(`Reminder sent to ${activeTeam.length} team member${activeTeam.length !== 1 ? 's' : ''}!`)
@@ -621,7 +622,7 @@ export default function SchedulePage() {
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
-          <h1 style={{ fontSize: '26px', fontWeight: 700, color: text, margin: 0 }}>Schedule</h1>
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: text, margin: 0 }}>Team hours</h1>
           <p style={{ fontSize: '14px', color: muted, margin: '2px 0 0' }}>{monthLabel}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -653,8 +654,31 @@ export default function SchedulePage() {
         </div>
       </div>
 
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {(['hours', 'team', ...(isManager ? (['pay'] as const) : [])] as const).map(id => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setHoursTab(id)}
+            style={{
+              fontSize: '14px',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: `0.5px solid ${hoursTab === id ? '#1e6cb5' : border}`,
+              background: hoursTab === id ? 'rgba(30,108,181,0.12)' : cardBg,
+              color: hoursTab === id ? '#5ba3e0' : muted,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontWeight: hoursTab === id ? 600 : 500,
+            }}
+          >
+            {id === 'hours' ? 'My hours' : id === 'team' ? 'Team' : 'Pay periods'}
+          </button>
+        ))}
+      </div>
+
       {/* ── Add event form ── */}
-      {showAddEvent && (
+      {(hoursTab === 'hours' || hoursTab === 'pay') && showAddEvent && (
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0 }}>Add event</h3>
@@ -687,7 +711,7 @@ export default function SchedulePage() {
       )}
 
       {/* ── Pay period banner ── */}
-      {primaryPP && (
+      {hoursTab === 'pay' && primaryPP && (
         <div style={{ background: dark ? 'rgba(30,108,181,0.12)' : 'rgba(30,108,181,0.07)', border: `0.5px solid rgba(30,108,181,0.25)`, borderRadius: '10px', padding: '10px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 20px' }}>
           <span style={{ fontSize: '13px', fontWeight: 700, color: '#5ba3e0' }}>Pay Period {primaryPP.num}</span>
           <span style={{ fontSize: '13px', color: muted }}>
@@ -732,8 +756,14 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {hoursTab === 'team' && !isManager && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+          <p style={{ fontSize: '14px', color: muted, margin: 0 }}>Team overview is available to managers. Use My hours to set your schedule.</p>
+        </div>
+      )}
+
       {/* ── Mass fill bar ── */}
-      {(viewingOwnSchedule || isManager) && (
+      {hoursTab === 'hours' && (viewingOwnSchedule || isManager) && (
         <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {showMassFill ? (
             <>
@@ -761,7 +791,7 @@ export default function SchedulePage() {
       )}
 
       {/* ── Team availability this week ── */}
-      {isManager && (
+      {hoursTab === 'team' && isManager && (
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '14px 18px', marginBottom: '16px' }}>
           <p style={{ fontSize: '14px', fontWeight: 600, color: text, margin: '0 0 10px' }}>Team this week</p>
           <div style={{ display: 'grid', gridTemplateColumns: '120px repeat(5, 1fr)', gap: '1px', fontSize: '13px' }}>
@@ -792,6 +822,7 @@ export default function SchedulePage() {
       )}
 
       {/* ── Calendar ── */}
+      {(hoursTab === 'hours' || hoursTab === 'pay') && (
       <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
         {/* Day-of-week headers */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `0.5px solid ${border}` }}>
@@ -943,9 +974,10 @@ export default function SchedulePage() {
           })}
         </div>
       </div>
+      )}
 
       {/* ── Edit sections — only show for the person's own schedule ── */}
-      {(viewingOwnSchedule || isManager) && (
+      {hoursTab === 'hours' && (viewingOwnSchedule || isManager) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px' }}>
 
           {/* Default schedule */}

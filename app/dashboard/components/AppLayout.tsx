@@ -9,56 +9,13 @@ import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
 import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
-import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
-
-const NAV_ITEMS = [
-  { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
-  { section: 'Work', items: [
-    { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
-    { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
-    { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
-    { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
-    { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
-    { label: 'Board update', href: '/dashboard/board-update', icon: 'mail' },
-    { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
-    { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
-    { label: 'Students', href: '/dashboard/students', icon: 'students' },
-  ]},
-  { section: 'Resources', items: [
-    { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
-    { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
-    { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
-    { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
-    { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
-  ]},
-  { section: 'Account', items: [
-    { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
-  ]},
-]
-
-const BOTTOM_NAV = [
-  { label: 'Home', href: '/dashboard', icon: 'home' },
-  { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
-  { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
-  { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
-  { label: 'Schedule', href: '/dashboard/schedule', icon: 'calendar' },
-  { label: 'More', href: '#more', icon: 'more' },
-]
-
-const MORE_ITEMS = [
-  { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
-  { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
-  { label: 'Board update', href: '/dashboard/board-update', icon: 'mail' },
-  { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
-  { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
-  { label: 'Students', href: '/dashboard/students', icon: 'students' },
-  { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
-  { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
-  { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
-  { label: 'Quick links', href: '/dashboard/links', icon: 'link' },
-  { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
-  { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
-]
+import { isStudentInternRole } from '@/lib/roles'
+import {
+  buildStaffDashboardNav,
+  buildStudentInternDashboardNav,
+  type DashboardNavItem,
+  type DashboardNavSection,
+} from '@/lib/dashboard-nav'
 
 const PATHS: Record<string, React.ReactNode> = {
   home: <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>,
@@ -108,52 +65,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [linkErrorMsg, setLinkErrorMsg] = useState('')
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([])
 
-  const studentInternNav = useMemo(
-    () => ({
-      navItems: [
-        { section: 'Main', items: [{ label: 'Home', href: STUDENT_INTERN_HOME_PATH, icon: 'home' }] },
-        {
-          section: 'Work',
-          items: [
-            { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
-            { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
-            { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
-            { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
-            { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
-          ],
-        },
-        {
-          section: 'Resources',
-          items: [
-            { label: 'Knowledge base', href: '/dashboard/knowledge', icon: 'book' },
-            { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
-          ],
-        },
-        { section: 'Account', items: [{ label: 'Settings', href: '/dashboard/settings', icon: 'settings' }] },
-      ] as typeof NAV_ITEMS,
-      bottomNav: [
-        { label: 'Home', href: STUDENT_INTERN_HOME_PATH, icon: 'home' },
-        { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
-        { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
-        { label: 'Equip', href: '/dashboard/equipment', icon: 'equipment' },
-        { label: 'KB', href: '/dashboard/knowledge', icon: 'book' },
-        { label: 'More', href: '#more', icon: 'more' },
-      ] as typeof BOTTOM_NAV,
-      moreItems: [
-        { label: 'Ideas', href: '/dashboard/ideas', icon: 'notes' },
-        { label: 'Board Meetings', href: '/dashboard/board-meetings', icon: 'board' },
-        { label: 'Equipment scan', href: '/dashboard/equipment/scan', icon: 'equipment' },
-        { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
-        { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
-      ] as typeof MORE_ITEMS,
-    }),
-    []
-  )
-
   const isStudentIntern = isStudentInternRole(userRole)
-  const navItemsResolved = isStudentIntern ? studentInternNav.navItems : NAV_ITEMS
-  const bottomNavResolved = isStudentIntern ? studentInternNav.bottomNav : BOTTOM_NAV
-  const moreItemsResolved = isStudentIntern ? studentInternNav.moreItems : MORE_ITEMS
+  const navResolved = useMemo(() => {
+    if (isStudentIntern) return buildStudentInternDashboardNav()
+    return buildStaffDashboardNav(userRole)
+  }, [isStudentIntern, userRole])
+
+  const navItemsResolved: DashboardNavSection[] = navResolved.navItems
+  const bottomNavResolved: DashboardNavItem[] = navResolved.bottomNav
+  const moreItemsResolved: DashboardNavItem[] = navResolved.moreItems
 
   // Global toast listener
   useEffect(() => {

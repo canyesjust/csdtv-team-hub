@@ -52,7 +52,7 @@ const ONBOARDING_TASKS: { title: string; description: string; week: number }[] =
   { week: 1, title: 'Shadow your first live production', description: 'Attend a real production event as an observer and take notes.' },
   { week: 1, title: 'Learn the productions tracking site', description: 'Get a tour of productions.canyonsdistrict.org and understand how requests come in.' },
   { week: 1, title: 'Log into the Team Hub', description: 'Sign in to csdtvstaff.org using your district email magic link.' },
-  { week: 1, title: 'Set your weekly schedule in Team Hub', description: 'Add your default weekly hours in the Schedule section of the Team Hub.' },
+  { week: 1, title: 'Set your weekly schedule in Team Hub', description: 'Add your default weekly hours under Team hours in the Team Hub.' },
   { week: 1, title: 'Review all Knowledge Base articles', description: 'Read every article in the Team Hub Knowledge Base to understand team processes.' },
   { week: 1, title: 'Complete district digital safety training', description: 'Finish the required online digital safety course assigned by the district.' },
   { week: 1, title: 'Week 1 check-in meeting with Justin', description: 'Sit down with Justin to review your first week, ask questions, and set goals for week 2.' },
