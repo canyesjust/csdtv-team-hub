@@ -1,4 +1,9 @@
-import type { OnboardingCategory, OnboardingItemInstance, OnboardingPhase } from './types'
+import type {
+  OnboardingCategory,
+  OnboardingItemInstance,
+  OnboardingPhase,
+  OnboardingTemplateItem,
+} from './types'
 
 export type GroupedChecklist = {
   phase: OnboardingPhase
@@ -7,6 +12,35 @@ export type GroupedChecklist = {
     items: OnboardingItemInstance[]
   }[]
 }[]
+
+export type GroupedTemplate = {
+  phase: OnboardingPhase
+  categories: {
+    category: OnboardingCategory
+    items: OnboardingTemplateItem[]
+  }[]
+}[]
+
+/** Outline of template items by phase → category (includes empty categories). */
+export function groupTemplateByPhaseCategory(
+  items: OnboardingTemplateItem[],
+  phases: OnboardingPhase[],
+  categories: OnboardingCategory[],
+): GroupedTemplate {
+  const active = items.filter((i) => i.active)
+  const phaseOrder = [...phases].filter((p) => p.active).sort((a, b) => a.sort_order - b.sort_order)
+  const catOrder = [...categories].filter((c) => c.active).sort((a, b) => a.sort_order - b.sort_order)
+
+  return phaseOrder.map((phase) => ({
+    phase,
+    categories: catOrder.map((category) => ({
+      category,
+      items: active
+        .filter((i) => i.phase_id === phase.id && i.category_id === category.id)
+        .sort((a, b) => a.sort_order - b.sort_order),
+    })),
+  }))
+}
 
 export function groupInstancesByPhaseCategory(
   instances: OnboardingItemInstance[],
