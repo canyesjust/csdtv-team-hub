@@ -12,6 +12,14 @@ import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
 import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
+import {
+  fetchTaskAssignments,
+  mergeAssigneeIds,
+  replaceTaskAssignees,
+  taskHasAssignee,
+  taskIsUnassigned,
+} from '@/lib/task-assignments'
+import TaskAssigneePicker from '../components/TaskAssigneePicker'
 
 interface Production {
   id: string; title: string; production_number: number
@@ -23,7 +31,8 @@ interface TimeEntry { id: string; hours: number; description: string | null; dat
 
 interface Task {
   id: string; title: string; description: string | null; status: string; priority: string
-  due_date: string | null; created_at: string; assigned_to: string | null; created_by: string
+  due_date: string | null; created_at: string; assigned_to: string | null; assignee_ids?: string[]
+  created_by: string
   production_id: string | null; needs_equipment: boolean; notes: string | null
   purchase_request: boolean; purchase_request_link: string | null
   hide_from_signage?: boolean
@@ -119,7 +128,7 @@ export default function TasksPage() {
     title: '',
     description: '',
     priority: 'normal',
-    assigned_to: '',
+    assignee_ids: [] as string[],
     due_date: '',
     production_id: '',
     needs_equipment: false,
@@ -257,7 +266,10 @@ export default function TasksPage() {
       e.preventDefault()
       setShowTemplates(false)
       setShowOverflow(false)
-      setNewTask(p => ({ ...p, assigned_to: p.assigned_to || currentUser?.id || '' }))
+      setNewTask(p => ({
+        ...p,
+        assignee_ids: p.assignee_ids.length > 0 ? p.assignee_ids : currentUser?.id ? [currentUser.id] : [],
+      }))
       setShowNewTask(true)
     }
     window.addEventListener('keydown', onKey)
@@ -280,6 +292,23 @@ export default function TasksPage() {
   const info = statusTone.info.color
   const review = statusTone.review.color
 
+  const enrichTasksWithAssignees = useCallback(async (rows: Task[]): Promise<Task[]> => {
+    const taskRows = rows.filter(t => t.source !== 'checklist')
+    const map = await fetchTaskAssignments(
+      supabase,
+      taskRows.map(t => t.id),
+    ).catch(() => new Map<string, string[]>())
+    return rows.map(t => {
+      if (t.source === 'checklist') return t
+      const assignee_ids = map.get(t.id) ?? mergeAssigneeIds(t.assigned_to, t.assignee_ids)
+      return {
+        ...t,
+        assignee_ids,
+        assigned_to: assignee_ids[0] ?? null,
+      }
+    })
+  }, [supabase])
+
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
@@ -294,9 +323,35 @@ export default function TasksPage() {
     let checklistRows: ChecklistRow[] = []
 
     if (isStu && uid) {
+      const { data: myAssignmentRows, error: assignmentQueryError } = await supabase
+        .from('task_assignments')
+        .select('task_id')
+        .eq('team_id', uid)
+      const assignedTaskIds = assignmentQueryError
+        ? []
+        : [...new Set((myAssignmentRows || []).map(r => r.task_id as string))]
+      const openFilter =
+        assignedTaskIds.length > 0
+          ? `assigned_to.eq.${uid},id.in.(${assignedTaskIds.join(',')})`
+          : `assigned_to.eq.${uid}`
+      const doneFilter =
+        assignedTaskIds.length > 0
+          ? `assigned_to.eq.${uid},id.in.(${assignedTaskIds.join(',')})`
+          : `assigned_to.eq.${uid}`
       ;[tasksRes, completedRes] = await Promise.all([
-        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('assigned_to', uid).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }),
-        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('assigned_to', uid).eq('status', 'complete').order('completed_at', { ascending: false }).limit(50),
+        supabase
+          .from('tasks')
+          .select('*, productions(id,title,production_number,request_type_label,start_datetime,status)')
+          .or(openFilter)
+          .neq('status', 'complete')
+          .order('due_date', { ascending: true, nullsFirst: false }),
+        supabase
+          .from('tasks')
+          .select('*, productions(id,title,production_number,request_type_label,start_datetime,status)')
+          .or(doneFilter)
+          .eq('status', 'complete')
+          .order('completed_at', { ascending: false })
+          .limit(50),
       ])
       const { data: checklistData } = await supabase
         .from('checklist_items')
@@ -359,8 +414,10 @@ export default function TasksPage() {
       productions: normalizeProductionRelation(row.productions),
     }))
 
-    setTasks([...(tasksRes.data || []), ...checklistAsTasks])
-    setCompletedTasks(completedRes.data || [])
+    const enrichedOpen = await enrichTasksWithAssignees([...(tasksRes.data || []), ...checklistAsTasks])
+    const enrichedDone = await enrichTasksWithAssignees(completedRes.data || [])
+    setTasks(enrichedOpen)
+    setCompletedTasks(enrichedDone)
     setTeam(teamList)
     setCurrentUser(userRes.data)
     setAllProductions(prodsList)
@@ -406,7 +463,7 @@ export default function TasksPage() {
     }
 
     setLoading(false)
-  }, [supabase])
+  }, [supabase, enrichTasksWithAssignees])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -609,6 +666,10 @@ export default function TasksPage() {
   }, [currentUser?.role])
 
   const getMember = (id: string | null) => id ? team.find(m => m.id === id) || null : null
+  const getAssigneeMembers = (task: Task) =>
+    mergeAssigneeIds(task.assigned_to, task.assignee_ids)
+      .map(id => getMember(id))
+      .filter((m): m is TeamMember => !!m)
 
   const saveAsTemplate = async () => {
     if (!newTemplateName.trim() || !currentUser) return
@@ -680,16 +741,36 @@ export default function TasksPage() {
     } catch { /* email error */ }
   }, [team, currentUser, supabase])
 
+  const setTaskAssignees = useCallback(
+    async (taskId: string, assigneeIds: string[], taskTitle: string, priorIds: string[]) => {
+      try {
+        const unique = await replaceTaskAssignees(supabase, taskId, assigneeIds, currentUser?.id)
+        const primary = unique[0] ?? null
+        setTasks(prev =>
+          prev.map(t => (t.id === taskId ? { ...t, assignee_ids: unique, assigned_to: primary } : t)),
+        )
+        setCompletedTasks(prev =>
+          prev.map(t => (t.id === taskId ? { ...t, assignee_ids: unique, assigned_to: primary } : t)),
+        )
+        setSelectedTask(prev =>
+          prev?.id === taskId ? { ...prev, assignee_ids: unique, assigned_to: primary } : prev,
+        )
+        for (const id of unique) {
+          if (!priorIds.includes(id)) void sendAssignEmail(id, taskTitle)
+        }
+      } catch {
+        toast('Failed to update assignees', 'error')
+      }
+    },
+    [supabase, currentUser?.id, sendAssignEmail],
+  )
+
   const updateTask = useCallback(async (id: string, updates: Partial<Task>) => {
     const { error } = await supabase.from('tasks').update(updates).eq('id', id)
     if (error) { toast('Failed to update task', 'error'); return }
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t))
     setSelectedTask(prev => prev?.id === id ? { ...prev, ...updates } : prev)
-    if (updates.assigned_to && updates.assigned_to !== selectedTask?.assigned_to) {
-      const task = tasks.find(t => t.id === id)
-      if (task) sendAssignEmail(updates.assigned_to, task.title)
-    }
-  }, [supabase, selectedTask, tasks, sendAssignEmail])
+  }, [supabase])
 
   const saveNotes = useCallback(async () => {
     if (!selectedTask) return
@@ -717,9 +798,10 @@ export default function TasksPage() {
 
   const createTask = useCallback(async () => {
     if (!newTask.title || !currentUser) return
+    const primaryAssignee = newTask.assignee_ids[0] ?? null
     const { data, error } = await supabase.from('tasks').insert({
       title: newTask.title, description: newTask.description || null,
-      priority: newTask.priority, assigned_to: newTask.assigned_to || null,
+      priority: newTask.priority, assigned_to: primaryAssignee,
       due_date: newTask.due_date || null, production_id: newTask.production_id || null,
       needs_equipment: newTask.needs_equipment,
       purchase_request: newTask.purchase_request,
@@ -730,14 +812,28 @@ export default function TasksPage() {
     }).select('*').single()
     if (error) { toast('Failed to create task', 'error'); return }
     if (data) {
+      const assignee_ids = await replaceTaskAssignees(
+        supabase,
+        data.id,
+        newTask.assignee_ids,
+        currentUser.id,
+      ).catch(() => newTask.assignee_ids)
       const linkedProd = newTask.production_id ? allProductions.find(p => p.id === newTask.production_id) || null : null
-      setTasks(prev => [{ ...data, productions: linkedProd }, ...prev])
-      if (newTask.assigned_to) sendAssignEmail(newTask.assigned_to, newTask.title)
+      setTasks(prev => [
+        {
+          ...data,
+          productions: linkedProd,
+          assignee_ids,
+          assigned_to: assignee_ids[0] ?? null,
+        },
+        ...prev,
+      ])
+      for (const id of assignee_ids) void sendAssignEmail(id, newTask.title)
       setNewTask({
         title: '',
         description: '',
         priority: 'normal',
-        assigned_to: currentUser.id,
+        assignee_ids: currentUser.id ? [currentUser.id] : [],
         due_date: '',
         production_id: '',
         needs_equipment: false,
@@ -779,9 +875,10 @@ export default function TasksPage() {
       if (task.recurring === 'daily') nextDate.setDate(nextDate.getDate() + interval)
       else if (task.recurring === 'weekly') nextDate.setDate(nextDate.getDate() + (7 * interval))
       else if (task.recurring === 'monthly') nextDate.setMonth(nextDate.getMonth() + interval)
+      const recurringAssignees = mergeAssigneeIds(task.assigned_to, task.assignee_ids)
       const { data: newRecurring } = await supabase.from('tasks').insert({
         title: task.title, description: task.description, priority: task.priority,
-        assigned_to: task.assigned_to, production_id: task.production_id,
+        assigned_to: recurringAssignees[0] ?? null, production_id: task.production_id,
         needs_equipment: task.needs_equipment,
         purchase_request: task.purchase_request,
         purchase_request_link: task.purchase_request_link,
@@ -790,7 +887,22 @@ export default function TasksPage() {
         recurring_interval: task.recurring_interval, status: 'pending',
         due_date: nextDate.toISOString().split('T')[0], created_by: task.created_by,
       }).select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').single()
-      if (newRecurring) setTasks(prev => [newRecurring, ...prev])
+      if (newRecurring) {
+        const assignee_ids = await replaceTaskAssignees(
+          supabase,
+          newRecurring.id,
+          recurringAssignees,
+          currentUser?.id,
+        ).catch(() => recurringAssignees)
+        setTasks(prev => [
+          {
+            ...newRecurring,
+            assignee_ids,
+            assigned_to: assignee_ids[0] ?? null,
+          },
+          ...prev,
+        ])
+      }
     }
 
     if (selectedTask?.id === task.id) closePanel()
@@ -800,7 +912,7 @@ export default function TasksPage() {
       setCompletedTasks(prev => [completed, ...prev])
       setCompleting(prev => { const n = new Set(prev); n.delete(task.id); return n })
     }, 600)
-  }, [supabase, tasks, selectedTask, closePanel])
+  }, [supabase, tasks, selectedTask, closePanel, currentUser?.id])
 
   const reopenTask = useCallback(async (task: Task) => {
     const { error } = await supabase.from('tasks').update({ status: 'pending', completed_at: null }).eq('id', task.id)
@@ -873,14 +985,14 @@ export default function TasksPage() {
 
   // Scope-aware source for chip counts and briefing — keeps numbers honest with the visible list
   const scopedTasks = useMemo(() => tasks.filter(t => {
-    if (scope === 'mine') return t.assigned_to === currentUser?.id
-    if (scope === 'unassigned') return t.assigned_to === null
+    if (scope === 'mine') return taskHasAssignee(t.assignee_ids, t.assigned_to, currentUser?.id)
+    if (scope === 'unassigned') return taskIsUnassigned(t.assignee_ids, t.assigned_to)
     return true
   }), [tasks, scope, currentUser?.id])
 
   const scopedCompleted = useMemo(() => completedTasks.filter(t => {
-    if (scope === 'mine') return t.assigned_to === currentUser?.id
-    if (scope === 'unassigned') return t.assigned_to === null
+    if (scope === 'mine') return taskHasAssignee(t.assignee_ids, t.assigned_to, currentUser?.id)
+    if (scope === 'unassigned') return taskIsUnassigned(t.assignee_ids, t.assigned_to)
     return true
   }), [completedTasks, scope, currentUser?.id])
 
@@ -936,7 +1048,14 @@ export default function TasksPage() {
     }
     if (groupBy === 'person') {
       const groups: Record<string, Task[]> = {}
-      regularFiltered.forEach(t => { const n = getMember(t.assigned_to)?.name || 'Unassigned'; if (!groups[n]) groups[n] = []; groups[n].push(t) })
+      regularFiltered.forEach(t => {
+        const ids = mergeAssigneeIds(t.assigned_to, t.assignee_ids)
+        const labels = ids.length > 0 ? ids.map(id => getMember(id)?.name).filter(Boolean) as string[] : ['Unassigned']
+        for (const n of labels) {
+          if (!groups[n]) groups[n] = []
+          groups[n].push(t)
+        }
+      })
       return Object.entries(groups).map(([label, tasks]) => ({ label, tasks }))
     }
     if (groupBy === 'status') {
@@ -1062,7 +1181,10 @@ export default function TasksPage() {
                   setShowNewTask(v => {
                     const next = !v
                     if (next) {
-                      setNewTask(p => ({ ...p, assigned_to: p.assigned_to || currentUser?.id || '' }))
+                      setNewTask(p => ({
+        ...p,
+        assignee_ids: p.assignee_ids.length > 0 ? p.assignee_ids : currentUser?.id ? [currentUser.id] : [],
+      }))
                     }
                     return next
                   })
@@ -1369,10 +1491,13 @@ export default function TasksPage() {
               <input ref={newTaskTitleRef} value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} placeholder="Task title" style={{ ...inputStyle, marginBottom: '8px' }} />
               <textarea value={newTask.description} onChange={e => setNewTask(p => ({ ...p, description: e.target.value }))} placeholder="Description (optional)" style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const, marginBottom: '8px' }} />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', marginBottom: '8px' }}>
-                <select value={newTask.assigned_to} onChange={e => setNewTask(p => ({ ...p, assigned_to: e.target.value }))} style={inputStyle}>
-                  <option value="">Unassigned</option>
-                  {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <TaskAssigneePicker
+                    team={team}
+                    value={newTask.assignee_ids}
+                    onChange={ids => setNewTask(p => ({ ...p, assignee_ids: ids }))}
+                  />
+                </div>
                 <select value={newTask.priority} onChange={e => setNewTask(p => ({ ...p, priority: e.target.value }))} style={inputStyle}>
                   {PRIORITIES.map(p => <option key={p} value={p}>{p === 'day of' ? 'Day of event' : p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
                 </select>
@@ -1481,12 +1606,29 @@ export default function TasksPage() {
               )}
               <select onChange={async e => {
                 if (!e.target.value) return
-                const ids = Array.from(selectedIds)
+                const ids = Array.from(selectedIds).filter(id => !id.startsWith('checklist:'))
                 const newAssignee = e.target.value
-                const { error } = await supabase.from('tasks').update({ assigned_to: newAssignee }).in('id', ids)
-                if (error) { toast('Failed to bulk assign', 'error'); return }
-                setTasks(prev => prev.map(t => selectedIds.has(t.id) ? { ...t, assigned_to: newAssignee } : t))
-                setSelectedTask(prev => (prev && selectedIds.has(prev.id)) ? { ...prev, assigned_to: newAssignee } : prev)
+                try {
+                  for (const taskId of ids) {
+                    await replaceTaskAssignees(supabase, taskId, [newAssignee], currentUser?.id)
+                  }
+                } catch {
+                  toast('Failed to bulk assign', 'error')
+                  e.target.value = ''
+                  return
+                }
+                setTasks(prev =>
+                  prev.map(t =>
+                    selectedIds.has(t.id)
+                      ? { ...t, assignee_ids: [newAssignee], assigned_to: newAssignee }
+                      : t,
+                  ),
+                )
+                setSelectedTask(prev =>
+                  prev && selectedIds.has(prev.id)
+                    ? { ...prev, assignee_ids: [newAssignee], assigned_to: newAssignee }
+                    : prev,
+                )
                 setSelectedIds(new Set())
                 e.target.value = ''
               }} style={{ padding: '6px 10px', borderRadius: '6px', background: cardBg, border: `1px solid ${border}`, color: text, fontFamily: 'inherit', fontSize: '12px' }}>
@@ -1540,7 +1682,7 @@ export default function TasksPage() {
                   const isOpen = selectedTask?.id === task.id
                   const isBulkSelected = selectedIds.has(task.id)
                   const dateInfo = formatDate(task.due_date)
-                  const assignee = getMember(task.assigned_to)
+                  const assignees = getAssigneeMembers(task)
                   const subCount = subtaskCounts[task.id]
                   const statusColor = task.status === 'in progress' ? warning : task.status === 'in review' ? review : task.status === 'complete' ? success : 'transparent'
                   const rowBg = isOpen
@@ -1645,9 +1787,37 @@ export default function TasksPage() {
                           </button>
                         )}
                         {dateInfo && <span style={{ fontSize: '12px', color: dateInfo.color, fontWeight: 600, whiteSpace: 'nowrap' as const, minWidth: '52px', textAlign: 'right' as const }}>{dateInfo.label}</span>}
-                        {assignee ? (
-                          <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: assignee.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }} title={assignee.name}>{assignee.name.slice(0, 2).toUpperCase()}</div>
-                        ) : <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `1.5px dashed ${border}`, flexShrink: 0 }} />}
+                        {assignees.length > 0 ? (
+                          <div style={{ display: 'flex', flexShrink: 0 }}>
+                            {assignees.slice(0, 3).map((a, ai) => (
+                              <div
+                                key={a.id}
+                                style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  borderRadius: '50%',
+                                  background: a.avatar_color,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '9px',
+                                  fontWeight: 700,
+                                  color: '#0a0f1e',
+                                  marginLeft: ai > 0 ? '-8px' : 0,
+                                  border: `2px solid ${cardBg}`,
+                                }}
+                                title={a.name}
+                              >
+                                {a.name.slice(0, 2).toUpperCase()}
+                              </div>
+                            ))}
+                            {assignees.length > 3 ? (
+                              <span style={{ fontSize: '10px', color: muted, marginLeft: '4px' }}>+{assignees.length - 3}</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: `1.5px dashed ${border}`, flexShrink: 0 }} />
+                        )}
                       </div>
                     </div>
                         )
@@ -1727,10 +1897,22 @@ export default function TasksPage() {
                     {PRIORITIES.map(p => <option key={p} value={p}>{p === 'day of' ? 'Day of event' : p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
                   </select>
                   <input type="date" value={selectedTask.due_date || ''} onChange={e => updateTask(selectedTask.id, { due_date: e.target.value || null })} style={chipSelect(dueDateTone(selectedTask.due_date))} />
-                  <select value={selectedTask.assigned_to || ''} onChange={e => updateTask(selectedTask.id, { assigned_to: e.target.value || null })} style={chipSelect(null)}>
-                    <option value="">Unassigned</option>
-                    {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
+                </div>
+
+                <div style={{ marginBottom: '14px' }}>
+                  <p style={{ fontSize: '11px', color: muted, fontWeight: 700, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Assigned to</p>
+                  <TaskAssigneePicker
+                    team={team}
+                    value={mergeAssigneeIds(selectedTask.assigned_to, selectedTask.assignee_ids)}
+                    onChange={ids =>
+                      void setTaskAssignees(
+                        selectedTask.id,
+                        ids,
+                        selectedTask.title,
+                        mergeAssigneeIds(selectedTask.assigned_to, selectedTask.assignee_ids),
+                      )
+                    }
+                  />
                 </div>
 
                 {selectedTask.intake_source === 'magic_link' && (selectedTask.intake_submitter_name || selectedTask.intake_submitter_email) && (
