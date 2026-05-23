@@ -7,10 +7,16 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
+import ArticleEditorToolbar from '../components/ArticleEditorToolbar'
+import ArticleEditorShell from '../components/ArticleEditorShell'
 import { toast } from '@/lib/toast'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
 
-const ArticleRichEditor = dynamic(() => import('../components/ArticleRichEditor'), { ssr: false })
+const ArticleRichEditor = dynamic(() => import('../components/ArticleRichEditor'), {
+  ssr: false,
+  loading: ArticleEditorShell,
+})
 
 interface Idea {
   id: string
@@ -104,6 +110,10 @@ export default function IdeasPage() {
     setEditorKey(k => k + 1)
   }, [])
 
+  const handleEditorReady = useCallback((ed: Editor | null) => {
+    setEditor(ed)
+  }, [])
+
   const loadData = useCallback(async () => {
     const {
       data: { session },
@@ -111,7 +121,7 @@ export default function IdeasPage() {
     if (!session) return
     const [ideasRes, userRes] = await Promise.all([
       supabase.from('project_ideas').select(IDEA_SELECT).order('updated_at', { ascending: false }),
-      supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single(),
+      resolveEffectiveTeamRow(supabase, 'id, name, role'),
     ])
     if (ideasRes.error) {
       toast('Failed to load ideas. Run db/project_ideas.sql in Supabase if this is a new install.', 'error')
@@ -119,7 +129,7 @@ export default function IdeasPage() {
     } else {
       setIdeas((ideasRes.data as Idea[]) || [])
     }
-    setCurrentUser(userRes.data)
+    setCurrentUser(userRes)
     setLoading(false)
   }, [supabase])
 
@@ -297,54 +307,7 @@ export default function IdeasPage() {
     minHeight: '44px',
   }
 
-  const tbBtn = (label: string, action: () => void, active: boolean, extraStyle?: React.CSSProperties) => (
-    <button
-      key={label}
-      type="button"
-      onClick={action}
-      style={{
-        fontSize: '13px',
-        padding: '4px 10px',
-        borderRadius: '6px',
-        border: `0.5px solid ${active ? '#1e6cb5' : border}`,
-        background: active ? 'rgba(30,108,181,0.15)' : 'transparent',
-        color: active ? '#5ba3e0' : muted,
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        minHeight: '30px',
-        ...extraStyle,
-      }}
-    >
-      {label}
-    </button>
-  )
-
-  const Toolbar = () => (
-    <div
-      style={{
-        display: 'flex',
-        gap: '4px',
-        padding: '8px 10px',
-        borderBottom: `0.5px solid ${border}`,
-        flexWrap: 'wrap',
-        background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
-      }}
-    >
-      {tbBtn('B', () => editor?.chain().focus().toggleBold().run(), !!editor?.isActive('bold'), {
-        fontWeight: 700,
-      })}
-      {tbBtn('I', () => editor?.chain().focus().toggleItalic().run(), !!editor?.isActive('italic'), {
-        fontStyle: 'italic',
-      })}
-      {tbBtn('H2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), !!editor?.isActive('heading', { level: 2 }))}
-      {tbBtn('H3', () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), !!editor?.isActive('heading', { level: 3 }))}
-      {tbBtn('• List', () => editor?.chain().focus().toggleBulletList().run(), !!editor?.isActive('bulletList'))}
-      {tbBtn('1. List', () => editor?.chain().focus().toggleOrderedList().run(), !!editor?.isActive('orderedList'))}
-      {tbBtn('—', () => editor?.chain().focus().setHorizontalRule().run(), false)}
-    </div>
-  )
-
-  const DetailPanel = () => (
+  const detailPanel = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div
         style={{
@@ -482,15 +445,20 @@ export default function IdeasPage() {
                 borderRadius: '10px',
                 overflow: 'hidden',
                 background: inputBg,
+                minHeight: '326px',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
-              <Toolbar />
-              <ArticleRichEditor
-                key={editorKey}
-                placeholder="Describe the idea — goals, audience, timing, open questions…"
-                initialContent={composeInitialHtml}
-                onEditorReady={setEditor}
-              />
+              <ArticleEditorToolbar editor={editor} border={border} muted={muted} dark={dark} />
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                <ArticleRichEditor
+                  key={editorKey}
+                  placeholder="Describe the idea — goals, audience, timing, open questions…"
+                  initialContent={composeInitialHtml}
+                  onEditorReady={handleEditorReady}
+                />
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', margin: '14px 20px 20px', flexWrap: 'wrap' }}>
               <button
@@ -808,7 +776,7 @@ export default function IdeasPage() {
           }}
         >
           {selected || showNew || editing ? (
-            <DetailPanel />
+            detailPanel
           ) : (
             <div
               style={{
@@ -850,7 +818,7 @@ export default function IdeasPage() {
           .ideas-detail-visible { min-height: calc(100dvh - 140px); }
         }
         .tiptap-editor .ProseMirror {
-          min-height: 240px;
+          min-height: 280px;
           padding: 14px 16px;
           font-size: 15px;
           color: ${text};
@@ -858,6 +826,7 @@ export default function IdeasPage() {
           line-height: 1.7;
           outline: none;
         }
+        .tiptap-editor .ProseMirror:focus { outline: none; }
         .tiptap-editor .ProseMirror > * + * { margin-top: 10px; }
         .tiptap-editor .ProseMirror h2 { font-size: 17px; font-weight: 600; color: ${text}; margin: 20px 0 6px; }
         .tiptap-editor .ProseMirror h3 { font-size: 15px; font-weight: 600; color: ${text}; margin: 16px 0 4px; }
