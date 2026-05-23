@@ -2,14 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { Editor } from '@tiptap/react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../components/Loader'
 import { isStudentInternRole } from '@/lib/roles'
-import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
+import { stripArticleHtml } from '@/lib/sanitize-article-html'
 import KnowledgeArticlesImportModal from './KnowledgeArticlesImportModal'
+import ArticleBody from './ArticleBody'
 import { downloadArticlesExport, mapArticlesForExport } from '@/lib/library/kb-export'
 import { fetchKnowledgeBaseArticles, type KbArticleWithAuthors } from '@/lib/library/kb-articles'
 import { printLibraryArticle } from '@/lib/library/print-article'
@@ -77,6 +78,13 @@ const CAT_STYLES: Record<string, { bg: string; color: string }> = {
   Other:     { bg: 'rgba(232,160,32,0.12)',  color: '#e8a020' },
 }
 
+function formatArticleDate(value: string | null | undefined): string {
+  if (!value) return 'Unknown date'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return 'Unknown date'
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+}
+
 const STARTER_ARTICLES = [
   { title: 'Livestream setup process', category: 'Process', content: '<p>Step by step guide for setting up a livestream...</p>' },
   { title: 'Board meeting workflow', category: 'Workflow', content: '<p>Complete board meeting production checklist and workflow...</p>' },
@@ -87,6 +95,7 @@ export default function KnowledgeArticlesTab() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
+  const router = useRouter()
   const searchParams = useSearchParams()
 
   const [articles, setArticles] = useState<Article[]>([])
@@ -119,17 +128,22 @@ export default function KnowledgeArticlesTab() {
       setEditorKey((k) => k + 1)
       setForm({ title: opts.title, category: opts.category })
       setSaveError('')
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('tab', 'articles')
       if (opts.mode === 'new') {
         setShowNew(true)
         setSelected(null)
         setEditing(false)
+        params.delete('article')
       } else {
         setEditing(true)
         setShowNew(false)
+        if (selected) params.set('article', selected.id)
       }
+      router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
       setShowMobileDetail(true)
     },
-    [],
+    [router, searchParams, selected],
   )
 
   const loadData = useCallback(async () => {
@@ -187,11 +201,15 @@ export default function KnowledgeArticlesTab() {
     const refreshed = await fetchKnowledgeBaseArticles(supabase)
     if (!refreshed.error) {
       setArticles(refreshed.data)
-      if (savedId) {
-        setSelected(refreshed.data.find((a) => a.id === savedId) ?? null)
-      } else {
-        const newest = refreshed.data[0]
-        if (newest) setSelected(newest)
+      const nextSelected = savedId
+        ? refreshed.data.find((a) => a.id === savedId) ?? null
+        : refreshed.data[0] ?? null
+      setSelected(nextSelected)
+      if (nextSelected) {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('tab', 'articles')
+        params.set('article', nextSelected.id)
+        router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
       }
     } else {
       await loadData()
@@ -201,7 +219,23 @@ export default function KnowledgeArticlesTab() {
   const openArticle = (article: Article) => {
     setSelected(article)
     setEditing(false)
+    setShowNew(false)
     setShowMobileDetail(true)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'articles')
+    params.set('article', article.id)
+    router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
+  }
+
+  const clearArticleSelection = () => {
+    setSelected(null)
+    setEditing(false)
+    setShowNew(false)
+    setShowMobileDetail(false)
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('article')
+    params.set('tab', 'articles')
+    router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
   }
 
   const togglePin = async (article: Article) => {
@@ -218,7 +252,7 @@ export default function KnowledgeArticlesTab() {
     if (!confirm(`Delete "${article.title}"? This cannot be undone.`)) return
     await supabase.from('knowledge_base').delete().eq('id', article.id)
     setArticles(prev => prev.filter(a => a.id !== article.id))
-    if (selected?.id === article.id) setSelected(null)
+    if (selected?.id === article.id) clearArticleSelection()
   }
 
   const readOnlyKb = isStudentInternRole(currentUser?.role)
@@ -277,7 +311,7 @@ export default function KnowledgeArticlesTab() {
   const DetailPanel = () => (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `0.5px solid ${border}` }}>
-        <button onClick={() => setShowMobileDetail(false)} className="mobile-back-btn" style={{ display: 'none', background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', padding: '4px 0', minHeight: '44px', alignItems: 'center', gap: '6px' }}>
+        <button type="button" onClick={clearArticleSelection} className="mobile-back-btn" style={{ display: 'none', background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', padding: '4px 0', minHeight: '44px', alignItems: 'center', gap: '6px' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
           Back
         </button>
@@ -362,9 +396,9 @@ export default function KnowledgeArticlesTab() {
             <h2 style={{ fontSize: '20px', fontWeight: 600, color: text, margin: '0 0 6px', lineHeight: 1.3 }}>{selected.title}</h2>
             <p style={{ fontSize: '14px', color: muted, margin: '0 0 28px' }}>
               {selected.author?.name && `By ${selected.author.name} · `}
-              Updated {new Date(selected.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              Updated {formatArticleDate(selected.updated_at)}
             </p>
-            <div className="article-content" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(selected.content || '') }} />
+            <ArticleBody html={selected.content || ''} />
           </div>
         ) : null}
       </div>
@@ -477,9 +511,20 @@ export default function KnowledgeArticlesTab() {
         </div>
       </div>
 
-      <div className="kb-layout" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
-
-        <div className={`kb-list ${showMobileDetail ? 'kb-list-hidden' : ''}`}>
+      <div
+        className="kb-layout"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr',
+          gap: '16px',
+          alignItems: 'stretch',
+          minHeight: 'min(720px, calc(100vh - 240px))',
+        }}
+      >
+        <div
+          className={`kb-list ${showMobileDetail ? 'kb-list-hidden' : ''}`}
+          style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 14px', marginBottom: '10px' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search articles..." style={{ background: 'none', border: 'none', outline: 'none', fontSize: '14px', color: text, fontFamily: 'inherit', width: '100%', minHeight: '24px' }} />
@@ -541,7 +586,10 @@ export default function KnowledgeArticlesTab() {
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div
+              className="kb-list-scroll"
+              style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: '2px' }}
+            >
               {filtered.map(article => {
                 const cs = CAT_STYLES[article.category] || CAT_STYLES.Other
                 const isSelected = selected?.id === article.id
@@ -567,11 +615,41 @@ export default function KnowledgeArticlesTab() {
           )}
         </div>
 
-        {(selected || showNew) && (
-          <div className={`kb-detail ${showMobileDetail ? 'kb-detail-visible' : 'kb-detail-desktop'}`} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', overflow: 'hidden', minHeight: '400px' }}>
+        <div
+          className={`kb-detail ${showMobileDetail ? 'kb-detail-visible' : 'kb-detail-desktop'}`}
+          style={{
+            background: cardBg,
+            border: `0.5px solid ${border}`,
+            borderRadius: '14px',
+            overflow: 'hidden',
+            minHeight: '400px',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {selected || showNew ? (
             <DetailPanel />
-          </div>
-        )}
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '48px 32px',
+                textAlign: 'center',
+              }}
+            >
+              <p style={{ fontSize: '16px', fontWeight: 500, color: text, margin: '0 0 8px' }}>
+                Select an article
+              </p>
+              <p style={{ fontSize: '14px', color: muted, margin: 0, maxWidth: '320px', lineHeight: 1.5 }}>
+                Choose an article from the list to read it here, or create a new one.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       <KnowledgeArticlesImportModal
@@ -591,11 +669,12 @@ export default function KnowledgeArticlesTab() {
 
       <style>{`
         @media (min-width: 768px) {
-          .kb-layout { grid-template-columns: 340px 1fr !important; }
-          .kb-list { display: block !important; }
-          .kb-list-hidden { display: block !important; }
-          .kb-detail { display: block !important; }
-          .kb-detail-desktop { display: block !important; }
+          .kb-layout { grid-template-columns: minmax(280px, 360px) minmax(0, 1fr) !important; }
+          .kb-list { display: flex !important; }
+          .kb-list-hidden { display: flex !important; }
+          .kb-detail { display: flex !important; }
+          .kb-detail-desktop { display: flex !important; }
+          .kb-list-scroll { max-height: calc(100vh - 280px); }
         }
         @media (max-width: 767px) {
           .kb-list-hidden { display: none !important; }

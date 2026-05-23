@@ -21,7 +21,7 @@ export default function ArticleRichEditor({
       Placeholder.configure({ placeholder }),
     ],
     content: initialContent,
-    immediatelyRender: true,
+    immediatelyRender: false,
     onCreate: ({ editor: ed }) => onEditorReady?.(ed),
     onDestroy: () => onEditorReady?.(null),
   })

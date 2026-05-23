@@ -22,7 +22,9 @@ function LibraryPageContent() {
 
   const setTab = useCallback(
     (next: LibraryTab) => {
-      router.replace(`/dashboard/library?tab=${next}`, { scroll: false })
+      const params = new URLSearchParams()
+      params.set('tab', next)
+      router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
     },
     [router],
   )
