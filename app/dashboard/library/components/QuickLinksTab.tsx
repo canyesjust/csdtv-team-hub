@@ -55,22 +55,30 @@ export default function QuickLinksTab() {
       return
     }
     const [linksRes, userRes] = await Promise.all([
-      supabase.from('quick_links').select('*').eq('active', true).order('sort_order'),
+      fetch('/api/library/quick-links', { cache: 'no-store' }),
       supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single(),
     ])
-    if (linksRes.error) {
-      const msg = linksRes.error.message
-      setLoadError(msg)
-      setLinks([])
-      console.error('quick_links load failed', linksRes.error)
-      if (msg.includes('quick_links') && (msg.includes('schema') || msg.includes('does not exist') || msg.includes('relation'))) {
-        toast('Quick links table is missing — run db/quick_links.sql in Supabase', 'error')
+
+    let linksData: QuickLink[] = []
+    if (linksRes.ok) {
+      const json = (await linksRes.json()) as { links?: QuickLink[]; error?: string }
+      if (json.error) {
+        setLoadError(json.error)
+        if (json.error.includes('does not exist') || json.error.includes('relation')) {
+          toast('Quick links table is missing — run db/quick_links.sql in Supabase', 'error')
+        } else {
+          toast(`Could not load quick links: ${json.error}`, 'error')
+        }
       } else {
-        toast(`Could not load quick links: ${msg}`, 'error')
+        linksData = json.links ?? []
       }
     } else {
-      setLinks(linksRes.data || [])
+      const json = (await linksRes.json().catch(() => ({}))) as { error?: string }
+      const msg = json.error || `Request failed (${linksRes.status})`
+      setLoadError(msg)
+      toast(`Could not load quick links: ${msg}`, 'error')
     }
+    setLinks(linksData)
     if (userRes.error) {
       console.error('team user load failed', userRes.error)
     }
@@ -86,26 +94,24 @@ export default function QuickLinksTab() {
     if (!form.title || !form.url || !currentUser) return
     setSaving(true)
     const url = form.url.startsWith('http') ? form.url : `https://${form.url}`
-    const { data, error } = await supabase
-      .from('quick_links')
-      .insert({
+    const res = await fetch('/api/library/quick-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         title: form.title.trim(),
         url,
         description: form.description.trim() || null,
         category: form.category,
-        created_by: currentUser.id,
-        sort_order: links.length,
-        active: true,
-      })
-      .select()
-      .single()
-    if (error) {
-      toast(error.message || 'Failed to add link', 'error')
+      }),
+    })
+    const json = (await res.json().catch(() => ({}))) as { link?: QuickLink; error?: string }
+    if (!res.ok) {
+      toast(json.error || 'Failed to add link', 'error')
       setSaving(false)
       return
     }
-    if (data) {
-      setLinks((prev) => [...prev, data])
+    if (json.link) {
+      setLinks((prev) => [...prev, json.link!])
       setForm({ title: '', url: '', description: '', category: 'Tools' })
       setShowNew(false)
       toast('Link added', 'success')
@@ -114,9 +120,10 @@ export default function QuickLinksTab() {
   }
 
   const deleteLink = async (id: string) => {
-    const { error } = await supabase.from('quick_links').update({ active: false }).eq('id', id)
-    if (error) {
-      toast(error.message || 'Failed to remove link', 'error')
+    const res = await fetch(`/api/library/quick-links/${id}`, { method: 'PATCH' })
+    const json = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) {
+      toast(json.error || 'Failed to remove link', 'error')
       return
     }
     setLinks((prev) => prev.filter((l) => l.id !== id))

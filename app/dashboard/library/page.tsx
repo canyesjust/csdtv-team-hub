@@ -1,39 +1,48 @@
 'use client'
 
-import { Suspense, useCallback } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useTheme } from '@/lib/theme'
 import KnowledgeArticlesTab from './components/KnowledgeArticlesTab'
 import QuickLinksTab from './components/QuickLinksTab'
 import Loader from '../components/Loader'
 
 type LibraryTab = 'articles' | 'links'
 
+function tabFromParams(searchParams: URLSearchParams): LibraryTab {
+  return searchParams.get('tab') === 'links' ? 'links' : 'articles'
+}
+
 function LibraryPageContent() {
-  const { theme } = useTheme()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const tab: LibraryTab = searchParams.get('tab') === 'links' ? 'links' : 'articles'
+  const urlTab = tabFromParams(searchParams)
+  const [activeTab, setActiveTab] = useState<LibraryTab>(urlTab)
+
+  useEffect(() => {
+    setActiveTab(urlTab)
+  }, [urlTab])
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
   const border = 'var(--border-subtle)'
   const cardBg = 'var(--surface-1)'
 
-  const setTab = useCallback(
+  const switchTab = useCallback(
     (next: LibraryTab) => {
-      const params = new URLSearchParams()
+      setActiveTab(next)
+      const params = new URLSearchParams(searchParams.toString())
       params.set('tab', next)
+      if (next === 'links') params.delete('article')
       router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
     },
-    [router],
+    [router, searchParams],
   )
 
   const tabBtn = (id: LibraryTab, label: string) => (
     <button
       key={id}
       type="button"
-      onClick={() => setTab(id)}
+      onClick={() => switchTab(id)}
       style={{
         fontSize: '14px',
         padding: '10px 16px',
@@ -41,9 +50,9 @@ function LibraryPageContent() {
         background: 'transparent',
         cursor: 'pointer',
         fontFamily: 'inherit',
-        color: tab === id ? 'var(--brand-primary)' : muted,
-        borderBottom: tab === id ? '2px solid var(--brand-primary)' : '2px solid transparent',
-        fontWeight: tab === id ? 600 : 400,
+        color: activeTab === id ? 'var(--brand-primary)' : muted,
+        borderBottom: activeTab === id ? '2px solid var(--brand-primary)' : '2px solid transparent',
+        fontWeight: activeTab === id ? 600 : 400,
         minHeight: '44px',
         whiteSpace: 'nowrap',
       }}
@@ -76,7 +85,7 @@ function LibraryPageContent() {
         {tabBtn('links', 'Quick links')}
       </div>
 
-      {tab === 'articles' ? <KnowledgeArticlesTab /> : <QuickLinksTab />}
+      {activeTab === 'articles' ? <KnowledgeArticlesTab /> : <QuickLinksTab />}
     </div>
   )
 }

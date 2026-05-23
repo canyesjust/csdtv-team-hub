@@ -72,10 +72,15 @@ const PRINT_STYLES = `
   }
 `
 
-/** Open a print-friendly window for a Library article. */
-export function printLibraryArticle(article: PrintableArticle): boolean {
-  if (typeof window === 'undefined') return false
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 
+function buildPrintDocument(article: PrintableArticle): string {
   const safeHtml = sanitizeArticleHtml(article.content || '')
   const updated = article.updated_at
     ? new Date(article.updated_at).toLocaleDateString('en-US', {
@@ -89,10 +94,7 @@ export function printLibraryArticle(article: PrintableArticle): boolean {
     updated ? `Updated ${updated}` : null,
   ].filter(Boolean)
 
-  const win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=700')
-  if (!win) return false
-
-  win.document.write(`<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -104,22 +106,65 @@ export function printLibraryArticle(article: PrintableArticle): boolean {
   <h1>${escapeHtml(article.title)}</h1>
   ${metaParts.length ? `<p class="meta">${escapeHtml(metaParts.join(' · '))}</p>` : ''}
   <div class="article-content">${safeHtml}</div>
-  <script>
-    window.onload = function() {
-      window.focus();
-      window.print();
-    };
-  </script>
 </body>
-</html>`)
-  win.document.close()
-  return true
+</html>`
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+/**
+ * Print via hidden off-screen iframe (avoids popup blockers and noopener null window issues).
+ */
+export function printLibraryArticle(article: PrintableArticle): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false
+
+  const html = buildPrintDocument(article)
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', 'Print article')
+  // Sized for layout; positioned off-screen so print preview is not blank.
+  iframe.style.cssText =
+    'position:fixed;left:-10000px;top:0;width:8.5in;height:11in;border:0;visibility:hidden;'
+  document.body.appendChild(iframe)
+
+  const win = iframe.contentWindow
+  const doc = win?.document
+  if (!win || !doc) {
+    iframe.remove()
+    return false
+  }
+
+  let printed = false
+  const cleanup = () => {
+    if (iframe.parentNode) iframe.remove()
+  }
+
+  const runPrint = () => {
+    if (printed) return true
+    printed = true
+    try {
+      win.focus()
+      win.print()
+    } catch {
+      cleanup()
+      return false
+    }
+    win.addEventListener('afterprint', cleanup, { once: true })
+    setTimeout(cleanup, 60_000)
+    return true
+  }
+
+  const schedulePrint = () => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => runPrint())
+    })
+  }
+
+  iframe.onload = schedulePrint
+
+  doc.open()
+  doc.write(html)
+  doc.close()
+
+  // Fallback if onload already fired or never fires (e.g. cached about:blank).
+  setTimeout(schedulePrint, 400)
+
+  return true
 }

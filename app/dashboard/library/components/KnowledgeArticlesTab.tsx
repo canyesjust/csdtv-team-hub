@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Editor } from '@tiptap/react'
@@ -113,6 +113,27 @@ export default function KnowledgeArticlesTab() {
   const [editorKey, setEditorKey] = useState(0)
   const [composeInitialHtml, setComposeInitialHtml] = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  const syncArticlesUrl = useCallback(
+    (patch: (params: URLSearchParams) => void) => {
+      if (!isMountedRef.current) return
+      // Read live URL so a stale closure cannot overwrite tab=links after the user switches tabs.
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('tab') === 'links') return
+      params.set('tab', 'articles')
+      patch(params)
+      router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
+    },
+    [router],
+  )
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -128,22 +149,22 @@ export default function KnowledgeArticlesTab() {
       setEditorKey((k) => k + 1)
       setForm({ title: opts.title, category: opts.category })
       setSaveError('')
-      const params = new URLSearchParams(searchParams.toString())
-      params.set('tab', 'articles')
       if (opts.mode === 'new') {
         setShowNew(true)
         setSelected(null)
         setEditing(false)
-        params.delete('article')
+        syncArticlesUrl((params) => params.delete('article'))
       } else {
         setEditing(true)
         setShowNew(false)
-        if (selected) params.set('article', selected.id)
+        const id = selected?.id
+        syncArticlesUrl((params) => {
+          if (id) params.set('article', id)
+        })
       }
-      router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
       setShowMobileDetail(true)
     },
-    [router, searchParams, selected],
+    [syncArticlesUrl, selected],
   )
 
   const loadData = useCallback(async () => {
@@ -199,6 +220,7 @@ export default function KnowledgeArticlesTab() {
     setForm({ title: '', category: 'Process' })
 
     const refreshed = await fetchKnowledgeBaseArticles(supabase)
+    if (!isMountedRef.current) return
     if (!refreshed.error) {
       setArticles(refreshed.data)
       const nextSelected = savedId
@@ -206,10 +228,7 @@ export default function KnowledgeArticlesTab() {
         : refreshed.data[0] ?? null
       setSelected(nextSelected)
       if (nextSelected) {
-        const params = new URLSearchParams(searchParams.toString())
-        params.set('tab', 'articles')
-        params.set('article', nextSelected.id)
-        router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
+        syncArticlesUrl((params) => params.set('article', nextSelected.id))
       }
     } else {
       await loadData()
@@ -221,10 +240,7 @@ export default function KnowledgeArticlesTab() {
     setEditing(false)
     setShowNew(false)
     setShowMobileDetail(true)
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('tab', 'articles')
-    params.set('article', article.id)
-    router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
+    syncArticlesUrl((params) => params.set('article', article.id))
   }
 
   const clearArticleSelection = () => {
@@ -232,10 +248,7 @@ export default function KnowledgeArticlesTab() {
     setEditing(false)
     setShowNew(false)
     setShowMobileDetail(false)
-    const params = new URLSearchParams(searchParams.toString())
-    params.delete('article')
-    params.set('tab', 'articles')
-    router.replace(`/dashboard/library?${params.toString()}`, { scroll: false })
+    syncArticlesUrl((params) => params.delete('article'))
   }
 
   const togglePin = async (article: Article) => {
@@ -281,7 +294,7 @@ export default function KnowledgeArticlesTab() {
       updated_at: selected.updated_at,
       authorName: selected.author?.name ?? null,
     })
-    if (!ok) toast('Allow pop-ups to print this article', 'error')
+    if (!ok) toast('Could not open print view for this article', 'error')
   }
 
   const inputStyle: React.CSSProperties = {
