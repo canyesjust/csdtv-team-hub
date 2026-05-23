@@ -66,7 +66,30 @@ export function normalizeKbContent(raw: string): string {
     .join('')
 }
 
-function rowFromFields(rowNum: number, title: string, category: string, content: string): KbImportRow {
+function fieldToString(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
+/** Accept `[...]` or `{ "articles": [...] }`. */
+export function unwrapKbImportJsonRoot(parsed: unknown): unknown[] | { error: string } {
+  if (Array.isArray(parsed)) return parsed
+  if (parsed && typeof parsed === 'object') {
+    const articles = (parsed as { articles?: unknown }).articles
+    if (Array.isArray(articles)) return articles
+  }
+  return { error: 'JSON must be an array of articles, or { "articles": [ ... ] }' }
+}
+
+function rowFromFields(
+  rowNum: number,
+  title: string,
+  category: string,
+  content: string,
+  opts?: { normalizeContent?: boolean },
+): KbImportRow {
   const t = title.trim()
   if (!t) {
     return { row: rowNum, title: '', category: 'Other', content: '', error: 'Missing title' }
@@ -74,12 +97,40 @@ function rowFromFields(rowNum: number, title: string, category: string, content:
   if (!content.trim()) {
     return { row: rowNum, title: t, category: normalizeKbCategory(category), content: '', error: 'Missing content' }
   }
+  const normalizeContent = opts?.normalizeContent !== false
   return {
     row: rowNum,
     title: t,
     category: normalizeKbCategory(category),
-    content: normalizeKbContent(content),
+    content: normalizeContent ? normalizeKbContent(content) : content.trim(),
   }
+}
+
+function rowFromJsonItem(rowNum: number, item: unknown, opts?: { normalizeContent?: boolean }): KbImportRow {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return {
+      row: rowNum,
+      title: '',
+      category: 'Other',
+      content: '',
+      error: 'Each entry must be an object with title and content',
+    }
+  }
+  const record = item as Record<string, unknown>
+  const title = fieldToString(record.title ?? record.name)
+  const category = fieldToString(record.category ?? record.type ?? 'Other')
+  const rawContent = record.content ?? record.body ?? record.html ?? record.text
+  if (rawContent != null && typeof rawContent === 'object') {
+    return {
+      row: rowNum,
+      title: title.trim(),
+      category: normalizeKbCategory(category),
+      content: '',
+      error: 'content must be a string (HTML or plain text), not an object',
+    }
+  }
+  const content = fieldToString(rawContent)
+  return rowFromFields(rowNum, title, category, content, opts)
 }
 
 function headerIndex(headers: string[], names: string[]): number {
@@ -90,7 +141,10 @@ function headerIndex(headers: string[], names: string[]): number {
   return -1
 }
 
-export function parseKbImportCsv(input: string): KbImportRow[] {
+export function parseKbImportCsv(
+  input: string,
+  opts?: { normalizeContent?: boolean },
+): KbImportRow[] {
   const lines = input.trim().split(/\r?\n/).filter((l) => l.trim())
   if (lines.length === 0) return []
 
@@ -124,36 +178,40 @@ export function parseKbImportCsv(input: string): KbImportRow[] {
     const title = cells[titleIdx] ?? ''
     const category = cells[categoryIdx] ?? 'Other'
     const content = cells[contentIdx] ?? cells.slice(Math.max(titleIdx, categoryIdx, contentIdx) + 1).join('\n')
-    rows.push(rowFromFields(i + 1, title, category, content))
+    rows.push(rowFromFields(i + 1, title, category, content, opts))
   }
   return rows
 }
 
-export function parseKbImportJson(input: string): KbImportRow[] {
-  let data: unknown
+export function parseKbImportJson(
+  input: string,
+  opts?: { normalizeContent?: boolean },
+): KbImportRow[] {
+  let parsed: unknown
   try {
-    data = JSON.parse(input)
+    parsed = JSON.parse(input)
   } catch {
-    return [{ row: 1, title: '', category: 'Other', content: '', error: 'Invalid JSON' }]
+    return [{ row: 1, title: '', category: 'Other', content: '', error: 'Invalid JSON — check commas, quotes, and brackets' }]
   }
-  if (!Array.isArray(data)) {
-    return [{ row: 1, title: '', category: 'Other', content: '', error: 'JSON must be an array of articles' }]
+  const unwrapped = unwrapKbImportJsonRoot(parsed)
+  if (!Array.isArray(unwrapped)) {
+    return [{ row: 1, title: '', category: 'Other', content: '', error: unwrapped.error }]
   }
   const rows: KbImportRow[] = []
-  for (let i = 0; i < data.length && rows.length < MAX_IMPORT_ROWS; i++) {
-    const item = data[i] as Record<string, unknown>
-    const title = String(item.title ?? item.name ?? '')
-    const category = String(item.category ?? item.type ?? 'Other')
-    const content = String(item.content ?? item.body ?? item.html ?? item.text ?? '')
-    rows.push(rowFromFields(i + 1, title, category, content))
+  for (let i = 0; i < unwrapped.length && rows.length < MAX_IMPORT_ROWS; i++) {
+    rows.push(rowFromJsonItem(i + 1, unwrapped[i], opts))
   }
   return rows
 }
 
-export function parseKbImportPayload(input: string, format: 'csv' | 'json'): KbImportRow[] {
+export function parseKbImportPayload(
+  input: string,
+  format: 'csv' | 'json',
+  opts?: { normalizeContent?: boolean },
+): KbImportRow[] {
   const trimmed = input.trim()
   if (!trimmed) return []
-  if (format === 'json') return parseKbImportJson(trimmed)
+  if (format === 'json') return parseKbImportJson(trimmed, opts)
   return parseKbImportCsv(trimmed)
 }
 
@@ -162,6 +220,24 @@ Livestream setup,Process,"Step 1: Check audio levels.
 
 Step 2: Start the encoder."
 Equipment policy,Policy,"All gear must be checked out through the team portal."`
+
+export const KB_IMPORT_JSON_TEMPLATE = JSON.stringify(
+  [
+    {
+      title: 'Equipment Checkout Policy',
+      category: 'Policy',
+      content:
+        '<h2>Overview</h2><p>All CSDTV gear must be checked out through the Team Hub equipment system.</p>',
+    },
+    {
+      title: 'Livestream Setup Process',
+      category: 'Process',
+      content: '<h2>Day of show</h2><ol><li>Pack kit.</li><li>Test audio.</li><li>Go live.</li></ol>',
+    },
+  ],
+  null,
+  2,
+)
 
 export async function importKbArticles(
   supabase: SupabaseClient,

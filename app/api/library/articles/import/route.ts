@@ -22,8 +22,7 @@ export async function POST(request: Request) {
   if (typeof body.csv === 'string' && body.csv.trim()) {
     rows = parseKbImportCsv(body.csv)
   } else if (Array.isArray(body.articles)) {
-    const json = JSON.stringify(body.articles)
-    rows = parseKbImportJson(json)
+    rows = parseKbImportJson(JSON.stringify(body.articles))
   } else if (typeof body.json === 'string' && body.json.trim()) {
     rows = parseKbImportJson(body.json)
   } else {

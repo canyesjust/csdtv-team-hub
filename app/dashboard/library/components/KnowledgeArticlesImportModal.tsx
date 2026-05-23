@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   KB_IMPORT_CSV_TEMPLATE,
+  KB_IMPORT_JSON_TEMPLATE,
   parseKbImportPayload,
   type KbImportRow,
 } from '@/lib/library/kb-import'
@@ -46,7 +47,15 @@ export default function KnowledgeArticlesImportModal({
   const [importing, setImporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const parsed = useMemo(() => (input.trim() ? parseKbImportPayload(input, format) : []), [input, format])
+  const parsed = useMemo(() => {
+    if (!input.trim()) return []
+    try {
+      return parseKbImportPayload(input, format, { normalizeContent: false })
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not parse import file'
+      return [{ row: 1, title: '', category: 'Other', content: '', error: message }]
+    }
+  }, [input, format])
   const validCount = parsed.filter((r) => !r.error).length
   const errorRows = parsed.filter((r) => r.error)
 
@@ -64,8 +73,8 @@ export default function KnowledgeArticlesImportModal({
   }
 
   const loadTemplate = () => {
-    setFormat('csv')
-    setInput(KB_IMPORT_CSV_TEMPLATE)
+    if (format === 'json') setInput(KB_IMPORT_JSON_TEMPLATE)
+    else setInput(KB_IMPORT_CSV_TEMPLATE)
   }
 
   const handleFile = async (file: File) => {
@@ -89,9 +98,24 @@ export default function KnowledgeArticlesImportModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
+      let data: {
+        error?: string
+        created?: number
+        skipped?: number
+        errors?: string[]
+      } = {}
+      const raw = await res.text()
+      if (raw) {
+        try {
+          data = JSON.parse(raw) as typeof data
+        } catch {
+          toast(res.ok ? 'Import finished but response was invalid' : `Import failed (${res.status})`, 'error')
+          return
+        }
+      }
       if (!res.ok) {
-        toast(data.error || 'Import failed', 'error')
+        const detail = data.errors?.length ? `: ${data.errors.slice(0, 2).join('; ')}` : ''
+        toast((data.error || 'Import failed') + detail, 'error')
         return
       }
       const parts = [
@@ -104,6 +128,9 @@ export default function KnowledgeArticlesImportModal({
       }
       close()
       onImported()
+    } catch (e) {
+      console.error('KB import failed', e)
+      toast(e instanceof Error ? e.message : 'Import failed', 'error')
     } finally {
       setImporting(false)
     }
@@ -183,7 +210,7 @@ export default function KnowledgeArticlesImportModal({
               fontSize: '13px',
             }}
           >
-            Load CSV example
+            Load example
           </button>
           <button
             type="button"
