@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { fetchAllPages } from '@/lib/supabase/fetch-all-pages'
 import { sanitizeArticleHtml } from '@/lib/sanitize-article-html'
 
 export const KB_ARTICLE_CATEGORIES = ['Process', 'Reference', 'Policy', 'Workflow', 'Other'] as const
@@ -266,16 +267,17 @@ export async function importKbArticles(
     return { created: 0, updated: 0, skipped: rows.length, errors }
   }
 
-  const { data: existingRows, error: existingErr } = await supabase
-    .from('knowledge_base')
-    .select('id, title')
+  const existingResult = await fetchAllPages<{ id: string; title: string }>(async (from, to) => {
+    const res = await supabase.from('knowledge_base').select('id, title').range(from, to)
+    return { data: res.data, error: res.error }
+  })
 
-  if (existingErr) {
-    return { created: 0, updated: 0, skipped: rows.length, errors: [...errors, existingErr.message] }
+  if (existingResult.error) {
+    return { created: 0, updated: 0, skipped: rows.length, errors: [...errors, existingResult.error] }
   }
 
   const existingByTitle = new Map<string, { id: string; title: string }>()
-  for (const row of existingRows || []) {
+  for (const row of existingResult.data) {
     const key = normalizeTitleKey(row.title)
     if (!existingByTitle.has(key)) {
       existingByTitle.set(key, { id: row.id as string, title: row.title as string })

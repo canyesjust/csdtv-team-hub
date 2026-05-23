@@ -146,11 +146,12 @@ export default function KnowledgeArticlesImportModal({
 
       if (created === 0 && updated === 0 && skipped > 0) {
         toast(
-          `No new articles — ${skipped} row(s) skipped because the title already exists. Use "Update existing" to refresh content, or check filters on the list.`,
+          `No changes — ${skipped} row(s) already exist (titles matched). Choose "Update existing" and import again to refresh content.`,
           'info',
         )
       } else if (created === 0 && updated === 0) {
-        toast('Import finished but no articles were created or updated.', 'info')
+        toast('Import finished but no articles were created or updated.', 'error')
+        return
       } else {
         const parts = [
           created ? `${created} created` : null,
@@ -163,8 +164,8 @@ export default function KnowledgeArticlesImportModal({
         console.warn('KB import warnings:', data.errors)
         toast(`Import warnings: ${data.errors.slice(0, 2).join('; ')}`, 'info')
       }
-      close()
       onImported()
+      close()
     } catch (e) {
       console.error('KB import failed', e)
       toast(e instanceof Error ? e.message : 'Import failed', 'error')

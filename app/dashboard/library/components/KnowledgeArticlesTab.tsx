@@ -11,6 +11,7 @@ import { isStudentInternRole } from '@/lib/roles'
 import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
 import KnowledgeArticlesImportModal from './KnowledgeArticlesImportModal'
 import { downloadArticlesExport, mapArticlesForExport } from '@/lib/library/kb-export'
+import { fetchKnowledgeBaseArticles, type KbArticleWithAuthors } from '@/lib/library/kb-articles'
 import { printLibraryArticle } from '@/lib/library/print-article'
 import { toast } from '@/lib/toast'
 
@@ -63,18 +64,7 @@ const ArticleRichEditor = dynamic(() => import('../../components/ArticleRichEdit
   loading: ArticleEditorShell,
 })
 
-interface Article {
-  id: string
-  title: string
-  content: string
-  category: string
-  created_by: string
-  updated_by: string | null
-  updated_at: string
-  pinned: boolean
-  author?: { name: string } | null
-  editor?: { name: string } | null
-}
+type Article = KbArticleWithAuthors
 
 interface CurrentUser { id: string; name: string; role: string }
 
@@ -145,15 +135,15 @@ export default function KnowledgeArticlesTab() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [articlesRes, userRes] = await Promise.all([
-      supabase.from('knowledge_base').select('*, author:team!knowledge_base_created_by_fkey(name), editor:team!knowledge_base_updated_by_fkey(name)').order('pinned', { ascending: false }).order('updated_at', { ascending: false }),
+    const [articlesResult, userRes] = await Promise.all([
+      fetchKnowledgeBaseArticles(supabase),
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
     ])
-    if (articlesRes.error) {
-      console.error('Failed to load knowledge_base', articlesRes.error)
-      toast(`Could not load articles: ${articlesRes.error.message}`, 'error')
+    if (articlesResult.error) {
+      console.error('Failed to load knowledge_base', articlesResult.error)
+      toast(`Could not load articles: ${articlesResult.error}`, 'error')
     } else {
-      setArticles(articlesRes.data || [])
+      setArticles(articlesResult.data)
     }
     setCurrentUser(userRes.data)
     setLoading(false)
@@ -176,25 +166,36 @@ export default function KnowledgeArticlesTab() {
     const isEmpty = htmlContent === '<p></p>' || htmlContent.trim() === ''
     if (!form.title || isEmpty || !currentUser) return
     setSaveError('')
+    const savedId = editing && selected ? selected.id : null
+
     if (editing && selected) {
-      const { data, error } = await supabase.from('knowledge_base')
+      const { error } = await supabase.from('knowledge_base')
         .update({ title: form.title, content: htmlContent, category: form.category, updated_at: new Date().toISOString(), updated_by: currentUser.id })
         .eq('id', selected.id)
-        .select('*, author:team!knowledge_base_created_by_fkey(name), editor:team!knowledge_base_updated_by_fkey(name)')
-        .single()
       if (error) { setSaveError('Failed to save article. Please try again.'); return }
-      if (data) { setArticles(prev => prev.map(a => a.id === data.id ? data : a)); setSelected(data) }
     } else {
-      const { data, error } = await supabase.from('knowledge_base')
+      const { error } = await supabase.from('knowledge_base')
         .insert({ title: form.title, content: htmlContent, category: form.category, created_by: currentUser.id, updated_by: currentUser.id })
-        .select('*, author:team!knowledge_base_created_by_fkey(name), editor:team!knowledge_base_updated_by_fkey(name)')
-        .single()
       if (error) { setSaveError('Failed to create article. Please try again.'); return }
-      if (data) { setArticles(prev => [data, ...prev]); setSelected(data); setShowMobileDetail(true) }
+      setShowMobileDetail(true)
     }
+
     setEditing(false)
     setShowNew(false)
     setForm({ title: '', category: 'Process' })
+
+    const refreshed = await fetchKnowledgeBaseArticles(supabase)
+    if (!refreshed.error) {
+      setArticles(refreshed.data)
+      if (savedId) {
+        setSelected(refreshed.data.find((a) => a.id === savedId) ?? null)
+      } else {
+        const newest = refreshed.data[0]
+        if (newest) setSelected(newest)
+      }
+    } else {
+      await loadData()
+    }
   }
 
   const openArticle = (article: Article) => {
