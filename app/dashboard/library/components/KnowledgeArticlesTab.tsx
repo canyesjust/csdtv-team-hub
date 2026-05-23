@@ -149,7 +149,12 @@ export default function KnowledgeArticlesTab() {
       supabase.from('knowledge_base').select('*, author:team!knowledge_base_created_by_fkey(name), editor:team!knowledge_base_updated_by_fkey(name)').order('pinned', { ascending: false }).order('updated_at', { ascending: false }),
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
     ])
-    setArticles(articlesRes.data || [])
+    if (articlesRes.error) {
+      console.error('Failed to load knowledge_base', articlesRes.error)
+      toast(`Could not load articles: ${articlesRes.error.message}`, 'error')
+    } else {
+      setArticles(articlesRes.data || [])
+    }
     setCurrentUser(userRes.data)
     setLoading(false)
   }, [supabase])
@@ -373,7 +378,11 @@ export default function KnowledgeArticlesTab() {
     <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
-          <p style={{ fontSize: '15px', color: muted, margin: '2px 0 0' }}>{articles.length} articles</p>
+          <p style={{ fontSize: '15px', color: muted, margin: '2px 0 0' }}>
+            {filtered.length === articles.length
+              ? `${articles.length} article${articles.length === 1 ? '' : 's'}`
+              : `${filtered.length} of ${articles.length} shown`}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {articles.length > 0 && (
@@ -505,7 +514,29 @@ export default function KnowledgeArticlesTab() {
                   )}
                 </div>
               ) : (
-                <p style={{ color: muted, fontSize: '14px' }}>No articles match your search</p>
+                <div>
+                  <p style={{ color: muted, fontSize: '14px', margin: '0 0 10px' }}>
+                    No articles match your search or category filter.
+                  </p>
+                  {(search || catFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => { setSearch(''); setCatFilter('all') }}
+                      style={{
+                        fontSize: '14px',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        background: 'var(--surface-2)',
+                        border: `0.5px solid ${border}`,
+                        color: 'var(--link)',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ) : (
@@ -545,7 +576,11 @@ export default function KnowledgeArticlesTab() {
       <KnowledgeArticlesImportModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onImported={() => void loadData()}
+        onImported={() => {
+          setSearch('')
+          setCatFilter('all')
+          void loadData()
+        }}
         text={text}
         muted={muted}
         border={border}

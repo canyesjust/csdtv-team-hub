@@ -140,14 +140,28 @@ export default function KnowledgeArticlesImportModal({
         toast((data.error || 'Import failed') + detail, 'error')
         return
       }
-      const parts = [
-        data.created ? `${data.created} created` : null,
-        data.updated ? `${data.updated} updated` : null,
-        data.skipped ? `${data.skipped} skipped` : null,
-      ].filter(Boolean)
-      toast(parts.length ? parts.join(', ') : 'Import complete', 'success')
+      const created = data.created ?? 0
+      const updated = data.updated ?? 0
+      const skipped = data.skipped ?? 0
+
+      if (created === 0 && updated === 0 && skipped > 0) {
+        toast(
+          `No new articles — ${skipped} row(s) skipped because the title already exists. Use "Update existing" to refresh content, or check filters on the list.`,
+          'info',
+        )
+      } else if (created === 0 && updated === 0) {
+        toast('Import finished but no articles were created or updated.', 'info')
+      } else {
+        const parts = [
+          created ? `${created} created` : null,
+          updated ? `${updated} updated` : null,
+          skipped ? `${skipped} skipped` : null,
+        ].filter(Boolean)
+        toast(parts.join(', '), 'success')
+      }
       if (data.errors?.length) {
         console.warn('KB import warnings:', data.errors)
+        toast(`Import warnings: ${data.errors.slice(0, 2).join('; ')}`, 'info')
       }
       close()
       onImported()
