@@ -45,8 +45,9 @@ function shouldEnforceLocalHour(): boolean {
  * Protect with CRON_SECRET: Authorization: Bearer <CRON_SECRET>
  * Also accepts Vercel's x-vercel-cron header for platform cron invocations.
  *
- * Sends once per **weekday** (Mon–Fri). The actual run time is controlled by `vercel.json`.
- * By default we do not enforce a local-hour check because some Vercel plans only allow daily cron.
+ * Sends once per **weekday** (Mon–Fri). Scheduled via Supabase pg_cron → `daily-digest-cron` edge
+ * function (see db/daily_digest_cron.sql). Vercel Cron is not used (Hobby plan allows one run/day only).
+ * By default we do not enforce a local-hour check on the route.
  * Optional: set DAILY_DIGEST_ENFORCE_LOCAL_HOUR=1 to require local hour >= DAILY_DIGEST_LOCAL_HOUR.
  *
  * Env:
