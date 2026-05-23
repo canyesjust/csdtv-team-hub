@@ -301,6 +301,26 @@ export default function SettingsPage() {
     setTimeout(() => setSavedMsg(''), 2000)
   }
 
+  const startViewAs = async (member: TeamMember) => {
+    if (member.id === currentUser?.id) return
+    try {
+      const res = await fetch('/api/impersonate/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamMemberId: member.id }),
+      })
+      const json = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        toast(json.error || 'Could not start view-as mode', 'error')
+        return
+      }
+      toast(`Viewing as ${member.name}`, 'success')
+      window.location.href = '/dashboard'
+    } catch {
+      toast('Could not start view-as mode', 'error')
+    }
+  }
+
   // ─── Email Templates CRUD ────────────────────────────────────────────────
   const startEditTpl = (t: EmailTemplate) => {
     setEditingTplId(t.id)
@@ -912,7 +932,10 @@ export default function SettingsPage() {
       {/* Team management — manager only */}
       {isManager && (
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'team' ? 'block' : 'none' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 16px' }}>Team</h2>
+          <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 8px' }}>Team</h2>
+          <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px', lineHeight: 1.5 }}>
+            Use <strong style={{ fontWeight: 600, color: text }}>View as</strong> to see the dashboard with their role and data. Exit anytime from the yellow banner at the top.
+          </p>
 
           {team.map(member => (
             <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: `0.5px solid ${border}` }}>
@@ -948,7 +971,26 @@ export default function SettingsPage() {
               </div>
               <span style={{ fontSize: '14px', padding: '3px 10px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{member.role}</span>
               {member.id !== currentUser?.id && (
-                <button onClick={() => deactivateMember(member.id, member.name)} style={{ fontSize: '14px', padding: '5px 10px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>Remove</button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void startViewAs(member)}
+                    style={{
+                      fontSize: '14px',
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      background: 'rgba(232,160,32,0.1)',
+                      border: '0.5px solid rgba(232,160,32,0.35)',
+                      color: '#e8a020',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      minHeight: '36px',
+                    }}
+                  >
+                    View as
+                  </button>
+                  <button onClick={() => deactivateMember(member.id, member.name)} style={{ fontSize: '14px', padding: '5px 10px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>Remove</button>
+                </>
               )}
             </div>
           ))}

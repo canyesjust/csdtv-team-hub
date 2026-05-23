@@ -8,6 +8,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
+import ImpersonationBanner from './ImpersonationBanner'
 import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import {
@@ -66,6 +67,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([])
   const [sidebarNavScrolling, setSidebarNavScrolling] = useState(false)
   const sidebarScrollHideRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [viewAs, setViewAs] = useState<{
+    subjectName: string
+    subjectRole: string
+    actorName: string
+  } | null>(null)
 
   const handleSidebarNavScroll = useCallback(() => {
     setSidebarNavScrolling(true)
@@ -78,10 +84,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   const isStudentIntern = isStudentInternRole(userRole)
+  const isViewAs = viewAs != null
   const navResolved = useMemo(() => {
-    if (isStudentIntern) return buildStudentInternDashboardNav()
-    return buildStaffDashboardNav(userRole)
-  }, [isStudentIntern, userRole])
+    const base = isStudentIntern ? buildStudentInternDashboardNav() : buildStaffDashboardNav(userRole)
+    if (!isViewAs) return base
+    const stripSettings = (items: DashboardNavItem[]) =>
+      items.filter(item => item.href !== '/dashboard/settings')
+    return {
+      navItems: base.navItems.map(section => ({
+        ...section,
+        items: stripSettings(section.items),
+      })),
+      bottomNav: base.bottomNav,
+      moreItems: stripSettings(base.moreItems),
+    }
+  }, [isStudentIntern, userRole, isViewAs])
 
   const navItemsResolved: DashboardNavSection[] = navResolved.navItems
   const bottomNavResolved: DashboardNavItem[] = navResolved.bottomNav
@@ -123,6 +140,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         setUserId(row.id)
         setAccessState('ready')
       }
+
+      try {
+        const sessionRes = await fetch('/api/impersonate/session', { cache: 'no-store' })
+        if (sessionRes.ok) {
+          const session = (await sessionRes.json()) as {
+            active?: boolean
+            subject?: { id: string; name: string; role: string; avatar_color: string | null }
+            actor?: { name: string }
+          }
+          if (session.active && session.subject) {
+            applyTeam(session.subject)
+            setViewAs({
+              subjectName: session.subject.name,
+              subjectRole: session.subject.role,
+              actorName: session.actor?.name ?? 'Manager',
+            })
+            return
+          }
+        }
+      } catch {
+        /* fall through to normal team load */
+      }
+      setViewAs(null)
 
       const email = user.email
       if (!email) {
@@ -370,6 +410,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {dark ? '☀️' : '🌙'}
           </button>
         </header>
+
+        {viewAs && (
+          <ImpersonationBanner
+            subjectName={viewAs.subjectName}
+            subjectRole={viewAs.subjectRole}
+            actorName={viewAs.actorName}
+          />
+        )}
 
         <main className="csdtv-content" style={{ flex: 1, padding: '20px 16px' }}>
           <div style={{ width: '100%', maxWidth: '1800px', margin: '0 auto' }}>

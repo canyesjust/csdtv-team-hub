@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE } from './lib/roles'
-import { getTeamRowForAuthUser } from './lib/server/auth'
+import { getActorTeamRow, getEffectiveTeamRow } from './lib/server/effective-team'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -39,13 +39,31 @@ export async function middleware(request: NextRequest) {
   const requiresTeam = pathname.startsWith('/dashboard') || pathname.startsWith('/control')
 
   if (user && requiresTeam) {
-    const teamAccess = await getTeamRowForAuthUser(supabase, user)
+    const teamAccess = await getEffectiveTeamRow(supabase, user)
     if (teamAccess === null) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('reason', 'not-on-team')
       return NextResponse.redirect(loginUrl)
     }
     const role = teamAccess === 'pending-link' ? null : teamAccess.role
+
+    if (teamAccess !== 'pending-link') {
+      const actorRow = await getActorTeamRow(supabase, user)
+      const isViewAs =
+        actorRow &&
+        actorRow !== 'pending-link' &&
+        actorRow.id !== teamAccess.id
+      if (
+        isViewAs &&
+        (pathname.startsWith('/dashboard/settings') ||
+          pathname.startsWith('/dashboard/onboarding/admin'))
+      ) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard'
+        return NextResponse.redirect(url)
+      }
+    }
+
     // Student Interns use a dedicated home at /dashboard/student
     if (role === STUDENT_INTERN_ROLE && (pathname === '/dashboard' || pathname === '/dashboard/')) {
       const url = request.nextUrl.clone()

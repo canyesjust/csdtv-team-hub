@@ -1,15 +1,16 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { getImpersonationSessionForActor } from '@/lib/server/impersonation'
 
-type TeamUser = {
+export type TeamUser = {
   id: string
   role: string
 }
 
-export async function getAuthenticatedTeamUser(): Promise<TeamUser | null> {
+async function createAuthServerClient() {
   const cookieStore = await cookies()
-  const authClient = createServerClient(
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -23,9 +24,12 @@ export async function getAuthenticatedTeamUser(): Promise<TeamUser | null> {
           } catch {}
         },
       },
-    }
+    },
   )
+}
 
+async function loadTeamUserByAuthUid(): Promise<TeamUser | null> {
+  const authClient = await createAuthServerClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) return null
 
@@ -44,8 +48,38 @@ export async function getAuthenticatedTeamUser(): Promise<TeamUser | null> {
   return { id: data.id, role: data.role }
 }
 
+/** Signed-in user (manager account), ignoring view-as. */
+export async function getActorTeamUser(): Promise<TeamUser | null> {
+  return loadTeamUserByAuthUid()
+}
+
+/** Effective team user for permissions and data (subject while view-as is active). */
+export async function getAuthenticatedTeamUser(): Promise<TeamUser | null> {
+  const actor = await loadTeamUserByAuthUid()
+  if (!actor) return null
+  if (actor.role !== 'Manager') return actor
+
+  const session = await getImpersonationSessionForActor(actor.id)
+  if (!session) return actor
+
+  return { id: session.subject.id, role: session.subject.role }
+}
+
 export function isManagerRole(role: string | null | undefined): boolean {
   return (role || '').toLowerCase() === 'manager'
+}
+
+/** Reject API mutations while a manager is in view-as mode. */
+export async function assertActorNotImpersonating(): Promise<{ ok: true } | { ok: false; message: string }> {
+  const actor = await getActorTeamUser()
+  if (!actor) return { ok: false, message: 'Unauthorized' }
+  if (actor.role !== 'Manager') return { ok: true }
+
+  const session = await getImpersonationSessionForActor(actor.id)
+  if (session) {
+    return { ok: false, message: 'Exit view-as mode before performing this action' }
+  }
+  return { ok: true }
 }
 
 /** Linked team row exists for this auth user. */
