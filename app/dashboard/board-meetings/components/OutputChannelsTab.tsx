@@ -55,7 +55,13 @@ export default function OutputChannelsTab() {
   if (loading) return <Loader />
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div>
+      <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px', lineHeight: 1.5, maxWidth: '720px' }}>
+        For OBS browser sources you leave open between meetings, use the <strong style={{ color: text }}>Standby</strong>{' '}
+        URL so the page does not poll the server. Remove <code style={{ fontSize: '12px' }}>?standby=1</code> (or switch
+        to the live URL) when you assign the channel and go live.
+      </p>
+      <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}` }}>
         <thead>
           <tr style={{ borderBottom: `0.5px solid ${border}`, textAlign: 'left' }}>
@@ -72,6 +78,7 @@ export default function OutputChannelsTab() {
           {channels.map(ch => {
             const slug = ch.view_type === 'second_screen' ? 'live' : ch.view_type
             const publicUrl = siteBase ? `${siteBase}/board/${ch.channel_number}/${slug}` : ''
+            const standbyUrl = publicUrl ? `${publicUrl}?standby=1` : ''
             const fullscreenUrl =
               ch.view_type === 'dais' && publicUrl ? `${publicUrl}?fullscreen=1` : ''
             return (
@@ -84,11 +91,15 @@ export default function OutputChannelsTab() {
                 <td style={{ padding: '12px 14px', fontSize: '12px' }}>
                   {publicUrl ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>
-                        {publicUrl}
+                      <a href={standbyUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>
+                        {standbyUrl}
+                        <span style={{ color: muted }}> (standby — use in OBS between meetings)</span>
+                      </a>
+                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ color: muted, fontSize: '12px' }}>
+                        Live: {publicUrl}
                       </a>
                       {fullscreenUrl ? (
-                        <a href={fullscreenUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>
+                        <a href={fullscreenUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)', fontSize: '12px' }}>
                           {fullscreenUrl} (full screen)
                         </a>
                       ) : null}
@@ -110,6 +121,7 @@ export default function OutputChannelsTab() {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
