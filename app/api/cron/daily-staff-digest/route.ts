@@ -16,10 +16,18 @@ function verifyCron(request: Request): boolean {
   const vercelCron = request.headers.get('x-vercel-cron')
   if (vercelCron === '1') return true
 
-  const secret = process.env.CRON_SECRET
-  if (!secret) return false
   const auth = request.headers.get('authorization')
-  return auth === `Bearer ${secret}`
+  if (!auth?.startsWith('Bearer ')) return false
+
+  const token = auth.slice('Bearer '.length)
+  const cronSecret = process.env.CRON_SECRET
+  if (cronSecret && token === cronSecret) return true
+
+  // Supabase pg_cron can call this route with the service role key (stored only in DB cron job).
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (serviceKey && token === serviceKey) return true
+
+  return false
 }
 
 function parseSendHour(): number {
