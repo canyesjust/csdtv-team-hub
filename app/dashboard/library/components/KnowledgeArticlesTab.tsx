@@ -10,6 +10,9 @@ import Loader from '../../components/Loader'
 import { isStudentInternRole } from '@/lib/roles'
 import { sanitizeArticleHtml, stripArticleHtml } from '@/lib/sanitize-article-html'
 import KnowledgeArticlesImportModal from './KnowledgeArticlesImportModal'
+import { downloadArticlesExport, mapArticlesForExport } from '@/lib/library/kb-export'
+import { printLibraryArticle } from '@/lib/library/print-article'
+import { toast } from '@/lib/toast'
 
 function ArticleEditorShell() {
   return (
@@ -220,6 +223,27 @@ export default function KnowledgeArticlesTab() {
     return matchSearch && matchCat
   })
 
+  const exportArticles = () =>
+    mapArticlesForExport(
+      filtered.map((a) => ({
+        title: a.title,
+        category: a.category,
+        content: a.content,
+      })),
+    )
+
+  const handlePrint = () => {
+    if (!selected) return
+    const ok = printLibraryArticle({
+      title: selected.title,
+      category: selected.category,
+      content: selected.content,
+      updated_at: selected.updated_at,
+      authorName: selected.author?.name ?? null,
+    })
+    if (!ok) toast('Allow pop-ups to print this article', 'error')
+  }
+
   const inputStyle: React.CSSProperties = {
     background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px',
     padding: '10px 14px', fontSize: '15px', color: text, fontFamily: 'inherit',
@@ -251,7 +275,16 @@ export default function KnowledgeArticlesTab() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
           Back
         </button>
-        <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto', flexWrap: 'wrap' }}>
+          {selected && !editing && !showNew && (
+            <button
+              type="button"
+              onClick={handlePrint}
+              style={{ fontSize: '15px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}
+            >
+              Print
+            </button>
+          )}
           {selected && !editing && !readOnlyKb && (
             <>
             <button
@@ -342,8 +375,52 @@ export default function KnowledgeArticlesTab() {
         <div>
           <p style={{ fontSize: '15px', color: muted, margin: '2px 0 0' }}>{articles.length} articles</p>
         </div>
-        {!readOnlyKb && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {articles.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => downloadArticlesExport(exportArticles(), 'json')}
+                disabled={filtered.length === 0}
+                style={{
+                  fontSize: '14px',
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  background: 'transparent',
+                  color: filtered.length === 0 ? muted : text,
+                  border: `0.5px solid ${border}`,
+                  cursor: filtered.length === 0 ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                  minHeight: '44px',
+                  opacity: filtered.length === 0 ? 0.5 : 1,
+                }}
+              >
+                Export JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadArticlesExport(exportArticles(), 'csv')}
+                disabled={filtered.length === 0}
+                style={{
+                  fontSize: '14px',
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  background: 'transparent',
+                  color: filtered.length === 0 ? muted : text,
+                  border: `0.5px solid ${border}`,
+                  cursor: filtered.length === 0 ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
+                  fontWeight: 500,
+                  minHeight: '44px',
+                  opacity: filtered.length === 0 ? 0.5 : 1,
+                }}
+              >
+                Export CSV
+              </button>
+            </>
+          )}
+        {!readOnlyKb && (
           <button
             type="button"
             onClick={() => setImportOpen(true)}
@@ -384,8 +461,8 @@ export default function KnowledgeArticlesTab() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New article
           </button>
-        </div>
         )}
+        </div>
       </div>
 
       <div className="kb-layout" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>

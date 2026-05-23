@@ -13,6 +13,8 @@ import type {
   OnboardingPhase,
   OnboardingTemplateItem,
 } from '@/lib/onboarding/types'
+import { planLibraryLinksForTemplateItems } from '@/lib/library/link-library-articles'
+import { toast } from '@/lib/toast'
 
 type ArticleOption = { id: string; title: string }
 
@@ -75,6 +77,7 @@ export default function OnboardingTemplateEditor({
   const [newPhase, setNewPhase] = useState('')
   const [newCategory, setNewCategory] = useState('')
   const [saving, setSaving] = useState(false)
+  const [linkingLibrary, setLinkingLibrary] = useState(false)
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -188,6 +191,31 @@ export default function OnboardingTemplateEditor({
     closeModal()
   }
 
+  const linkLibraryByTitle = async () => {
+    if (!articles.length) {
+      toast('Add Library articles first, then link by title', 'error')
+      return
+    }
+    const planned = planLibraryLinksForTemplateItems(items, articles)
+    if (planned.length === 0) {
+      toast('No unlinked items matched a Library article title', 'error')
+      return
+    }
+    setLinkingLibrary(true)
+    try {
+      for (const link of planned) {
+        const item = items.find((i) => i.id === link.itemId)
+        if (!item) continue
+        await onUpdateItem(item, { library_article_id: link.articleId })
+      }
+      toast(`Linked ${planned.length} item${planned.length === 1 ? '' : 's'} to Library articles`, 'success')
+    } catch {
+      toast('Failed to link some items', 'error')
+    } finally {
+      setLinkingLibrary(false)
+    }
+  }
+
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
       <Link href="/dashboard/onboarding" style={{ fontSize: '14px', color: muted, textDecoration: 'none' }}>
@@ -275,7 +303,26 @@ export default function OnboardingTemplateEditor({
 
       {tab === 'checklist' && (
         <>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => void linkLibraryByTitle()}
+              disabled={linkingLibrary || articles.length === 0}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '8px',
+                background: 'transparent',
+                color: 'var(--link)',
+                border: `0.5px solid ${border}`,
+                cursor: linkingLibrary || articles.length === 0 ? 'default' : 'pointer',
+                fontFamily: 'inherit',
+                fontWeight: 500,
+                fontSize: '14px',
+                opacity: articles.length === 0 ? 0.5 : 1,
+              }}
+            >
+              {linkingLibrary ? 'Linking…' : 'Link Library by title'}
+            </button>
             <button
               type="button"
               onClick={() => openAdd()}

@@ -5,8 +5,10 @@ import {
   KB_IMPORT_CSV_TEMPLATE,
   KB_IMPORT_JSON_TEMPLATE,
   parseKbImportPayload,
+  type KbImportDuplicateMode,
   type KbImportRow,
 } from '@/lib/library/kb-import'
+import { downloadTextFile } from '@/lib/library/kb-export'
 import { toast } from '@/lib/toast'
 
 type Format = 'csv' | 'json'
@@ -45,15 +47,23 @@ export default function KnowledgeArticlesImportModal({
   const [format, setFormat] = useState<Format>('csv')
   const [input, setInput] = useState('')
   const [importing, setImporting] = useState(false)
+  const [duplicateMode, setDuplicateMode] = useState<KbImportDuplicateMode>('skip')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const parsed = useMemo(() => {
+  const parsed = useMemo((): KbImportRow[] => {
     if (!input.trim()) return []
     try {
       return parseKbImportPayload(input, format, { normalizeContent: false })
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not parse import file'
-      return [{ row: 1, title: '', category: 'Other', content: '', error: message }]
+      const row: KbImportRow = {
+        row: 1,
+        title: '',
+        category: 'Other',
+        content: '',
+        error: message,
+      }
+      return [row]
     }
   }, [input, format])
   const validCount = parsed.filter((r) => !r.error).length
@@ -69,12 +79,23 @@ export default function KnowledgeArticlesImportModal({
   const close = () => {
     setInput('')
     setFormat('csv')
+    setDuplicateMode('skip')
     onClose()
   }
 
   const loadTemplate = () => {
     if (format === 'json') setInput(KB_IMPORT_JSON_TEMPLATE)
     else setInput(KB_IMPORT_CSV_TEMPLATE)
+  }
+
+  const downloadTemplate = () => {
+    const ext = format === 'json' ? 'json' : 'csv'
+    const content = format === 'json' ? KB_IMPORT_JSON_TEMPLATE : KB_IMPORT_CSV_TEMPLATE
+    downloadTextFile(
+      `library-import-template.${ext}`,
+      content,
+      format === 'json' ? 'application/json;charset=utf-8' : 'text/csv;charset=utf-8',
+    )
   }
 
   const handleFile = async (file: File) => {
@@ -91,8 +112,8 @@ export default function KnowledgeArticlesImportModal({
     try {
       const body =
         format === 'json'
-          ? { json: input }
-          : { csv: input }
+          ? { json: input, duplicateMode }
+          : { csv: input, duplicateMode }
       const res = await fetch('/api/library/articles/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -101,6 +122,7 @@ export default function KnowledgeArticlesImportModal({
       let data: {
         error?: string
         created?: number
+        updated?: number
         skipped?: number
         errors?: string[]
       } = {}
@@ -119,7 +141,8 @@ export default function KnowledgeArticlesImportModal({
         return
       }
       const parts = [
-        data.created ? `${data.created} imported` : null,
+        data.created ? `${data.created} created` : null,
+        data.updated ? `${data.updated} updated` : null,
         data.skipped ? `${data.skipped} skipped` : null,
       ].filter(Boolean)
       toast(parts.length ? parts.join(', ') : 'Import complete', 'success')
@@ -172,7 +195,8 @@ export default function KnowledgeArticlesImportModal({
         <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px', lineHeight: 1.45 }}>
           Bulk-add Library articles from CSV or JSON. CSV columns: <strong>title</strong>,{' '}
           <strong>category</strong> (Process, Reference, Policy, Workflow, Other),{' '}
-          <strong>content</strong> (HTML or plain text). Multi-line content can sit in quoted CSV cells.
+          <strong>content</strong> (HTML or plain text). JSON can be an array or{' '}
+          <code style={{ fontSize: '12px' }}>{'{ "articles": [...] }'}</code>.
         </p>
 
         <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
@@ -211,6 +235,22 @@ export default function KnowledgeArticlesImportModal({
             }}
           >
             Load example
+          </button>
+          <button
+            type="button"
+            onClick={downloadTemplate}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              border: `0.5px solid ${border}`,
+              background: 'transparent',
+              color: 'var(--link)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '13px',
+            }}
+          >
+            Download template
           </button>
           <button
             type="button"
@@ -259,6 +299,39 @@ export default function KnowledgeArticlesImportModal({
           }}
         />
 
+        <div style={{ marginTop: '12px' }}>
+          <p style={{ fontSize: '12px', color: muted, margin: '0 0 6px', fontWeight: 500 }}>
+            If title already exists
+          </p>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {(
+              [
+                ['skip', 'Skip duplicates'],
+                ['update', 'Update existing'],
+                ['allow', 'Allow duplicates'],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setDuplicateMode(mode)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  border: `0.5px solid ${duplicateMode === mode ? 'var(--brand-primary)' : border}`,
+                  background: duplicateMode === mode ? 'var(--status-info-bg)' : 'transparent',
+                  color: duplicateMode === mode ? 'var(--brand-primary-strong)' : muted,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: '12px',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {parsed.length > 0 && (
           <p style={{ fontSize: '13px', color: muted, margin: '10px 0 0' }}>
             {validCount} ready to import
@@ -266,14 +339,26 @@ export default function KnowledgeArticlesImportModal({
           </p>
         )}
 
-        {errorRows.length > 0 && errorRows.length <= 5 && (
-          <ul style={{ fontSize: '12px', color: '#ef4444', margin: '8px 0 0', paddingLeft: '18px' }}>
-            {errorRows.map((r: KbImportRow) => (
-              <li key={r.row}>
-                Row {r.row}: {r.error}
-              </li>
-            ))}
-          </ul>
+        {errorRows.length > 0 && (
+          <div
+            style={{
+              marginTop: '8px',
+              maxHeight: '120px',
+              overflowY: 'auto',
+              border: '0.5px solid rgba(239,68,68,0.25)',
+              borderRadius: '8px',
+              padding: '8px 10px',
+              background: 'rgba(239,68,68,0.04)',
+            }}
+          >
+            <ul style={{ fontSize: '12px', color: '#ef4444', margin: 0, paddingLeft: '18px' }}>
+              {errorRows.map((r) => (
+                <li key={r.row}>
+                  Row {r.row}: {r.error}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>

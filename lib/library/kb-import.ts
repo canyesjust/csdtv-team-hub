@@ -12,7 +12,14 @@ export type KbImportRow = {
   error?: string
 }
 
+/** How to handle rows whose title already exists in Library. */
+export type KbImportDuplicateMode = 'skip' | 'update' | 'allow'
+
 const MAX_IMPORT_ROWS = 200
+
+export function normalizeTitleKey(title: string): string {
+  return title.trim().toLowerCase()
+}
 
 function parseCSVLine(line: string, delimiter: string): string[] {
   const result: string[] = []
@@ -239,37 +246,112 @@ export const KB_IMPORT_JSON_TEMPLATE = JSON.stringify(
   2,
 )
 
+export type KbImportResult = {
+  created: number
+  updated: number
+  skipped: number
+  errors: string[]
+}
+
 export async function importKbArticles(
   supabase: SupabaseClient,
   rows: KbImportRow[],
   userId: string,
-): Promise<{ created: number; skipped: number; errors: string[] }> {
+  duplicateMode: KbImportDuplicateMode = 'skip',
+): Promise<KbImportResult> {
   const valid = rows.filter((r) => !r.error)
   const errors = rows.filter((r) => r.error).map((r) => `Row ${r.row}: ${r.error}`)
 
   if (valid.length === 0) {
-    return { created: 0, skipped: rows.length, errors }
+    return { created: 0, updated: 0, skipped: rows.length, errors }
+  }
+
+  const { data: existingRows, error: existingErr } = await supabase
+    .from('knowledge_base')
+    .select('id, title')
+
+  if (existingErr) {
+    return { created: 0, updated: 0, skipped: rows.length, errors: [...errors, existingErr.message] }
+  }
+
+  const existingByTitle = new Map<string, { id: string; title: string }>()
+  for (const row of existingRows || []) {
+    const key = normalizeTitleKey(row.title)
+    if (!existingByTitle.has(key)) {
+      existingByTitle.set(key, { id: row.id as string, title: row.title as string })
+    }
   }
 
   const now = new Date().toISOString()
-  const payloads = valid.map((r) => ({
-    title: r.title,
-    category: r.category,
-    content: r.content,
-    created_by: userId,
-    updated_by: userId,
-    updated_at: now,
-    pinned: false,
-  }))
+  let created = 0
+  let updated = 0
+  let skipped = rows.length - valid.length
 
-  const { data, error } = await supabase.from('knowledge_base').insert(payloads).select('id')
-  if (error) {
-    return { created: 0, skipped: rows.length, errors: [...errors, error.message] }
+  const toInsert: {
+    title: string
+    category: string
+    content: string
+    created_by: string
+    updated_by: string
+    updated_at: string
+    pinned: boolean
+  }[] = []
+
+  for (const row of valid) {
+    const key = normalizeTitleKey(row.title)
+    const existing = existingByTitle.get(key)
+
+    if (existing) {
+      if (duplicateMode === 'skip') {
+        skipped += 1
+        continue
+      }
+      if (duplicateMode === 'update') {
+        const { error: updateErr } = await supabase
+          .from('knowledge_base')
+          .update({
+            category: row.category,
+            content: row.content,
+            updated_by: userId,
+            updated_at: now,
+          })
+          .eq('id', existing.id)
+        if (updateErr) {
+          errors.push(`Row ${row.row}: ${updateErr.message}`)
+          skipped += 1
+        } else {
+          updated += 1
+        }
+        continue
+      }
+    }
+
+    toInsert.push({
+      title: row.title,
+      category: row.category,
+      content: row.content,
+      created_by: userId,
+      updated_by: userId,
+      updated_at: now,
+      pinned: false,
+    })
+    if (!existing) {
+      existingByTitle.set(key, { id: `pending-${key}`, title: row.title })
+    }
   }
 
-  return {
-    created: data?.length ?? 0,
-    skipped: rows.length - valid.length,
-    errors,
+  if (toInsert.length > 0) {
+    const { data, error } = await supabase.from('knowledge_base').insert(toInsert).select('id')
+    if (error) {
+      return {
+        created: 0,
+        updated,
+        skipped: rows.length,
+        errors: [...errors, error.message],
+      }
+    }
+    created = data?.length ?? 0
   }
+
+  return { created, updated, skipped, errors }
 }

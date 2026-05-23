@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { isStudentInternRole } from '@/lib/roles'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
-import { importKbArticles, parseKbImportCsv, parseKbImportJson } from '@/lib/library/kb-import'
+import {
+  importKbArticles,
+  parseKbImportCsv,
+  parseKbImportJson,
+  type KbImportDuplicateMode,
+} from '@/lib/library/kb-import'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,8 +45,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const result = await importKbArticles(service, rows, teamUser.id)
-  if (result.created === 0 && result.errors.length > 0) {
+  const duplicateMode: KbImportDuplicateMode =
+    body.duplicateMode === 'update' || body.duplicateMode === 'allow' ? body.duplicateMode : 'skip'
+
+  const result = await importKbArticles(service, rows, teamUser.id, duplicateMode)
+  if (result.created === 0 && result.updated === 0 && result.errors.length > 0) {
     return NextResponse.json({ error: 'Import failed', ...result }, { status: 500 })
   }
 
