@@ -85,7 +85,7 @@ export default function VideosPage() {
     if (!session) return
     const [videosRes, userRes, prodsRes, schoolsRes] = await Promise.all([
       supabase.from('videos').select('*, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }),
-      resolveEffectiveTeamRow(supabase, 'id, name, role'),
+      resolveEffectiveTeamRow<TeamMember>(supabase, 'id, name, role'),
       supabase.from('productions').select('id, title, production_number, start_datetime, organizer_name').order('production_number', { ascending: false }).limit(500),
       supabase.from('schools').select('code, name'),
     ])

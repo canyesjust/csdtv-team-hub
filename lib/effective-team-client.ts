@@ -22,10 +22,9 @@ export async function fetchEffectiveTeam(): Promise<EffectiveTeamResponse | null
 }
 
 /** Load full team row by effective id (works with view-as RLS). */
-export async function resolveEffectiveTeamRow<T extends Record<string, unknown>>(
-  supabase: SupabaseClient,
-  select = '*',
-): Promise<T | null> {
+export async function resolveEffectiveTeamRow<
+  T extends { id: string; name: string; role: string } = EffectiveTeamMember,
+>(supabase: SupabaseClient, select = '*'): Promise<T | null> {
   const effective = await fetchEffectiveTeam()
   if (!effective?.team) return null
   const { data, error } = await supabase.from('team').select(select).eq('id', effective.team.id).single()

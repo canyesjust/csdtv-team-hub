@@ -145,7 +145,7 @@ export default function EquipmentPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const userData = await resolveEffectiveTeamRow(supabase, '*')
+    const userData = await resolveEffectiveTeamRow<TeamMember>(supabase, '*')
     if (userData) setUser(userData)
 
     const [eqRes, catRes, kitRes, loanRes] = await Promise.all([

@@ -284,7 +284,7 @@ export default function ProductionDetailPage() {
       supabase.from('team').select('id, name, email, role, avatar_color').eq('active', true),
       supabase.from('production_links').select('*').eq('production_id', prodUUID).order('created_at'),
       supabase.from('production_activity').select('*').eq('production_id', prodUUID).order('created_at', { ascending: false }).limit(50),
-      resolveEffectiveTeamRow(supabase, '*'),
+      resolveEffectiveTeamRow<TeamMember>(supabase, '*'),
       supabase.from('knowledge_base').select('id, title, category').order('title'),
       supabase.from('email_templates').select('*').order('sort_order'),
       supabase.from('schools').select('*').order('name'),

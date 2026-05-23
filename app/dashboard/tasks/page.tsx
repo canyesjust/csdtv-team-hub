@@ -313,7 +313,7 @@ export default function TasksPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const teamRow = await resolveEffectiveTeamRow<Record<string, unknown>>(supabase, '*')
+    const teamRow = await resolveEffectiveTeamRow<CurrentUser>(supabase, 'id, name, role')
     const userRes = { data: teamRow }
     const uid = userRes.data?.id
     const isStu = isStudentInternRole(userRes.data?.role)

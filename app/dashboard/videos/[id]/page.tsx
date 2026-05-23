@@ -94,7 +94,7 @@ export default function VideoDetailPage() {
       supabase.from('video_destinations').select('*').eq('video_id', videoId),
       supabase.from('video_files').select('*').eq('video_id', videoId).order('created_at'),
       supabase.from('video_tags').select('*').eq('video_id', videoId),
-      resolveEffectiveTeamRow(supabase, 'id, name, role'),
+      resolveEffectiveTeamRow<TeamMember>(supabase, 'id, name, role'),
       supabase.from('productions').select('id, title, production_number').order('production_number', { ascending: false }).limit(100),
     ])
     setVideo(videoRes.data)

@@ -121,7 +121,7 @@ export default function IdeasPage() {
     if (!session) return
     const [ideasRes, userRes] = await Promise.all([
       supabase.from('project_ideas').select(IDEA_SELECT).order('updated_at', { ascending: false }),
-      resolveEffectiveTeamRow(supabase, 'id, name, role'),
+      resolveEffectiveTeamRow<CurrentUser>(supabase, 'id, name, role'),
     ])
     if (ideasRes.error) {
       toast('Failed to load ideas. Run db/project_ideas.sql in Supabase if this is a new install.', 'error')

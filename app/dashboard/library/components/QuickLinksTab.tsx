@@ -57,7 +57,7 @@ export default function QuickLinksTab() {
     }
     const [linksRes, userRes] = await Promise.all([
       fetch('/api/library/quick-links', { cache: 'no-store' }),
-      resolveEffectiveTeamRow(supabase, 'id, name, role'),
+      resolveEffectiveTeamRow<CurrentUser>(supabase, 'id, name, role'),
     ])
 
     let linksData: QuickLink[] = []

@@ -190,7 +190,7 @@ export default function KnowledgeArticlesTab() {
     if (!session) return
     const [articlesResult, userRes] = await Promise.all([
       fetchKnowledgeBaseArticles(supabase),
-      resolveEffectiveTeamRow(supabase, '*'),
+      resolveEffectiveTeamRow<CurrentUser>(supabase, 'id, name, role'),
     ])
     if (articlesResult.error) {
       console.error('Failed to load knowledge_base', articlesResult.error)
