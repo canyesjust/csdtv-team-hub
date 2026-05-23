@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import type { Editor } from '@tiptap/react'
 import Link from 'next/link'
@@ -54,7 +54,8 @@ export default function IdeasPage() {
   const [showMobileDetail, setShowMobileDetail] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [editor, setEditor] = useState<Editor | null>(null)
-  const pendingEditorContent = useRef<string | null>(null)
+  const [editorKey, setEditorKey] = useState(0)
+  const [composeInitialHtml, setComposeInitialHtml] = useState('')
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -66,16 +67,34 @@ export default function IdeasPage() {
 
   const isManager = currentUser?.role === 'Manager'
 
-  const queueEditorContent = useCallback((html: string) => {
-    if (editor) editor.commands.setContent(html)
-    else pendingEditorContent.current = html
-  }, [editor])
+  const beginCompose = useCallback(
+    (opts: { title: string; content: string; mode: 'new' | 'edit' }) => {
+      setEditor(null)
+      setComposeInitialHtml(opts.content)
+      setEditorKey(k => k + 1)
+      setFormTitle(opts.title)
+      setSaveError('')
+      setShowMobileDetail(true)
+      if (opts.mode === 'new') {
+        setShowNew(true)
+        setSelected(null)
+        setEditing(false)
+      } else {
+        setEditing(true)
+        setShowNew(false)
+      }
+    },
+    [],
+  )
 
-  useEffect(() => {
-    if (!editor || pendingEditorContent.current === null) return
-    editor.commands.setContent(pendingEditorContent.current)
-    pendingEditorContent.current = null
-  }, [editor])
+  const cancelCompose = useCallback(() => {
+    setEditing(false)
+    setShowNew(false)
+    setSaveError('')
+    setShowMobileDetail(false)
+    setEditor(null)
+    setEditorKey(k => k + 1)
+  }, [])
 
   const loadData = useCallback(async () => {
     const {
@@ -186,10 +205,11 @@ export default function IdeasPage() {
   }
 
   const startEdit = (idea: Idea) => {
-    setFormTitle(idea.title)
-    queueEditorContent(idea.description || '')
-    setEditing(true)
-    setShowNew(false)
+    beginCompose({
+      title: idea.title,
+      content: idea.description || '',
+      mode: 'edit',
+    })
   }
 
   const archiveIdea = async (idea: Idea) => {
@@ -331,7 +351,10 @@ export default function IdeasPage() {
       >
         <button
           type="button"
-          onClick={() => setShowMobileDetail(false)}
+          onClick={() => {
+            if (showNew || editing) cancelCompose()
+            else setShowMobileDetail(false)
+          }}
           className="ideas-mobile-back"
           style={{
             display: 'none',
@@ -455,7 +478,9 @@ export default function IdeasPage() {
             >
               <Toolbar />
               <ArticleRichEditor
+                key={editorKey}
                 placeholder="Describe the idea — goals, audience, timing, open questions…"
+                initialContent={composeInitialHtml}
                 onEditorReady={setEditor}
               />
             </div>
@@ -480,11 +505,7 @@ export default function IdeasPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setEditing(false)
-                  setShowNew(false)
-                  setSaveError('')
-                }}
+                onClick={cancelCompose}
                 style={{
                   fontSize: '14px',
                   padding: '10px 20px',
@@ -566,16 +587,10 @@ export default function IdeasPage() {
             Future projects and brainstorms — not district productions yet
           </p>
         </div>
+        {!showNew && !editing && (
         <button
           type="button"
-          onClick={() => {
-            setShowNew(true)
-            setSelected(null)
-            setEditing(false)
-            setFormTitle('')
-            queueEditorContent('')
-            setShowMobileDetail(true)
-          }}
+          onClick={() => beginCompose({ title: '', content: '', mode: 'new' })}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -598,9 +613,11 @@ export default function IdeasPage() {
           </svg>
           New idea
         </button>
+        )}
       </div>
 
       <p
+        className="ideas-page-intro"
         style={{
           fontSize: '13px',
           color: muted,
@@ -616,7 +633,10 @@ export default function IdeasPage() {
         as <strong style={{ fontWeight: 600, color: text }}>Idea / Request</strong>.
       </p>
 
-      <div className="ideas-layout" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+      <div
+        className={`ideas-layout${showMobileDetail && (showNew || editing) ? ' ideas-compose-mode' : ''}`}
+        style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}
+      >
         <div className={`ideas-list ${showMobileDetail ? 'ideas-list-hidden' : ''}`}>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
             {(['active', 'archived'] as const).map(t => (
@@ -767,35 +787,59 @@ export default function IdeasPage() {
           )}
         </div>
 
-        {(selected || showNew) && (
-          <div
-            className={`ideas-detail ${showMobileDetail ? 'ideas-detail-visible' : 'ideas-detail-desktop'}`}
-            style={{
-              background: cardBg,
-              border: `0.5px solid ${border}`,
-              borderRadius: '14px',
-              overflow: 'hidden',
-              minHeight: '400px',
-            }}
-          >
+        <div
+          className={`ideas-detail ${showMobileDetail ? 'ideas-detail-visible' : 'ideas-detail-desktop'}`}
+          style={{
+            background: cardBg,
+            border: `0.5px solid ${border}`,
+            borderRadius: '14px',
+            overflow: 'hidden',
+            minHeight: '400px',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {selected || showNew || editing ? (
             <DetailPanel />
-          </div>
-        )}
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '48px 32px',
+                textAlign: 'center',
+              }}
+            >
+              <p style={{ fontSize: '16px', fontWeight: 500, color: text, margin: '0 0 8px' }}>
+                Select an idea
+              </p>
+              <p style={{ fontSize: '14px', color: muted, margin: 0, maxWidth: '320px', lineHeight: 1.5 }}>
+                Choose an idea from the list, or use <strong style={{ fontWeight: 600, color: text }}>New idea</strong> to
+                start one.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       <style>{`
         @media (min-width: 768px) {
-          .ideas-layout { grid-template-columns: 340px 1fr !important; }
+          .ideas-layout { grid-template-columns: minmax(280px, 360px) minmax(0, 1fr) !important; }
           .ideas-list { display: block !important; }
           .ideas-list-hidden { display: block !important; }
-          .ideas-detail { display: block !important; }
-          .ideas-detail-desktop { display: block !important; }
+          .ideas-detail { display: flex !important; }
+          .ideas-detail-desktop { display: flex !important; }
         }
         @media (max-width: 767px) {
           .ideas-list-hidden { display: none !important; }
           .ideas-detail { display: none; }
-          .ideas-detail-visible { display: block !important; }
+          .ideas-detail-visible { display: flex !important; }
           .ideas-mobile-back { display: flex !important; }
+          .ideas-compose-mode .ideas-page-intro { display: none; }
+          .ideas-detail-visible { min-height: calc(100dvh - 140px); }
         }
         .tiptap-editor .ProseMirror {
           min-height: 240px;
