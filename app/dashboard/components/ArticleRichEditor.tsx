@@ -4,7 +4,10 @@ import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 
-type ArticleRichEditorProps = {
+const EMPTY_DOC = '<p></p>'
+
+export type ArticleRichEditorProps = {
+  /** Pass a changing `key` from the parent when opening a different document (new vs edit). */
   placeholder: string
   onEditorReady?: (editor: Editor | null) => void
   initialContent?: string
@@ -15,16 +18,22 @@ export default function ArticleRichEditor({
   onEditorReady,
   initialContent = '',
 }: ArticleRichEditorProps) {
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({ placeholder }),
-    ],
-    content: initialContent,
-    immediatelyRender: false,
-    onCreate: ({ editor: ed }) => onEditorReady?.(ed),
-    onDestroy: () => onEditorReady?.(null),
-  })
+  const content = initialContent.trim() ? initialContent : EMPTY_DOC
+
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit,
+        Placeholder.configure({ placeholder }),
+      ],
+      content,
+      immediatelyRender: false,
+      autofocus: false,
+      onCreate: ({ editor: ed }) => onEditorReady?.(ed),
+      onDestroy: () => onEditorReady?.(null),
+    },
+    [content, placeholder],
+  )
 
   return <EditorContent editor={editor} className="tiptap-editor" />
 }

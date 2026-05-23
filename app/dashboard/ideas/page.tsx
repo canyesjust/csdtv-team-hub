@@ -88,11 +88,19 @@ export default function IdeasPage() {
   )
 
   const cancelCompose = useCallback(() => {
+    const wasNew = showNew
     setEditing(false)
     setShowNew(false)
     setSaveError('')
-    setShowMobileDetail(false)
     setEditor(null)
+    setComposeInitialHtml('')
+    setEditorKey(k => k + 1)
+    if (wasNew) setShowMobileDetail(false)
+  }, [showNew])
+
+  const resetEditorInstance = useCallback(() => {
+    setEditor(null)
+    setComposeInitialHtml('')
     setEditorKey(k => k + 1)
   }, [])
 
@@ -195,12 +203,12 @@ export default function IdeasPage() {
     setEditing(false)
     setShowNew(false)
     setFormTitle('')
+    resetEditorInstance()
   }
 
   const openIdea = (idea: Idea) => {
+    if (editing || showNew) cancelCompose()
     setSelected(idea)
-    setEditing(false)
-    setShowNew(false)
     setShowMobileDetail(true)
   }
 

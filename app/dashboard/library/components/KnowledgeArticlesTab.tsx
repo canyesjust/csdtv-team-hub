@@ -167,6 +167,23 @@ export default function KnowledgeArticlesTab() {
     [syncArticlesUrl, selected],
   )
 
+  const cancelCompose = useCallback(() => {
+    const wasNew = showNew
+    setEditing(false)
+    setShowNew(false)
+    setSaveError('')
+    setEditor(null)
+    setComposeInitialHtml('')
+    setEditorKey((k) => k + 1)
+    if (wasNew) setShowMobileDetail(false)
+  }, [showNew])
+
+  const resetEditorInstance = useCallback(() => {
+    setEditor(null)
+    setComposeInitialHtml('')
+    setEditorKey((k) => k + 1)
+  }, [])
+
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
@@ -218,6 +235,7 @@ export default function KnowledgeArticlesTab() {
     setEditing(false)
     setShowNew(false)
     setForm({ title: '', category: 'Process' })
+    resetEditorInstance()
 
     const refreshed = await fetchKnowledgeBaseArticles(supabase)
     if (!isMountedRef.current) return
@@ -236,17 +254,18 @@ export default function KnowledgeArticlesTab() {
   }
 
   const openArticle = (article: Article) => {
+    if (editing || showNew) cancelCompose()
     setSelected(article)
-    setEditing(false)
-    setShowNew(false)
     setShowMobileDetail(true)
     syncArticlesUrl((params) => params.set('article', article.id))
   }
 
   const clearArticleSelection = () => {
+    if (editing || showNew) {
+      cancelCompose()
+      if (selected) return
+    }
     setSelected(null)
-    setEditing(false)
-    setShowNew(false)
     setShowMobileDetail(false)
     syncArticlesUrl((params) => params.delete('article'))
   }
@@ -324,7 +343,15 @@ export default function KnowledgeArticlesTab() {
   const DetailPanel = () => (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `0.5px solid ${border}` }}>
-        <button type="button" onClick={clearArticleSelection} className="mobile-back-btn" style={{ display: 'none', background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', padding: '4px 0', minHeight: '44px', alignItems: 'center', gap: '6px' }}>
+        <button
+          type="button"
+          onClick={() => {
+            if (editing || showNew) cancelCompose()
+            else clearArticleSelection()
+          }}
+          className="mobile-back-btn"
+          style={{ display: 'none', background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', padding: '4px 0', minHeight: '44px', alignItems: 'center', gap: '6px' }}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
           Back
         </button>
@@ -397,7 +424,7 @@ export default function KnowledgeArticlesTab() {
             </div>
             <div style={{ display: 'flex', gap: '8px', margin: '14px 20px 20px' }}>
               <button onClick={saveArticle} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save article</button>
-              <button onClick={() => { setEditing(false); setShowNew(false); setSaveError(''); setEditor(null) }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
+              <button type="button" onClick={cancelCompose} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
               {saveError && <span style={{ fontSize: '13px', color: '#ef4444' }}>{saveError}</span>}
             </div>
           </div>
