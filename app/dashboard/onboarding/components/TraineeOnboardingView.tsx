@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/theme'
 import Loader from '../../components/Loader'
 import { ONBOARDING_ASSIGNMENT_STATUS } from '@/lib/onboarding/constants'
 import { trackIdForTeamRole } from '@/lib/onboarding/constants'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import {
   canSubmitForSignoff,
   groupInstancesByPhaseCategory,
@@ -49,11 +50,10 @@ export default function TraineeOnboardingView() {
     } = await supabase.auth.getSession()
     if (!session) return
 
-    const { data: user } = await supabase
-      .from('team')
-      .select('id, name, role')
-      .eq('supabase_user_id', session.user.id)
-      .single()
+    const user = await resolveEffectiveTeamRow<{ id: string; name: string; role: string }>(
+      supabase,
+      'id, name, role',
+    )
     if (!user) return
     setCurrentUser(user)
 

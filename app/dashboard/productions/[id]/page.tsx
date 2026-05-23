@@ -16,6 +16,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isStudentInternRole } from '@/lib/roles'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { hubRequestProductionComplete, hubRequestProductionInProgress } from '@/lib/production-status-requests'
 import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker, schoolCodesMatch } from '@/lib/thumbnail-school-brand'
 
@@ -250,7 +251,7 @@ export default function ProductionDetailPage() {
 
     const prodUUID = prodRes.data.id
 
-    const { data: meRow } = await supabase.from('team').select('id, role').eq('supabase_user_id', session.user.id).single()
+    const meRow = await resolveEffectiveTeamRow<{ id: string; role: string }>(supabase, 'id, role')
     if (meRow && isStudentInternRole(meRow.role)) {
       const { data: memRow } = await supabase
         .from('production_members')
@@ -283,7 +284,7 @@ export default function ProductionDetailPage() {
       supabase.from('team').select('id, name, email, role, avatar_color').eq('active', true),
       supabase.from('production_links').select('*').eq('production_id', prodUUID).order('created_at'),
       supabase.from('production_activity').select('*').eq('production_id', prodUUID).order('created_at', { ascending: false }).limit(50),
-      supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
+      resolveEffectiveTeamRow(supabase, '*'),
       supabase.from('knowledge_base').select('id, title, category').order('title'),
       supabase.from('email_templates').select('*').order('sort_order'),
       supabase.from('schools').select('*').order('name'),
@@ -297,7 +298,7 @@ export default function ProductionDetailPage() {
     setAllTeam(teamRes.data || [])
     setLinks(linksRes.data || [])
     setActivity(actRes.data || [])
-    setCurrentUser(userRes.data)
+    setCurrentUser(userRes)
     setKbArticles(kbRes.data || [])
     setTemplates(tplRes.data || [])
     setSchools((schoolsRes.data as SchoolBrand[]) || [])

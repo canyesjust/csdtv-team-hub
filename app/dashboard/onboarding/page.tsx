@@ -7,6 +7,7 @@ import Loader from '../components/Loader'
 import { isManagerRole, trackIdForTeamRole } from '@/lib/onboarding/constants'
 import ManagerOverview from './components/ManagerOverview'
 import TraineeOnboardingView from './components/TraineeOnboardingView'
+import { fetchEffectiveTeam } from '@/lib/effective-team-client'
 
 export default function OnboardingPage() {
   const supabase = createClient()
@@ -23,12 +24,8 @@ export default function OnboardingPage() {
         router.replace('/login')
         return
       }
-      const { data: user } = await supabase
-        .from('team')
-        .select('role')
-        .eq('supabase_user_id', session.user.id)
-        .single()
-      setRole(user?.role || null)
+      const effective = await fetchEffectiveTeam()
+      setRole(effective?.team.role || null)
       setLoading(false)
     })()
   }, [supabase, router])

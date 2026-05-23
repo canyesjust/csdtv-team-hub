@@ -12,6 +12,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
+import { fetchEffectiveTeam } from '@/lib/effective-team-client'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 
@@ -283,8 +284,17 @@ function ProductionsPageContent() {
 
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    const userPromise = session
-      ? supabase.from('team').select('id, name, email, role').eq('supabase_user_id', session.user.id).single()
+    const effective = session ? await fetchEffectiveTeam() : null
+    const userPromise = effective?.team
+      ? Promise.resolve({
+          data: {
+            id: effective.team.id,
+            name: effective.team.name,
+            email: effective.team.email ?? '',
+            role: effective.team.role,
+          } as CurrentUser,
+          error: null,
+        })
       : Promise.resolve({ data: null as CurrentUser | null, error: null })
     const [dismissedDataRes, userRes] = await Promise.all([
       supabase.from('dismissed_conflicts').select('production_a_id, production_b_id'),

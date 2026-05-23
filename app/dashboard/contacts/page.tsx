@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { toast } from '@/lib/toast'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 
 interface Contact {
   id: string; name: string; title: string | null; organization: string | null
@@ -42,7 +43,7 @@ export default function ContactsPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const { data: user } = await supabase.from('team').select('id').eq('supabase_user_id', session.user.id).single()
+    const user = await resolveEffectiveTeamRow<{ id: string }>(supabase, 'id')
     if (user) setCurrentUser(user)
     const { data } = await supabase.from('contacts').select('*').order('created_at', { ascending: false })
     setContacts(data || [])

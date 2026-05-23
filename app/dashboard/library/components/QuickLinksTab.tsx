@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { isStudentInternRole } from '@/lib/roles'
 import { toast } from '@/lib/toast'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import Loader from '../../components/Loader'
 
 interface QuickLink {
@@ -56,7 +57,7 @@ export default function QuickLinksTab() {
     }
     const [linksRes, userRes] = await Promise.all([
       fetch('/api/library/quick-links', { cache: 'no-store' }),
-      supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single(),
+      resolveEffectiveTeamRow(supabase, 'id, name, role'),
     ])
 
     let linksData: QuickLink[] = []
@@ -79,10 +80,7 @@ export default function QuickLinksTab() {
       toast(`Could not load quick links: ${msg}`, 'error')
     }
     setLinks(linksData)
-    if (userRes.error) {
-      console.error('team user load failed', userRes.error)
-    }
-    setCurrentUser(userRes.data)
+    setCurrentUser(userRes)
     setLoading(false)
   }, [supabase])
 

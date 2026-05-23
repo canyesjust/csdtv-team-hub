@@ -15,6 +15,7 @@ import { downloadArticlesExport, mapArticlesForExport } from '@/lib/library/kb-e
 import { fetchKnowledgeBaseArticles, type KbArticleWithAuthors } from '@/lib/library/kb-articles'
 import { printLibraryArticle } from '@/lib/library/print-article'
 import { toast } from '@/lib/toast'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 
 function ArticleEditorShell() {
   return (
@@ -189,7 +190,7 @@ export default function KnowledgeArticlesTab() {
     if (!session) return
     const [articlesResult, userRes] = await Promise.all([
       fetchKnowledgeBaseArticles(supabase),
-      supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
+      resolveEffectiveTeamRow(supabase, '*'),
     ])
     if (articlesResult.error) {
       console.error('Failed to load knowledge_base', articlesResult.error)
@@ -197,7 +198,7 @@ export default function KnowledgeArticlesTab() {
     } else {
       setArticles(articlesResult.data)
     }
-    setCurrentUser(userRes.data)
+    setCurrentUser(userRes)
     setLoading(false)
   }, [supabase])
 

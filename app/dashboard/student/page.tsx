@@ -10,6 +10,7 @@ import { ZoneHeader } from '../components/ZoneHeader'
 import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole } from '@/lib/roles'
+import { fetchEffectiveTeam } from '@/lib/effective-team-client'
 
 interface Task {
   id: string
@@ -81,13 +82,14 @@ export default function StudentHomePage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const { data: user } = await supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single()
-    if (!user) return
+    const effective = await fetchEffectiveTeam()
+    if (!effective?.team) return
+    const user = effective.team
     if (!isStudentInternRole(user.role)) {
       router.replace('/dashboard')
       return
     }
-    setCurrentUser(user)
+    setCurrentUser({ id: user.id, name: user.name, role: user.role })
 
     const [tasksRes, membersRes] = await Promise.all([
       supabase

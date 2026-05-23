@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
 import { canAddOrEditEquipment } from '@/lib/equipment-access'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import {
   formatPowerSpecShort,
   getNextPowerCableAssetTag,
@@ -104,7 +105,7 @@ export default function EquipmentDetailPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const { data: userData } = await supabase.from('team').select('id, role').eq('supabase_user_id', session.user.id).single()
+    const userData = await resolveEffectiveTeamRow<{ id: string; role: string }>(supabase, 'id, role')
     if (userData) {
       setUserId(userData.id)
       setUserRole(userData.role ?? null)

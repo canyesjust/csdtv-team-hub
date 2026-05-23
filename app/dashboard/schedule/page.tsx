@@ -8,6 +8,7 @@ import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { useOutlookEvents } from './use-outlook-events'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
 const toLocalDateStr = (d: Date): string =>
@@ -256,9 +257,9 @@ export default function SchedulePage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const userRes = await supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single()
-    const user: CurrentUser = userRes.data
-    setCurrentUser(user)
+    const teamRow = await resolveEffectiveTeamRow<CurrentUser>(supabase, '*')
+    if (!teamRow) return
+    setCurrentUser(teamRow)
 
     const teamRes = await supabase.from('team').select('*').eq('active', true)
     setTeam(teamRes.data || [])
@@ -270,7 +271,7 @@ export default function SchedulePage() {
     const { data: eventsData } = await supabase.from('calendar_events').select('*').order('date')
     setCalEvents(eventsData || [])
 
-    if (user) setViewingId(v => v || user.id)
+    setViewingId(v => v || teamRow.id)
     setLoading(false)
   }, [supabase])
 

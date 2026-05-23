@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Loader from '../../components/Loader'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 
 interface Video {
   id: string; title: string; description: string | null; video_type: string; status: string
@@ -93,7 +94,7 @@ export default function VideoDetailPage() {
       supabase.from('video_destinations').select('*').eq('video_id', videoId),
       supabase.from('video_files').select('*').eq('video_id', videoId).order('created_at'),
       supabase.from('video_tags').select('*').eq('video_id', videoId),
-      supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single(),
+      resolveEffectiveTeamRow(supabase, 'id, name, role'),
       supabase.from('productions').select('id, title, production_number').order('production_number', { ascending: false }).limit(100),
     ])
     setVideo(videoRes.data)
@@ -101,7 +102,7 @@ export default function VideoDetailPage() {
     setDestinations(destRes.data || [])
     setFiles(filesRes.data || [])
     setTags(tagsRes.data || [])
-    setCurrentUser(userRes.data)
+    setCurrentUser(userRes)
     setProductions(prodsRes.data || [])
     // Load video checklist
     const { data: checkData } = await supabase.from('video_checklist_items').select('*').eq('video_id', videoId).order('sort_order')

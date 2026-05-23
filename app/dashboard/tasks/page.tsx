@@ -11,6 +11,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
 import {
   fetchTaskAssignments,
@@ -312,7 +313,8 @@ export default function TasksPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const userRes = await supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single()
+    const teamRow = await resolveEffectiveTeamRow<Record<string, unknown>>(supabase, '*')
+    const userRes = { data: teamRow }
     const uid = userRes.data?.id
     const isStu = isStudentInternRole(userRes.data?.role)
 

@@ -17,6 +17,7 @@ import {
   SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES,
 } from '@/lib/productions/status-filters'
 import { loadInsightsData, loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
+import { fetchEffectiveTeam } from '@/lib/effective-team-client'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
@@ -120,13 +121,14 @@ export default function DashboardPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const { data: user } = await supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single()
-      if (!user) return
+      const effective = await fetchEffectiveTeam()
+      if (!effective?.team) return
+      const user = effective.team
       if (isStudentInternRole(user.role)) {
         router.replace(STUDENT_INTERN_HOME_PATH)
         return
       }
-      setCurrentUser(user)
+      setCurrentUser({ id: user.id, name: user.name, role: user.role })
 
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
       const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)

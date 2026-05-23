@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 
 type Equipment = {
   id: string; asset_tag: string; name: string; brand: string | null; model: string | null
@@ -47,7 +48,10 @@ export default function KitDetailPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const { data: userData } = await supabase.from('team').select('id, name, role').eq('supabase_user_id', session.user.id).single()
+    const userData = await resolveEffectiveTeamRow<{ id: string; name: string; role: string }>(
+      supabase,
+      'id, name, role',
+    )
     if (userData) setUser(userData)
 
     const { data: kitData } = await supabase.from('equipment_kits').select('*').eq('id', kitId).single()

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
+import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { canAddOrEditEquipment } from '@/lib/equipment-access'
 import {
   formatPowerSpecShort,
@@ -144,11 +145,7 @@ export default function EquipmentPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const { data: userData } = await supabase
-      .from('team')
-      .select('*')
-      .eq('supabase_user_id', session.user.id)
-      .single()
+    const userData = await resolveEffectiveTeamRow(supabase, '*')
     if (userData) setUser(userData)
 
     const [eqRes, catRes, kitRes, loanRes] = await Promise.all([
