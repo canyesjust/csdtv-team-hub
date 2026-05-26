@@ -163,16 +163,17 @@ export default function DashboardPage() {
       const isWeekday = todayDayName !== 'sunday' && todayDayName !== 'saturday'
       if (isWeekday) {
         const weekStart = getMondayStr(todayDate)
-        const { data: weekOverrides } = await supabase
+        const { data: weekOverrideRow } = await supabase
           .from('schedule_overrides')
-          .select(SCHEDULE_DAY_SELECT)
+          .select(`${SCHEDULE_DAY_SELECT}, week_start`)
           .eq('user_id', user.id)
           .eq('week_start', weekStart)
+          .maybeSingle()
         const defaults = schedDefaultRes.data
           ? [{ ...schedDefaultRes.data, user_id: user.id }]
           : []
-        const overrides = weekOverrides
-          ? [{ ...weekOverrides, user_id: user.id }]
+        const overrides = weekOverrideRow
+          ? [{ ...weekOverrideRow, user_id: user.id }]
           : []
         setTodayHours(resolveDayHours(user.id, todayDate, defaults, overrides))
       }
