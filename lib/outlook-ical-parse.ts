@@ -7,6 +7,14 @@ export interface OutlookIcalEvent {
   all_day: boolean
 }
 
+function unescapeIcalText(value: string): string {
+  return value
+    .replace(/\\n/gi, '\n')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\')
+}
+
 export function parseOutlookIcal(text: string): OutlookIcalEvent[] {
   const events: OutlookIcalEvent[] = []
   const blocks = text.split('BEGIN:VEVENT')
@@ -33,7 +41,7 @@ export function parseOutlookIcal(text: string): OutlookIcalEvent[] {
       return null
     }
 
-    const summary = get('SUMMARY') || 'Untitled'
+    const summary = unescapeIcalText(get('SUMMARY') || 'Untitled')
     const dtStart = get('DTSTART')
     const dtEnd = get('DTEND')
     const location = get('LOCATION')

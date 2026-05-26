@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getSchoolName as getSchoolNameFallback } from '@/lib/schools'
+import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -57,6 +58,7 @@ export default function SignagePage() {
   const [schoolMap, setSchoolMap] = useState<Record<string, string>>({})
   const [calEvents, setCalEvents] = useState<{ id: string; title: string; date: string; start_time: string | null; color: string }[]>([])
   const [outlookEvents, setOutlookEvents] = useState<{ title: string; date: string; start_time: string | null; location: string | null }[]>([])
+  const [outlookEnabled, setOutlookEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
@@ -76,14 +78,23 @@ export default function SignagePage() {
     setSchedOverrides(ovrsRes.data || [])
     setCalEvents(eventsRes.data || [])
     try {
-      const ir = await fetch('/api/signage/ical-events', { cache: 'no-store' })
-      if (ir.ok) {
-        const { events: oe } = await ir.json()
-        setOutlookEvents(oe || [])
+      const cfgRes = await fetch('/api/signage/config', { cache: 'no-store' })
+      const cfg = cfgRes.ok ? ((await cfgRes.json()) as { outlookEnabled?: boolean }) : null
+      const enabled = Boolean(cfg?.outlookEnabled)
+      setOutlookEnabled(enabled)
+      if (enabled) {
+        const ir = await fetch('/api/signage/ical-events', { cache: 'no-store' })
+        if (ir.ok) {
+          const { events: oe } = await ir.json()
+          setOutlookEvents(oe || [])
+        } else {
+          setOutlookEvents([])
+        }
       } else {
         setOutlookEvents([])
       }
     } catch {
+      setOutlookEnabled(false)
       setOutlookEvents([])
     }
     const m: Record<string, string> = {}
@@ -189,6 +200,7 @@ export default function SignagePage() {
         <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#34d399', fontWeight: 700 }}>YEAR</span> <span style={{ fontWeight: 600 }}>{ytdCompleted}</span>/{ytdTotal} completed{ytdTotal > 0 ? ` (${Math.round(ytdCompleted / ytdTotal * 100)}%)` : ''}</span>
         {ytdVidsProduced > 0 && <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#ef4444', fontWeight: 700 }}>VIDEOS</span> <span style={{ fontWeight: 600 }}>{ytdVidsProduced}</span> produced</span>}
         {inProgressProds.length > 0 && <span style={{ background: cardBg, border: '1px solid rgba(251,191,36,0.2)', borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#fbbf24', fontWeight: 700 }}>IN PROGRESS</span> {inProgressProds.map(p => p.title).join(' · ')}</span>}
+        {outlookEnabled && <span style={{ background: cardBg, border: '1px solid rgba(8,145,178,0.25)', borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#0891b2', fontWeight: 700 }}>OUTLOOK</span> teal = room calendar only (not already in Hub)</span>}
       </div>
 
       {/* Calendar — single CSS grid: 8 cols × 6 rows */}
@@ -249,22 +261,12 @@ export default function SignagePage() {
                     const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
                     const dayEvts = calEvents.filter(e => e.date === ds)
                     // Outlook events with auto-dedup against productions
-                    const dayOl = outlookEvents.filter(e => {
-                      if (e.date !== ds) return false
-                      const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
-                      const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
-                      const titleWords = getWords(e.title)
-                      return !dayProds.some(p => {
-                        const prodWords = getWords(p.title)
-                        if (titleWords.length === 0 || prodWords.length === 0) return false
-                        const nt = normalize(e.title), np = normalize(p.title)
-                        if (nt === np || nt.includes(np) || np.includes(nt)) return true
-                        const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
-                        const longer = titleWords.length > prodWords.length ? titleWords : prodWords
-                        const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
-                        return overlap >= Math.ceil(shorter.length * 0.5)
-                      })
-                    })
+                    const dayOl = outlookEnabled
+                      ? outlookEvents.filter(e => {
+                          if (e.date !== ds) return false
+                          return !dayProds.some(p => outlookEventMatchesProduction(e.title, p.title))
+                        })
+                      : []
                     const n = dayProds.length + dayEvts.length + dayOl.length
                     const s = n <= 3 ? 1 : Math.max(0.55, 3 / n)
                     return <>

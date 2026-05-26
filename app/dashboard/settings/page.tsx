@@ -125,6 +125,9 @@ export default function SettingsPage() {
   const [taskSignageHref, setTaskSignageHref] = useState<string>('/signage/tasks')
   const [taskSignageAbsolute, setTaskSignageAbsolute] = useState<string>('')
   const [signageTasksKeyConfigured, setSignageTasksKeyConfigured] = useState<boolean | null>(null)
+  const [signageOutlookEnabled, setSignageOutlookEnabled] = useState(false)
+  const [signageOutlookConfigured, setSignageOutlookConfigured] = useState(false)
+  const [signageOutlookBusy, setSignageOutlookBusy] = useState(false)
 
   const text    = 'var(--text-primary)'
   const muted   = 'var(--text-muted)'
@@ -170,6 +173,21 @@ export default function SettingsPage() {
       }
     } catch {
       setSignageTasksKeyConfigured(false)
+    }
+
+    try {
+      const olRes = await fetch('/api/dashboard/signage-outlook', { cache: 'no-store' })
+      const olBody = await olRes.json().catch(() => ({}))
+      if (olRes.ok) {
+        setSignageOutlookEnabled(Boolean(olBody.enabled))
+        setSignageOutlookConfigured(Boolean(olBody.configured))
+      } else {
+        setSignageOutlookEnabled(false)
+        setSignageOutlookConfigured(false)
+      }
+    } catch {
+      setSignageOutlookEnabled(false)
+      setSignageOutlookConfigured(false)
     }
 
     setLoading(false)
@@ -926,6 +944,52 @@ export default function SettingsPage() {
             Full URL for TVs:{' '}
             <span style={{ wordBreak: 'break-all' as const, color: text }}>{taskSignageAbsolute}</span>
           </p>
+        )}
+
+        {isManager && (
+          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: `0.5px solid ${border}` }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: text, margin: '0 0 6px' }}>Outlook room calendar</h3>
+            <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px', lineHeight: 1.5 }}>
+              Show Outlook/room bookings on the production calendar signage in teal when they are not already represented by a Hub production on that day.
+            </p>
+            {!signageOutlookConfigured ? (
+              <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
+                Not configured — set <code style={{ fontSize: '11px' }}>OUTLOOK_ICAL_URL</code> in Vercel to your published Outlook iCal feed.
+              </p>
+            ) : (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: signageOutlookBusy ? 'default' : 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={signageOutlookEnabled}
+                  disabled={signageOutlookBusy}
+                  onChange={async (e) => {
+                    const next = e.target.checked
+                    setSignageOutlookBusy(true)
+                    try {
+                      const res = await fetch('/api/dashboard/signage-outlook', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: next }),
+                      })
+                      const body = await res.json().catch(() => ({}))
+                      if (!res.ok) {
+                        toast(typeof body.error === 'string' ? body.error : 'Could not update Outlook signage setting', 'error')
+                        return
+                      }
+                      setSignageOutlookEnabled(Boolean(body.enabled))
+                      toast(next ? 'Outlook events will show on production signage.' : 'Outlook events hidden on production signage.', 'success')
+                    } finally {
+                      setSignageOutlookBusy(false)
+                    }
+                  }}
+                  style={{ width: '16px', height: '16px', accentColor: 'var(--brand-primary)' }}
+                />
+                <span style={{ fontSize: '14px', color: text, fontWeight: signageOutlookEnabled ? 600 : 500 }}>
+                  Show Outlook bookings on production signage
+                </span>
+              </label>
+            )}
+          </div>
         )}
       </div>
 
