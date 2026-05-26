@@ -4,6 +4,8 @@ import { parseOutlookIcal } from '@/lib/outlook-ical-parse'
 
 const ICAL_URL = process.env.OUTLOOK_ICAL_URL || ''
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   if (!ICAL_URL) return NextResponse.json({ error: 'Calendar not configured' }, { status: 500 })
 

@@ -11,7 +11,8 @@ export type OutlookEvent = {
   all_day: boolean
 }
 
-const CACHE_KEY_PREFIX = 'csdtv-ical-events-'
+const CACHE_VERSION = '2'
+const CACHE_KEY_PREFIX = `csdtv-ical-events-v${CACHE_VERSION}-`
 
 function todayCacheKey(): string {
   const d = new Date()
@@ -50,9 +51,8 @@ export function useOutlookEvents(enabled: boolean) {
     }
 
     const cached = readCachedEvents()
-    if (cached) {
+    if (cached?.length) {
       setOutlookEvents(cached)
-      return
     }
 
     let cancelled = false
@@ -61,7 +61,7 @@ export function useOutlookEvents(enabled: boolean) {
 
     ;(async () => {
       try {
-        const res = await fetch('/api/ical', { signal: controller.signal })
+        const res = await fetch('/api/ical', { signal: controller.signal, cache: 'no-store' })
         if (!res.ok) return
         const { events: oe } = await res.json()
         const events = (oe || []) as OutlookEvent[]

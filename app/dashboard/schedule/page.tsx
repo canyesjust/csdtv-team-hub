@@ -10,6 +10,7 @@ import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { useOutlookEvents } from './use-outlook-events'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { getMondayStr, resolveDayHours, toLocalDateStr, WEEKDAY_KEYS } from '@/lib/team-schedule'
+import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
 type PayPeriodRow = { num: number; start: string; end: string; cutoff: string; payday: string }
@@ -369,33 +370,13 @@ export default function SchedulePage() {
 
   const getOutlookForDay = (date: Date) => {
     if (!showOutlook) return []
-    const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const ds = toLocalDateStr(date)
     const dayProds = getProdsForDay(date)
     return outlookEvents.filter(e => {
       if (e.date !== ds) return false
-      // Skip dismissed
       const key = `${e.date}|${e.title}`
       if (dismissedOutlook.has(key)) return false
-      // Auto-match: skip if title closely matches a production on the same day
-      // Smart matching: strips prefixes, compares keywords
-      const normalize = (t: string) => t.toLowerCase().replace(/^(video|livestream|equipment|recording|csd|canyons?)\s*[-–—:]\s*/i, '').replace(/\b(csd|canyons?|district|school|elementary|middle|high)\b/gi, '').replace(/\d{4}/g, '').trim()
-      const getWords = (t: string) => normalize(t).split(/\s+/).filter(w => w.length >= 3)
-      const titleWords = getWords(e.title)
-      const matched = dayProds.some(p => {
-        const prodWords = getWords(p.title)
-        if (titleWords.length === 0 || prodWords.length === 0) return false
-        // Exact normalized match
-        if (normalize(e.title) === normalize(p.title)) return true
-        // Substring match on normalized
-        const nt = normalize(e.title), np = normalize(p.title)
-        if (nt.includes(np) || np.includes(nt)) return true
-        // Keyword overlap: if 50%+ of the shorter title's words appear in the longer
-        const shorter = titleWords.length <= prodWords.length ? titleWords : prodWords
-        const longer = titleWords.length > prodWords.length ? titleWords : prodWords
-        const overlap = shorter.filter(w => longer.some(lw => lw.includes(w) || w.includes(lw))).length
-        return overlap >= Math.ceil(shorter.length * 0.5)
-      })
-      return !matched
+      return !dayProds.some(p => outlookEventMatchesProduction(e.title, p.title))
     })
   }
 
