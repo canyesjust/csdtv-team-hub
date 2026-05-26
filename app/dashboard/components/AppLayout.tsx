@@ -170,10 +170,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         return
       }
 
+      const emailNorm = email.trim().toLowerCase()
       const { data: teamByEmail, error: emailLookupErr } = await supabase
         .from('team')
         .select('id, name, role, avatar_color, supabase_user_id')
-        .eq('email', email)
+        .eq('email', emailNorm)
         .maybeSingle()
 
       if (emailLookupErr) {

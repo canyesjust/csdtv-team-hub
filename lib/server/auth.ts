@@ -98,7 +98,7 @@ export async function getTeamRowForAuthUser(
   const { data: byEmail } = await supabase
     .from('team')
     .select('id, role, supabase_user_id')
-    .eq('email', user.email)
+    .eq('email', user.email.trim().toLowerCase())
     .maybeSingle()
   if (byEmail && !byEmail.supabase_user_id) return 'pending-link'
   return null

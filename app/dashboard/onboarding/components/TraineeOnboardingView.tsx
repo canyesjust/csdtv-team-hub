@@ -19,6 +19,7 @@ import type {
   OnboardingPhase,
 } from '@/lib/onboarding/types'
 import OnboardingChecklist from './OnboardingChecklist'
+import { toast } from '@/lib/toast'
 
 interface CurrentUser {
   id: string
@@ -111,10 +112,15 @@ export default function TraineeOnboardingView() {
     const completed_at = completed ? new Date().toISOString() : null
     const completed_by = completed ? currentUser.id : null
 
-    await supabase
+    const { error: toggleErr } = await supabase
       .from('onboarding_item_instances')
       .update({ completed, completed_at, completed_by })
       .eq('id', task.id)
+
+    if (toggleErr) {
+      toast(toggleErr.message || 'Could not update checklist item', 'error')
+      return
+    }
 
     setInstances((prev) =>
       prev.map((t) =>
@@ -123,7 +129,7 @@ export default function TraineeOnboardingView() {
     )
 
     if (assignment.status === ONBOARDING_ASSIGNMENT_STATUS.pending_signoff && !completed) {
-      await supabase
+      const { error: reopenErr } = await supabase
         .from('onboarding_assignments')
         .update({
           status: ONBOARDING_ASSIGNMENT_STATUS.in_progress,
@@ -131,6 +137,10 @@ export default function TraineeOnboardingView() {
           updated_at: new Date().toISOString(),
         })
         .eq('id', assignment.id)
+      if (reopenErr) {
+        toast(reopenErr.message || 'Could not update assignment status', 'error')
+        return
+      }
       setAssignment((a) =>
         a
           ? {
@@ -147,7 +157,7 @@ export default function TraineeOnboardingView() {
     if (!assignment || !canSubmitForSignoff(instances)) return
     setSubmitting(true)
     const now = new Date().toISOString()
-    await supabase
+    const { error: submitErr } = await supabase
       .from('onboarding_assignments')
       .update({
         status: ONBOARDING_ASSIGNMENT_STATUS.pending_signoff,
@@ -155,6 +165,11 @@ export default function TraineeOnboardingView() {
         updated_at: now,
       })
       .eq('id', assignment.id)
+    if (submitErr) {
+      toast(submitErr.message || 'Could not submit for sign-off', 'error')
+      setSubmitting(false)
+      return
+    }
     setAssignment((a) =>
       a
         ? {

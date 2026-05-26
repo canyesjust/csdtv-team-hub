@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../../components/Loader'
+import { toast } from '@/lib/toast'
 import OnboardingChecklist from '../../components/OnboardingChecklist'
 import {
   ONBOARDING_ASSIGNMENT_STATUS,
@@ -116,10 +117,14 @@ export default function OnboardingCoachPage() {
     const completed = !task.completed
     const completed_at = completed ? new Date().toISOString() : null
     const completed_by = completed ? managerId : null
-    await supabase
+    const { error } = await supabase
       .from('onboarding_item_instances')
       .update({ completed, completed_at, completed_by })
       .eq('id', task.id)
+    if (error) {
+      toast(error.message || 'Could not update checklist item', 'error')
+      return
+    }
     setInstances((prev) =>
       prev.map((t) =>
         t.id === task.id ? { ...t, completed, completed_at, completed_by } : t,

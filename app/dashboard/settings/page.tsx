@@ -6,6 +6,7 @@ import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth-constants'
+import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
 
 interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string; supabase_user_id: string | null }
 interface SchoolListRow {
@@ -291,12 +292,33 @@ export default function SettingsPage() {
       const result = await res.json()
 
       if (!res.ok || result.error) {
-        setInviteResult({ success: false, message: result.error || 'Failed to invite. Please try again.' })
+        const partial =
+          result.teamId && result.emailSent === false
+            ? ' Their Hub account may exist but the email did not send — check Resend or try Send invite again from Team.'
+            : ''
+        setInviteResult({
+          success: false,
+          message: (result.error || 'Failed to invite. Please try again.') + partial,
+        })
         setInviting(false)
         return
       }
 
-      setInviteResult({ success: true, message: `Invite sent to ${inviteEmail}. They'll receive an email with a sign-in link.` })
+      let message = `Invite sent to ${inviteEmail}. They'll receive an email with a sign-in link.`
+      if (result.teamId) {
+        const { started, error: obErr } = await startOnboardingAfterInviteIfNeeded(
+          supabase,
+          result.teamId,
+          inviteRole,
+        )
+        if (obErr) {
+          message += ` Onboarding could not be started automatically: ${obErr}`
+        } else if (started) {
+          message += ' Onboarding checklist has been started for them.'
+        }
+      }
+
+      setInviteResult({ success: true, message })
       setInviteEmail('')
       setInviting(false)
       loadData()
@@ -1023,7 +1045,17 @@ export default function SettingsPage() {
                         })
                         const result = await res.json()
                         if (res.ok && result.success) {
-                          toast(`Invite sent to ${member.email}`, 'success')
+                          let msg = `Invite sent to ${member.email}`
+                          if (result.teamId) {
+                            const { started, error: obErr } = await startOnboardingAfterInviteIfNeeded(
+                              supabase,
+                              result.teamId,
+                              member.role,
+                            )
+                            if (obErr) msg += ` (onboarding not started: ${obErr})`
+                            else if (started) msg += ' — onboarding started'
+                          }
+                          toast(msg, 'success')
                           loadData()
                         } else {
                           toast(result.error || 'Failed to send invite', 'error')

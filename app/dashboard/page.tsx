@@ -168,8 +168,12 @@ export default function DashboardPage() {
           .select(SCHEDULE_DAY_SELECT)
           .eq('user_id', user.id)
           .eq('week_start', weekStart)
-        const defaults = schedDefaultRes.data ? [schedDefaultRes.data] : []
-        const overrides = weekOverrides ? [weekOverrides] : []
+        const defaults = schedDefaultRes.data
+          ? [{ ...schedDefaultRes.data, user_id: user.id }]
+          : []
+        const overrides = weekOverrides
+          ? [{ ...weekOverrides, user_id: user.id }]
+          : []
         setTodayHours(resolveDayHours(user.id, todayDate, defaults, overrides))
       }
 
