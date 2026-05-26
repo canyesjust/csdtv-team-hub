@@ -9,11 +9,9 @@ import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { useOutlookEvents } from './use-outlook-events'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
+import { getMondayStr, resolveDayHours, toLocalDateStr, WEEKDAY_KEYS } from '@/lib/team-schedule'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
-const toLocalDateStr = (d: Date): string =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-
 type PayPeriodRow = { num: number; start: string; end: string; cutoff: string; payday: string }
 
 const PAY_PERIODS_CORE: PayPeriodRow[] = [
@@ -162,7 +160,7 @@ interface Production {
   request_type_label: string | null; start_datetime: string | null
 }
 
-const DAYS: (keyof DaySchedule)[] = ['monday','tuesday','wednesday','thursday','friday']
+const DAYS: (keyof DaySchedule)[] = [...WEEKDAY_KEYS]
 const DAY_LABELS = ['Mon','Tue','Wed','Thu','Fri']
 
 const EMPTY_DEFAULT: DaySchedule = { monday:'', tuesday:'', wednesday:'', thursday:'', friday:'' }
@@ -182,6 +180,7 @@ export default function SchedulePage() {
   const [defaults, setDefaults]         = useState<ScheduleDefault[]>([])
   const [overrides, setOverrides]       = useState<ScheduleOverride[]>([])
   const [allTeamDefaults, setAllTeamDefaults] = useState<ScheduleDefault[]>([])
+  const [allTeamOverrides, setAllTeamOverrides] = useState<ScheduleOverride[]>([])
   const [productions, setProductions]   = useState<Production[]>([])
   const [calEvents, setCalEvents]       = useState<CalendarEvent[]>([])
   const [loading, setLoading]           = useState(true)
@@ -227,14 +226,7 @@ export default function SchedulePage() {
     calDays.push(d)
   }
 
-  // Compute Monday of any date's week
-  const getMondayStr = (d: Date): string => {
-    const copy = new Date(d)
-    const dow = copy.getDay()
-    const diff = dow === 0 ? -6 : 1 - dow
-    copy.setDate(copy.getDate() + diff)
-    return toLocalDateStr(copy)
-  }
+  // Compute Monday of any date's week (local YYYY-MM-DD)
 
   // ─── Pay period info for viewed month ───────────────────────────────────────
   const payPeriodsInView = getPayPeriodsForMonth(viewYear, viewMonth)
@@ -268,6 +260,10 @@ export default function SchedulePage() {
     const { data: allDefs } = await supabase.from('schedule_defaults').select('*')
     setAllTeamDefaults(allDefs || [])
 
+    const currentWeekStart = getMondayStr(new Date())
+    const { data: weekOvrs } = await supabase.from('schedule_overrides').select('*').eq('week_start', currentWeekStart)
+    setAllTeamOverrides(weekOvrs || [])
+
     const { data: eventsData } = await supabase.from('calendar_events').select('*').order('date')
     setCalEvents(eventsData || [])
 
@@ -296,6 +292,12 @@ export default function SchedulePage() {
     setDismissedOutlook(new Set())
     localStorage.removeItem('dismissed-outlook')
   }
+
+  const refreshTeamWeekOverrides = useCallback(async () => {
+    const currentWeekStart = getMondayStr(new Date())
+    const { data } = await supabase.from('schedule_overrides').select('*').eq('week_start', currentWeekStart)
+    setAllTeamOverrides(data || [])
+  }, [supabase])
 
   const loadScheduleData = useCallback(async () => {
     const targetId = viewingId
@@ -346,14 +348,8 @@ export default function SchedulePage() {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
   const getHoursForDay = (date: Date): string | null => {
-    const dow = date.getDay()
-    if (dow === 0 || dow === 6) return null
-    const dayKey = getDayOfWeekKey(dow) as keyof DaySchedule
-    const weekStart = getMondayStr(date)
-    const override = overrides.find(o => o.week_start === weekStart)
-    if (override && override[dayKey] !== null && override[dayKey] !== undefined) return override[dayKey] || null
-    const def = defaults[0]
-    return def ? (def[dayKey] || null) : null
+    if (!viewingId) return null
+    return resolveDayHours(viewingId, date, defaults, overrides)
   }
 
   const getProdsForDay = (date: Date): Production[] => {
@@ -492,10 +488,14 @@ export default function SchedulePage() {
       const { error } = await supabase.from('schedule_defaults').update({ ...myDefault }).eq('id', existing.id)
       if (error) { toast('Failed to save default schedule', 'error'); return }
       setDefaults(prev => prev.map(d => d.id === existing.id ? { ...d, ...myDefault } : d))
+      setAllTeamDefaults(prev => prev.map(d => d.id === existing.id ? { ...d, ...myDefault } : d))
     } else {
       const { data, error } = await supabase.from('schedule_defaults').insert({ user_id: viewingId, ...myDefault }).select().single()
       if (error) { toast('Failed to save default schedule', 'error'); return }
-      if (data) setDefaults(prev => [...prev, data])
+      if (data) {
+        setDefaults(prev => [...prev, data])
+        setAllTeamDefaults(prev => [...prev.filter(d => d.user_id !== viewingId), data])
+      }
     }
     setEditingDefault(false)
   }, [currentUser, viewingId, defaults, myDefault, supabase])
@@ -515,7 +515,8 @@ export default function SchedulePage() {
       if (data) setOverrides(prev => [...prev, data])
     }
     setEditingOverride(false)
-  }, [currentUser, viewingId, overrides, myOverride, overrideWeek, supabase])
+    await refreshTeamWeekOverrides()
+  }, [currentUser, viewingId, overrides, myOverride, overrideWeek, supabase, refreshTeamWeekOverrides])
 
   // ─── Save a single day override ──────────────────────────────────────────
   const saveDay = useCallback(async (date: Date, value: string) => {
@@ -541,7 +542,8 @@ export default function SchedulePage() {
       if (data) setOverrides(prev => [...prev, data])
     }
     setEditingCell(null)
-  }, [currentUser, viewingId, overrides, supabase])
+    await refreshTeamWeekOverrides()
+  }, [currentUser, viewingId, overrides, supabase, refreshTeamWeekOverrides])
 
   // ─── Mass fill all weekdays in the viewed month ───────────────────────────
   const runMassFill = useCallback(async () => {
@@ -588,7 +590,8 @@ export default function SchedulePage() {
     setShowMassFill(false)
     setMassFillValue('')
     setMassFilling(false)
-  }, [currentUser, viewingId, massFillValue, overrides, supabase, viewYear, viewMonth])
+    await refreshTeamWeekOverrides()
+  }, [currentUser, viewingId, massFillValue, overrides, supabase, viewYear, viewMonth, refreshTeamWeekOverrides])
 
   // ─── Styles ───────────────────────────────────────────────────────────────
   const inputStyle: React.CSSProperties = {
@@ -793,24 +796,24 @@ export default function SchedulePage() {
               <div key={d} style={{ padding: '6px 0', textAlign: 'center' as const, color: muted, fontWeight: 600, fontSize: '11px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>{d}</div>
             ))}
             {team.map(member => {
-              const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-              const today = new Date()
-              const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
-              const ws = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+              const monday = new Date()
+              monday.setHours(12, 0, 0, 0)
+              monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
               return [
                 <div key={`name-${member.id}`} style={{ padding: '6px 0', color: text, fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: member.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>{member.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}</div>
                   {member.name.split(' ')[0]}
                 </div>,
-                ...days.map(dayKey => {
-                  const def = allTeamDefaults.find(d => d.user_id === member.id)
-                  const hrs = def ? (def as any)[dayKey] : null
+                ...DAYS.map((dayKey, dayIdx) => {
+                  const dayDate = new Date(monday)
+                  dayDate.setDate(monday.getDate() + dayIdx)
+                  const hrs = resolveDayHours(member.id, dayDate, allTeamDefaults, allTeamOverrides)
                   return <div key={`${member.id}-${dayKey}`} style={{ padding: '6px 0', textAlign: 'center' as const, color: hrs ? '#22c55e' : (dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), fontSize: '12px', fontWeight: hrs ? 500 : 400 }}>{hrs || '—'}</div>
                 })
               ]
             })}
           </div>
-          <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0' }}>Use the person-switcher above to see detailed schedules with overrides. This is a quick overview.</p>
+          <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0' }}>This week&apos;s hours per person — weekly overrides when set, otherwise default schedules.</p>
         </div>
       )}
 

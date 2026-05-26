@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getSchoolName as getSchoolNameFallback } from '@/lib/schools'
 import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
+import { resolveDayHours } from '@/lib/team-schedule'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -24,7 +25,6 @@ const TYPE_SHORT: Record<string, string> = {
   'Record Meeting': 'Recording', 'Podcast': 'Podcast', 'Board Meeting': 'Board Mtg', 'Other, Unsure, Or Consultation': 'Other',
 }
 const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
-const DOW_MAP: Record<number, string> = { 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday' }
 
 /** Match hub: strip numeric prefix from synced status values. */
 function normalizeProductionStatus(status: string | null | undefined): string {
@@ -44,7 +44,6 @@ function showProductionOnSignageCalendar(p: Production): boolean {
 }
 
 function getSunday(d: Date): Date { const dt = new Date(d); dt.setDate(dt.getDate() - dt.getDay()); dt.setHours(0, 0, 0, 0); return dt }
-function getMondayStr(d: Date): string { const dt = new Date(d); const day = dt.getDay(); dt.setDate(dt.getDate() + (day === 0 ? -6 : 1 - day)); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}` }
 function isSameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate() }
 function getInitials(n: string) { const p = n.split(' '); return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase() }
 
@@ -133,15 +132,8 @@ export default function SignagePage() {
     })
   }
 
-  const getHoursForUser = (userId: string): string | null => {
-    const dow = today.getDay(); if (dow === 0 || dow === 6) return null
-    const dayKey = DOW_MAP[dow]; if (!dayKey) return null
-    const ws = getMondayStr(today)
-    const ov = schedOverrides.find(o => o.user_id === userId && o.week_start === ws)
-    if (ov && (ov as any)[dayKey] !== null && (ov as any)[dayKey] !== undefined) return (ov as any)[dayKey] || null
-    const def = schedDefaults.find(d => d.user_id === userId)
-    return def ? ((def as any)[dayKey] || null) : null
-  }
+  const getHoursForUser = (userId: string): string | null =>
+    resolveDayHours(userId, today, schedDefaults, schedOverrides)
 
   const inProgressProds = productions.filter(p => normalizeProductionStatus(p.status) === 'In Progress')
   const endOfWeek = new Date(sunday); endOfWeek.setDate(endOfWeek.getDate() + 7)

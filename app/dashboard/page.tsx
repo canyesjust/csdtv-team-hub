@@ -18,6 +18,7 @@ import {
 } from '@/lib/productions/status-filters'
 import { loadInsightsData, loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
+import { getMondayStr, resolveDayHours } from '@/lib/team-schedule'
 
 interface Task {
   id: string; title: string; status: string; due_date: string | null; priority: string
@@ -157,26 +158,19 @@ export default function DashboardPage() {
       setProductionYearRows((schoolYearRowsRes.data as Array<{ school_year: string | null; start_datetime: string | null; status: string | null }> | null) || [])
 
       const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
-      const todayDayName = dayNames[new Date().getDay()]
+      const todayDate = new Date()
+      const todayDayName = dayNames[todayDate.getDay()]
       const isWeekday = todayDayName !== 'sunday' && todayDayName !== 'saturday'
       if (isWeekday) {
-        const dayKey = todayDayName as keyof ScheduleDay
-        const monday = new Date()
-        monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
-        const weekStart = monday.toISOString().split('T')[0]
-        const { data: override } = await supabase
+        const weekStart = getMondayStr(todayDate)
+        const { data: weekOverrides } = await supabase
           .from('schedule_overrides')
           .select(SCHEDULE_DAY_SELECT)
           .eq('user_id', user.id)
           .eq('week_start', weekStart)
-          .maybeSingle()
-        if (override && override[dayKey]) {
-          setTodayHours(override[dayKey])
-        } else if (schedDefaultRes.data && schedDefaultRes.data[dayKey]) {
-          setTodayHours(schedDefaultRes.data[dayKey])
-        } else {
-          setTodayHours(null)
-        }
+        const defaults = schedDefaultRes.data ? [schedDefaultRes.data] : []
+        const overrides = weekOverrides ? [weekOverrides] : []
+        setTodayHours(resolveDayHours(user.id, todayDate, defaults, overrides))
       }
 
       if (prodMembersRes.data && prodMembersRes.data.length > 0) {
