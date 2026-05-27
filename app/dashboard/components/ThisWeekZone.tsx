@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { ZoneHeader } from './ZoneHeader'
+import { useProductionDrawer } from './ProductionDrawerProvider'
 import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusTone } from '@/lib/ui/styles'
-import { dayDiffFromToday } from '@/lib/dashboard/day-diff'
+import { getProductionStatusTone } from '@/lib/dashboard/production-attention'
 
 export interface WeekProduction {
   id: string
@@ -34,23 +34,7 @@ function getPrepPct(prod: WeekProduction): number | null {
 }
 
 export function getStatusTone(prod: WeekProduction): keyof typeof statusTone {
-  const days = dayDiffFromToday(prod.start_datetime)
-  const members = prod.production_members?.length ?? 0
-  const items = prod.checklist_items ?? []
-  const prepPct = items.length > 0
-    ? Math.round((items.filter(i => i.completed).length / items.length) * 100)
-    : 0
-
-  if (days !== null && days <= 1) {
-    if (members === 0) return 'danger'
-    if (items.length === 0) return 'danger'
-    if (prepPct < 50) return 'danger'
-  }
-  if (days !== null && days <= 2) {
-    if (members < 2) return 'warning'
-    if (prepPct < 70) return 'warning'
-  }
-  return 'success'
+  return getProductionStatusTone(prod)
 }
 
 function sameLocalDay(a: Date, b: Date): boolean {
@@ -71,7 +55,7 @@ function dayHeaderLabel(day: Date, index: number): { primary: string; secondary:
 }
 
 function CalendarEvent({ prod }: { prod: WeekProduction }) {
-  const router = useRouter()
+  const { openByProductionNumber } = useProductionDrawer()
   const tone = getStatusTone(prod)
   const accent = statusTone[tone].color
   const accentBg = statusTone[tone].background
@@ -95,11 +79,11 @@ function CalendarEvent({ prod }: { prod: WeekProduction }) {
       role="button"
       tabIndex={0}
       className="week-cal-event"
-      onClick={() => router.push(`/dashboard/productions?prod=${prod.production_number}`)}
+      onClick={() => openByProductionNumber(prod.production_number)}
       onKeyDown={e => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          router.push(`/dashboard/productions?prod=${prod.production_number}`)
+          openByProductionNumber(prod.production_number)
         }
       }}
       style={{

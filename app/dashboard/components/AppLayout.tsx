@@ -9,6 +9,7 @@ import Link from 'next/link'
 import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
 import ImpersonationBanner from './ImpersonationBanner'
+import { ProductionDrawerProvider } from './ProductionDrawerProvider'
 import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import {
@@ -422,7 +423,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <main className="csdtv-content" style={{ flex: 1, padding: '20px 16px' }}>
           <div style={{ width: '100%', maxWidth: '1800px', margin: '0 auto' }}>
-            {children}
+            <ProductionDrawerProvider>{children}</ProductionDrawerProvider>
           </div>
         </main>
 

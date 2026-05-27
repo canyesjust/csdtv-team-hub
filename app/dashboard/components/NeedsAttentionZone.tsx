@@ -4,14 +4,14 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { ZoneHeader } from './ZoneHeader'
+import { useProductionDrawer } from './ProductionDrawerProvider'
 import { uiStyles, statusTone } from '@/lib/ui/styles'
 import { dayDiffFromToday } from '@/lib/dashboard/day-diff'
 import type { WeekProduction } from './ThisWeekZone'
 
 interface NeedsAttentionZoneProps {
   unstaffedProductions: WeekProduction[]
-  understaffedProductions: WeekProduction[]
-  atRiskProductions: WeekProduction[]
+  lowPrepProductions: WeekProduction[]
   missingProdMetadata: WeekProduction[]
   ytEmailPendingCount: number
   ytMissingLinkCount: number
@@ -26,6 +26,7 @@ interface AttentionItem {
   text: string
   tone: AttentionTone
   href: string
+  productionNumber?: number
 }
 
 const VISIBLE_CAP = 5
@@ -39,8 +40,7 @@ function daysLabel(prod: WeekProduction): string {
 
 export function NeedsAttentionZone({
   unstaffedProductions,
-  understaffedProductions,
-  atRiskProductions,
+  lowPrepProductions,
   missingProdMetadata,
   ytEmailPendingCount,
   ytMissingLinkCount,
@@ -51,6 +51,7 @@ export function NeedsAttentionZone({
   const dark = theme === 'dark'
   const rowHover = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
   const [expanded, setExpanded] = useState(false)
+  const { openByProductionNumber } = useProductionDrawer()
 
   const items = useMemo(() => {
     const list: AttentionItem[] = []
@@ -61,24 +62,17 @@ export function NeedsAttentionZone({
         text: `#${prod.production_number} ${prod.title} has no crew · ${daysLabel(prod)}`,
         tone: 'danger',
         href: `/dashboard/productions?prod=${prod.production_number}`,
+        productionNumber: prod.production_number,
       })
     }
 
-    for (const prod of understaffedProductions) {
+    for (const prod of lowPrepProductions) {
       list.push({
         icon: '⚠',
-        text: `#${prod.production_number} ${prod.title} only 1 crew · ${daysLabel(prod)}`,
+        text: `#${prod.production_number} ${prod.title} checklist behind · ${daysLabel(prod)}`,
         tone: 'warning',
         href: `/dashboard/productions?prod=${prod.production_number}`,
-      })
-    }
-
-    for (const prod of atRiskProductions) {
-      list.push({
-        icon: '⚠',
-        text: `#${prod.production_number} ${prod.title} prep below threshold · ${daysLabel(prod)}`,
-        tone: 'warning',
-        href: `/dashboard/productions?prod=${prod.production_number}`,
+        productionNumber: prod.production_number,
       })
     }
 
@@ -115,14 +109,14 @@ export function NeedsAttentionZone({
         text: `#${prod.production_number} ${prod.title} missing date or location`,
         tone: 'review',
         href: `/dashboard/productions?prod=${prod.production_number}`,
+        productionNumber: prod.production_number,
       })
     }
 
     return list
   }, [
     unstaffedProductions,
-    understaffedProductions,
-    atRiskProductions,
+    lowPrepProductions,
     missingProdMetadata,
     ytEmailPendingCount,
     ytMissingLinkCount,
@@ -152,58 +146,90 @@ export function NeedsAttentionZone({
           </div>
         ) : (
           <>
-            {visibleItems.map((item, i) => (
-              <Link
-                key={`${item.href}-${i}`}
-                href={item.href}
-                style={{
-                  textDecoration: 'none',
-                  display: 'flex',
-                  alignItems: 'stretch',
-                  gap: '8px',
-                  padding: '10px 14px',
-                  borderBottom:
-                    i < visibleItems.length - 1 || (hiddenCount > 0 && !expanded)
-                      ? '1px solid var(--border-subtle)'
-                      : 'none',
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => {
-                  ;(e.currentTarget as HTMLAnchorElement).style.background = rowHover
-                }}
-                onMouseLeave={e => {
-                  ;(e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
-                }}
-              >
-                <div
-                  style={{
-                    width: '3px',
-                    borderRadius: '2px',
-                    background: statusTone[item.tone].color,
-                    flexShrink: 0,
+            {visibleItems.map((item, i) => {
+              const rowStyle = {
+                textDecoration: 'none' as const,
+                display: 'flex',
+                alignItems: 'stretch',
+                gap: '8px',
+                padding: '10px 14px',
+                borderBottom:
+                  i < visibleItems.length - 1 || (hiddenCount > 0 && !expanded)
+                    ? '1px solid var(--border-subtle)'
+                    : 'none',
+                transition: 'background 0.1s',
+                width: '100%',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                textAlign: 'left' as const,
+              }
+              const rowBody = (
+                <>
+                  <div
+                    style={{
+                      width: '3px',
+                      borderRadius: '2px',
+                      background: statusTone[item.tone].color,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: '13px', flexShrink: 0, lineHeight: 1.4 }} aria-hidden>
+                    {item.icon}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: 'var(--text-primary)',
+                      fontWeight: 500,
+                      flex: 1,
+                      minWidth: 0,
+                      lineHeight: 1.4,
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                  >
+                    {item.text}
+                  </span>
+                </>
+              )
+              if (item.productionNumber != null) {
+                return (
+                  <button
+                    key={`${item.href}-${i}`}
+                    type="button"
+                    style={rowStyle}
+                    onClick={() => openByProductionNumber(item.productionNumber!)}
+                    onMouseEnter={e => {
+                      ;(e.currentTarget as HTMLButtonElement).style.background = rowHover
+                    }}
+                    onMouseLeave={e => {
+                      ;(e.currentTarget as HTMLButtonElement).style.background = 'transparent'
+                    }}
+                  >
+                    {rowBody}
+                  </button>
+                )
+              }
+              return (
+                <Link
+                  key={`${item.href}-${i}`}
+                  href={item.href}
+                  style={rowStyle}
+                  onMouseEnter={e => {
+                    ;(e.currentTarget as HTMLAnchorElement).style.background = rowHover
                   }}
-                />
-                <span style={{ fontSize: '13px', flexShrink: 0, lineHeight: 1.4 }} aria-hidden>
-                  {item.icon}
-                </span>
-                <span
-                  style={{
-                    fontSize: '13px',
-                    color: 'var(--text-primary)',
-                    fontWeight: 500,
-                    flex: 1,
-                    minWidth: 0,
-                    lineHeight: 1.4,
-                    overflow: 'hidden',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
+                  onMouseLeave={e => {
+                    ;(e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
                   }}
                 >
-                  {item.text}
-                </span>
-              </Link>
-            ))}
+                  {rowBody}
+                </Link>
+              )
+            })}
             {hiddenCount > 0 && !expanded && (
               <button
                 type="button"

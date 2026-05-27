@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, type CSSProperties, type FormEvent } 
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { toast } from '@/lib/toast'
+import { replaceTaskAssignees } from '@/lib/task-assignments'
+import TaskAssigneePicker from './TaskAssigneePicker'
 
 const PRIORITIES = ['low', 'normal', 'high', 'day of'] as const
 
@@ -11,7 +13,7 @@ export interface QuickAddTaskModalProps {
   open: boolean
   onClose: () => void
   currentUser: { id: string; name: string }
-  teamMembers: { id: string; name: string }[]
+  teamMembers: { id: string; name: string; avatar_color: string }[]
   onCreated?: () => void
 }
 
@@ -27,7 +29,7 @@ export function QuickAddTaskModal({
   const supabase = createClient()
 
   const [title, setTitle] = useState('')
-  const [assignee, setAssignee] = useState(currentUser.id)
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [dueDate, setDueDate] = useState('')
   const [priority, setPriority] = useState<string>('normal')
   const [submitting, setSubmitting] = useState(false)
@@ -54,14 +56,14 @@ export function QuickAddTaskModal({
 
   const resetForm = useCallback(() => {
     setTitle('')
-    setAssignee(currentUser.id)
+    setAssigneeIds(currentUser.id ? [currentUser.id] : [])
     setDueDate('')
     setPriority('normal')
   }, [currentUser.id])
 
   useEffect(() => {
     if (open) {
-      setAssignee(currentUser.id)
+      setAssigneeIds(currentUser.id ? [currentUser.id] : [])
     }
   }, [open, currentUser.id])
 
@@ -79,19 +81,32 @@ export function QuickAddTaskModal({
     const trimmed = title.trim()
     if (!trimmed || submitting) return
     setSubmitting(true)
-    const { error } = await supabase.from('tasks').insert({
-      title: trimmed,
-      assigned_to: assignee,
-      due_date: dueDate || null,
-      priority,
-      status: 'pending',
-      created_by: currentUser.id,
-    })
-    setSubmitting(false)
-    if (error) {
-      toast(error.message, 'error')
+    const primaryAssignee = assigneeIds[0] ?? null
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        title: trimmed,
+        assigned_to: primaryAssignee,
+        due_date: dueDate || null,
+        priority,
+        status: 'pending',
+        created_by: currentUser.id,
+      })
+      .select('id')
+      .single()
+    if (error || !data) {
+      setSubmitting(false)
+      toast(error?.message ?? 'Failed to create task', 'error')
       return
     }
+    try {
+      await replaceTaskAssignees(supabase, data.id, assigneeIds, currentUser.id)
+    } catch (assignErr) {
+      setSubmitting(false)
+      toast(assignErr instanceof Error ? assignErr.message : 'Failed to set assignees', 'error')
+      return
+    }
+    setSubmitting(false)
     toast('Task created', 'success')
     onCreated?.()
     resetForm()
@@ -146,18 +161,24 @@ export function QuickAddTaskModal({
               required
             />
           </label>
-          <label style={{ display: 'block', marginBottom: '12px' }}>
+          <div style={{ marginBottom: '12px' }}>
             <span style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: muted, marginBottom: '6px' }}>
-              Assignee
+              Assignees
             </span>
-            <select value={assignee} onChange={e => setAssignee(e.target.value)} style={inputStyle}>
-              {teamMembers.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            <div
+              style={{
+                padding: '10px 12px',
+                background: inputBg,
+                border: `0.5px solid ${border}`,
+                borderRadius: '8px',
+              }}
+            >
+              <TaskAssigneePicker team={teamMembers} value={assigneeIds} onChange={setAssigneeIds} />
+            </div>
+            <p style={{ fontSize: '11px', color: muted, margin: '6px 0 0' }}>
+              Tap names to add or remove. Leave none selected for unassigned.
+            </p>
+          </div>
           <label style={{ display: 'block', marginBottom: '12px' }}>
             <span style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: muted, marginBottom: '6px' }}>
               Due date

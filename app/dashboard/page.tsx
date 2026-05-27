@@ -14,6 +14,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
+import { hasNoCrew, isLowPrepAttention, startsWithinDays } from '@/lib/dashboard/production-attention'
 import { loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
 
@@ -28,13 +29,6 @@ const QUICK_LINKS = [
   { href: '/dashboard/videos', label: 'Videos' },
   { href: '/dashboard/knowledge', label: 'Knowledge base' },
 ]
-
-function getProgress(prod: WeekProduction) {
-  const items = prod.checklist_items || []
-  if (items.length === 0) return null
-  const done = items.filter(i => i.completed).length
-  return { done, total: items.length, pct: Math.round((done / items.length) * 100) }
-}
 
 export default function DashboardPage() {
   const { theme } = useTheme()
@@ -201,29 +195,18 @@ export default function DashboardPage() {
     [managerProductions, schoolYearFilter],
   )
 
-  const startsSoonManager = filteredManagerProductions.filter(p => {
-    const days = dayDiffFromToday(p.start_datetime)
-    return days !== null && days >= 0 && days <= 2
-  })
+  const startsSoonManager = filteredManagerProductions.filter(p => startsWithinDays(p, 2))
 
-  const unstaffedProductions = startsSoonManager.filter(p => (p.production_members || []).length === 0)
+  const unstaffedProductions = startsSoonManager.filter(p => hasNoCrew(p))
+
+  const lowPrepProductions = filteredManagerProductions
+    .filter(p => startsWithinDays(p, 2) && isLowPrepAttention(p))
+    .slice(0, 4)
+
   const understaffedProductions = startsSoonManager.filter(p => {
     const members = p.production_members || []
     return members.length > 0 && members.length < 2
   })
-
-  const atRiskProductions = filteredManagerProductions
-    .filter(prod => {
-      const progress = getProgress(prod)
-      const startsSoon = (() => {
-        const days = dayDiffFromToday(prod.start_datetime)
-        return days !== null && days >= 0 && days <= 2
-      })()
-      const checklistMissing = !progress || progress.total === 0
-      const lowProgress = !!progress && progress.pct < 60
-      return startsSoon && (checklistMissing || lowProgress)
-    })
-    .slice(0, 4)
 
   const missingProdMetadata = filteredManagerProductions.filter(
     p => !p.start_datetime || !(p.filming_location || p.school_department),
@@ -263,8 +246,7 @@ export default function DashboardPage() {
 
   const attentionCount =
     unstaffedProductions.length +
-    understaffedProductions.length +
-    atRiskProductions.length +
+    lowPrepProductions.length +
     (crewSlotsTotal > 0 && crewSlotsFilled / crewSlotsTotal < 0.7 ? 1 : 0) +
     (ytMissingLinkCount > 0 ? 1 : 0) +
     (ytEmailPendingCount > 0 ? 1 : 0) +
@@ -451,8 +433,7 @@ export default function DashboardPage() {
         <div className="dashboard-attention-span">
         <NeedsAttentionZone
           unstaffedProductions={unstaffedProductions}
-          understaffedProductions={understaffedProductions}
-          atRiskProductions={atRiskProductions}
+          lowPrepProductions={lowPrepProductions}
           missingProdMetadata={missingProdMetadata}
           ytEmailPendingCount={ytEmailPendingCount}
           ytMissingLinkCount={ytMissingLinkCount}
@@ -794,7 +775,7 @@ export default function DashboardPage() {
           open={showQuickTaskModal}
           onClose={() => setShowQuickTaskModal(false)}
           currentUser={currentUser}
-          teamMembers={teamMembers.map(m => ({ id: m.id, name: m.name }))}
+          teamMembers={teamMembers.map(m => ({ id: m.id, name: m.name, avatar_color: m.avatar_color }))}
         />
       )}
 
