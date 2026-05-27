@@ -14,7 +14,7 @@ import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
-import { hasNoCrew, isLowPrepAttention, startsWithinDays } from '@/lib/dashboard/production-attention'
+import { isLowPrepAttention, isUnderstaffed, startsWithinDays } from '@/lib/dashboard/production-attention'
 import { loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
 
@@ -197,16 +197,11 @@ export default function DashboardPage() {
 
   const startsSoonManager = filteredManagerProductions.filter(p => startsWithinDays(p, 2))
 
-  const unstaffedProductions = startsSoonManager.filter(p => hasNoCrew(p))
+  const understaffedProductions = startsSoonManager.filter(p => isUnderstaffed(p))
 
   const lowPrepProductions = filteredManagerProductions
     .filter(p => startsWithinDays(p, 2) && isLowPrepAttention(p))
     .slice(0, 4)
-
-  const understaffedProductions = startsSoonManager.filter(p => {
-    const members = p.production_members || []
-    return members.length > 0 && members.length < 2
-  })
 
   const missingProdMetadata = filteredManagerProductions.filter(
     p => !p.start_datetime || !(p.filming_location || p.school_department),
@@ -245,7 +240,7 @@ export default function DashboardPage() {
   }
 
   const attentionCount =
-    unstaffedProductions.length +
+    understaffedProductions.length +
     lowPrepProductions.length +
     (crewSlotsTotal > 0 && crewSlotsFilled / crewSlotsTotal < 0.7 ? 1 : 0) +
     (ytMissingLinkCount > 0 ? 1 : 0) +
@@ -432,7 +427,7 @@ export default function DashboardPage() {
         </div>
         <div className="dashboard-attention-span">
         <NeedsAttentionZone
-          unstaffedProductions={unstaffedProductions}
+          understaffedProductions={understaffedProductions}
           lowPrepProductions={lowPrepProductions}
           missingProdMetadata={missingProdMetadata}
           ytEmailPendingCount={ytEmailPendingCount}
@@ -487,16 +482,10 @@ export default function DashboardPage() {
               >
                 {[
                   {
-                    label: 'Unstaffed',
-                    value: String(unstaffedProductions.length),
-                    sub: 'starts within 48h',
-                    tone: 'danger' as const,
-                  },
-                  {
                     label: 'Understaffed',
                     value: String(understaffedProductions.length),
-                    sub: 'need added coverage',
-                    tone: 'warning' as const,
+                    sub: 'no crew assigned · starts within 48h',
+                    tone: 'danger' as const,
                   },
                   {
                     label: 'Crew fill',
@@ -700,7 +689,7 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div>
-                    {[...unstaffedProductions, ...understaffedProductions].slice(0, 6).map((prod, i, arr) => (
+                    {understaffedProductions.slice(0, 6).map((prod, i, arr) => (
                       <Link
                         key={prod.id}
                         href={`/dashboard/productions?prod=${prod.production_number}`}
@@ -737,19 +726,16 @@ export default function DashboardPage() {
                         </span>
                         <span
                           style={{
-                            ...statusBadge(
-                              (prod.production_members || []).length === 0 ? 'danger' : 'warning',
-                              true,
-                            ),
+                            ...statusBadge('danger', true),
                             fontSize: '10px',
                             flexShrink: 0,
                           }}
                         >
-                          {(prod.production_members || []).length === 0 ? 'Unstaffed' : 'Understaffed'}
+                          Understaffed
                         </span>
                       </Link>
                     ))}
-                    {unstaffedProductions.length + understaffedProductions.length === 0 && (
+                    {understaffedProductions.length === 0 && (
                       <p
                         style={{
                           padding: '20px 16px',

@@ -10,6 +10,7 @@ import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { useOutlookEvents } from './use-outlook-events'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { getMondayStr, resolveDayHours, toLocalDateStr, WEEKDAY_KEYS } from '@/lib/team-schedule'
+import { isGoneOnDate, type ScheduleGoneDay } from '@/lib/team-gone-days'
 import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
@@ -184,6 +185,9 @@ export default function SchedulePage() {
   const [allTeamOverrides, setAllTeamOverrides] = useState<ScheduleOverride[]>([])
   const [productions, setProductions]   = useState<Production[]>([])
   const [calEvents, setCalEvents]       = useState<CalendarEvent[]>([])
+  const [goneDays, setGoneDays]         = useState<ScheduleGoneDay[]>([])
+  const [allTeamGoneDays, setAllTeamGoneDays] = useState<ScheduleGoneDay[]>([])
+  const [togglingGone, setTogglingGone] = useState<string | null>(null)
   const [loading, setLoading]           = useState(true)
   const [editingDefault, setEditingDefault] = useState(false)
   const [editingOverride, setEditingOverride] = useState(false)
@@ -262,8 +266,16 @@ export default function SchedulePage() {
     setAllTeamDefaults(allDefs || [])
 
     const currentWeekStart = getMondayStr(new Date())
+    const weekFriday = new Date(currentWeekStart + 'T12:00:00')
+    weekFriday.setDate(weekFriday.getDate() + 4)
     const { data: weekOvrs } = await supabase.from('schedule_overrides').select('*').eq('week_start', currentWeekStart)
     setAllTeamOverrides(weekOvrs || [])
+    const { data: weekGone } = await supabase
+      .from('schedule_gone_days')
+      .select('id, user_id, date')
+      .gte('date', currentWeekStart)
+      .lte('date', toLocalDateStr(weekFriday))
+    setAllTeamGoneDays((weekGone as ScheduleGoneDay[]) || [])
 
     const { data: eventsData } = await supabase.from('calendar_events').select('*').order('date')
     setCalEvents(eventsData || [])
@@ -311,13 +323,15 @@ export default function SchedulePage() {
     })
     const weekArr = Array.from(weekStarts)
 
-    const [defRes, ovRes] = await Promise.all([
+    const [defRes, ovRes, goneRes] = await Promise.all([
       supabase.from('schedule_defaults').select('*').eq('user_id', targetId),
       supabase.from('schedule_overrides').select('*').eq('user_id', targetId).in('week_start', weekArr),
+      supabase.from('schedule_gone_days').select('id, user_id, date').eq('user_id', targetId).gte('date', toLocalDateStr(firstOfMonth)).lte('date', toLocalDateStr(lastOfMonth)),
     ])
 
     setDefaults(defRes.data || [])
     setOverrides(ovRes.data || [])
+    setGoneDays((goneRes.data as ScheduleGoneDay[]) || [])
 
     // Load ALL productions for the viewed month (not just user's)
     const queryStart = new Date(firstOfMonth)
@@ -461,7 +475,37 @@ export default function SchedulePage() {
     return Math.round(total * 10) / 10
   }
 
-  // ─── Save default ─────────────────────────────────────────────────────────
+  const toggleGoneDay = useCallback(async (date: Date) => {
+    if (!currentUser || !viewingId) return
+    const dateStr = toLocalDateStr(date)
+    setTogglingGone(dateStr)
+    const existing = goneDays.find(g => g.user_id === viewingId && g.date === dateStr)
+    try {
+      if (existing) {
+        const { error } = await supabase.from('schedule_gone_days').delete().eq('id', existing.id)
+        if (error) { toast('Failed to clear out-of-office', 'error'); return }
+        setGoneDays(prev => prev.filter(g => g.id !== existing.id))
+        if (viewingId === currentUser.id || isManager) {
+          setAllTeamGoneDays(prev => prev.filter(g => g.id !== existing.id))
+        }
+      } else {
+        const { data, error } = await supabase.from('schedule_gone_days').insert({ user_id: viewingId, date: dateStr }).select('id, user_id, date').single()
+        if (error) { toast('Failed to mark out-of-office', 'error'); return }
+        if (data) {
+          setGoneDays(prev => [...prev.filter(g => !(g.user_id === viewingId && g.date === dateStr)), data as ScheduleGoneDay])
+          const weekStart = getMondayStr(new Date())
+          const weekFriday = new Date(weekStart + 'T12:00:00')
+          weekFriday.setDate(weekFriday.getDate() + 4)
+          if (dateStr >= weekStart && dateStr <= toLocalDateStr(weekFriday)) {
+            setAllTeamGoneDays(prev => [...prev.filter(g => !(g.user_id === viewingId && g.date === dateStr)), data as ScheduleGoneDay])
+          }
+        }
+      }
+    } finally {
+      setTogglingGone(null)
+    }
+  }, [currentUser, viewingId, goneDays, supabase, isManager])
+
   const saveDefault = useCallback(async () => {
     if (!currentUser || !viewingId) return
     const existing = defaults.find(d => d.user_id === viewingId)

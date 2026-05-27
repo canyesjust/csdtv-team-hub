@@ -14,8 +14,14 @@ export function getChecklistPrepPct(prod: ProductionRiskInput): number | null {
   return Math.round((done / items.length) * 100)
 }
 
-export function hasNoCrew(prod: ProductionRiskInput): boolean {
+/** Production has zero crew assigned (understaffed). */
+export function isUnderstaffed(prod: ProductionRiskInput): boolean {
   return (prod.production_members ?? []).length === 0
+}
+
+/** @deprecated Use isUnderstaffed */
+export function hasNoCrew(prod: ProductionRiskInput): boolean {
+  return isUnderstaffed(prod)
 }
 
 export function startsWithinDays(prod: ProductionRiskInput, maxDays: number): boolean {
@@ -39,7 +45,7 @@ export type StatusToneKey = 'success' | 'warning' | 'danger'
 export function getProductionStatusTone(prod: ProductionRiskInput): StatusToneKey {
   const days = dayDiffFromToday(prod.start_datetime)
   if (days !== null && days <= 1) {
-    if (hasNoCrew(prod)) return 'danger'
+    if (isUnderstaffed(prod)) return 'danger'
     const pct = getChecklistPrepPct(prod)
     if (pct !== null && pct < 50) return 'danger'
   }

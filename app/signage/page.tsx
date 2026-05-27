@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getSchoolName as getSchoolNameFallback } from '@/lib/schools'
 import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
-import { resolveDayHours } from '@/lib/team-schedule'
+import { resolveDayHours, toLocalDateStr } from '@/lib/team-schedule'
+import { formatGoneSignageLine, goneFirstNamesForDate, isGoneOnDate, type ScheduleGoneDay } from '@/lib/team-gone-days'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -56,6 +57,7 @@ export default function SignagePage() {
   const [schedOverrides, setSchedOverrides] = useState<SchedOverride[]>([])
   const [schoolMap, setSchoolMap] = useState<Record<string, string>>({})
   const [calEvents, setCalEvents] = useState<{ id: string; title: string; date: string; start_time: string | null; color: string }[]>([])
+  const [goneDays, setGoneDays] = useState<ScheduleGoneDay[]>([])
   const [outlookEvents, setOutlookEvents] = useState<{ title: string; date: string; start_time: string | null; location: string | null }[]>([])
   const [outlookEnabled, setOutlookEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -63,19 +65,29 @@ export default function SignagePage() {
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t) }, [])
 
   const loadData = useCallback(async () => {
-    const [prodsRes, teamRes, defsRes, ovrsRes, schoolsRes, eventsRes] = await Promise.all([
+    const todayLocal = new Date()
+    todayLocal.setHours(0, 0, 0, 0)
+    const rangeSunday = getSunday(todayLocal)
+    const rangeStart = toLocalDateStr(rangeSunday)
+    const rangeEndDate = new Date(rangeSunday)
+    rangeEndDate.setDate(rangeEndDate.getDate() + 34)
+    const rangeEnd = toLocalDateStr(rangeEndDate)
+
+    const [prodsRes, teamRes, defsRes, ovrsRes, schoolsRes, eventsRes, goneRes] = await Promise.all([
       supabase.from('productions').select('id, production_number, title, request_type_label, status, school_year, start_datetime, filming_location, school_department, deliverables_count, production_members(user_id, team(name, avatar_color))').not('start_datetime', 'is', null).order('start_datetime'),
       supabase.from('team').select('id, name, avatar_color, role').eq('active', true),
       supabase.from('schedule_defaults').select('*'),
       supabase.from('schedule_overrides').select('*'),
       supabase.from('schools').select('code, name'),
       supabase.from('calendar_events').select('id, title, date, start_time, color').order('date'),
+      supabase.from('schedule_gone_days').select('id, user_id, date').gte('date', rangeStart).lte('date', rangeEnd),
     ])
     setProductions((prodsRes.data as any) || [])
     setTeam(teamRes.data || [])
     setSchedDefaults(defsRes.data || [])
     setSchedOverrides(ovrsRes.data || [])
     setCalEvents(eventsRes.data || [])
+    setGoneDays((goneRes.data as ScheduleGoneDay[]) || [])
     try {
       const cfgRes = await fetch('/api/signage/config', { cache: 'no-store' })
       const cfg = cfgRes.ok ? ((await cfgRes.json()) as { outlookEnabled?: boolean }) : null
@@ -179,7 +191,8 @@ export default function SignagePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           {team.map(m => {
             const hrs = getHoursForUser(m.id)
-            return <span key={m.id} style={{ fontSize: '14px', color: hrs ? '#ccd5e8' : dimmed }}><span style={{ display: 'inline-block', width: '24px', height: '24px', borderRadius: '50%', background: m.avatar_color, textAlign: 'center' as const, lineHeight: '24px', fontSize: '10px', fontWeight: 700, color: '#0a0f1e', marginRight: '4px', verticalAlign: 'middle' }}>{getInitials(m.name)}</span>{m.name.split(' ')[0]} <span style={{ color: hrs ? '#34d399' : dimmed, fontWeight: 600 }}>{hrs || 'Off'}</span></span>
+            const goneToday = isGoneOnDate(m.id, toLocalDateStr(today), goneDays)
+            return <span key={m.id} style={{ fontSize: '14px', color: goneToday ? dimmed : (hrs ? '#ccd5e8' : dimmed) }}><span style={{ display: 'inline-block', width: '24px', height: '24px', borderRadius: '50%', background: m.avatar_color, textAlign: 'center' as const, lineHeight: '24px', fontSize: '10px', fontWeight: 700, color: '#0a0f1e', marginRight: '4px', verticalAlign: 'middle' }}>{getInitials(m.name)}</span>{m.name.split(' ')[0]} <span style={{ color: goneToday ? '#f87171' : (hrs ? '#34d399' : dimmed), fontWeight: 600 }}>{goneToday ? 'Out' : (hrs || 'Off')}</span></span>
           })}
           <span style={{ fontSize: '18px', fontWeight: 500, color: '#ccd5e8' }}>{now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
           <span style={{ fontSize: '32px', fontWeight: 800, color: '#60b8f0' }}>{now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
@@ -252,6 +265,7 @@ export default function SignagePage() {
                   {(() => {
                     const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
                     const dayEvts = calEvents.filter(e => e.date === ds)
+                    const goneLine = formatGoneSignageLine(goneFirstNamesForDate(ds, goneDays, team))
                     // Outlook events with auto-dedup against productions
                     const dayOl = outlookEnabled
                       ? outlookEvents.filter(e => {
@@ -312,6 +326,11 @@ export default function SignagePage() {
                       {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>}
                     </div>
                   ))}
+                  {goneLine && (
+                    <div style={{ fontSize: `${Math.round(12 * s)}px`, color: '#f87171', fontWeight: 500, marginTop: `${Math.round(2 * s)}px`, lineHeight: 1.2, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const }}>
+                      {goneLine}
+                    </div>
+                  )}
                     </>
                   })()}
                 </div>

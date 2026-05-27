@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
+import { isUnderstaffed } from '@/lib/dashboard/production-attention'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 
@@ -86,7 +87,7 @@ const TYPE_COLORS: Record<string, string> = {
   'Other, Unsure, Or Consultation': '#64748b',
 }
 
-type FocusFilter = 'all' | 'today' | 'this-week' | 'overdue' | 'unstaffed' | 'upcoming' | 'live-email-pending'
+type FocusFilter = 'all' | 'today' | 'this-week' | 'overdue' | 'understaffed' | 'upcoming' | 'live-email-pending'
 type Scope = 'all' | 'mine' | 'unassigned'
 type View = 'pipeline' | 'list'
 
@@ -870,7 +871,7 @@ function ProductionsPageContent() {
 
   // Counts (scope-aware) for focus chips & briefing — omit Complete/Abandoned only
   const counts = useMemo(() => {
-    let all = 0, today = 0, thisWeek = 0, overdue = 0, unstaffed = 0, upcoming = 0, liveEmailPending = 0
+    let all = 0, today = 0, thisWeek = 0, overdue = 0, understaffed = 0, upcoming = 0, liveEmailPending = 0
     scopedProductions.forEach(p => {
       if (!countsTowardFocusBubbles(p)) return
       all++
@@ -879,7 +880,7 @@ function ProductionsPageContent() {
       if (d === 0) today++
       if (d !== null && d >= 0 && d <= 7) thisWeek++
       if (isOverdueProd(p)) overdue++
-      if ((p.production_members || []).length === 0 && isFutureUpcoming) unstaffed++
+      if (isUnderstaffed(p) && isFutureUpcoming) understaffed++
       if (isFutureUpcoming) upcoming++
       if (
         isLivestreamType(p)
@@ -888,7 +889,7 @@ function ProductionsPageContent() {
         && p.status !== 'Abandoned'
       ) liveEmailPending++
     })
-    return { today, thisWeek, overdue, unstaffed, upcoming, liveEmailPending, all }
+    return { today, thisWeek, overdue, understaffed, upcoming, liveEmailPending, all }
   }, [scopedProductions, isLivestreamType, youtubeOrganizerEmailLogged])
 
   const ytPendingOnly = searchParams.get('ytPending') === '1'
@@ -897,7 +898,7 @@ function ProductionsPageContent() {
     const parts: string[] = []
     if (counts.thisWeek > 0) parts.push(`${counts.thisWeek} this week`)
     if (counts.overdue > 0) parts.push(`${counts.overdue} overdue`)
-    if (counts.unstaffed > 0) parts.push(`${counts.unstaffed} unstaffed`)
+    if (counts.understaffed > 0) parts.push(`${counts.understaffed} understaffed`)
     parts.push(`${counts.all} total`)
     return parts.join(' · ')
   }, [counts])
@@ -915,9 +916,9 @@ function ProductionsPageContent() {
       if (d === null || d < 0 || d > 7) return false
     }
     if (focusFilter === 'overdue' && !isOverdueProd(p)) return false
-    if (focusFilter === 'unstaffed') {
+    if (focusFilter === 'understaffed') {
       const isFuture = !isPastProd(p) && p.status !== 'Complete' && p.status !== 'Abandoned'
-      if (!((p.production_members || []).length === 0 && isFuture)) return false
+      if (!(isUnderstaffed(p) && isFuture)) return false
     }
     if (focusFilter === 'upcoming') {
       const d = daysFromToday(p.start_datetime)
@@ -1322,7 +1323,7 @@ function ProductionsPageContent() {
               {focusChip('today', 'Today', counts.today, 'info')}
               {focusChip('this-week', 'This week', counts.thisWeek, 'warning')}
               {focusChip('overdue', 'Overdue', counts.overdue, 'danger')}
-              {focusChip('unstaffed', 'Unstaffed', counts.unstaffed, 'danger')}
+              {focusChip('understaffed', 'Understaffed', counts.understaffed, 'danger')}
               {focusChip('live-email-pending', 'Live email', counts.liveEmailPending, 'info')}
             </div>
           </section>

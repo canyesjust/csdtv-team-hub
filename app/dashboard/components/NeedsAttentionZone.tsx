@@ -10,7 +10,7 @@ import { dayDiffFromToday } from '@/lib/dashboard/day-diff'
 import type { WeekProduction } from './ThisWeekZone'
 
 interface NeedsAttentionZoneProps {
-  unstaffedProductions: WeekProduction[]
+  understaffedProductions: WeekProduction[]
   lowPrepProductions: WeekProduction[]
   missingProdMetadata: WeekProduction[]
   ytEmailPendingCount: number
@@ -39,7 +39,7 @@ function daysLabel(prod: WeekProduction): string {
 }
 
 export function NeedsAttentionZone({
-  unstaffedProductions,
+  understaffedProductions,
   lowPrepProductions,
   missingProdMetadata,
   ytEmailPendingCount,
@@ -56,10 +56,10 @@ export function NeedsAttentionZone({
   const items = useMemo(() => {
     const list: AttentionItem[] = []
 
-    for (const prod of unstaffedProductions) {
+    for (const prod of understaffedProductions) {
       list.push({
         icon: '⚠',
-        text: `#${prod.production_number} ${prod.title} has no crew · ${daysLabel(prod)}`,
+        text: `#${prod.production_number} ${prod.title} understaffed · ${daysLabel(prod)}`,
         tone: 'danger',
         href: `/dashboard/productions?prod=${prod.production_number}`,
         productionNumber: prod.production_number,
@@ -115,7 +115,7 @@ export function NeedsAttentionZone({
 
     return list
   }, [
-    unstaffedProductions,
+    understaffedProductions,
     lowPrepProductions,
     missingProdMetadata,
     ytEmailPendingCount,
