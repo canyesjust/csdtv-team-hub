@@ -11,6 +11,7 @@ import { useOutlookEvents } from './use-outlook-events'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { getMondayStr, resolveDayHours, toLocalDateStr, WEEKDAY_KEYS } from '@/lib/team-schedule'
 import { isGoneOnDate, type ScheduleGoneDay } from '@/lib/team-gone-days'
+import { officeClosedOnDate, type ScheduleOfficeClosedDay } from '@/lib/team-office-closed'
 import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
@@ -187,7 +188,9 @@ export default function SchedulePage() {
   const [calEvents, setCalEvents]       = useState<CalendarEvent[]>([])
   const [goneDays, setGoneDays]         = useState<ScheduleGoneDay[]>([])
   const [allTeamGoneDays, setAllTeamGoneDays] = useState<ScheduleGoneDay[]>([])
+  const [officeClosedDays, setOfficeClosedDays] = useState<ScheduleOfficeClosedDay[]>([])
   const [togglingGone, setTogglingGone] = useState<string | null>(null)
+  const [togglingOfficeClosed, setTogglingOfficeClosed] = useState<string | null>(null)
   const [loading, setLoading]           = useState(true)
   const [editingDefault, setEditingDefault] = useState(false)
   const [editingOverride, setEditingOverride] = useState(false)
@@ -323,15 +326,17 @@ export default function SchedulePage() {
     })
     const weekArr = Array.from(weekStarts)
 
-    const [defRes, ovRes, goneRes] = await Promise.all([
+    const [defRes, ovRes, goneRes, closedRes] = await Promise.all([
       supabase.from('schedule_defaults').select('*').eq('user_id', targetId),
       supabase.from('schedule_overrides').select('*').eq('user_id', targetId).in('week_start', weekArr),
       supabase.from('schedule_gone_days').select('id, user_id, date').eq('user_id', targetId).gte('date', toLocalDateStr(firstOfMonth)).lte('date', toLocalDateStr(lastOfMonth)),
+      supabase.from('schedule_office_closed_days').select('id, date, label').gte('date', toLocalDateStr(firstOfMonth)).lte('date', toLocalDateStr(lastOfMonth)),
     ])
 
     setDefaults(defRes.data || [])
     setOverrides(ovRes.data || [])
     setGoneDays((goneRes.data as ScheduleGoneDay[]) || [])
+    setOfficeClosedDays((closedRes.data as ScheduleOfficeClosedDay[]) || [])
 
     // Load ALL productions for the viewed month (not just user's)
     const queryStart = new Date(firstOfMonth)
@@ -480,6 +485,10 @@ export default function SchedulePage() {
   const toggleGoneDay = useCallback(async (date: Date) => {
     if (!currentUser || !viewingId) return
     const dateStr = toLocalDateStr(date)
+    if (officeClosedOnDate(dateStr, officeClosedDays)) {
+      toast('Office is closed this day — hours cannot be scheduled', 'error')
+      return
+    }
     setTogglingGone(dateStr)
     const existing = goneDays.find(g => g.user_id === viewingId && g.date === dateStr)
     try {
@@ -506,7 +515,36 @@ export default function SchedulePage() {
     } finally {
       setTogglingGone(null)
     }
-  }, [currentUser, viewingId, goneDays, supabase, isManager])
+  }, [currentUser, viewingId, goneDays, supabase, isManager, officeClosedDays])
+
+  const toggleOfficeClosed = useCallback(async (date: Date) => {
+    if (!currentUser || !isManager) return
+    const dateStr = toLocalDateStr(date)
+    setTogglingOfficeClosed(dateStr)
+    const existing = officeClosedOnDate(dateStr, officeClosedDays)
+    try {
+      if (existing) {
+        const { error } = await supabase.from('schedule_office_closed_days').delete().eq('id', existing.id)
+        if (error) { toast('Failed to clear office closure', 'error'); return }
+        setOfficeClosedDays(prev => prev.filter(d => d.id !== existing.id))
+      } else {
+        const labelInput = window.prompt('Office closed label (optional)', 'Office closed')
+        if (labelInput === null) return
+        const label = labelInput.trim()
+        const { data, error } = await supabase
+          .from('schedule_office_closed_days')
+          .insert({ date: dateStr, label: label || null, created_by: currentUser.id })
+          .select('id, date, label')
+          .single()
+        if (error) { toast('Failed to mark office closed', 'error'); return }
+        if (data) {
+          setOfficeClosedDays(prev => [...prev.filter(d => d.date !== dateStr), data as ScheduleOfficeClosedDay])
+        }
+      }
+    } finally {
+      setTogglingOfficeClosed(null)
+    }
+  }, [currentUser, isManager, officeClosedDays, supabase])
 
   const saveDefault = useCallback(async () => {
     if (!currentUser || !viewingId) return
@@ -548,6 +586,12 @@ export default function SchedulePage() {
   // ─── Save a single day override ──────────────────────────────────────────
   const saveDay = useCallback(async (date: Date, value: string) => {
     if (!currentUser || !viewingId) return
+    const dateStr = toLocalDateStr(date)
+    if (officeClosedOnDate(dateStr, officeClosedDays)) {
+      toast('Office is closed this day — hours cannot be scheduled', 'error')
+      setEditingCell(null)
+      return
+    }
     const dow = date.getDay()
     if (dow === 0 || dow === 6) return
     const dayKey = getDayOfWeekKey(dow) as keyof DaySchedule
@@ -570,7 +614,7 @@ export default function SchedulePage() {
     }
     setEditingCell(null)
     await refreshTeamWeekOverrides()
-  }, [currentUser, viewingId, overrides, supabase, refreshTeamWeekOverrides])
+  }, [currentUser, viewingId, overrides, supabase, refreshTeamWeekOverrides, officeClosedDays])
 
   // ─── Mass fill all weekdays in the viewed month ───────────────────────────
   const runMassFill = useCallback(async () => {
@@ -584,6 +628,7 @@ export default function SchedulePage() {
       if (!isCurrentMonth(d)) return
       const dow = d.getDay()
       if (dow === 0 || dow === 6) return
+      if (officeClosedOnDate(toLocalDateStr(d), officeClosedDays)) return
       const ws = getMondayStr(d)
       if (!weekMap.has(ws)) weekMap.set(ws, new Set())
       weekMap.get(ws)!.add(getDayOfWeekKey(dow) as keyof DaySchedule)
@@ -618,7 +663,7 @@ export default function SchedulePage() {
     setMassFillValue('')
     setMassFilling(false)
     await refreshTeamWeekOverrides()
-  }, [currentUser, viewingId, massFillValue, overrides, supabase, viewYear, viewMonth, refreshTeamWeekOverrides])
+  }, [currentUser, viewingId, massFillValue, overrides, supabase, viewYear, viewMonth, refreshTeamWeekOverrides, officeClosedDays])
 
   // ─── Styles ───────────────────────────────────────────────────────────────
   const inputStyle: React.CSSProperties = {
@@ -647,8 +692,11 @@ export default function SchedulePage() {
           <h1 style={{ fontSize: '26px', fontWeight: 700, color: text, margin: 0 }}>Team hours</h1>
           <p style={{ fontSize: '14px', color: muted, margin: '2px 0 0' }}>{monthLabel}</p>
           {hoursTab === 'hours' && (viewingOwnSchedule || isManager) && (
-            <p style={{ fontSize: '12px', color: muted, margin: '6px 0 0', maxWidth: '420px' }}>
-              Click <span style={{ color: '#f87171', fontWeight: 600 }}>Out</span> on a weekday to mark time off — it appears on the digital signage calendar.
+            <p style={{ fontSize: '12px', color: muted, margin: '6px 0 0', maxWidth: '480px' }}>
+              Click <span style={{ color: '#f87171', fontWeight: 600 }}>Out</span> for personal time off (shows on signage).
+              {isManager && (
+                <> Managers: click <span style={{ color: '#fbbf24', fontWeight: 600 }}>Closed</span> to block scheduling for the whole office.</>
+              )}
             </p>
           )}
         </div>
@@ -839,11 +887,14 @@ export default function SchedulePage() {
                   const dayDate = new Date(monday)
                   dayDate.setDate(monday.getDate() + dayIdx)
                   const dayStr = toLocalDateStr(dayDate)
+                  const closed = officeClosedOnDate(dayStr, officeClosedDays)
                   const gone = isGoneOnDate(member.id, dayStr, allTeamGoneDays)
                   const hrs = resolveDayHours(member.id, dayDate, allTeamDefaults, allTeamOverrides)
                   return (
                     <div key={`${member.id}-${dayKey}`} style={{ padding: '6px 0', textAlign: 'center' as const, fontSize: '12px' }}>
-                      {gone ? (
+                      {closed ? (
+                        <span style={{ color: '#fbbf24', fontWeight: 600 }}>Closed</span>
+                      ) : gone ? (
                         <span style={{ color: '#f87171', fontWeight: 600 }}>Out</span>
                       ) : (
                         <span style={{ color: hrs ? '#22c55e' : (dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), fontWeight: hrs ? 500 : 400 }}>{hrs || '—'}</span>
@@ -885,13 +936,17 @@ export default function SchedulePage() {
             const isLastRow = idx >= totalCells - 7
             const isLastCol = dow === 6
             const dateStr = toLocalDateStr(day)
+            const officeClosed = officeClosedOnDate(dateStr, officeClosedDays)
             const gone =
               !!viewingId &&
               !isWeekend &&
               inMonth &&
+              !officeClosed &&
               isGoneOnDate(viewingId, dateStr, goneDays)
-            const canMarkGone = !isWeekend && inMonth && (viewingOwnSchedule || isManager)
+            const canMarkGone = !isWeekend && inMonth && !officeClosed && (viewingOwnSchedule || isManager)
+            const canEditHours = !isWeekend && inMonth && !officeClosed && (viewingOwnSchedule || isManager)
             const goneBusy = togglingGone === dateStr
+            const closedBusy = togglingOfficeClosed === dateStr
 
             return (
               <div
@@ -901,7 +956,9 @@ export default function SchedulePage() {
                   padding: '6px 7px',
                   borderRight: isLastCol ? 'none' : `0.5px solid ${border}`,
                   borderBottom: isLastRow ? 'none' : `0.5px solid ${border}`,
-                  background: gone && inMonth
+                  background: officeClosed && inMonth
+                    ? (dark ? 'rgba(251,191,36,0.1)' : 'rgba(251,191,36,0.08)')
+                    : gone && inMonth
                     ? (dark ? 'rgba(248,113,113,0.08)' : 'rgba(248,113,113,0.06)')
                     : isWeekend ? wkendBg : inPP && inMonth ? (dark ? 'rgba(30,108,181,0.04)' : 'rgba(30,108,181,0.025)') : 'transparent',
                   position: 'relative' as const,
@@ -910,11 +967,10 @@ export default function SchedulePage() {
               >
                 {/* Day number + hours row */}
                 <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', cursor: (!isWeekend && inMonth && (viewingOwnSchedule || isManager)) ? 'text' : 'default' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px', cursor: canEditHours ? 'text' : 'default' }}
                   onClick={e => {
-                    if (isWeekend || !inMonth || (!viewingOwnSchedule && !isManager)) return
-                    const ds = toLocalDateStr(day)
-                    setEditingCell({ dateStr: ds, value: hours || '' })
+                    if (!canEditHours) return
+                    setEditingCell({ dateStr, value: hours || '' })
                   }}
                 >
                   <span style={{
@@ -928,7 +984,7 @@ export default function SchedulePage() {
                     {day.getDate()}
                   </span>
                   {/* Inline edit input OR hours badge */}
-                  {!isWeekend && inMonth && editingCell?.dateStr === toLocalDateStr(day) ? (
+                  {!isWeekend && inMonth && editingCell?.dateStr === dateStr ? (
                     <input
                       autoFocus
                       value={editingCell.value}
@@ -943,13 +999,19 @@ export default function SchedulePage() {
                       placeholder="9am-5pm"
                       style={{ fontSize: '10px', width: '68px', background: inputBg, border: `0.5px solid #1e6cb5`, borderRadius: '4px', padding: '1px 4px', color: text, fontFamily: 'inherit', outline: 'none' }}
                     />
+                  ) : officeClosed && inMonth ? (
+                    <span
+                      title={officeClosed.label || 'Office closed'}
+                      style={{ fontSize: '10px', fontWeight: 600, color: '#fbbf24', background: dark ? 'rgba(251,191,36,0.18)' : 'rgba(251,191,36,0.12)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' as const }}>
+                      Closed
+                    </span>
                   ) : hours && inMonth ? (
                     <span
                       title="Click to edit"
-                      style={{ fontSize: '10px', fontWeight: 500, color: '#5ba3e0', background: dark ? 'rgba(30,108,181,0.18)' : 'rgba(30,108,181,0.1)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' as const, cursor: (!isWeekend && inMonth && (viewingOwnSchedule || isManager)) ? 'text' : 'default' }}>
+                      style={{ fontSize: '10px', fontWeight: 500, color: '#5ba3e0', background: dark ? 'rgba(30,108,181,0.18)' : 'rgba(30,108,181,0.1)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' as const, cursor: canEditHours ? 'text' : 'default' }}>
                       {hours.replace(/\s/g, '')}
                     </span>
-                  ) : !isWeekend && inMonth && (viewingOwnSchedule || isManager) ? (
+                  ) : canEditHours ? (
                     <span style={{ fontSize: '10px', color: dark ? 'rgba(136,153,187,0.3)' : 'rgba(107,114,128,0.25)', padding: '1px 5px' }}>+</span>
                   ) : null}
                   {canMarkGone && (
@@ -977,6 +1039,34 @@ export default function SchedulePage() {
                       }}
                     >
                       {goneBusy ? '…' : 'Out'}
+                    </button>
+                  )}
+                  {isManager && !isWeekend && inMonth && (
+                    <button
+                      type="button"
+                      title={officeClosed ? 'Clear office closure' : 'Mark office closed (blocks team scheduling)'}
+                      disabled={closedBusy}
+                      onClick={e => {
+                        e.stopPropagation()
+                        void toggleOfficeClosed(day)
+                      }}
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 600,
+                        lineHeight: 1,
+                        padding: '2px 5px',
+                        borderRadius: '4px',
+                        border: `1px solid ${officeClosed ? '#fbbf24' : border}`,
+                        background: officeClosed ? (dark ? 'rgba(251,191,36,0.2)' : 'rgba(251,191,36,0.12)') : 'transparent',
+                        color: officeClosed ? '#fbbf24' : muted,
+                        cursor: closedBusy ? 'wait' : 'pointer',
+                        fontFamily: 'inherit',
+                        flexShrink: 0,
+                        opacity: closedBusy ? 0.6 : 1,
+                        marginLeft: canMarkGone ? '2px' : 0,
+                      }}
+                    >
+                      {closedBusy ? '…' : 'Closed'}
                     </button>
                   )}
                 </div>
