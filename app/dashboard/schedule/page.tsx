@@ -361,6 +361,8 @@ export default function SchedulePage() {
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { if (viewingId) loadScheduleData() }, [loadScheduleData, viewingId, monthOffset])
 
+  const isManager = currentUser?.role === 'Manager'
+
   // ─── Helpers ─────────────────────────────────────────────────────────────────
   const getHoursForDay = (date: Date): string | null => {
     if (!viewingId) return null
@@ -625,7 +627,6 @@ export default function SchedulePage() {
     outline: 'none', width: '100%', boxSizing: 'border-box',
   }
 
-  const isManager = currentUser?.role === 'Manager'
   const viewingMember = team.find(m => m.id === viewingId)
   const viewingOwnSchedule = viewingId === currentUser?.id
 
