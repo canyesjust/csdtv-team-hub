@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Loader from '../components/Loader'
 import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
@@ -185,7 +185,16 @@ function ProductionsPageContent() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
+  const router = useRouter()
   const searchParams = useSearchParams()
+
+  const closeDrawer = useCallback(() => {
+    setSelectedProdId(null)
+    const params = new URLSearchParams(Array.from(searchParams.entries()))
+    params.delete('prod')
+    const qs = params.toString()
+    router.replace('/dashboard/productions' + (qs ? `?${qs}` : ''))
+  }, [router, searchParams])
 
   const [productions, setProductions] = useState<Production[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
@@ -450,13 +459,13 @@ function ProductionsPageContent() {
 
   useEffect(() => {
     if (!selectedProdId) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedProdId(null) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [selectedProdId])
+  }, [selectedProdId, closeDrawer])
 
   const selectProduction = useCallback(async (prodId: string) => {
-    if (selectedProdId === prodId) { setSelectedProdId(null); return }
+    if (selectedProdId === prodId) { closeDrawer(); return }
     setSelectedProdId(prodId)
     setPanelLoading(true)
     const prod = productions.find(p => p.id === prodId)
@@ -487,7 +496,14 @@ function ProductionsPageContent() {
     } finally {
       setPanelLoading(false)
     }
-  }, [selectedProdId, supabase, productions])
+  }, [selectedProdId, supabase, productions, closeDrawer])
+
+  useEffect(() => {
+    const wantedNumber = searchParams.get('prod')
+    if (!wantedNumber || productions.length === 0) return
+    const match = productions.find(p => String(p.production_number) === wantedNumber)
+    if (match && match.id !== selectedProdId) void selectProduction(match.id)
+  }, [productions, searchParams, selectedProdId, selectProduction])
 
   // Sync panelTeamNotes when underlying production changes
   useEffect(() => {
@@ -1636,14 +1652,14 @@ function ProductionsPageContent() {
         {/* DETAIL DRAWER */}
         {selectedProd && (
           <>
-            <div className="drawer-backdrop" onClick={() => setSelectedProdId(null)} />
+            <div className="drawer-backdrop" onClick={closeDrawer} />
             <aside className="drawer-panel" style={{ flexShrink: 0, background: cardBg, border: `1px solid ${border}`, borderRadius: '16px', overflowY: 'auto' as const }}>
               <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', padding: '14px 18px 10px', borderBottom: `1px solid ${border}`, position: 'sticky' as const, top: 0, background: cardBg, zIndex: 1 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: '11px', color: muted, margin: '0 0 2px', fontWeight: 600 }}>#{selectedProd.production_number}</p>
                   <h2 style={{ fontSize: '17px', fontWeight: 700, color: text, margin: 0, lineHeight: 1.25 }}>{selectedProd.title}</h2>
                 </div>
-                <button onClick={() => setSelectedProdId(null)} aria-label="Close detail" style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+                <button onClick={closeDrawer} aria-label="Close detail" style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '22px', lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
               </header>
 
               {panelLoading ? (

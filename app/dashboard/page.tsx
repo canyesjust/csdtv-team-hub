@@ -7,51 +7,34 @@ import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from './components/Loader'
 import { ZoneHeader } from './components/ZoneHeader'
-import { getSchoolName } from '@/lib/schools'
+import { QuickAddTaskModal } from './components/QuickAddTaskModal'
+import { ThisWeekZone, type WeekProduction } from './components/ThisWeekZone'
+import { NeedsAttentionZone } from './components/NeedsAttentionZone'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
-import {
-  isActiveProductionStatus,
-  SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES,
-} from '@/lib/productions/status-filters'
-import { loadInsightsData, loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
+import { loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
-import { getMondayStr, resolveDayHours } from '@/lib/team-schedule'
-
-interface Task {
-  id: string; title: string; status: string; due_date: string | null; priority: string
-  assigned_to?: string | null
-  blocked_by?: string | null
-  productions?: { title: string } | null
-}
-
-interface Production {
-  id: string; production_number: number; title: string
-  request_type_label: string | null; type: string | null; status: string | null
-  school_year?: string | null
-  start_datetime: string | null; filming_location: string | null; school_department: string | null
-  checklist_items?: { id: string; title: string; completed: boolean }[]
-  production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
-}
-
-interface QueueItem {
-  id: string
-  type: 'task' | 'production_risk'
-  title: string
-  subtitle: string
-  reason: string
-  href: string
-  score: number
-}
 
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
 interface CurrentUser { id: string; name: string; role: string }
-interface Activity { id: string; action: string; detail: string | null; created_at: string; production_id: string; user_id?: string | null; team?: { name: string } | null }
-interface ScheduleDay { monday: string; tuesday: string; wednesday: string; thursday: string; friday: string }
 interface OverdueOwnerRow { assigned_to: string | null; due_date: string | null }
-const SCHEDULE_DAY_SELECT = 'monday,tuesday,wednesday,thursday,friday'
+
+const QUICK_LINKS = [
+  { href: '/dashboard/productions', label: 'Productions' },
+  { href: '/dashboard/schedule', label: 'Schedule' },
+  { href: '/dashboard/equipment', label: 'Equipment' },
+  { href: '/dashboard/videos', label: 'Videos' },
+  { href: '/dashboard/knowledge', label: 'Knowledge base' },
+]
+
+function getProgress(prod: WeekProduction) {
+  const items = prod.checklist_items || []
+  if (items.length === 0) return null
+  const done = items.filter(i => i.completed).length
+  return { done, total: items.length, pct: Math.round((done / items.length) * 100) }
+}
 
 export default function DashboardPage() {
   const { theme } = useTheme()
@@ -60,62 +43,31 @@ export default function DashboardPage() {
   const router = useRouter()
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
-  const [myTasks, setMyTasks] = useState<Task[]>([])
-  const [myProductions, setMyProductions] = useState<Production[]>([])
-  const [managerProductions, setManagerProductions] = useState<Production[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
-  const [totalProductions, setTotalProductions] = useState(0)
-  const [todayProductions, setTodayProductions] = useState<Production[]>([])
-  const [insightsOpen, setInsightsOpen] = useState(false)
-  const [managerOpen, setManagerOpen] = useState(true)
-  const [loading, setLoading] = useState(true)
-  const [todayHours, setTodayHours] = useState<string | null>(null)
-  const [recentActivity, setRecentActivity] = useState<Activity[]>([])
-  const [ytEmailPendingCount, setYtEmailPendingCount] = useState(0)
-  const [ytMissingLinkCount, setYtMissingLinkCount] = useState(0)
-  const [completing, setCompleting] = useState<Set<string>>(new Set())
-  const [weekStats, setWeekStats] = useState({ prodsCompleted: 0, tasksCompleted: 0, videosPublished: 0 })
-  const [expandedTodayProd, setExpandedTodayProd] = useState<string | null>(null)
-  const [monthStats, setMonthStats] = useState({ prodsCompleted: 0, tasksCompleted: 0, videosPublished: 0 })
-  const [yearProdCount, setYearProdCount] = useState(0)
-  const [totalVidsProduced, setTotalVidsProduced] = useState(0)
-  const [totalYtViews, setTotalYtViews] = useState(0)
-  const [dashboardUpdatedAt, setDashboardUpdatedAt] = useState<string | null>(null)
-  const [clockTickMs, setClockTickMs] = useState(Date.now())
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [weekProductions, setWeekProductions] = useState<WeekProduction[]>([])
+  const [managerProductions, setManagerProductions] = useState<WeekProduction[]>([])
   const [crewSlotsTotal, setCrewSlotsTotal] = useState(0)
   const [crewSlotsFilled, setCrewSlotsFilled] = useState(0)
+  const [ytEmailPendingCount, setYtEmailPendingCount] = useState(0)
+  const [ytMissingLinkCount, setYtMissingLinkCount] = useState(0)
   const [managerRiskCounts, setManagerRiskCounts] = useState({ unassigned: 0, blocked: 0, overdue: 0 })
   const [overdueOwnerRows, setOverdueOwnerRows] = useState<OverdueOwnerRow[]>([])
   const [schoolYearFilter, setSchoolYearFilter] = useState(currentSchoolYearKey())
   const [schoolYearOptions, setSchoolYearOptions] = useState<string[]>([])
-  const [productionYearRows, setProductionYearRows] = useState<Array<{ school_year: string | null; start_datetime: string | null; status: string | null }>>([])
+  const [managerOpen, setManagerOpen] = useState(false)
+  const [showQuickTaskModal, setShowQuickTaskModal] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [managerDataLoaded, setManagerDataLoaded] = useState(false)
-  const [insightsDataLoaded, setInsightsDataLoaded] = useState(false)
   const [managerOpsLoading, setManagerOpsLoading] = useState(false)
-  const [insightsLoading, setInsightsLoading] = useState(false)
 
-  const text     = 'var(--text-primary)'
-  const muted    = 'var(--text-muted)'
-  const border   = 'var(--border-subtle)'
-  const cardBg   = 'var(--surface-1)'
-  const surface2 = 'var(--surface-2)'
+  const text = 'var(--text-primary)'
+  const muted = 'var(--text-muted)'
+  const border = 'var(--border-subtle)'
+  const cardBg = 'var(--surface-1)'
   const rowHover = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
-  const warning = statusTone.warning.color
-  const warningBg = statusTone.warning.background
-  const danger = statusTone.danger.color
-  const dangerBg = statusTone.danger.background
-  const info = statusTone.info.color
-  const infoBg = statusTone.info.background
   const review = statusTone.review.color
-  const success = statusTone.success.color
-  const successBg = statusTone.success.background
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setManagerOpen(false)
-    }
-  }, [])
+  const info = statusTone.info.color
 
   const loadData = useCallback(async () => {
     setLoadError(null)
@@ -131,69 +83,37 @@ export default function DashboardPage() {
       }
       setCurrentUser({ id: user.id, name: user.name, role: user.role })
 
-      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
-      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const weekEnd = new Date(todayStart)
+      weekEnd.setDate(weekEnd.getDate() + 7)
+      weekEnd.setHours(23, 59, 59, 999)
 
-      const [tasksRes, prodMembersRes, teamRes, countRes, todayProdsRes, schedDefaultRes, schoolYearRowsRes] = await Promise.all([
-        supabase.from('tasks').select('*, productions(title)').eq('assigned_to', user.id).neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }).limit(20),
-        supabase.from('production_members').select('production_id').eq('user_id', user.id),
+      const [teamRes, weekProdsRes] = await Promise.all([
         supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
-        supabase.from('productions').select('id', { count: 'exact', head: true }),
-        supabase.from('productions').select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)').not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES).gte('start_datetime', todayStart.toISOString()).lte('start_datetime', todayEnd.toISOString()).order('start_datetime', { ascending: true }).limit(10),
-        supabase.from('schedule_defaults').select(SCHEDULE_DAY_SELECT).eq('user_id', user.id).single(),
-        supabase.from('productions').select('school_year,start_datetime,status'),
+        supabase
+          .from('productions')
+          .select(
+            'id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
+          )
+          .gte('start_datetime', todayStart.toISOString())
+          .lte('start_datetime', weekEnd.toISOString())
+          .order('start_datetime', { ascending: true }),
       ])
 
-      setMyTasks(tasksRes.data || [])
+      const weekData = (weekProdsRes.data as unknown as WeekProduction[]) ?? []
+      setWeekProductions(weekData)
       setTeamMembers(teamRes.data || [])
-      setTotalProductions(countRes.count || 0)
-      setTodayProductions((todayProdsRes.data as any) || [])
+
       const yearSet = new Set<string>()
-      ;((schoolYearRowsRes.data as Array<{ school_year: string | null; start_datetime: string | null }> | null) || []).forEach((row) => {
+      weekData.forEach(row => {
         const y = resolvedSchoolYearKey(row)
         if (y) yearSet.add(y)
       })
       yearSet.add(currentSchoolYearKey())
       setSchoolYearOptions(Array.from(yearSet).sort((a, b) => b.localeCompare(a)))
-      setProductionYearRows((schoolYearRowsRes.data as Array<{ school_year: string | null; start_datetime: string | null; status: string | null }> | null) || [])
 
-      const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'] as const
-      const todayDate = new Date()
-      const todayDayName = dayNames[todayDate.getDay()]
-      const isWeekday = todayDayName !== 'sunday' && todayDayName !== 'saturday'
-      if (isWeekday) {
-        const weekStart = getMondayStr(todayDate)
-        const { data: weekOverrideRow } = await supabase
-          .from('schedule_overrides')
-          .select(`${SCHEDULE_DAY_SELECT}, week_start`)
-          .eq('user_id', user.id)
-          .eq('week_start', weekStart)
-          .maybeSingle()
-        const defaults = schedDefaultRes.data
-          ? [{ ...schedDefaultRes.data, user_id: user.id }]
-          : []
-        const overrides = weekOverrideRow
-          ? [{ ...weekOverrideRow, user_id: user.id }]
-          : []
-        setTodayHours(resolveDayHours(user.id, todayDate, defaults, overrides))
-      }
-
-      if (prodMembersRes.data && prodMembersRes.data.length > 0) {
-        const ids = prodMembersRes.data.map((p: { production_id: string }) => p.production_id)
-        const { data: prods } = await supabase
-          .from('productions')
-          .select('id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, checklist_items(id, title, completed)')
-          .in('id', ids)
-          .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
-          .order('start_datetime', { ascending: true, nullsFirst: false })
-          .limit(8)
-        setMyProductions(prods || [])
-      } else {
-        setMyProductions([])
-      }
       setManagerDataLoaded(false)
-      setInsightsDataLoaded(false)
-      setDashboardUpdatedAt(new Date().toISOString())
     } catch (err) {
       console.error('Failed to load dashboard', err)
       setLoadError('Failed to load dashboard data. Please refresh.')
@@ -202,22 +122,20 @@ export default function DashboardPage() {
     }
   }, [supabase, router])
 
-  useEffect(() => { loadData() }, [loadData])
   useEffect(() => {
-    const timer = setInterval(() => setClockTickMs(Date.now()), 60000)
-    return () => clearInterval(timer)
-  }, [])
+    loadData()
+  }, [loadData])
 
-  const isManagerRole = (currentUser?.role || '').toLowerCase() === 'manager'
+  const isManager = (currentUser?.role || '').toLowerCase() === 'manager'
 
   useEffect(() => {
-    if (loading || !currentUser || !isManagerRole || !managerOpen || managerDataLoaded) return
+    if (loading || !currentUser || !isManager || managerDataLoaded) return
     let cancelled = false
     setManagerOpsLoading(true)
     loadManagerOpsData(supabase)
-      .then((data) => {
+      .then(data => {
         if (cancelled) return
-        setManagerProductions(data.managerProductions as Production[])
+        setManagerProductions(data.managerProductions as WeekProduction[])
         setManagerRiskCounts(data.managerRiskCounts)
         setOverdueOwnerRows(data.overdueOwnerRows)
         setCrewSlotsTotal(data.crewSlotsTotal)
@@ -225,39 +143,25 @@ export default function DashboardPage() {
         setYtEmailPendingCount(data.ytEmailPendingCount)
         setYtMissingLinkCount(data.ytMissingLinkCount)
         setManagerDataLoaded(true)
+
+        setSchoolYearOptions(prev => {
+          const yearSet = new Set(prev)
+          ;(data.managerProductions as WeekProduction[]).forEach(row => {
+            const y = resolvedSchoolYearKey(row)
+            if (y) yearSet.add(y)
+          })
+          yearSet.add(currentSchoolYearKey())
+          return Array.from(yearSet).sort((a, b) => b.localeCompare(a))
+        })
       })
-      .catch((err) => console.error('Failed to load manager ops', err))
+      .catch(err => console.error('Failed to load manager ops', err))
       .finally(() => {
         if (!cancelled) setManagerOpsLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [loading, currentUser, isManagerRole, managerOpen, managerDataLoaded, supabase])
-
-  useEffect(() => {
-    if (loading || !currentUser || !insightsOpen || insightsDataLoaded) return
-    let cancelled = false
-    setInsightsLoading(true)
-    loadInsightsData(supabase)
-      .then((data) => {
-        if (cancelled) return
-        setRecentActivity(data.recentActivity as Activity[])
-        setWeekStats(data.weekStats)
-        setMonthStats(data.monthStats)
-        setYearProdCount(data.yearProdCount)
-        setTotalVidsProduced(data.totalVidsProduced)
-        setTotalYtViews(data.totalYtViews)
-        setInsightsDataLoaded(true)
-      })
-      .catch((err) => console.error('Failed to load insights', err))
-      .finally(() => {
-        if (!cancelled) setInsightsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [loading, currentUser, insightsOpen, insightsDataLoaded, supabase])
+  }, [loading, currentUser, isManager, managerDataLoaded, supabase])
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -266,459 +170,243 @@ export default function DashboardPage() {
     return 'Good evening'
   }
 
-  const getMorningBriefing = () => {
-    const parts: string[] = []
-    const todayTasks = myTasks.filter(t => dayDiffFromToday(t.due_date) === 0)
-    const overdueTasks = myTasks.filter(t => {
-      const d = dayDiffFromToday(t.due_date)
-      return d !== null && d < 0
-    })
-    if (filteredTodayProductions.length > 0) parts.push(`${filteredTodayProductions.length} production${filteredTodayProductions.length > 1 ? 's' : ''} happening today`)
-    if (overdueTasks.length > 0) parts.push(`${overdueTasks.length} overdue task${overdueTasks.length > 1 ? 's' : ''} need attention`)
-    else if (todayTasks.length > 0) parts.push(`${todayTasks.length} task${todayTasks.length > 1 ? 's' : ''} due today`)
-    if (parts.length === 0 && myTasks.length === 0) return "You're all caught up — no open tasks."
-    if (parts.length === 0) return `You have ${myTasks.length} open task${myTasks.length > 1 ? 's' : ''}.`
-    return parts.join(' · ') + '.'
-  }
-
-  const formatDate = (d: string | null): { label: string; color: string } | null => {
-    if (!d) return null
-    const date = new Date(d)
-    const diff = dayDiffFromToday(d)
-    if (diff === null) return null
-    if (diff < 0) return { label: 'Overdue', color: danger }
-    if (diff === 0) return { label: 'Today', color: warning }
-    if (diff === 1) return { label: 'Tomorrow', color: warning }
-    if (diff <= 7) return { label: `${diff}d`, color: muted }
-    return { label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), color: muted }
-  }
-
-  const getProgress = (prod: Production) => {
-    const items = prod.checklist_items || []
-    if (items.length === 0) return null
-    const done = items.filter(i => i.completed).length
-    return { done, total: items.length, pct: Math.round((done / items.length) * 100) }
-  }
-
-  const filteredTodayProductions = useMemo(
+  const filteredWeekProductions = useMemo(
     () =>
-      todayProductions.filter(
-        (p) =>
-          isActiveProductionStatus(p.status) &&
-          inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
+      weekProductions.filter(p =>
+        inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
       ),
-    [todayProductions, schoolYearFilter]
+    [weekProductions, schoolYearFilter],
   )
-  const filteredMyProductions = useMemo(
-    () =>
-      myProductions.filter(
-        (p) =>
-          isActiveProductionStatus(p.status) &&
-          inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
-      ),
-    [myProductions, schoolYearFilter]
-  )
+
+  const getForwardBriefing = () => {
+    const count = filteredWeekProductions.length
+    if (count === 0) return 'No productions this week.'
+    const nextProd = filteredWeekProductions[0]
+    const daysToNext = dayDiffFromToday(nextProd.start_datetime)
+    const inLabel =
+      daysToNext === null
+        ? 'upcoming'
+        : daysToNext === 0
+          ? 'today'
+          : daysToNext === 1
+            ? 'in 1 day'
+            : `in ${daysToNext} days`
+    return `${count} production${count > 1 ? 's' : ''} this week · ${nextProd.title} ${inLabel}.`
+  }
+
   const filteredManagerProductions = useMemo(
-    () => managerProductions.filter(p => inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)),
-    [managerProductions, schoolYearFilter]
+    () =>
+      managerProductions.filter(p =>
+        inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
+      ),
+    [managerProductions, schoolYearFilter],
   )
-  const totalProductionsForFilter = useMemo(() => {
-    const all = [...todayProductions, ...myProductions, ...managerProductions]
-    const seen = new Set<string>()
-    let count = 0
-    for (const p of all) {
-      if (seen.has(p.id)) continue
-      seen.add(p.id)
-      if (inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)) count += 1
-    }
-    return count
-  }, [todayProductions, myProductions, managerProductions, schoolYearFilter])
-  const yearProdCountForFilter = useMemo(() => {
-    return productionYearRows.filter((p) => {
-      if ((p.status || '').toLowerCase() !== 'complete') return false
-      return inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)
-    }).length
-  }, [productionYearRows, schoolYearFilter])
 
-  const overdueCount = myTasks.filter(t => t.due_date && new Date(t.due_date) < new Date()).length
-  const urgentCount = myTasks.filter(t => t.priority === 'high' || t.priority === 'day of').length
-  const dueSoonCount = myTasks.filter(t => {
-    if (!t.due_date) return false
-    const days = dayDiffFromToday(t.due_date)
-    return days !== null && days >= 0 && days <= 2
-  }).length
-  const blockedCount = myTasks.filter(t => Boolean(t.blocked_by)).length
-  const atRiskProductions = filteredMyProductions.filter(prod => {
-    const progress = getProgress(prod)
-    const startsSoon = (() => {
-      const days = dayDiffFromToday(prod.start_datetime)
-      return days !== null && days >= 0 && days <= 2
-    })()
-    const checklistMissing = !progress || progress.total === 0
-    const lowProgress = !!progress && progress.pct < 60
-    return startsSoon && (checklistMissing || lowProgress)
-  }).slice(0, 4)
-  const isManager = (currentUser?.role || '').toLowerCase() === 'manager'
   const startsSoonManager = filteredManagerProductions.filter(p => {
     const days = dayDiffFromToday(p.start_datetime)
     return days !== null && days >= 0 && days <= 2
   })
+
   const unstaffedProductions = startsSoonManager.filter(p => (p.production_members || []).length === 0)
   const understaffedProductions = startsSoonManager.filter(p => {
     const members = p.production_members || []
     return members.length > 0 && members.length < 2
   })
-  const missingProdMetadata = filteredManagerProductions.filter(p => !p.start_datetime || !(p.filming_location || p.school_department))
-  const crewFillPct = crewSlotsTotal > 0 ? Math.round((crewSlotsFilled / crewSlotsTotal) * 100) : 0
 
-  const queueItems: QueueItem[] = [
-    ...myTasks.map(task => {
-      const dueDays = dayDiffFromToday(task.due_date)
-      const overdue = dueDays !== null && dueDays < 0
-      const due48h = dueDays !== null && dueDays >= 0 && dueDays <= 2
-      const score =
-        (overdue ? 40 : 0) +
-        (due48h ? 25 : 0) +
-        (task.blocked_by ? 30 : 0) +
-        ((task.priority === 'high' || task.priority === 'day of') ? 20 : 0) +
-        (!task.assigned_to ? 10 : 0)
-      return {
-        id: task.id,
-        type: 'task' as const,
-        title: task.title,
-        subtitle: task.productions?.title || 'Task',
-        reason: [overdue ? 'Overdue' : null, task.blocked_by ? 'Blocked' : null, due48h ? 'Due soon' : null].filter(Boolean).join(' + ') || 'Open task',
-        href: '/dashboard/tasks',
-        score,
-      }
-    }),
-    ...atRiskProductions.map(prod => {
+  const atRiskProductions = filteredManagerProductions
+    .filter(prod => {
       const progress = getProgress(prod)
-      const dueDays = dayDiffFromToday(prod.start_datetime) ?? 999
-      const score =
-        (dueDays >= 0 && dueDays <= 2 ? 35 : 0) +
-        ((!progress || progress.pct < 60) ? 20 : 0) +
-        (((prod.production_members || []).length === 0) ? 10 : 0)
-      return {
-        id: prod.id,
-        type: 'production_risk' as const,
-        title: `#${prod.production_number} ${prod.title}`,
-        subtitle: 'Production risk',
-        reason: dueDays < 0 ? 'Past due' : dueDays === 0 ? 'Starts today' : `Starts in ${dueDays}d`,
-        href: `/dashboard/productions/${prod.production_number}`,
-        score,
-      }
-    }),
-  ].sort((a, b) => b.score - a.score).slice(0, 8)
+      const startsSoon = (() => {
+        const days = dayDiffFromToday(prod.start_datetime)
+        return days !== null && days >= 0 && days <= 2
+      })()
+      const checklistMissing = !progress || progress.total === 0
+      const lowProgress = !!progress && progress.pct < 60
+      return startsSoon && (checklistMissing || lowProgress)
+    })
+    .slice(0, 4)
+
+  const missingProdMetadata = filteredManagerProductions.filter(
+    p => !p.start_datetime || !(p.filming_location || p.school_department),
+  )
+
+  const crewFillPct = crewSlotsTotal > 0 ? Math.round((crewSlotsFilled / crewSlotsTotal) * 100) : 0
 
   const overdueByOwner = teamMembers
     .map(member => {
       const mine = overdueOwnerRows.filter(t => t.assigned_to === member.id)
       if (mine.length === 0) return null
       const now = Date.now()
-      const aging = mine.reduce((acc, t) => {
-        if (!t.due_date) return acc
-        const days = Math.max(1, Math.ceil((now - new Date(t.due_date).getTime()) / DAY_MS))
-        if (days <= 2) acc.a += 1
-        else if (days <= 7) acc.b += 1
-        else acc.c += 1
-        return acc
-      }, { a: 0, b: 0, c: 0 })
+      const aging = mine.reduce(
+        (acc, t) => {
+          if (!t.due_date) return acc
+          const days = Math.max(1, Math.ceil((now - new Date(t.due_date).getTime()) / DAY_MS))
+          if (days <= 2) acc.a += 1
+          else if (days <= 7) acc.b += 1
+          else acc.c += 1
+          return acc
+        },
+        { a: 0, b: 0, c: 0 },
+      )
       return { member, total: mine.length, aging }
     })
     .filter(Boolean)
-    .sort((a, b) => (b!.total - a!.total))
+    .sort((a, b) => b!.total - a!.total)
     .slice(0, 6) as { member: TeamMember; total: number; aging: { a: number; b: number; c: number } }[]
 
-  const completeTask = async (taskId: string) => {
-    setCompleting(prev => new Set(prev).add(taskId))
-    await supabase.from('tasks').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', taskId)
-    setTimeout(() => {
-      setMyTasks(prev => prev.filter(t => t.id !== taskId))
-      setCompleting(prev => { const n = new Set(prev); n.delete(taskId); return n })
-    }, 400)
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+        <Loader />
+      </div>
+    )
   }
-  const nextDue = myTasks.find(t => t.due_date) || null
-  const nextDueInfo = nextDue ? formatDate(nextDue.due_date) : null
-  const lastUpdatedLabel = dashboardUpdatedAt
-    ? `${Math.max(0, Math.floor((clockTickMs - new Date(dashboardUpdatedAt).getTime()) / 60000))}m ago`
-    : 'just now'
-
-  const taskStatusBadge = (status: string) => {
-    const s = status?.toLowerCase()
-    const st = { 'in progress': { bg: warningBg, color: warning }, 'pending': { bg: 'var(--surface-2)', color: muted }, 'complete': { bg: successBg, color: success } }[s] || { bg: 'var(--surface-2)', color: muted }
-    return <span style={{ fontSize: '12px', fontWeight: 500, padding: '3px 9px', borderRadius: '20px', background: st.bg, color: st.color, whiteSpace: 'nowrap' as const }}>{status}</span>
-  }
-
-  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}><Loader /></div>
-
-  const QUICK_ACTIONS = [
-    { href: '/dashboard/tasks', label: 'New task', desc: 'Create a task', color: 'var(--brand-primary)', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> },
-    { href: '/dashboard/productions', label: 'Productions', desc: `${totalProductionsForFilter} total`, color: warning, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> },
-    { href: '/dashboard/schedule', label: 'Team hours', desc: 'Set your hours', color: success, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-    { href: '/dashboard/library', label: 'Library', desc: 'Guides & links', color: review, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg> },
-  ]
 
   return (
-    <div style={{ maxWidth: '1760px', margin: '0 auto' }}>
-      {/* ============== HEADER ============== */}
-      <header style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, color: text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>{greeting()}, {currentUser?.name?.split(' ')[0]}</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, margin: '0 0 6px' }}>
-          <p style={{ fontSize: '14px', color: muted, margin: 0 }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-          <select value={schoolYearFilter} onChange={e => setSchoolYearFilter(e.target.value)} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '8px', padding: '5px 10px', fontSize: '12px', color: text, fontFamily: 'inherit', outline: 'none' }}>
-            <option value={ALL_SCHOOL_YEARS}>All school years</option>
-            {schoolYearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+    <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
+      <header style={{ marginBottom: '24px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '16px',
+            flexWrap: 'wrap' as const,
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1
+              style={{
+                fontSize: '26px',
+                fontWeight: 700,
+                color: text,
+                margin: '0 0 6px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {greeting()}, {currentUser?.name?.split(' ')[0]}
+            </h1>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                flexWrap: 'wrap' as const,
+                margin: '0 0 6px',
+              }}
+            >
+              <p style={{ fontSize: '14px', color: muted, margin: 0 }}>
+                {new Date().toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </p>
+              <select
+                value={schoolYearFilter}
+                onChange={e => setSchoolYearFilter(e.target.value)}
+                style={{
+                  background: cardBg,
+                  border: `1px solid ${border}`,
+                  borderRadius: '8px',
+                  padding: '5px 10px',
+                  fontSize: '12px',
+                  color: text,
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                }}
+              >
+                <option value={ALL_SCHOOL_YEARS}>All school years</option>
+                {schoolYearOptions.map(y => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p style={{ fontSize: '14px', color: muted, margin: 0 }}>{getForwardBriefing()}</p>
+            {loadError && (
+              <p style={{ margin: '8px 0 0', fontSize: '13px', color: statusTone.danger.color }}>
+                {loadError}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowQuickTaskModal(true)}
+            style={{
+              background: 'var(--brand-primary)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 14px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              flexShrink: 0,
+            }}
+          >
+            + Task
+          </button>
         </div>
-        <p style={{ fontSize: '14px', color: urgentCount > 0 || overdueCount > 0 ? warning : muted, margin: 0 }}>{getMorningBriefing()}</p>
-        {loadError && <p style={{ margin: '8px 0 0', fontSize: '13px', color: danger }}>{loadError}</p>}
       </header>
 
-      {/* Glance chips */}
-      <div className="dashboard-glance-row" style={{ display: 'flex', gap: '8px', marginBottom: '28px', flexWrap: 'wrap' as const }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span style={{ fontSize: '13px', color: todayHours ? text : muted, fontWeight: todayHours ? 500 : 400 }}>
-            {todayHours || 'No hours set'}
-          </span>
-        </div>
-        {myTasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: warningBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={warning} strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-            <span style={{ fontSize: '13px', color: warning, fontWeight: 500 }}>
-              {myTasks.filter(t => t.due_date && new Date(t.due_date).toDateString() === new Date().toDateString()).length} due today
-            </span>
-          </div>
-        )}
-        {overdueCount > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: dangerBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={danger} strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span style={{ fontSize: '13px', color: danger, fontWeight: 500 }}>{overdueCount} overdue</span>
-          </div>
-        )}
-        {filteredTodayProductions.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: infoBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 13px' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={info} strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-            <span style={{ fontSize: '13px', color: info, fontWeight: 500 }}>{filteredTodayProductions.length} production{filteredTodayProductions.length > 1 ? 's' : ''} today</span>
-          </div>
-        )}
-      </div>
+      <ThisWeekZone weekProductions={filteredWeekProductions} />
 
-      {/* ============== ZONE: TODAY ============== */}
-      {filteredTodayProductions.length > 0 && (
-        <section style={uiStyles.zoneSection}>
-          <ZoneHeader
-            label="Today"
-            hint={`${filteredTodayProductions.length} production${filteredTodayProductions.length > 1 ? 's' : ''} on the schedule`}
-            accent={info}
-          />
-          <div className="today-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '12px' }}>
-            {filteredTodayProductions.map(p => {
-              const d = p.start_datetime ? new Date(p.start_datetime) : null
-              const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
-              const loc = getSchoolName(p.filming_location) || getSchoolName(p.school_department) || p.filming_location || ''
-              const members = (p.production_members || []).map(m => m.team).filter(Boolean)
-              const isExpanded = expandedTodayProd === p.id
-              const items = (p.checklist_items || []).sort((a, b) => (a as any).sort_order - (b as any).sort_order)
-              const doneCount = items.filter(c => c.completed).length
-              return (
-                <div key={p.id} onClick={() => setExpandedTodayProd(isExpanded ? null : p.id)} style={{ padding: '14px 16px', borderRadius: '14px', background: cardBg, border: `1px solid ${isExpanded ? 'var(--border-strong)' : border}`, cursor: 'pointer', boxShadow: 'var(--shadow-soft)', transition: 'border-color var(--motion-fast) var(--ease-standard)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '4px', height: '44px', borderRadius: '2px', background: info, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title}</p>
-                      <p style={{ fontSize: '13px', color: muted, margin: '3px 0 0' }}>
-                        {time && <span style={{ fontWeight: 500, color: info }}>{time}</span>}
-                        {time && loc ? ' · ' : ''}{loc}
-                      </p>
-                      <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>
-                        {p.request_type_label || 'Production'}
-                        {members.length > 0 && ` · ${members.map(m => m!.name.split(' ')[0]).join(', ')}`}
-                        {items.length > 0 && ` · ${doneCount}/${items.length} steps`}
-                      </p>
-                    </div>
-                    <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
-                      {members.slice(0, 3).map((m, i) => m && (
-                        <div key={i} style={{ width: '28px', height: '28px', borderRadius: '50%', background: m.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#0a0f1e' }}>{m.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
-                      ))}
-                    </div>
-                  </div>
-                  {isExpanded && (
-                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${border}` }} onClick={e => e.stopPropagation()}>
-                      {items.length > 0 ? items.map(item => (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0' }}>
-                          <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `1.5px solid ${item.completed ? success : border}`, background: item.completed ? success : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            {item.completed && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                          </div>
-                          <span style={{ fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>{item.title}</span>
-                        </div>
-                      )) : <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No checklist items</p>}
-                      <Link href={`/dashboard/productions/${p.production_number}`} style={{ ...uiStyles.actionLink, display: 'inline-block', fontSize: '12px', marginTop: '10px', fontWeight: 500 }}>Open production →</Link>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
+      <NeedsAttentionZone
+        unstaffedProductions={unstaffedProductions}
+        understaffedProductions={understaffedProductions}
+        atRiskProductions={atRiskProductions}
+        missingProdMetadata={missingProdMetadata}
+        ytEmailPendingCount={ytEmailPendingCount}
+        ytMissingLinkCount={ytMissingLinkCount}
+        crewSlotsTotal={crewSlotsTotal}
+        crewSlotsFilled={crewSlotsFilled}
+      />
 
-      {/* ============== ZONE: OPERATE ============== */}
-      <section style={uiStyles.zoneSection}>
-        <ZoneHeader
-          label="Operate"
-          hint={`Updated ${lastUpdatedLabel}`}
-          action={<Link href="/dashboard/tasks" style={{ ...uiStyles.actionLink, fontSize: '12px' }}>Open task center →</Link>}
-        />
-
-        {/* Personal metric strip — 4 metrics */}
-        <div className="metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '16px' }}>
-          {[
-            { label: 'Open tasks', value: String(myTasks.length), sub: 'assigned to you', hi: false, color: info, href: '/dashboard/tasks' },
-            { label: 'Overdue', value: String(overdueCount), sub: overdueCount === 0 ? 'all on track' : 'need attention', hi: overdueCount > 0, color: danger, href: '/dashboard/tasks' },
-            { label: 'High priority', value: String(urgentCount), sub: urgentCount === 0 ? 'nothing urgent' : 'urgent now', hi: urgentCount > 0, color: warning, href: '/dashboard/tasks' },
-            { label: 'Next due', value: nextDueInfo?.label || '—', sub: nextDue?.title || 'no tasks due', hi: false, color: muted, valueColor: nextDueInfo?.color, href: '/dashboard/tasks' },
-          ].map(({ label, value, sub, hi, color, valueColor, href }) => (
-            <Link key={label} href={href} style={{ textDecoration: 'none' }}>
-              <div style={{ ...uiStyles.metricCard, padding: '16px 18px', background: hi ? `${color}10` : surface2, border: `1px solid ${hi ? `${color}40` : border}` }}
-                onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'}
-                onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'}
-              >
-                <p style={{ fontSize: '11px', fontWeight: 700, color: hi ? color : muted, margin: '0 0 8px', textTransform: 'uppercase' as const, letterSpacing: '1px' }}>{label}</p>
-                <p style={{ fontSize: '32px', fontWeight: 800, color: valueColor || (hi ? color : text), margin: '0 0 4px', lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</p>
-                <p style={{ fontSize: '13px', color: muted, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{sub}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        {/* Focus queue — single source of truth */}
-        <div style={{ ...uiStyles.card, marginBottom: '16px', overflow: 'hidden', boxShadow: 'var(--shadow-soft)' }}>
-          <div style={{ padding: '14px 18px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-            <div>
-              <h2 style={{ fontSize: '15px', fontWeight: 700, color: text, margin: 0 }}>Focus queue</h2>
-              <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Ranked by operational risk</p>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>
-              <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{overdueCount + blockedCount} at risk · {dueSoonCount} due 48h</span>
-              <Link href="/dashboard/tasks" style={uiStyles.panelLink}>Open task center →</Link>
-            </div>
-          </div>
-          <div>
-            {queueItems.length === 0 ? (
-              <p style={{ padding: '24px 20px', fontSize: '14px', color: muted, margin: 0, textAlign: 'center' as const }}>Nothing in your queue right now.</p>
-            ) : queueItems.map((item, i) => (
-              <Link key={`${item.type}-${item.id}`} href={item.href} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '12px 18px', borderBottom: i < queueItems.length - 1 ? `1px solid ${border}` : 'none', transition: 'background 0.1s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = rowHover}
-                onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
-              >
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <p style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.title}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{item.subtitle}</p>
-                </div>
-                <span style={{ ...statusBadge(item.type === 'task' ? 'warning' : 'review', true), fontSize: '11px', flexShrink: 0 }}>{item.reason}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* My tasks + My productions */}
-        <div className="operate-panels" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-          <div style={{ ...uiStyles.card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${border}` }}>
-              <h2 style={{ fontSize: '15px', fontWeight: 700, color: text, margin: 0 }}>My tasks</h2>
-              <Link href="/dashboard/tasks" style={uiStyles.panelLink}>View all →</Link>
-            </div>
-            <div style={{ flex: 1 }}>
-              {myTasks.length === 0 ? (
-                <div style={{ padding: '32px 18px', textAlign: 'center' as const }}>
-                  <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No open tasks</p>
-                  <Link href="/dashboard/tasks" style={uiStyles.panelLink}>Create a task →</Link>
-                </div>
-              ) : myTasks.slice(0, 8).map((task, i, arr) => {
-                const dateInfo = formatDate(task.due_date)
-                const isCompleting = completing.has(task.id)
-                return (
-                  <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 18px', borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none', transition: 'all 0.3s', opacity: isCompleting ? 0.4 : 1, background: isCompleting ? successBg : 'transparent' }}
-                    onMouseEnter={e => { if (!isCompleting) (e.currentTarget as HTMLDivElement).style.background = rowHover }}
-                    onMouseLeave={e => { if (!isCompleting) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-                  >
-                    <button onClick={() => !isCompleting && completeTask(task.id)} style={{ width: '18px', height: '18px', borderRadius: '5px', border: `2px solid ${isCompleting ? success : task.status === 'in progress' ? warning : border}`, flexShrink: 0, background: isCompleting ? success : task.status === 'in progress' ? warningBg : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-                      {isCompleting && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                    </button>
-                    <Link href="/dashboard/tasks" style={{ flex: 1, minWidth: 0, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</p>
-                        {task.productions && <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{task.productions.title}</p>}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
-                        {taskStatusBadge(task.status)}
-                        {dateInfo && <span style={{ fontSize: '12px', color: dateInfo.color, fontWeight: 700 }}>{dateInfo.label}</span>}
-                      </div>
-                    </Link>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div style={{ ...uiStyles.card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${border}` }}>
-              <h2 style={{ fontSize: '15px', fontWeight: 700, color: text, margin: 0 }}>My productions</h2>
-              <Link href="/dashboard/productions" style={uiStyles.panelLink}>View all →</Link>
-            </div>
-            <div style={{ flex: 1 }}>
-              {filteredMyProductions.length === 0 ? (
-                <div style={{ padding: '32px 18px', textAlign: 'center' as const }}>
-                  <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No active productions</p>
-                  <Link href="/dashboard/productions" style={uiStyles.panelLink}>Browse productions →</Link>
-                </div>
-              ) : filteredMyProductions.slice(0, 8).map((prod, i, arr) => {
-                const progress = getProgress(prod)
-                const typeLabel = prod.request_type_label || prod.type || 'Unknown'
-                return (
-                  <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'block', padding: '12px 18px', borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none', transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = rowHover}
-                    onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, paddingRight: '10px' }}>{prod.title}</p>
-                      <span style={{ fontSize: '13px', color: muted, flexShrink: 0, fontWeight: 500 }}>{progress ? `${progress.pct}%` : '—'}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ flex: 1, height: '4px', background: surface2, borderRadius: '3px', overflow: 'hidden' }}>
-                        {progress && <div style={{ width: `${progress.pct}%`, height: '100%', background: progress.pct === 100 ? success : 'var(--brand-primary)', borderRadius: '3px' }} />}
-                      </div>
-                      <span style={{ fontSize: '12px', color: muted, flexShrink: 0, maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{typeLabel}</span>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick actions — compact strip */}
-        <div className="quick-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-          {QUICK_ACTIONS.map(({ href, label, desc, color, icon }) => (
-            <Link key={href} href={href} style={{ textDecoration: 'none' }}>
-              <div style={{ background: surface2, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '12px', minHeight: '64px' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = color; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = border; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)' }}
-              >
-                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>{icon}</div>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: '13px', fontWeight: 700, color: text, margin: 0 }}>{label}</p>
-                  <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{desc}</p>
-                </div>
-              </div>
+      <section style={{ marginBottom: '32px' }}>
+        <p style={{ fontSize: '12px', fontWeight: 600, color: muted, margin: '0 0 10px' }}>Jump to</p>
+        <div
+          className="dashboard-quick-links"
+          style={{
+            display: 'flex',
+            gap: '8px',
+            flexWrap: 'nowrap' as const,
+            overflowX: 'auto' as const,
+            paddingBottom: '4px',
+          }}
+        >
+          {QUICK_LINKS.map(link => (
+            <Link
+              key={link.href}
+              href={link.href}
+              style={{
+                textDecoration: 'none',
+                background: 'var(--surface-2)',
+                border: `1px solid ${border}`,
+                borderRadius: '999px',
+                padding: '8px 14px',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: text,
+                whiteSpace: 'nowrap' as const,
+                flexShrink: 0,
+                transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => {
+                ;(e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--brand-primary)'
+              }}
+              onMouseLeave={e => {
+                ;(e.currentTarget as HTMLAnchorElement).style.borderColor = border
+              }}
+            >
+              {link.label}
             </Link>
           ))}
         </div>
       </section>
 
-      {/* ============== ZONE: MANAGER OPS ============== */}
       {isManager && (
         <section style={uiStyles.zoneSection}>
           <ZoneHeader
@@ -727,10 +415,19 @@ export default function DashboardPage() {
             accent={review}
             action={
               <button
+                type="button"
                 onClick={() => setManagerOpen(v => !v)}
                 aria-expanded={managerOpen}
                 aria-controls="manager-ops-content"
-                style={{ background: 'transparent', border: 'none', color: muted, fontSize: '12px', cursor: 'pointer', fontWeight: 600, padding: 0 }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: muted,
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  padding: 0,
+                }}
               >
                 {managerOpen ? 'Collapse' : 'Expand'}
               </button>
@@ -739,29 +436,112 @@ export default function DashboardPage() {
           {managerOpen && (
             <div id="manager-ops-content">
               {managerOpsLoading && !managerDataLoaded && (
-                <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>Loading manager data…</p>
+                <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>
+                  Loading manager data…
+                </p>
               )}
-              {/* 4 KPIs only */}
-              <div className="manager-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '14px' }}>
+              <div
+                className="manager-kpis"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '10px',
+                  marginBottom: '14px',
+                }}
+              >
                 {[
-                  { label: 'Unstaffed', value: String(unstaffedProductions.length), sub: 'starts within 48h', tone: 'danger' as const },
-                  { label: 'Understaffed', value: String(understaffedProductions.length), sub: 'need added coverage', tone: 'warning' as const },
-                  { label: 'Crew fill', value: `${crewFillPct}%`, sub: `${crewSlotsFilled}/${crewSlotsTotal} spots filled`, tone: crewFillPct < 70 ? 'danger' as const : crewFillPct < 90 ? 'warning' as const : 'success' as const },
-                  { label: 'Unassigned tasks', value: String(managerRiskCounts.unassigned), sub: 'owner missing', tone: 'review' as const },
+                  {
+                    label: 'Unstaffed',
+                    value: String(unstaffedProductions.length),
+                    sub: 'starts within 48h',
+                    tone: 'danger' as const,
+                  },
+                  {
+                    label: 'Understaffed',
+                    value: String(understaffedProductions.length),
+                    sub: 'need added coverage',
+                    tone: 'warning' as const,
+                  },
+                  {
+                    label: 'Crew fill',
+                    value: `${crewFillPct}%`,
+                    sub: `${crewSlotsFilled}/${crewSlotsTotal} spots filled`,
+                    tone:
+                      crewFillPct < 70
+                        ? ('danger' as const)
+                        : crewFillPct < 90
+                          ? ('warning' as const)
+                          : ('success' as const),
+                  },
+                  {
+                    label: 'Unassigned tasks',
+                    value: String(managerRiskCounts.unassigned),
+                    sub: 'owner missing',
+                    tone: 'review' as const,
+                  },
                 ].map(kpi => (
                   <div key={kpi.label} style={{ ...uiStyles.cardSoft, padding: '14px 16px' }}>
-                    <p style={{ margin: 0, fontSize: '11px', letterSpacing: '0.8px', textTransform: 'uppercase' as const, color: statusTone[kpi.tone].color, fontWeight: 700 }}>{kpi.label}</p>
-                    <p style={{ margin: '6px 0 0', fontSize: '28px', color: text, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.02em' }}>{kpi.value}</p>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '11px',
+                        letterSpacing: '0.8px',
+                        textTransform: 'uppercase' as const,
+                        color: statusTone[kpi.tone].color,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {kpi.label}
+                    </p>
+                    <p
+                      style={{
+                        margin: '6px 0 0',
+                        fontSize: '28px',
+                        color: text,
+                        fontWeight: 800,
+                        lineHeight: 1,
+                        letterSpacing: '-0.02em',
+                      }}
+                    >
+                      {kpi.value}
+                    </p>
                     <p style={{ margin: '6px 0 0', fontSize: '12px', color: muted }}>{kpi.sub}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="manager-panels" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: '12px' }}>
+              <div
+                className="manager-panels"
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))',
+                  gap: '12px',
+                }}
+              >
                 <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>YouTube link follow-up</h3>
-                    <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>Board + Livestream</span>
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: `1px solid ${border}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>
+                      YouTube link follow-up
+                    </h3>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: muted,
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.6px',
+                      }}
+                    >
+                      Board + Livestream
+                    </span>
                   </div>
                   <div style={{ padding: '12px 16px', display: 'grid', gap: '8px' }}>
                     <p style={{ margin: 0, fontSize: '13px', color: text, fontWeight: 600 }}>
@@ -770,51 +550,181 @@ export default function DashboardPage() {
                     <p style={{ margin: 0, fontSize: '13px', color: text, fontWeight: 600 }}>
                       {ytMissingLinkCount} missing link
                     </p>
-                    <Link href="/dashboard/productions?ytPending=1" style={{ marginTop: '2px', fontSize: '13px', fontWeight: 600, color: info, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
+                    <Link
+                      href="/dashboard/productions?ytPending=1"
+                      style={{
+                        marginTop: '2px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: info,
+                        textDecoration: 'none',
+                        whiteSpace: 'nowrap' as const,
+                      }}
+                    >
                       View list →
                     </Link>
                   </div>
                 </div>
 
                 <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>Ownership risks</h3>
-                    <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{managerRiskCounts.overdue} overdue · {managerRiskCounts.blocked} blocked</span>
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: `1px solid ${border}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>
+                      Ownership risks
+                    </h3>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: muted,
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.6px',
+                      }}
+                    >
+                      {managerRiskCounts.overdue} overdue · {managerRiskCounts.blocked} blocked
+                    </span>
                   </div>
                   <div>
                     {overdueByOwner.length === 0 ? (
-                      <p style={{ padding: '20px 16px', margin: 0, fontSize: '13px', color: muted, textAlign: 'center' as const }}>No overdue tasks across team.</p>
-                    ) : overdueByOwner.map((row, i) => (
-                      <div key={row.member.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: i < overdueByOwner.length - 1 ? `1px solid ${border}` : 'none' }}>
-                        <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>{row.member.name}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '12px', color: muted }}>{row.total}</span>
-                          <span style={{ fontSize: '11px', color: muted, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{row.aging.a}/{row.aging.b}/{row.aging.c}</span>
+                      <p
+                        style={{
+                          padding: '20px 16px',
+                          margin: 0,
+                          fontSize: '13px',
+                          color: muted,
+                          textAlign: 'center' as const,
+                        }}
+                      >
+                        No overdue tasks across team.
+                      </p>
+                    ) : (
+                      overdueByOwner.map((row, i) => (
+                        <div
+                          key={row.member.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 16px',
+                            borderBottom:
+                              i < overdueByOwner.length - 1 ? `1px solid ${border}` : 'none',
+                          }}
+                        >
+                          <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>
+                            {row.member.name}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '12px', color: muted }}>{row.total}</span>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                color: muted,
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                              }}
+                            >
+                              {row.aging.a}/{row.aging.b}/{row.aging.c}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 
                 <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>Coverage risks</h3>
-                    <span style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px' }}>{missingProdMetadata.length} data gaps</span>
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: `1px solid ${border}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <h3 style={{ margin: 0, fontSize: '14px', color: text, fontWeight: 700 }}>
+                      Coverage risks
+                    </h3>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: muted,
+                        textTransform: 'uppercase' as const,
+                        letterSpacing: '0.6px',
+                      }}
+                    >
+                      {missingProdMetadata.length} data gaps
+                    </span>
                   </div>
                   <div>
                     {[...unstaffedProductions, ...understaffedProductions].slice(0, 6).map((prod, i, arr) => (
-                      <Link key={prod.id} href={`/dashboard/productions/${prod.production_number}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none', transition: 'background 0.1s' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.background = rowHover}
-                        onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'}
+                      <Link
+                        key={prod.id}
+                        href={`/dashboard/productions?prod=${prod.production_number}`}
+                        style={{
+                          textDecoration: 'none',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 16px',
+                          borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none',
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={e => {
+                          ;(e.currentTarget as HTMLAnchorElement).style.background = rowHover
+                        }}
+                        onMouseLeave={e => {
+                          ;(e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
+                        }}
                       >
-                        <span style={{ fontSize: '13px', color: text, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, minWidth: 0, paddingRight: '10px' }}>#{prod.production_number} {prod.title}</span>
-                        <span style={{ ...statusBadge((prod.production_members || []).length === 0 ? 'danger' : 'warning', true), fontSize: '10px', flexShrink: 0 }}>
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            color: text,
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap' as const,
+                            flex: 1,
+                            minWidth: 0,
+                            paddingRight: '10px',
+                          }}
+                        >
+                          #{prod.production_number} {prod.title}
+                        </span>
+                        <span
+                          style={{
+                            ...statusBadge(
+                              (prod.production_members || []).length === 0 ? 'danger' : 'warning',
+                              true,
+                            ),
+                            fontSize: '10px',
+                            flexShrink: 0,
+                          }}
+                        >
                           {(prod.production_members || []).length === 0 ? 'Unstaffed' : 'Understaffed'}
                         </span>
                       </Link>
                     ))}
                     {unstaffedProductions.length + understaffedProductions.length === 0 && (
-                      <p style={{ padding: '20px 16px', margin: 0, fontSize: '13px', color: muted, textAlign: 'center' as const }}>No staffing exceptions in next 48h.</p>
+                      <p
+                        style={{
+                          padding: '20px 16px',
+                          margin: 0,
+                          fontSize: '13px',
+                          color: muted,
+                          textAlign: 'center' as const,
+                        }}
+                      >
+                        No staffing exceptions in next 48h.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -824,82 +734,21 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {/* ============== ZONE: INSIGHTS ============== */}
-      <section style={{ ...uiStyles.zoneSection, marginBottom: '16px' }}>
-        <ZoneHeader
-          label="Insights"
-          hint="Pulse and recent activity"
-          action={
-            <button
-              onClick={() => setInsightsOpen(v => !v)}
-              aria-expanded={insightsOpen}
-              aria-controls="insights-content"
-              style={{ background: 'transparent', border: 'none', color: muted, fontSize: '12px', cursor: 'pointer', fontWeight: 600, padding: 0 }}
-            >
-              {insightsOpen ? 'Collapse' : 'Expand'}
-            </button>
-          }
+      {currentUser && (
+        <QuickAddTaskModal
+          open={showQuickTaskModal}
+          onClose={() => setShowQuickTaskModal(false)}
+          currentUser={currentUser}
+          teamMembers={teamMembers.map(m => ({ id: m.id, name: m.name }))}
         />
-        {insightsOpen && (
-          <div id="insights-content">
-            {insightsLoading && !insightsDataLoaded && (
-              <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>Loading insights…</p>
-            )}
-            <div className="stats-pulse" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '14px' }}>
-              {[
-                { label: 'This week', items: [`${weekStats.prodsCompleted} productions`, `${weekStats.tasksCompleted} tasks`, `${weekStats.videosPublished} videos`], color: info },
-                { label: 'This month', items: [`${monthStats.prodsCompleted} productions`, `${monthStats.tasksCompleted} tasks`, `${monthStats.videosPublished} videos`], color: review },
-                { label: 'Year pace', items: [`${yearProdCountForFilter} completed`, `${Math.round(yearProdCountForFilter / Math.max(1, new Date().getMonth() + 1) * 12)} projected/yr`], color: success },
-                ...(totalVidsProduced > 0 || totalYtViews > 0 ? [{ label: 'Output', items: [`${totalVidsProduced} videos produced`, ...(totalYtViews > 0 ? [`${totalYtViews.toLocaleString()} YT views`] : [])], color: danger }] : []),
-              ].map(s => (
-                <div key={s.label} style={{ ...uiStyles.cardSoft, padding: '12px 14px' }}>
-                  <p style={{ fontSize: '11px', fontWeight: 700, color: s.color, margin: '0 0 6px', textTransform: 'uppercase' as const, letterSpacing: '0.8px' }}>{s.label}</p>
-                  {s.items.map((item, i) => <p key={i} style={{ fontSize: '13px', color: i === 0 ? text : muted, margin: '2px 0', fontWeight: i === 0 ? 600 : 400 }}>{item}</p>)}
-                </div>
-              ))}
-            </div>
-
-            <div style={{ ...uiStyles.card, overflow: 'hidden' as const }}>
-              <div style={{ padding: '12px 18px', borderBottom: `1px solid ${border}` }}>
-                <h2 style={{ fontSize: '14px', fontWeight: 700, color: text, margin: 0 }}>Recent activity</h2>
-              </div>
-              {recentActivity.length === 0 ? (
-                <p style={{ padding: '20px', color: muted, fontSize: '13px', margin: 0, textAlign: 'center' as const }}>No recent activity</p>
-              ) : recentActivity.map((a, i) => {
-                  const time = new Date(a.created_at)
-                  const diff = Date.now() - time.getTime()
-                  const mins = Math.floor(diff / 60000)
-                  const hrs = Math.floor(mins / 60)
-                  const days = Math.floor(hrs / 24)
-                  const ago = days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : mins > 0 ? `${mins}m ago` : 'just now'
-                  return (
-                    <div key={a.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '10px 18px', borderBottom: i < recentActivity.length - 1 ? `1px solid ${border}` : 'none', fontSize: '13px' }}>
-                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: info, marginTop: '6px', flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ color: text, fontWeight: 500 }}>{a.team?.name || 'System'}</span>
-                        <span style={{ color: muted }}> {a.action}</span>
-                        {a.detail && <span style={{ color: muted }}> — {a.detail}</span>}
-                      </div>
-                      <span style={{ color: muted, flexShrink: 0, fontSize: '12px' }}>{ago}</span>
-                    </div>
-                  )
-                })}
-            </div>
-          </div>
-        )}
-      </section>
+      )}
 
       <style>{`
-        .dashboard-glance-row > div { min-height: 38px; }
         @media (min-width: 640px) {
-          .metric-grid { grid-template-columns: repeat(4, 1fr) !important; }
-          .quick-grid { grid-template-columns: repeat(4, 1fr) !important; }
           .manager-kpis { grid-template-columns: repeat(4, 1fr) !important; }
         }
         @media (max-width: 767px) {
-          .dashboard-glance-row { gap: 6px !important; margin-bottom: 18px !important; }
-          .today-grid { gap: 10px !important; }
-          .operate-panels, .manager-panels { gap: 12px !important; }
+          .manager-panels { gap: 12px !important; }
         }
       `}</style>
     </div>
