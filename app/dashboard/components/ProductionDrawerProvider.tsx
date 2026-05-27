@@ -99,7 +99,7 @@ export function ProductionDrawerProvider({ children }: { children: ReactNode }) 
           toast('Could not load production', 'error')
           return
         }
-        setProduction(normalizeProductionRow(data as Record<string, unknown>))
+        setProduction(normalizeProductionRow(data))
       } finally {
         setOpening(false)
       }

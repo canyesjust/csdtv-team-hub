@@ -103,7 +103,7 @@ export interface EmailTemplate {
   active: boolean
 }
 
-export function normalizeProductionRow(p: Record<string, unknown>): ProductionDetail {
+export function normalizeProductionRow(p: unknown): ProductionDetail {
   const row = p as ProductionDetail & { production_members?: unknown[] }
   return {
     ...row,
