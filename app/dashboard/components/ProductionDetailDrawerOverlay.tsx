@@ -21,6 +21,7 @@ import {
   type DetailPanelCurrentUser,
   type DetailPanelTeamMember,
   type EmailTemplate,
+  normalizePanelActivityRows,
   type PanelActivity,
   type PanelChecklist,
   type ProductionDetail,
@@ -122,7 +123,7 @@ export function ProductionDetailDrawerOverlay({
       } else {
         setPanelChecklist(checkRes.data || [])
       }
-      setPanelActivity(actRes.error ? [] : ((actRes.data as PanelActivity[]) || []))
+      setPanelActivity(actRes.error ? [] : normalizePanelActivityRows(actRes.data))
     } catch {
       toast('Failed to load production details', 'error')
       setPanelChecklist([])
@@ -163,7 +164,10 @@ export function ProductionDetailDrawerOverlay({
         .insert({ production_id: selectedProdId, user_id: currentUser.id, action, detail })
         .select('id, action, detail, created_at, team:team(name)')
         .single()
-      if (data) setPanelActivity(prev => [data as PanelActivity, ...prev].slice(0, 5))
+      if (data) {
+        const row = normalizePanelActivityRows([data])[0]
+        if (row) setPanelActivity(prev => [row, ...prev].slice(0, 5))
+      }
     },
     [currentUser, selectedProdId, supabase],
   )

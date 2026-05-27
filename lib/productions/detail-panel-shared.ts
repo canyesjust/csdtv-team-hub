@@ -71,6 +71,14 @@ export interface PanelActivity {
   team: { name: string } | null
 }
 
+export function normalizePanelActivityRows(rows: unknown[] | null | undefined): PanelActivity[] {
+  return (rows || []).map(row => {
+    const r = row as PanelActivity & { team?: { name: string } | { name: string }[] | null }
+    const team = Array.isArray(r.team) ? (r.team[0] ?? null) : (r.team ?? null)
+    return { id: r.id, action: r.action, detail: r.detail, created_at: r.created_at, team }
+  })
+}
+
 export interface DetailPanelTeamMember {
   id: string
   name: string
