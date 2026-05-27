@@ -575,19 +575,36 @@ export default function DashboardPage() {
                     <p style={{ margin: 0, fontSize: '13px', color: text, fontWeight: 600 }}>
                       {ytMissingLinkCount} missing link
                     </p>
-                    <Link
-                      href="/dashboard/productions?ytPending=1"
-                      style={{
-                        marginTop: '2px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        color: info,
-                        textDecoration: 'none',
-                        whiteSpace: 'nowrap' as const,
-                      }}
-                    >
-                      View list →
-                    </Link>
+                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '12px', marginTop: '4px' }}>
+                      {ytEmailPendingCount > 0 && (
+                        <Link
+                          href="/dashboard/productions?ytEmailPending=1"
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: info,
+                            textDecoration: 'none',
+                            whiteSpace: 'nowrap' as const,
+                          }}
+                        >
+                          View email pending →
+                        </Link>
+                      )}
+                      {ytMissingLinkCount > 0 && (
+                        <Link
+                          href="/dashboard/productions?ytMissingLink=1"
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            color: statusTone.warning.color,
+                            textDecoration: 'none',
+                            whiteSpace: 'nowrap' as const,
+                          }}
+                        >
+                          View missing link →
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
 

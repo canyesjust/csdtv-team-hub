@@ -14,6 +14,13 @@ import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
 import { isUnderstaffedProductionFocus } from '@/lib/dashboard/production-attention'
+import {
+  isBoardOrLivestreamProduction,
+  isYtEmailPendingProduction,
+  isYtMissingLinkProduction,
+  organizerYoutubeEmailLogged,
+  productionIdsFromOrganizerYoutubeActivity,
+} from '@/lib/dashboard/youtube-link-followup'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 
@@ -87,7 +94,7 @@ const TYPE_COLORS: Record<string, string> = {
   'Other, Unsure, Or Consultation': '#64748b',
 }
 
-type FocusFilter = 'all' | 'today' | 'this-week' | 'overdue' | 'understaffed' | 'upcoming' | 'live-email-pending'
+type FocusFilter = 'all' | 'today' | 'this-week' | 'overdue' | 'understaffed' | 'upcoming' | 'live-email-pending' | 'missing-link'
 type Scope = 'all' | 'mine' | 'unassigned'
 type View = 'pipeline' | 'list'
 
@@ -209,7 +216,13 @@ function ProductionsPageContent() {
   const [view, setView] = useState<View>('pipeline')
   const initialScope: Scope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'unassigned' ? 'unassigned' : 'all'
   const [scope, setScope] = useState<Scope>(initialScope)
-  const [focusFilter, setFocusFilter] = useState<FocusFilter>('all')
+  const [focusFilter, setFocusFilter] = useState<FocusFilter>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('ytPending') === '1' || params.get('ytEmailPending') === '1') return 'live-email-pending'
+    if (params.get('ytMissingLink') === '1') return 'missing-link'
+    return 'all'
+  })
   const [dismissedConflicts, setDismissedConflicts] = useState<Set<string>>(new Set())
   const [conflictsExpanded, setConflictsExpanded] = useState(false)
   const [overdueExpanded, setOverdueExpanded] = useState(false)
@@ -361,15 +374,11 @@ function ProductionsPageContent() {
     const organizerEmailActs: { production_id: string; detail: string | null }[] = []
     const completeRequestedActs: { production_id: string }[] = []
     const requestedInProgressActs: { production_id: string }[] = []
-    const pendingLivestreamIds = cleaned
-      .filter(p => {
-        const t = (p.request_type_label || p.type || '').toLowerCase()
-        const isLive = t.includes('livestream') || t.includes('live stream')
-        return isLive && !!(p.livestream_url || '').trim() && !p.youtube_link_email_sent_at
-      })
+    const pendingYoutubeEmailIds = cleaned
+      .filter(p => isYtEmailPendingProduction(p) && !p.youtube_link_email_sent_at)
       .map(p => p.id)
-    if (pendingLivestreamIds.length > 0) {
-      const chunks = chunkIds(pendingLivestreamIds, 120)
+    if (pendingYoutubeEmailIds.length > 0) {
+      const chunks = chunkIds(pendingYoutubeEmailIds, 120)
       const chunkResults = await Promise.all(
         chunks.map(ids =>
           supabase
@@ -413,14 +422,7 @@ function ProductionsPageContent() {
         if (res.data) requestedInProgressActs.push(...(res.data as { production_id: string }[]))
       })
     }
-    const ytMailSet = new Set<string>()
-    for (const row of organizerEmailActs || []) {
-      const det = (row.detail || '').toLowerCase()
-      if (det.includes('youtube') || (det.includes('template:') && det.includes('livestream'))) {
-        ytMailSet.add(row.production_id as string)
-      }
-    }
-    setOrganizerYoutubeEmailedIds(ytMailSet)
+    setOrganizerYoutubeEmailedIds(productionIdsFromOrganizerYoutubeActivity(organizerEmailActs || []))
     setCompleteRequestedIds(new Set((completeRequestedActs || []).map(r => r.production_id)))
     setRequestedInProgressIds(new Set((requestedInProgressActs || []).map(r => r.production_id)))
 
@@ -815,11 +817,6 @@ function ProductionsPageContent() {
 
   const getTypeLabel = (p: Production) => p.request_type_label || p.type || 'Unknown'
   const getTypeColor = (p: Production) => TYPE_COLORS[getTypeLabel(p)] || '#64748b'
-  const isLivestreamType = useCallback((p: Production) => {
-    const t = (p.request_type_label || p.type || '').toLowerCase()
-    return t.includes('livestream') || t.includes('live stream')
-  }, [])
-
   const isStudentInternUser = useMemo(() => isStudentInternRole(currentUser?.role), [currentUser?.role])
 
   useEffect(() => {
@@ -827,10 +824,10 @@ function ProductionsPageContent() {
   }, [isStudentInternUser])
 
   /** True if staff logged sending the organizer link email (column or activity). */
-  const youtubeOrganizerEmailLogged = useCallback((p: Production) => {
-    if (p.youtube_link_email_sent_at) return true
-    return organizerYoutubeEmailedIds.has(p.id)
-  }, [organizerYoutubeEmailedIds])
+  const youtubeOrganizerEmailLogged = useCallback(
+    (p: Production) => organizerYoutubeEmailLogged(p, organizerYoutubeEmailedIds),
+    [organizerYoutubeEmailedIds],
+  )
   const isCompleteRequested = useCallback((p: Production) => {
     if (p.status === 'Complete Requested') return true
     if (p.status === 'Complete' || p.status === 'Abandoned') return false
@@ -871,7 +868,7 @@ function ProductionsPageContent() {
 
   // Counts (scope-aware) for focus chips & briefing — omit Complete/Abandoned only
   const counts = useMemo(() => {
-    let all = 0, today = 0, thisWeek = 0, overdue = 0, understaffed = 0, upcoming = 0, liveEmailPending = 0
+    let all = 0, today = 0, thisWeek = 0, overdue = 0, understaffed = 0, upcoming = 0, liveEmailPending = 0, missingLink = 0
     scopedProductions.forEach(p => {
       if (!countsTowardFocusBubbles(p)) return
       all++
@@ -882,17 +879,14 @@ function ProductionsPageContent() {
       if (isOverdueProd(p)) overdue++
       if (isUnderstaffedProductionFocus(p)) understaffed++
       if (isFutureUpcoming) upcoming++
-      if (
-        isLivestreamType(p)
-        && (p.livestream_url || '').trim()
-        && !youtubeOrganizerEmailLogged(p)
-        && p.status !== 'Abandoned'
-      ) liveEmailPending++
+      if (isYtEmailPendingProduction(p, organizerYoutubeEmailedIds)) liveEmailPending++
+      if (isYtMissingLinkProduction(p)) missingLink++
     })
-    return { today, thisWeek, overdue, understaffed, upcoming, liveEmailPending, all }
-  }, [scopedProductions, isLivestreamType, youtubeOrganizerEmailLogged])
+    return { today, thisWeek, overdue, understaffed, upcoming, liveEmailPending, missingLink, all }
+  }, [scopedProductions, organizerYoutubeEmailedIds])
 
-  const ytPendingOnly = searchParams.get('ytPending') === '1'
+  const ytPendingOnly = searchParams.get('ytPending') === '1' || searchParams.get('ytEmailPending') === '1'
+  const ytMissingLinkOnly = searchParams.get('ytMissingLink') === '1'
 
   const briefingText = useMemo(() => {
     const parts: string[] = []
@@ -905,11 +899,8 @@ function ProductionsPageContent() {
 
   // Filter pipeline: focus → status → type → search (scope is already applied via scopedProductions)
   const filtered = useMemo(() => scopedProductions.filter(p => {
-    if (ytPendingOnly) {
-      if (p.status !== 'Complete') return false
-      if (youtubeOrganizerEmailLogged(p)) return false
-      if (!(p.livestream_url && String(p.livestream_url).trim())) return false
-    }
+    if (ytPendingOnly && !isYtEmailPendingProduction(p, organizerYoutubeEmailedIds)) return false
+    if (ytMissingLinkOnly && !isYtMissingLinkProduction(p)) return false
     if (focusFilter === 'today' && daysFromToday(p.start_datetime) !== 0) return false
     if (focusFilter === 'this-week') {
       const d = daysFromToday(p.start_datetime)
@@ -922,12 +913,8 @@ function ProductionsPageContent() {
       if (d === null || d < 0) return false
       if (p.status === 'Complete' || p.status === 'Abandoned') return false
     }
-    if (focusFilter === 'live-email-pending') {
-      if (!isLivestreamType(p)) return false
-      if (!(p.livestream_url || '').trim()) return false
-      if (youtubeOrganizerEmailLogged(p)) return false
-      if (p.status === 'Abandoned') return false
-    }
+    if (focusFilter === 'live-email-pending' && !isYtEmailPendingProduction(p, organizerYoutubeEmailedIds)) return false
+    if (focusFilter === 'missing-link' && !isYtMissingLinkProduction(p)) return false
     if (typeFilter !== 'all' && getTypeLabel(p) !== typeFilter) return false
     const effectiveStatus = isCompleteRequested(p) ? 'Complete Requested' : p.status
     if (statusFilter !== 'all' && effectiveStatus !== statusFilter) return false
@@ -943,7 +930,7 @@ function ProductionsPageContent() {
       if (!hit) return false
     }
     return true
-  }), [scopedProductions, ytPendingOnly, focusFilter, typeFilter, statusFilter, search, isLivestreamType, youtubeOrganizerEmailLogged, isCompleteRequested])
+  }), [scopedProductions, ytPendingOnly, ytMissingLinkOnly, focusFilter, typeFilter, statusFilter, search, organizerYoutubeEmailedIds, isCompleteRequested])
 
   const overdueProds = useMemo(() => filtered.filter(isOverdueProd), [filtered])
 
@@ -1290,24 +1277,24 @@ function ProductionsPageContent() {
             </div>
           </header>
 
-          {ytPendingOnly && (
+          {(ytPendingOnly || focusFilter === 'live-email-pending') && (
             <div style={{ marginBottom: '16px', padding: '12px 14px', borderRadius: '12px', border: `1px solid ${info}`, background: dark ? 'rgba(91,163,224,0.08)' : 'rgba(91,163,224,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
               <p style={{ margin: 0, fontSize: '13px', color: text }}>
-                Showing completed productions that have a synced livestream/video link and no logged organizer link email yet.
+                Board meetings and livestreams (approved or in progress) with a synced production link and no organizer YouTube email logged yet — matches the dashboard follow-up counts.
               </p>
               <Link href="/dashboard/productions" style={{ fontSize: '13px', fontWeight: 600, color: info, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
                 Clear filter
               </Link>
             </div>
           )}
-          {focusFilter === 'live-email-pending' && (
-            <div style={{ marginBottom: '14px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${info}`, background: dark ? 'rgba(91,163,224,0.08)' : 'rgba(91,163,224,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
+          {(ytMissingLinkOnly || focusFilter === 'missing-link') && (
+            <div style={{ marginBottom: '14px', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${warning}`, background: dark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
               <p style={{ margin: 0, fontSize: '13px', color: text }}>
-                Livestream-type productions with a synced link and no organizer link email logged yet (checks send timestamp and Activity).
+                Board meetings and livestreams (approved or in progress) missing a synced production link from the district site.
               </p>
-              <button type="button" onClick={() => setFocusFilter('all')} style={{ fontSize: '13px', fontWeight: 600, color: info, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const }}>
+              <Link href="/dashboard/productions" style={{ fontSize: '13px', fontWeight: 600, color: warning, textDecoration: 'none', whiteSpace: 'nowrap' as const }}>
                 Clear filter
-              </button>
+              </Link>
             </div>
           )}
 
@@ -1322,6 +1309,7 @@ function ProductionsPageContent() {
               {focusChip('overdue', 'Overdue', counts.overdue, 'danger')}
               {focusChip('understaffed', 'Understaffed', counts.understaffed, 'danger')}
               {focusChip('live-email-pending', 'Live email', counts.liveEmailPending, 'info')}
+              {focusChip('missing-link', 'Missing link', counts.missingLink, 'warning')}
             </div>
           </section>
 

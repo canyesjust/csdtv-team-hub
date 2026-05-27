@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { dayDiffFromToday } from '@/lib/dashboard/day-diff'
+import {
+  isYtEmailPendingProduction,
+  isYtMissingLinkProduction,
+  productionIdsFromOrganizerYoutubeActivity,
+} from '@/lib/dashboard/youtube-link-followup'
+import { currentSchoolYearKey, inSelectedSchoolYear } from '@/lib/school-year'
 import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 
 export interface DashboardProduction {
@@ -80,7 +86,7 @@ export async function loadManagerOpsData(
     supabase.from('tasks').select('assigned_to,due_date').neq('status', 'complete').not('assigned_to', 'is', null).lt('due_date', todayIso).limit(3000),
     supabase
       .from('productions')
-      .select('id, request_type_label, type, status, livestream_url, youtube_link_email_sent_at')
+      .select('id, request_type_label, type, status, livestream_url, youtube_link_email_sent_at, school_year, start_datetime')
       .neq('status', 'Abandoned'),
   ])
 
@@ -117,21 +123,41 @@ export async function loadManagerOpsData(
   let ytEmailPendingCount = 0
   let ytMissingLinkCount = 0
   if (!ytRes.error) {
-    const relevant = (ytRes.data || []).filter((p: { request_type_label?: string | null; type?: string | null }) => {
-      const t = `${p.request_type_label || ''} ${p.type || ''}`.toLowerCase()
-      return t.includes('livestream') || t.includes('live stream') || t.includes('board')
-    })
-    const allowedStatus = (status: string | null | undefined): boolean => {
-      const s = (status || '').toLowerCase()
-      return s.includes('approved') || s.includes('in progress')
+    const schoolYear = currentSchoolYearKey()
+    const ytRows = ((ytRes.data || []) as {
+      id: string
+      request_type_label?: string | null
+      type?: string | null
+      status?: string | null
+      livestream_url?: string | null
+      youtube_link_email_sent_at?: string | null
+      school_year?: string | null
+      start_datetime?: string | null
+    }[]).filter(p =>
+      inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYear),
+    )
+    ytMissingLinkCount = ytRows.filter(p => isYtMissingLinkProduction(p)).length
+
+    const needsActivityCheck = ytRows.filter(
+      p => isYtEmailPendingProduction(p) && !p.youtube_link_email_sent_at,
+    )
+    let activityEmailedIds = new Set<string>()
+    if (needsActivityCheck.length > 0) {
+      const CHUNK = 120
+      const organizerActs: { production_id: string; detail: string | null }[] = []
+      for (let i = 0; i < needsActivityCheck.length; i += CHUNK) {
+        const ids = needsActivityCheck.slice(i, i + CHUNK).map(p => p.id)
+        const { data } = await supabase
+          .from('production_activity')
+          .select('production_id, detail')
+          .eq('action', 'Emailed organizer')
+          .in('production_id', ids)
+        if (data) organizerActs.push(...(data as { production_id: string; detail: string | null }[]))
+      }
+      activityEmailedIds = productionIdsFromOrganizerYoutubeActivity(organizerActs)
     }
-    const activeRelevant = relevant.filter((p: { status?: string | null }) => allowedStatus(p.status))
-    ytEmailPendingCount = activeRelevant.filter(
-      (p: { livestream_url?: string | null; youtube_link_email_sent_at?: string | null }) =>
-        !!(p.livestream_url || '').trim() && !p.youtube_link_email_sent_at,
-    ).length
-    ytMissingLinkCount = activeRelevant.filter(
-      (p: { livestream_url?: string | null }) => !(p.livestream_url || '').trim(),
+    ytEmailPendingCount = ytRows.filter(p =>
+      isYtEmailPendingProduction(p, activityEmailedIds),
     ).length
   }
 

@@ -88,9 +88,9 @@ export function NeedsAttentionZone({
     if (ytMissingLinkCount > 0) {
       list.push({
         icon: '📺',
-        text: `${ytMissingLinkCount} video${ytMissingLinkCount > 1 ? 's' : ''} missing production link`,
+        text: `${ytMissingLinkCount} board/livestream missing synced link`,
         tone: 'review',
-        href: '/dashboard/videos',
+        href: '/dashboard/productions?ytMissingLink=1',
       })
     }
 
