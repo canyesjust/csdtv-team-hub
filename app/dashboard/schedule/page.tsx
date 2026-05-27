@@ -646,6 +646,11 @@ export default function SchedulePage() {
         <div>
           <h1 style={{ fontSize: '26px', fontWeight: 700, color: text, margin: 0 }}>Team hours</h1>
           <p style={{ fontSize: '14px', color: muted, margin: '2px 0 0' }}>{monthLabel}</p>
+          {hoursTab === 'hours' && (viewingOwnSchedule || isManager) && (
+            <p style={{ fontSize: '12px', color: muted, margin: '6px 0 0', maxWidth: '420px' }}>
+              Click <span style={{ color: '#f87171', fontWeight: 600 }}>Out</span> on a weekday to mark time off — it appears on the digital signage calendar.
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {/* Manager: person switcher */}
@@ -833,8 +838,18 @@ export default function SchedulePage() {
                 ...DAYS.map((dayKey, dayIdx) => {
                   const dayDate = new Date(monday)
                   dayDate.setDate(monday.getDate() + dayIdx)
+                  const dayStr = toLocalDateStr(dayDate)
+                  const gone = isGoneOnDate(member.id, dayStr, allTeamGoneDays)
                   const hrs = resolveDayHours(member.id, dayDate, allTeamDefaults, allTeamOverrides)
-                  return <div key={`${member.id}-${dayKey}`} style={{ padding: '6px 0', textAlign: 'center' as const, color: hrs ? '#22c55e' : (dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), fontSize: '12px', fontWeight: hrs ? 500 : 400 }}>{hrs || '—'}</div>
+                  return (
+                    <div key={`${member.id}-${dayKey}`} style={{ padding: '6px 0', textAlign: 'center' as const, fontSize: '12px' }}>
+                      {gone ? (
+                        <span style={{ color: '#f87171', fontWeight: 600 }}>Out</span>
+                      ) : (
+                        <span style={{ color: hrs ? '#22c55e' : (dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'), fontWeight: hrs ? 500 : 400 }}>{hrs || '—'}</span>
+                      )}
+                    </div>
+                  )
                 })
               ]
             })}
@@ -869,6 +884,14 @@ export default function SchedulePage() {
             const dayOutlook = getOutlookForDay(day)
             const isLastRow = idx >= totalCells - 7
             const isLastCol = dow === 6
+            const dateStr = toLocalDateStr(day)
+            const gone =
+              !!viewingId &&
+              !isWeekend &&
+              inMonth &&
+              isGoneOnDate(viewingId, dateStr, goneDays)
+            const canMarkGone = !isWeekend && inMonth && (viewingOwnSchedule || isManager)
+            const goneBusy = togglingGone === dateStr
 
             return (
               <div
@@ -878,7 +901,9 @@ export default function SchedulePage() {
                   padding: '6px 7px',
                   borderRight: isLastCol ? 'none' : `0.5px solid ${border}`,
                   borderBottom: isLastRow ? 'none' : `0.5px solid ${border}`,
-                  background: isWeekend ? wkendBg : inPP && inMonth ? (dark ? 'rgba(30,108,181,0.04)' : 'rgba(30,108,181,0.025)') : 'transparent',
+                  background: gone && inMonth
+                    ? (dark ? 'rgba(248,113,113,0.08)' : 'rgba(248,113,113,0.06)')
+                    : isWeekend ? wkendBg : inPP && inMonth ? (dark ? 'rgba(30,108,181,0.04)' : 'rgba(30,108,181,0.025)') : 'transparent',
                   position: 'relative' as const,
                   opacity: inMonth ? 1 : 0.3,
                 }}
@@ -927,6 +952,33 @@ export default function SchedulePage() {
                   ) : !isWeekend && inMonth && (viewingOwnSchedule || isManager) ? (
                     <span style={{ fontSize: '10px', color: dark ? 'rgba(136,153,187,0.3)' : 'rgba(107,114,128,0.25)', padding: '1px 5px' }}>+</span>
                   ) : null}
+                  {canMarkGone && (
+                    <button
+                      type="button"
+                      title={gone ? 'Clear out-of-office' : 'Mark out-of-office (shows on signage)'}
+                      disabled={goneBusy}
+                      onClick={e => {
+                        e.stopPropagation()
+                        void toggleGoneDay(day)
+                      }}
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 600,
+                        lineHeight: 1,
+                        padding: '2px 5px',
+                        borderRadius: '4px',
+                        border: `1px solid ${gone ? '#f87171' : border}`,
+                        background: gone ? (dark ? 'rgba(248,113,113,0.2)' : 'rgba(248,113,113,0.12)') : 'transparent',
+                        color: gone ? '#f87171' : muted,
+                        cursor: goneBusy ? 'wait' : 'pointer',
+                        fontFamily: 'inherit',
+                        flexShrink: 0,
+                        opacity: goneBusy ? 0.6 : 1,
+                      }}
+                    >
+                      {goneBusy ? '…' : 'Out'}
+                    </button>
+                  )}
                 </div>
 
                 {/* Production chips */}

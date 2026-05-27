@@ -13,7 +13,7 @@ import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
-import { isUnderstaffed } from '@/lib/dashboard/production-attention'
+import { isUnderstaffedProductionFocus } from '@/lib/dashboard/production-attention'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
 import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
 
@@ -880,7 +880,7 @@ function ProductionsPageContent() {
       if (d === 0) today++
       if (d !== null && d >= 0 && d <= 7) thisWeek++
       if (isOverdueProd(p)) overdue++
-      if (isUnderstaffed(p) && isFutureUpcoming) understaffed++
+      if (isUnderstaffedProductionFocus(p)) understaffed++
       if (isFutureUpcoming) upcoming++
       if (
         isLivestreamType(p)
@@ -916,10 +916,7 @@ function ProductionsPageContent() {
       if (d === null || d < 0 || d > 7) return false
     }
     if (focusFilter === 'overdue' && !isOverdueProd(p)) return false
-    if (focusFilter === 'understaffed') {
-      const isFuture = !isPastProd(p) && p.status !== 'Complete' && p.status !== 'Abandoned'
-      if (!(isUnderstaffed(p) && isFuture)) return false
-    }
+    if (focusFilter === 'understaffed' && !isUnderstaffedProductionFocus(p)) return false
     if (focusFilter === 'upcoming') {
       const d = daysFromToday(p.start_datetime)
       if (d === null || d < 0) return false

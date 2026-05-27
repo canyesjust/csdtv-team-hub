@@ -19,6 +19,21 @@ export function isUnderstaffed(prod: ProductionRiskInput): boolean {
   return (prod.production_members ?? []).length === 0
 }
 
+const CREW_NEEDED_STATUSES = new Set(['Approved/Scheduled', 'In Progress'])
+
+/** Understaffed for productions focus counts — scheduled work that still needs a team. */
+export function isUnderstaffedProductionFocus(
+  prod: ProductionRiskInput & { status?: string | null },
+): boolean {
+  if (!isUnderstaffed(prod)) return false
+  if (!prod.start_datetime) return false
+  const days = dayDiffFromToday(prod.start_datetime)
+  if (days === null || days < 0) return false
+  const status = prod.status ?? ''
+  if (status === 'Complete' || status === 'Abandoned' || status === 'Idea/Request') return false
+  return CREW_NEEDED_STATUSES.has(status)
+}
+
 /** @deprecated Use isUnderstaffed */
 export function hasNoCrew(prod: ProductionRiskInput): boolean {
   return isUnderstaffed(prod)
