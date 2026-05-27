@@ -64,7 +64,6 @@ export default function DashboardPage() {
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
   const border = 'var(--border-subtle)'
-  const cardBg = 'var(--surface-1)'
   const rowHover = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
   const review = statusTone.review.color
   const info = statusTone.info.color
@@ -262,119 +261,151 @@ export default function DashboardPage() {
     )
   }
 
+  const attentionCount =
+    unstaffedProductions.length +
+    understaffedProductions.length +
+    atRiskProductions.length +
+    (crewSlotsTotal > 0 && crewSlotsFilled / crewSlotsTotal < 0.7 ? 1 : 0) +
+    (ytMissingLinkCount > 0 ? 1 : 0) +
+    (ytEmailPendingCount > 0 ? 1 : 0) +
+    Math.min(missingProdMetadata.length, 3)
+
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '24px' }}>
+      <header
+        style={{
+          marginBottom: '20px',
+          padding: '16px 18px',
+          ...uiStyles.card,
+          borderRadius: '14px',
+        }}
+      >
         <div
           style={{
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '16px',
+            gap: '12px',
             flexWrap: 'wrap' as const,
+            marginBottom: '10px',
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1
-              style={{
-                fontSize: '26px',
-                fontWeight: 700,
-                color: text,
-                margin: '0 0 6px',
-                letterSpacing: '-0.02em',
-              }}
-            >
-              {greeting()}, {currentUser?.name?.split(' ')[0]}
-            </h1>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                flexWrap: 'wrap' as const,
-                margin: '0 0 6px',
-              }}
-            >
-              <p style={{ fontSize: '14px', color: muted, margin: 0 }}>
-                {new Date().toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </p>
-              <select
-                value={schoolYearFilter}
-                onChange={e => setSchoolYearFilter(e.target.value)}
-                style={{
-                  background: cardBg,
-                  border: `1px solid ${border}`,
-                  borderRadius: '8px',
-                  padding: '5px 10px',
-                  fontSize: '12px',
-                  color: text,
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                }}
-              >
-                <option value={ALL_SCHOOL_YEARS}>All school years</option>
-                {schoolYearOptions.map(y => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p style={{ fontSize: '14px', color: muted, margin: 0 }}>{getForwardBriefing()}</p>
-            {loadError && (
-              <p style={{ margin: '8px 0 0', fontSize: '13px', color: statusTone.danger.color }}>
-                {loadError}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowQuickTaskModal(true)}
+          <h1
             style={{
-              background: 'var(--brand-primary)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '8px 14px',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              flexShrink: 0,
+              fontSize: '22px',
+              fontWeight: 700,
+              color: text,
+              margin: 0,
+              letterSpacing: '-0.02em',
             }}
           >
-            + Task
-          </button>
+            {greeting()}, {currentUser?.name?.split(' ')[0]}
+          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <select
+              value={schoolYearFilter}
+              onChange={e => setSchoolYearFilter(e.target.value)}
+              style={{
+                background: 'var(--surface-2)',
+                border: `1px solid ${border}`,
+                borderRadius: '8px',
+                padding: '6px 10px',
+                fontSize: '12px',
+                color: text,
+                fontFamily: 'inherit',
+                outline: 'none',
+              }}
+            >
+              <option value={ALL_SCHOOL_YEARS}>All school years</option>
+              {schoolYearOptions.map(y => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowQuickTaskModal(true)}
+              style={{
+                background: 'var(--brand-primary)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '7px 12px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              + Task
+            </button>
+          </div>
         </div>
-      </header>
 
-      <ThisWeekZone weekProductions={filteredWeekProductions} />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap' as const,
+            marginBottom: '12px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: muted,
+              padding: '4px 10px',
+              borderRadius: '999px',
+              background: 'var(--surface-2)',
+              border: `1px solid ${border}`,
+            }}
+          >
+            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          </span>
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              color: filteredWeekProductions.length > 0 ? 'var(--brand-primary)' : muted,
+              padding: '4px 10px',
+              borderRadius: '999px',
+              background: 'var(--surface-2)',
+              border: `1px solid ${filteredWeekProductions.length > 0 ? 'var(--brand-primary)' : border}`,
+            }}
+          >
+            {filteredWeekProductions.length} this week
+          </span>
+          {attentionCount > 0 && (
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: statusTone.warning.color,
+                padding: '4px 10px',
+                borderRadius: '999px',
+                background: statusTone.warning.background,
+                border: `1px solid ${statusTone.warning.color}`,
+              }}
+            >
+              {attentionCount} need attention
+            </span>
+          )}
+          <span style={{ fontSize: '13px', color: muted, flex: '1 1 200px', minWidth: 0 }}>
+            {getForwardBriefing()}
+          </span>
+        </div>
 
-      <NeedsAttentionZone
-        unstaffedProductions={unstaffedProductions}
-        understaffedProductions={understaffedProductions}
-        atRiskProductions={atRiskProductions}
-        missingProdMetadata={missingProdMetadata}
-        ytEmailPendingCount={ytEmailPendingCount}
-        ytMissingLinkCount={ytMissingLinkCount}
-        crewSlotsTotal={crewSlotsTotal}
-        crewSlotsFilled={crewSlotsFilled}
-      />
-
-      <section style={{ marginBottom: '32px' }}>
-        <p style={{ fontSize: '12px', fontWeight: 600, color: muted, margin: '0 0 10px' }}>Jump to</p>
         <div
           className="dashboard-quick-links"
           style={{
             display: 'flex',
-            gap: '8px',
+            gap: '6px',
             flexWrap: 'nowrap' as const,
             overflowX: 'auto' as const,
-            paddingBottom: '4px',
+            paddingBottom: '2px',
           }}
         >
           {QUICK_LINKS.map(link => (
@@ -386,8 +417,8 @@ export default function DashboardPage() {
                 background: 'var(--surface-2)',
                 border: `1px solid ${border}`,
                 borderRadius: '999px',
-                padding: '8px 14px',
-                fontSize: '13px',
+                padding: '6px 12px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: text,
                 whiteSpace: 'nowrap' as const,
@@ -405,7 +436,31 @@ export default function DashboardPage() {
             </Link>
           ))}
         </div>
-      </section>
+
+        {loadError && (
+          <p style={{ margin: '10px 0 0', fontSize: '13px', color: statusTone.danger.color }}>
+            {loadError}
+          </p>
+        )}
+      </header>
+
+      <div className="dashboard-main-grid" style={{ display: 'grid', gap: '16px', marginBottom: '24px' }}>
+        <div className="dashboard-week-span">
+          <ThisWeekZone weekProductions={filteredWeekProductions} />
+        </div>
+        <div className="dashboard-attention-span">
+        <NeedsAttentionZone
+          unstaffedProductions={unstaffedProductions}
+          understaffedProductions={understaffedProductions}
+          atRiskProductions={atRiskProductions}
+          missingProdMetadata={missingProdMetadata}
+          ytEmailPendingCount={ytEmailPendingCount}
+          ytMissingLinkCount={ytMissingLinkCount}
+          crewSlotsTotal={crewSlotsTotal}
+          crewSlotsFilled={crewSlotsFilled}
+        />
+        </div>
+      </div>
 
       {isManager && (
         <section style={uiStyles.zoneSection}>
@@ -744,6 +799,23 @@ export default function DashboardPage() {
       )}
 
       <style>{`
+        .dashboard-week-span {
+          grid-column: 1 / -1;
+        }
+        @media (min-width: 1024px) {
+          .dashboard-main-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+            align-items: stretch;
+          }
+          .dashboard-week-span {
+            grid-column: 1;
+            grid-row: 1;
+          }
+          .dashboard-attention-span {
+            grid-column: 2;
+            grid-row: 1;
+          }
+        }
         @media (min-width: 640px) {
           .manager-kpis { grid-template-columns: repeat(4, 1fr) !important; }
         }

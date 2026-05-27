@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useTheme } from '@/lib/theme'
 import { ZoneHeader } from './ZoneHeader'
 import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusTone } from '@/lib/ui/styles'
@@ -34,7 +33,7 @@ function getPrepPct(prod: WeekProduction): number | null {
   return Math.round((done / items.length) * 100)
 }
 
-function getStatusTone(prod: WeekProduction): keyof typeof statusTone {
+export function getStatusTone(prod: WeekProduction): keyof typeof statusTone {
   const days = dayDiffFromToday(prod.start_datetime)
   const members = prod.production_members?.length ?? 0
   const items = prod.checklist_items ?? []
@@ -54,14 +53,6 @@ function getStatusTone(prod: WeekProduction): keyof typeof statusTone {
   return 'success'
 }
 
-function formatDayLabel(day: Date, index: number): string {
-  const weekday = day.toLocaleDateString('en-US', { weekday: 'short' })
-  const datePart = day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  if (index === 0) return `TODAY · ${weekday} ${datePart}`
-  if (index === 1) return `TOMORROW · ${weekday} ${datePart}`
-  return `${weekday.toUpperCase()} ${datePart}`
-}
-
 function sameLocalDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -70,25 +61,20 @@ function sameLocalDay(a: Date, b: Date): boolean {
   )
 }
 
-function ProductionCard({ prod }: { prod: WeekProduction }) {
+function dayHeaderLabel(day: Date, index: number): { primary: string; secondary: string } {
+  if (index === 0) return { primary: 'Today', secondary: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+  if (index === 1) return { primary: 'Tomorrow', secondary: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
+  return {
+    primary: day.toLocaleDateString('en-US', { weekday: 'short' }),
+    secondary: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+  }
+}
+
+function CalendarEvent({ prod }: { prod: WeekProduction }) {
   const router = useRouter()
-  const { theme } = useTheme()
-  const dark = theme === 'dark'
-  const [isMobile, setIsMobile] = useState(false)
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)')
-    const update = () => setIsMobile(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
-  }, [])
-
-  const text = 'var(--text-primary)'
-  const muted = 'var(--text-muted)'
-  const border = 'var(--border-subtle)'
   const tone = getStatusTone(prod)
   const accent = statusTone[tone].color
+  const accentBg = statusTone[tone].background
   const prepPct = getPrepPct(prod)
 
   const d = prod.start_datetime ? new Date(prod.start_datetime) : null
@@ -103,20 +89,12 @@ function ProductionCard({ prod }: { prod: WeekProduction }) {
     ''
 
   const typeLabel = prod.request_type_label || prod.type || 'Production'
-  const subtitleParts = [typeLabel, loc]
-  if (prepPct !== null) subtitleParts.push(`${prepPct}% prep`)
-  const subtitle = subtitleParts.filter(Boolean).join(' · ')
-
-  const members = (prod.production_members ?? []).map(m => m.team).filter(Boolean) as {
-    name: string
-    avatar_color: string
-  }[]
-  const avatarCap = isMobile ? 2 : 3
 
   return (
     <div
       role="button"
       tabIndex={0}
+      className="week-cal-event"
       onClick={() => router.push(`/dashboard/productions?prod=${prod.production_number}`)}
       onKeyDown={e => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -125,84 +103,70 @@ function ProductionCard({ prod }: { prod: WeekProduction }) {
         }
       }}
       style={{
-        ...uiStyles.card,
-        padding: '12px 16px',
+        background: accentBg,
+        border: `1px solid ${accent}`,
+        borderLeft: `3px solid ${accent}`,
+        borderRadius: '8px',
+        padding: '8px 8px 8px 7px',
         cursor: 'pointer',
-        marginBottom: '8px',
-        transition: 'border-color var(--motion-fast) var(--ease-standard)',
+        transition: 'transform var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard)',
       }}
       onMouseEnter={e => {
-        ;(e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-strong)'
+        const el = e.currentTarget as HTMLDivElement
+        el.style.transform = 'translateY(-1px)'
+        el.style.boxShadow = 'var(--shadow-soft)'
       }}
       onMouseLeave={e => {
-        ;(e.currentTarget as HTMLDivElement).style.borderColor = border
+        const el = e.currentTarget as HTMLDivElement
+        el.style.transform = 'translateY(0)'
+        el.style.boxShadow = 'none'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-        <div
-          style={{
-            width: '12px',
-            height: '12px',
-            borderRadius: '50%',
-            background: accent,
-            flexShrink: 0,
-            marginTop: '4px',
-          }}
-        />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' as const }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, color: text, flexShrink: 0 }}>{time}</span>
-            <p
-              style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                color: text,
-                margin: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap' as const,
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              #{prod.production_number} {prod.title}
-            </p>
-          </div>
-          <p style={{ fontSize: '12px', color: muted, margin: '4px 0 0' }}>{subtitle}</p>
-        </div>
-        <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
-          {members.slice(0, avatarCap).map((m, i) => (
-            <div
-              key={i}
-              title={m.name}
-              style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: m.avatar_color,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '9px',
-                fontWeight: 700,
-                color: dark ? '#0a0f1e' : '#0a0f1e',
-              }}
-            >
-              {m.name
-                .split(' ')
-                .map(n => n[0])
-                .join('')
-                .toUpperCase()
-                .slice(0, 2)}
-            </div>
-          ))}
-        </div>
-      </div>
+      <p
+        style={{
+          margin: 0,
+          fontSize: '11px',
+          fontWeight: 700,
+          color: accent,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {time}
+      </p>
+      <p
+        style={{
+          margin: '4px 0 0',
+          fontSize: '12px',
+          fontWeight: 600,
+          color: 'var(--text-primary)',
+          lineHeight: 1.35,
+          overflow: 'hidden',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+        }}
+      >
+        #{prod.production_number} {prod.title}
+      </p>
+      <p
+        style={{
+          margin: '3px 0 0',
+          fontSize: '10px',
+          color: 'var(--text-muted)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap' as const,
+        }}
+      >
+        {typeLabel}
+        {loc ? ` · ${loc}` : ''}
+        {prepPct !== null ? ` · ${prepPct}%` : ''}
+      </p>
     </div>
   )
 }
 
-function DayGroup({
+function CalendarDayColumn({
   day,
   index,
   productions,
@@ -211,51 +175,92 @@ function DayGroup({
   index: number
   productions: WeekProduction[]
 }) {
-  const label = formatDayLabel(day, index)
   const isToday = index === 0
-  const count = productions.length
-  const headerColor = isToday ? 'var(--brand-primary)' : 'var(--text-muted)'
+  const { primary, secondary } = dayHeaderLabel(day, index)
+  const isEmpty = productions.length === 0
 
   return (
-    <div style={{ marginBottom: '16px' }}>
+    <div
+      className="week-cal-col"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        flex: '1 1 0',
+      }}
+    >
       <div
         style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: '10px',
-          marginBottom: '8px',
+          padding: '10px 8px',
+          textAlign: 'center' as const,
+          borderBottom: '1px solid var(--border-subtle)',
+          background: isToday ? 'var(--surface-2)' : 'transparent',
+          flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.5px', color: headerColor }}>
-          {label}
-        </span>
-        {count > 0 && (
-          <span className="this-week-day-count" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {count} production{count > 1 ? 's' : ''}
-          </span>
-        )}
-      </div>
-      {count === 0 ? (
-        <div
+        <p
           style={{
-            border: '1px dashed var(--border-subtle)',
-            borderRadius: '12px',
-            padding: '14px 16px',
-            background: 'transparent',
+            margin: 0,
+            fontSize: '11px',
+            fontWeight: 700,
+            letterSpacing: '0.3px',
+            textTransform: 'uppercase' as const,
+            color: isToday ? 'var(--brand-primary)' : 'var(--text-muted)',
           }}
         >
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Nothing scheduled</p>
-        </div>
-      ) : (
-        productions.map(prod => <ProductionCard key={prod.id} prod={prod} />)
-      )}
+          {primary}
+        </p>
+        <p
+          style={{
+            margin: '2px 0 0',
+            fontSize: '13px',
+            fontWeight: 600,
+            color: isToday ? 'var(--brand-primary)' : 'var(--text-primary)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {secondary}
+        </p>
+      </div>
+
+      <div
+        className="week-cal-col-body"
+        style={{
+          flex: 1,
+          padding: '8px 6px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          minHeight: '100px',
+          background: isToday ? 'var(--surface-2)' : 'transparent',
+        }}
+      >
+        {isEmpty ? (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '6px',
+              border: '1px dashed var(--border-subtle)',
+              minHeight: '72px',
+            }}
+          >
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center' as const, padding: '0 4px' }}>
+              —
+            </span>
+          </div>
+        ) : (
+          productions.map(prod => <CalendarEvent key={prod.id} prod={prod} />)
+        )}
+      </div>
     </div>
   )
 }
 
 export function ThisWeekZone({ weekProductions }: ThisWeekZoneProps) {
-  const dayBuckets = useMemo(() => {
+  const buckets = useMemo(() => {
     const days: Date[] = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -265,25 +270,76 @@ export function ThisWeekZone({ weekProductions }: ThisWeekZoneProps) {
       days.push(d)
     }
 
-    return days.map(day => {
+    return days.map((day, index) => {
       const prods = weekProductions.filter(p => {
         if (!p.start_datetime) return false
         const start = new Date(p.start_datetime)
         return sameLocalDay(start, day)
       })
-      return { day, productions: prods }
+      return { day, index, productions: prods }
     })
   }, [weekProductions])
 
+  const prodCount = weekProductions.length
+
   return (
-    <section style={uiStyles.zoneSection}>
-      <ZoneHeader label="This week" hint="Next 7 days" accent="var(--brand-primary)" />
-      {dayBuckets.map(({ day, productions }, index) => (
-        <DayGroup key={day.toISOString()} day={day} index={index} productions={productions} />
-      ))}
+    <section style={{ ...uiStyles.zoneSection, marginBottom: 0 }}>
+      <ZoneHeader
+        label="This week"
+        hint={prodCount === 0 ? 'Next 7 days' : `${prodCount} production${prodCount > 1 ? 's' : ''}`}
+        accent="var(--brand-primary)"
+      />
+      <div
+        style={{
+          ...uiStyles.card,
+          padding: 0,
+          overflow: 'hidden',
+        }}
+      >
+        <div className="week-cal-scroll">
+          <div className="week-cal-grid">
+            {buckets.map(({ day, index, productions }) => (
+              <CalendarDayColumn
+                key={day.toISOString()}
+                day={day}
+                index={index}
+                productions={productions}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
       <style>{`
+        .week-cal-scroll {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .week-cal-grid {
+          display: flex;
+          min-width: 100%;
+        }
+        .week-cal-col {
+          min-width: 0;
+        }
         @media (max-width: 767px) {
-          .this-week-day-count { display: none !important; }
+          .week-cal-grid {
+            min-width: 700px;
+          }
+          .week-cal-col {
+            min-width: 100px;
+          }
+        }
+        @media (min-width: 768px) {
+          .week-cal-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+          }
+          .week-cal-col {
+            border-right: 1px solid var(--border-subtle);
+          }
+          .week-cal-col:last-child {
+            border-right: none;
+          }
         }
       `}</style>
     </section>

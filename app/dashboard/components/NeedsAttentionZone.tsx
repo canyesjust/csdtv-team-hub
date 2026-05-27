@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { ZoneHeader } from './ZoneHeader'
 import { uiStyles, statusTone } from '@/lib/ui/styles'
@@ -28,6 +28,8 @@ interface AttentionItem {
   href: string
 }
 
+const VISIBLE_CAP = 5
+
 function daysLabel(prod: WeekProduction): string {
   const days = dayDiffFromToday(prod.start_datetime)
   if (days === null) return 'soon'
@@ -48,6 +50,7 @@ export function NeedsAttentionZone({
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const rowHover = dark ? 'rgba(255,255,255,0.04)' : 'rgba(11,20,38,0.04)'
+  const [expanded, setExpanded] = useState(false)
 
   const items = useMemo(() => {
     const list: AttentionItem[] = []
@@ -55,7 +58,7 @@ export function NeedsAttentionZone({
     for (const prod of unstaffedProductions) {
       list.push({
         icon: '⚠',
-        text: `#${prod.production_number} ${prod.title} has no crew · starts in ${daysLabel(prod)}`,
+        text: `#${prod.production_number} ${prod.title} has no crew · ${daysLabel(prod)}`,
         tone: 'danger',
         href: `/dashboard/productions?prod=${prod.production_number}`,
       })
@@ -64,7 +67,7 @@ export function NeedsAttentionZone({
     for (const prod of understaffedProductions) {
       list.push({
         icon: '⚠',
-        text: `#${prod.production_number} ${prod.title} only has 1 crew member · starts in ${daysLabel(prod)}`,
+        text: `#${prod.production_number} ${prod.title} only 1 crew · ${daysLabel(prod)}`,
         tone: 'warning',
         href: `/dashboard/productions?prod=${prod.production_number}`,
       })
@@ -73,7 +76,7 @@ export function NeedsAttentionZone({
     for (const prod of atRiskProductions) {
       list.push({
         icon: '⚠',
-        text: `#${prod.production_number} ${prod.title} prep below threshold · starts in ${daysLabel(prod)}`,
+        text: `#${prod.production_number} ${prod.title} prep below threshold · ${daysLabel(prod)}`,
         tone: 'warning',
         href: `/dashboard/productions?prod=${prod.production_number}`,
       })
@@ -82,7 +85,7 @@ export function NeedsAttentionZone({
     if (crewSlotsTotal > 0 && crewSlotsFilled / crewSlotsTotal < 0.7) {
       list.push({
         icon: '👥',
-        text: `Student crew slots: ${crewSlotsFilled}/${crewSlotsTotal} filled across upcoming events`,
+        text: `Crew slots ${crewSlotsFilled}/${crewSlotsTotal} filled`,
         tone: 'warning',
         href: '/dashboard/productions',
       })
@@ -91,7 +94,7 @@ export function NeedsAttentionZone({
     if (ytMissingLinkCount > 0) {
       list.push({
         icon: '📺',
-        text: `${ytMissingLinkCount} YouTube video${ytMissingLinkCount > 1 ? 's' : ''} missing link to production`,
+        text: `${ytMissingLinkCount} video${ytMissingLinkCount > 1 ? 's' : ''} missing production link`,
         tone: 'review',
         href: '/dashboard/videos',
       })
@@ -100,7 +103,7 @@ export function NeedsAttentionZone({
     if (ytEmailPendingCount > 0) {
       list.push({
         icon: '📺',
-        text: `${ytEmailPendingCount} video${ytEmailPendingCount > 1 ? 's' : ''} with link, organizer email not sent`,
+        text: `${ytEmailPendingCount} video${ytEmailPendingCount > 1 ? 's' : ''} — email not sent`,
         tone: 'review',
         href: '/dashboard/productions?ytPending=1',
       })
@@ -127,55 +130,121 @@ export function NeedsAttentionZone({
     crewSlotsFilled,
   ])
 
+  const visibleItems = expanded ? items : items.slice(0, VISIBLE_CAP)
+  const hiddenCount = items.length - VISIBLE_CAP
+  const hasDanger = items.some(i => i.tone === 'danger')
+  const accent = hasDanger ? 'var(--status-danger)' : 'var(--status-warning)'
+
   return (
-    <section style={uiStyles.zoneSection}>
+    <section style={{ ...uiStyles.zoneSection, marginBottom: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <ZoneHeader
         label="Needs attention"
-        hint={`${items.length} item${items.length === 1 ? '' : 's'}`}
-        accent="var(--status-warning)"
+        hint={items.length === 0 ? 'All clear' : `${items.length} item${items.length === 1 ? '' : 's'}`}
+        accent={items.length === 0 ? 'var(--status-success)' : accent}
       />
-      <div style={{ ...uiStyles.card, overflow: 'hidden' }}>
+      <div style={{ ...uiStyles.card, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: '120px' }}>
         {items.length === 0 ? (
-          <p style={{ padding: '16px', fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
-            All clear — nothing needs attention right now.
-          </p>
+          <div style={{ padding: '20px 16px', textAlign: 'center' as const }}>
+            <p style={{ fontSize: '22px', margin: '0 0 6px' }} aria-hidden>✓</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, fontWeight: 500 }}>
+              All clear — nothing needs attention
+            </p>
+          </div>
         ) : (
-          items.map((item, i) => (
-            <Link
-              key={`${item.href}-${i}`}
-              href={item.href}
-              style={{
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'stretch',
-                gap: '10px',
-                padding: '12px 16px',
-                borderBottom: i < items.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                transition: 'background 0.1s',
-              }}
-              onMouseEnter={e => {
-                ;(e.currentTarget as HTMLAnchorElement).style.background = rowHover
-              }}
-              onMouseLeave={e => {
-                ;(e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
-              }}
-            >
-              <div
+          <>
+            {visibleItems.map((item, i) => (
+              <Link
+                key={`${item.href}-${i}`}
+                href={item.href}
                 style={{
-                  width: '4px',
-                  borderRadius: '2px',
-                  background: statusTone[item.tone].color,
-                  flexShrink: 0,
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'stretch',
+                  gap: '8px',
+                  padding: '10px 14px',
+                  borderBottom:
+                    i < visibleItems.length - 1 || (hiddenCount > 0 && !expanded)
+                      ? '1px solid var(--border-subtle)'
+                      : 'none',
+                  transition: 'background 0.1s',
                 }}
-              />
-              <span style={{ fontSize: '14px', flexShrink: 0 }} aria-hidden>
-                {item.icon}
-              </span>
-              <span style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500, flex: 1, minWidth: 0 }}>
-                {item.text}
-              </span>
-            </Link>
-          ))
+                onMouseEnter={e => {
+                  ;(e.currentTarget as HTMLAnchorElement).style.background = rowHover
+                }}
+                onMouseLeave={e => {
+                  ;(e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
+                }}
+              >
+                <div
+                  style={{
+                    width: '3px',
+                    borderRadius: '2px',
+                    background: statusTone[item.tone].color,
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontSize: '13px', flexShrink: 0, lineHeight: 1.4 }} aria-hidden>
+                  {item.icon}
+                </span>
+                <span
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--text-primary)',
+                    fontWeight: 500,
+                    flex: 1,
+                    minWidth: 0,
+                    lineHeight: 1.4,
+                    overflow: 'hidden',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                  }}
+                >
+                  {item.text}
+                </span>
+              </Link>
+            ))}
+            {hiddenCount > 0 && !expanded && (
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                style={{
+                  background: 'var(--surface-2)',
+                  border: 'none',
+                  borderTop: '1px solid var(--border-subtle)',
+                  padding: '10px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--link)',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  textAlign: 'left' as const,
+                }}
+              >
+                Show {hiddenCount} more
+              </button>
+            )}
+            {expanded && items.length > VISIBLE_CAP && (
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                style={{
+                  background: 'var(--surface-2)',
+                  border: 'none',
+                  borderTop: '1px solid var(--border-subtle)',
+                  padding: '10px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  textAlign: 'left' as const,
+                }}
+              >
+                Show less
+              </button>
+            )}
+          </>
         )}
       </div>
     </section>
