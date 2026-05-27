@@ -180,6 +180,9 @@ export default function SignagePage() {
 
   const bg = '#070d18'; const cardBg = '#0f1828'; const text = '#eef2ff'; const muted = '#8899bb'; const dimmed = '#4a5670'
   const gridBorder = 'rgba(255,255,255,0.1)'
+  const todayStr = toLocalDateStr(today)
+  const todayOfficeClosed = officeClosedOnDate(todayStr, officeClosedDays)
+  const todayClosedLabel = formatOfficeClosedSignageLine(todayOfficeClosed)
 
   if (loading) return <div style={{ background: bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' as const }}><p style={{ color: muted, fontSize: '22px', fontFamily: 'system-ui' }}>Loading...</p></div>
 
@@ -206,7 +209,22 @@ export default function SignagePage() {
       </div>
 
       {/* Row 2: Stats */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexShrink: 0, fontSize: '15px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexShrink: 0, fontSize: '15px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+        {todayClosedLabel && (
+          <span style={{
+            background: 'rgba(251,191,36,0.18)',
+            border: '2px solid rgba(251,191,36,0.55)',
+            borderRadius: '10px',
+            padding: '8px 18px',
+            fontSize: '22px',
+            fontWeight: 800,
+            color: '#fbbf24',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase' as const,
+          }}>
+            {todayClosedLabel}
+          </span>
+        )}
         <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#60b8f0', fontWeight: 700 }}>THIS WEEK</span> <span style={{ fontWeight: 600 }}>{thisWeekProds.length}</span> production{thisWeekProds.length !== 1 ? 's' : ''}</span>
         <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#34d399', fontWeight: 700 }}>YEAR</span> <span style={{ fontWeight: 600 }}>{ytdCompleted}</span>/{ytdTotal} completed{ytdTotal > 0 ? ` (${Math.round(ytdCompleted / ytdTotal * 100)}%)` : ''}</span>
         {ytdVidsProduced > 0 && <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#ef4444', fontWeight: 700 }}>VIDEOS</span> <span style={{ fontWeight: 600 }}>{ytdVidsProduced}</span> produced</span>}
@@ -257,23 +275,72 @@ export default function SignagePage() {
               const past = date < today && !isSameDay(date, today)
               const todayCell = isSameDay(date, today)
               const isWeekend = di === 0 || di === 6
-                  const hasActive = dayProds.some(p => normalizeProductionStatus(p.status) === 'In Progress')
+              const hasActive = dayProds.some(p => normalizeProductionStatus(p.status) === 'In Progress')
               const opacity = past ? (hasActive ? 0.8 : 0.3) : 1
+              const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+              const officeClosed = officeClosedOnDate(ds, officeClosedDays)
+              const closedLine = formatOfficeClosedSignageLine(officeClosed)
 
               return (
                 <div key={`${wi}-${di}`} style={{
-                  background: todayCell ? 'rgba(96,184,240,0.08)' : isWeekend ? 'rgba(255,255,255,0.01)' : 'transparent',
+                  background: officeClosed
+                    ? 'rgba(251,191,36,0.14)'
+                    : todayCell ? 'rgba(96,184,240,0.08)' : isWeekend ? 'rgba(255,255,255,0.01)' : 'transparent',
                   borderBottom: wi < 4 ? `1px solid ${gridBorder}` : 'none',
                   borderRight: di < 6 ? `1px solid ${gridBorder}` : 'none',
-                  borderLeft: todayCell ? '3px solid #60b8f0' : 'none',
-                  padding: '2px 3px', opacity, overflow: 'hidden' as const,
+                  borderLeft: todayCell ? '3px solid #60b8f0' : officeClosed ? '3px solid rgba(251,191,36,0.5)' : 'none',
+                  padding: officeClosed ? '4px 5px' : '2px 3px',
+                  opacity,
+                  overflow: 'hidden' as const,
+                  display: 'flex',
+                  flexDirection: 'column' as const,
+                  minHeight: 0,
                 }}>
-                  {(() => {
-                    const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                  {officeClosed && closedLine ? (
+                    <>
+                      <div style={{
+                        fontSize: '15px',
+                        color: todayCell ? '#60b8f0' : '#c0ccdd',
+                        fontWeight: todayCell ? 800 : 600,
+                        textAlign: 'right' as const,
+                        flexShrink: 0,
+                      }}>
+                        {date.getDate()}
+                      </div>
+                      <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '8px 6px',
+                        margin: '2px 0',
+                        borderRadius: '8px',
+                        background: 'rgba(251,191,36,0.2)',
+                        border: '2px solid rgba(251,191,36,0.5)',
+                        minHeight: 0,
+                      }}>
+                        <span style={{
+                          fontSize: closedLine.length > 18 ? '18px' : '24px',
+                          fontWeight: 800,
+                          color: '#fbbf24',
+                          textAlign: 'center' as const,
+                          lineHeight: 1.15,
+                          wordBreak: 'break-word' as const,
+                          letterSpacing: '0.02em',
+                          textTransform: 'uppercase' as const,
+                        }}>
+                          {closedLine}
+                        </span>
+                      </div>
+                      {dayProds.length > 0 && (
+                        <div style={{ flexShrink: 0, opacity: 0.45, fontSize: '11px', color: muted, padding: '2px 0 0', overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const }}>
+                          {dayProds.length} shoot{dayProds.length !== 1 ? 's' : ''} scheduled
+                        </div>
+                      )}
+                    </>
+                  ) : (() => {
                     const dayEvts = calEvents.filter(e => e.date === ds)
-                    const officeClosed = officeClosedOnDate(ds, officeClosedDays)
-                    const closedLine = formatOfficeClosedSignageLine(officeClosed)
-                    const goneLine = officeClosed ? null : formatGoneSignageLine(goneFirstNamesForDate(ds, goneDays, team))
+                    const goneLine = formatGoneSignageLine(goneFirstNamesForDate(ds, goneDays, team))
                     // Outlook events with auto-dedup against productions
                     const dayOl = outlookEnabled
                       ? outlookEvents.filter(e => {
@@ -334,11 +401,6 @@ export default function SignagePage() {
                       {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>}
                     </div>
                   ))}
-                  {closedLine && (
-                    <div style={{ fontSize: `${Math.round(12 * s)}px`, color: '#fbbf24', fontWeight: 600, marginTop: `${Math.round(2 * s)}px`, lineHeight: 1.2, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const }}>
-                      {closedLine}
-                    </div>
-                  )}
                   {goneLine && (
                     <div style={{ fontSize: `${Math.round(12 * s)}px`, color: '#f87171', fontWeight: 500, marginTop: `${Math.round(2 * s)}px`, lineHeight: 1.2, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const }}>
                       {goneLine}
