@@ -1,3 +1,5 @@
+import { isActiveProductionStatus } from '@/lib/productions/status-filters'
+
 export const ALL_SCHOOL_YEARS = 'all'
 
 /** Default productions filter: current school year + next (prep before July 1 rollover). */
@@ -43,14 +45,10 @@ function schoolYearStartYear(key: string): number | null {
   return m ? Number(m[1]) : null
 }
 
-function isActivePipelineStatus(status: string | null | undefined): boolean {
-  const s = status || ''
-  return (
-    s === 'In Progress' ||
-    s === 'Approved/Scheduled' ||
-    s === 'Idea/Request' ||
-    s === 'Complete Requested'
-  )
+function isPipelineActive(status: string | null | undefined): boolean {
+  const s = (status || '').trim()
+  if (s === 'Complete Requested') return true
+  return isActiveProductionStatus(status)
 }
 
 function isFinishedStatus(status: string | null | undefined): boolean {
@@ -75,22 +73,34 @@ export function excludeOldFinishedProduction(
   return !onlyBeforeCurrent
 }
 
+function eventSchoolYearKey(input: { start_datetime?: string | null }): string | null {
+  if (!input.start_datetime) return null
+  return schoolYearKeyForDate(input.start_datetime)
+}
+
 export function matchesSchoolYearFilter(
   input: { school_year?: string | null; start_datetime?: string | null; status?: string | null },
   selectedFilter: string,
   now: Date = new Date(),
 ): boolean {
-  if (!excludeOldFinishedProduction(input, now)) return false
   if (selectedFilter === ALL_SCHOOL_YEARS) return true
+
+  const years = schoolYearsForProduction(input)
+  const eventYear = eventSchoolYearKey(input)
+
   if (selectedFilter === PLANNING_SCHOOL_YEARS) {
+    if (!excludeOldFinishedProduction(input, now)) return false
     const current = currentSchoolYearKey(now)
     const next = nextSchoolYearKey(now)
-    const years = schoolYearsForProduction(input)
     if (years.some(y => y === current || y === next)) return true
-    if (isActivePipelineStatus(input.status)) return true
+    if (eventYear === current || eventYear === next) return true
+    if (isPipelineActive(input.status)) return true
+    if (years.length === 0 && eventYear === null && !isFinishedStatus(input.status)) return true
     return false
   }
-  return schoolYearsForProduction(input).includes(selectedFilter)
+
+  if (years.includes(selectedFilter)) return true
+  return eventYear === selectedFilter
 }
 
 /** @deprecated Use matchesSchoolYearFilter */

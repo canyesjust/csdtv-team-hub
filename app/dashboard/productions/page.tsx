@@ -22,6 +22,7 @@ import {
   productionIdsFromOrganizerYoutubeActivity,
 } from '@/lib/dashboard/youtube-link-followup'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
+import { isOverdueProd as isOverdueProduction } from '@/lib/productions/detail-panel-shared'
 import {
   ALL_SCHOOL_YEARS,
   PLANNING_SCHOOL_YEARS,
@@ -157,11 +158,7 @@ function daysFromToday(d: string | null): number | null {
 }
 
 function isOverdueProd(p: Production): boolean {
-  if (!p.start_datetime) return false
-  if (p.status === 'Complete' || p.status === 'Abandoned') return false
-  if (p.status === 'In Progress') return false
-  const df = daysFromToday(p.start_datetime)
-  return df !== null && df < 0
+  return isOverdueProduction(p)
 }
 
 function isPastProd(p: Production): boolean {

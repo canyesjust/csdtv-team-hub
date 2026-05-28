@@ -161,16 +161,8 @@ export default function DashboardPage() {
     return 'Good evening'
   }
 
-  const filteredWeekProductions = useMemo(
-    () =>
-      weekProductions.filter(p =>
-        matchesSchoolYearFilter(
-          { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
-          schoolYearFilter,
-        ),
-      ),
-    [weekProductions, schoolYearFilter],
-  )
+  // This-week query is already bounded by date; do not hide rows by school year.
+  const filteredWeekProductions = weekProductions
 
   const getForwardBriefing = () => {
     const count = filteredWeekProductions.length

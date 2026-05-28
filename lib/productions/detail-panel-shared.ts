@@ -197,7 +197,6 @@ function daysFromToday(d: string | null): number | null {
 export function isOverdueProd(p: ProductionDetail): boolean {
   if (!p.start_datetime) return false
   if (p.status === 'Complete' || p.status === 'Abandoned') return false
-  if (p.status === 'In Progress') return false
   const df = daysFromToday(p.start_datetime)
   return df !== null && df < 0
 }
