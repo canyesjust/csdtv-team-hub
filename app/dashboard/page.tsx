@@ -12,7 +12,13 @@ import { ThisWeekZone, type WeekProduction } from './components/ThisWeekZone'
 import { NeedsAttentionZone } from './components/NeedsAttentionZone'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
-import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
+import {
+  ALL_SCHOOL_YEARS,
+  PLANNING_SCHOOL_YEARS,
+  buildSchoolYearFilterOptions,
+  matchesSchoolYearFilter,
+  planningSchoolYearFilterLabel,
+} from '@/lib/school-year'
 import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
 import { isLowPrepAttention, isUnderstaffed, startsWithinDays } from '@/lib/dashboard/production-attention'
 import { loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
@@ -46,7 +52,7 @@ export default function DashboardPage() {
   const [ytMissingLinkCount, setYtMissingLinkCount] = useState(0)
   const [managerRiskCounts, setManagerRiskCounts] = useState({ unassigned: 0, blocked: 0, overdue: 0 })
   const [overdueOwnerRows, setOverdueOwnerRows] = useState<OverdueOwnerRow[]>([])
-  const [schoolYearFilter, setSchoolYearFilter] = useState(currentSchoolYearKey())
+  const [schoolYearFilter, setSchoolYearFilter] = useState(PLANNING_SCHOOL_YEARS)
   const [schoolYearOptions, setSchoolYearOptions] = useState<string[]>([])
   const [managerOpen, setManagerOpen] = useState(false)
   const [showQuickTaskModal, setShowQuickTaskModal] = useState(false)
@@ -98,13 +104,7 @@ export default function DashboardPage() {
       setWeekProductions(weekData)
       setTeamMembers(teamRes.data || [])
 
-      const yearSet = new Set<string>()
-      weekData.forEach(row => {
-        const y = resolvedSchoolYearKey(row)
-        if (y) yearSet.add(y)
-      })
-      yearSet.add(currentSchoolYearKey())
-      setSchoolYearOptions(Array.from(yearSet).sort((a, b) => b.localeCompare(a)))
+      setSchoolYearOptions(buildSchoolYearFilterOptions(weekData))
 
       setManagerDataLoaded(false)
     } catch (err) {
@@ -138,13 +138,11 @@ export default function DashboardPage() {
         setManagerDataLoaded(true)
 
         setSchoolYearOptions(prev => {
-          const yearSet = new Set(prev)
-          ;(data.managerProductions as WeekProduction[]).forEach(row => {
-            const y = resolvedSchoolYearKey(row)
-            if (y) yearSet.add(y)
-          })
-          yearSet.add(currentSchoolYearKey())
-          return Array.from(yearSet).sort((a, b) => b.localeCompare(a))
+          const merged = new Set([
+            ...prev,
+            ...buildSchoolYearFilterOptions(data.managerProductions as WeekProduction[]),
+          ])
+          return Array.from(merged).sort((a, b) => b.localeCompare(a))
         })
       })
       .catch(err => console.error('Failed to load manager ops', err))
@@ -166,7 +164,10 @@ export default function DashboardPage() {
   const filteredWeekProductions = useMemo(
     () =>
       weekProductions.filter(p =>
-        inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
+        matchesSchoolYearFilter(
+          { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
+          schoolYearFilter,
+        ),
       ),
     [weekProductions, schoolYearFilter],
   )
@@ -190,7 +191,10 @@ export default function DashboardPage() {
   const filteredManagerProductions = useMemo(
     () =>
       managerProductions.filter(p =>
-        inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter),
+        matchesSchoolYearFilter(
+          { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
+          schoolYearFilter,
+        ),
       ),
     [managerProductions, schoolYearFilter],
   )
@@ -293,6 +297,7 @@ export default function DashboardPage() {
                 outline: 'none',
               }}
             >
+              <option value={PLANNING_SCHOOL_YEARS}>{planningSchoolYearFilterLabel()}</option>
               <option value={ALL_SCHOOL_YEARS}>All school years</option>
               {schoolYearOptions.map(y => (
                 <option key={y} value={y}>

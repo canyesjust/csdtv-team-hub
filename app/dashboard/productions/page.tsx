@@ -22,7 +22,15 @@ import {
   productionIdsFromOrganizerYoutubeActivity,
 } from '@/lib/dashboard/youtube-link-followup'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
-import { ALL_SCHOOL_YEARS, currentSchoolYearKey, inSelectedSchoolYear, resolvedSchoolYearKey } from '@/lib/school-year'
+import {
+  ALL_SCHOOL_YEARS,
+  PLANNING_SCHOOL_YEARS,
+  buildSchoolYearFilterOptions,
+  isNextSchoolYearOnlyProduction,
+  matchesSchoolYearFilter,
+  planningSchoolYearDividerLabel,
+  planningSchoolYearFilterLabel,
+} from '@/lib/school-year'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -211,7 +219,7 @@ function ProductionsPageContent() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [schoolYearFilter, setSchoolYearFilter] = useState(currentSchoolYearKey())
+  const [schoolYearFilter, setSchoolYearFilter] = useState(PLANNING_SCHOOL_YEARS)
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [view, setView] = useState<View>('pipeline')
   const initialScope: Scope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'unassigned' ? 'unassigned' : 'all'
@@ -843,18 +851,13 @@ function ProductionsPageContent() {
 
   const formatDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
 
-  const yearOptions = useMemo(() => {
-    const set = new Set<string>()
-    productions.forEach(p => {
-      const y = resolvedSchoolYearKey({ school_year: p.school_year, start_datetime: p.start_datetime })
-      if (y) set.add(y)
-    })
-    set.add(currentSchoolYearKey())
-    return Array.from(set).sort((a, b) => b.localeCompare(a))
-  }, [productions])
+  const yearOptions = useMemo(() => buildSchoolYearFilterOptions(productions), [productions])
 
   const yearScopedProductions = useMemo(() => productions.filter(p => (
-    inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYearFilter)
+    matchesSchoolYearFilter(
+      { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
+      schoolYearFilter,
+    )
   )), [productions, schoolYearFilter])
 
   // Scope-aware base set
@@ -1127,6 +1130,42 @@ function ProductionsPageContent() {
     )
   }
 
+  const renderPipelineCardsWithUpcomingDivider = (prods: Production[]) => {
+    const current: Production[] = []
+    const upcoming: Production[] = []
+    for (const p of prods) {
+      if (isNextSchoolYearOnlyProduction({ school_year: p.school_year, start_datetime: p.start_datetime })) {
+        upcoming.push(p)
+      } else {
+        current.push(p)
+      }
+    }
+    if (upcoming.length === 0) {
+      return prods.map(p => <ProductionCard key={p.id} prod={p} />)
+    }
+    return (
+      <>
+        {current.map(p => <ProductionCard key={p.id} prod={p} />)}
+        <div
+          role="separator"
+          style={{
+            margin: '12px 0 8px',
+            paddingTop: '10px',
+            borderTop: `1px dashed ${border}`,
+            fontSize: '11px',
+            fontWeight: 700,
+            color: muted,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {planningSchoolYearDividerLabel()}
+        </div>
+        {upcoming.map(p => <ProductionCard key={p.id} prod={p} />)}
+      </>
+    )
+  }
+
   // ---------- Production row (list view) ----------
   const ProductionRow = ({ prod, isLast }: { prod: Production; isLast: boolean }) => {
     const past      = isPastProd(prod)
@@ -1329,11 +1368,12 @@ function ProductionsPageContent() {
                 {search && <button onClick={() => setSearch('')} aria-label="Clear search" style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>}
               </div>
               <select value={schoolYearFilter} onChange={e => setSchoolYearFilter(e.target.value)} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 10px', fontSize: '13px', color: text, fontFamily: 'inherit', outline: 'none' }}>
+                <option value={PLANNING_SCHOOL_YEARS}>{planningSchoolYearFilterLabel()}</option>
                 <option value={ALL_SCHOOL_YEARS}>All school years</option>
                 {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
-            {(typeFilter !== 'all' || statusFilter !== 'all' || schoolYearFilter !== currentSchoolYearKey()) && (
+            {(typeFilter !== 'all' || statusFilter !== 'all' || schoolYearFilter !== PLANNING_SCHOOL_YEARS) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const, marginTop: '10px', fontSize: '12px', color: muted }}>
                 {typeFilter !== 'all' && (
                   <span style={{ ...statusBadge('info', true), fontSize: '11px' }}>
@@ -1345,10 +1385,10 @@ function ProductionsPageContent() {
                     Status: {statusFilter} <button onClick={() => setStatusFilter('all')} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: '4px', padding: 0, fontSize: '12px', lineHeight: 1 }}>×</button>
                   </span>
                 )}
-                {schoolYearFilter !== currentSchoolYearKey() && (
+                {schoolYearFilter !== PLANNING_SCHOOL_YEARS && (
                   <span style={{ ...statusBadge('info', true), fontSize: '11px' }}>
                     Year: {schoolYearFilter === ALL_SCHOOL_YEARS ? 'All' : schoolYearFilter}
-                    <button onClick={() => setSchoolYearFilter(currentSchoolYearKey())} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: '4px', padding: 0, fontSize: '12px', lineHeight: 1 }}>×</button>
+                    <button onClick={() => setSchoolYearFilter(PLANNING_SCHOOL_YEARS)} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', marginLeft: '4px', padding: 0, fontSize: '12px', lineHeight: 1 }}>×</button>
                   </span>
                 )}
               </div>
@@ -1536,7 +1576,7 @@ function ProductionsPageContent() {
                     </button>
                     {ideaStripExpanded && (
                       <div style={{ borderTop: `1px solid ${warning}35`, padding: '6px 10px 8px' }}>
-                        {ideaForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                        {renderPipelineCardsWithUpcomingDivider(ideaForward)}
                       </div>
                     )}
                   </div>
@@ -1547,25 +1587,25 @@ function ProductionsPageContent() {
                   {inProgress.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                       {colHeader('In Progress', inProgress.length, 'warning')}
-                      {inProgress.map(p => <ProductionCard key={p.id} prod={p} />)}
+                      {renderPipelineCardsWithUpcomingDivider(inProgress)}
                     </div>
                   )}
                   <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                     {colHeader('Approved / Scheduled', approvedForward.length, 'success')}
                     {approvedForward.length === 0 ? (
                       <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No approved / scheduled productions</p>
-                    ) : approvedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                    ) : renderPipelineCardsWithUpcomingDivider(approvedForward)}
                   </div>
                   <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                     {colHeader('Complete Requested', completeRequestedForward.length, 'review')}
                     {completeRequestedForward.length === 0 ? (
                       <p style={{ fontSize: '13px', color: muted, textAlign: 'center' as const, padding: '16px 0', margin: 0 }}>No completion requests</p>
-                    ) : completeRequestedForward.map(p => <ProductionCard key={p.id} prod={p} />)}
+                    ) : renderPipelineCardsWithUpcomingDivider(completeRequestedForward)}
                   </div>
                   {miscPipelineProds.length > 0 && (
                     <div style={{ background: colBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '14px' }}>
                       {colHeader('Other statuses', miscPipelineProds.length, null)}
-                      {miscPipelineProds.map(p => <ProductionCard key={`misc-${p.id}`} prod={p} />)}
+                      {renderPipelineCardsWithUpcomingDivider(miscPipelineProds)}
                     </div>
                   )}
               </div>

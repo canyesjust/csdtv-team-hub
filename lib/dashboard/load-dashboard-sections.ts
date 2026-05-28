@@ -5,7 +5,7 @@ import {
   isYtMissingLinkProduction,
   productionIdsFromOrganizerYoutubeActivity,
 } from '@/lib/dashboard/youtube-link-followup'
-import { currentSchoolYearKey, inSelectedSchoolYear } from '@/lib/school-year'
+import { matchesSchoolYearFilter, PLANNING_SCHOOL_YEARS } from '@/lib/school-year'
 import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 
 export interface DashboardProduction {
@@ -123,7 +123,6 @@ export async function loadManagerOpsData(
   let ytEmailPendingCount = 0
   let ytMissingLinkCount = 0
   if (!ytRes.error) {
-    const schoolYear = currentSchoolYearKey()
     const ytRows = ((ytRes.data || []) as {
       id: string
       request_type_label?: string | null
@@ -134,7 +133,10 @@ export async function loadManagerOpsData(
       school_year?: string | null
       start_datetime?: string | null
     }[]).filter(p =>
-      inSelectedSchoolYear({ school_year: p.school_year, start_datetime: p.start_datetime }, schoolYear),
+      matchesSchoolYearFilter(
+        { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
+        PLANNING_SCHOOL_YEARS,
+      ),
     )
     ytMissingLinkCount = ytRows.filter(p => isYtMissingLinkProduction(p)).length
 
