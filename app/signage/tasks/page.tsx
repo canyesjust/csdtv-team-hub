@@ -20,6 +20,18 @@ interface TeamMember {
   role?: string | null
 }
 
+interface InProgressProduction {
+  id: string
+  production_number: number
+  title: string
+  start_datetime: string | null
+  request_type_label: string | null
+}
+
+function normalizeProductionStatus(status: string | null | undefined): string {
+  return status ? status.replace(/^\d+\s*-\s*/, '') : ''
+}
+
 interface ProductionMemberRow {
   production_id: string
   user_id: string
@@ -82,6 +94,7 @@ export default function TasksSignagePage() {
   const [tasks, setTasks] = useState<TaskRow[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [prodMembers, setProdMembers] = useState<ProductionMemberRow[]>([])
+  const [inProgressProductions, setInProgressProductions] = useState<InProgressProduction[]>([])
   const [checklistOpenByUser, setChecklistOpenByUser] = useState<Record<string, number>>({})
   const [checklistUnassignedOpen, setChecklistUnassignedOpen] = useState(0)
   const [taskIntakeUrl, setTaskIntakeUrl] = useState<string | null>(null)
@@ -93,12 +106,13 @@ export default function TasksSignagePage() {
     const res = await fetch(`/api/signage/tasks-data?k=${encodeURIComponent(key)}`, { cache: 'no-store' })
     const payload = await res.json().catch(() => ({}))
     if (!res.ok) {
-    setTasks([])
-    setTeam([])
-    setProdMembers([])
-    setChecklistOpenByUser({})
-    setChecklistUnassignedOpen(0)
-    setTaskIntakeUrl(null)
+      setTasks([])
+      setTeam([])
+      setProdMembers([])
+      setInProgressProductions([])
+      setChecklistOpenByUser({})
+      setChecklistUnassignedOpen(0)
+      setTaskIntakeUrl(null)
       const message = (typeof payload?.error === 'string' && payload.error) || 'Failed to load signage data'
       let hint: string | null = null
       if (res.status === 401) {
@@ -138,6 +152,7 @@ export default function TasksSignagePage() {
     setTasks(normalizedTasks)
     setTeam((payload.team as TeamMember[]) || [])
     setProdMembers((payload.prodMembers as ProductionMemberRow[]) || [])
+    setInProgressProductions((payload.inProgressProductions as InProgressProduction[]) || [])
     setChecklistOpenByUser(
       payload.checklistOpenByUser && typeof payload.checklistOpenByUser === 'object' && !Array.isArray(payload.checklistOpenByUser)
         ? (payload.checklistOpenByUser as Record<string, number>)
@@ -264,14 +279,20 @@ export default function TasksSignagePage() {
       const personProds = (byPersonProds.get(member.id) || [])
         .filter(p => p.productions?.start_datetime)
         .sort((a, b) => new Date(a.productions!.start_datetime!).getTime() - new Date(b.productions!.start_datetime!).getTime())
-      const next5DayProds = personProds.filter(p => {
+      const personInProgressProds = personProds.filter(
+        p => normalizeProductionStatus(p.productions?.status) === 'In Progress'
+      )
+      const personUpcomingProds = personProds.filter(
+        p => normalizeProductionStatus(p.productions?.status) !== 'In Progress'
+      )
+      const next5DayProds = personUpcomingProds.filter(p => {
         const startIso = p.productions?.start_datetime
         if (!startIso) return false
         const ms = new Date(startIso).getTime() - Date.now()
         const days = ms / 86400000
         return days >= 0 && days <= 5
       })
-      return { member, personTasks, personOverdue, personProds, next5DayProds, checklistOpen: checklistOpenByUser[member.id] ?? 0 }
+      return { member, personTasks, personOverdue, personInProgressProds, personUpcomingProds, next5DayProds, checklistOpen: checklistOpenByUser[member.id] ?? 0 }
     }).sort((a, b) => {
       const rankDiff = roleRank(a.member.role) - roleRank(b.member.role)
       if (rankDiff !== 0) return rankDiff
@@ -333,7 +354,7 @@ export default function TasksSignagePage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', gap: '16px', flexWrap: 'wrap' as const }}>
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
           <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.05 }}>CSDtv Task Ops Board</h1>
-          <p style={{ margin: '6px 0 0', color: muted, fontSize: `${fs.subtitle}px` }}>Unassigned work, ownership, and upcoming 14-day production load</p>
+          <p style={{ margin: '6px 0 0', color: muted, fontSize: `${fs.subtitle}px` }}>Unassigned work, in-progress productions, and upcoming 14-day load</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexShrink: 0 }}>
           {taskIntakeQrDataUrl && taskIntakeUrl && (
@@ -349,12 +370,13 @@ export default function TasksSignagePage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
         {[
           { label: 'Unassigned', value: unassignedTasks.length, color: '#fbbf24' },
           { label: 'Overdue', value: overdueTasks.length, color: '#ef4444' },
           { label: 'Due today', value: dueTodayCount, color: '#60b8f0' },
           { label: 'Open tasks', value: displayTasks.length, color: '#34d399' },
+          { label: 'In progress', value: inProgressProductions.length, color: '#f0b840' },
           { label: 'Checklist items', value: checklistOpenTotal, color: '#f472b6' },
           { label: 'Request queue', value: purchaseQueueCount, color: '#c084fc' },
         ].map(stat => (
@@ -364,6 +386,59 @@ export default function TasksSignagePage() {
           </div>
         ))}
       </div>
+
+      {inProgressProductions.length > 0 && (
+        <div style={{ background: cardBg, border: '1px solid rgba(240,184,64,0.45)', borderRadius: '12px', padding: '12px 14px', marginBottom: '12px' }}>
+          <h2 style={{ margin: 0, fontSize: `${fit(28, 18, densityPenalty * 0.3)}px`, color: '#f0b840', fontWeight: 800, letterSpacing: '0.02em' }}>
+            In progress productions
+          </h2>
+          <div style={{ marginTop: '10px', display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+            {inProgressProductions.map(prod => {
+              const tag = signageTypeTag(prod.request_type_label)
+              const dateStr = formatProductionDateShort(prod.start_datetime)
+              return (
+                <div
+                  key={prod.id}
+                  style={{
+                    flex: '0 0 auto',
+                    minWidth: `${fit(280, 200)}px`,
+                    maxWidth: `${fit(360, 260)}px`,
+                    border: `1px solid rgba(240,184,64,0.35)`,
+                    borderRadius: '10px',
+                    padding: '10px 12px',
+                    background: 'rgba(240,184,64,0.08)',
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: `${fit(22, 16)}px`, fontWeight: 800, lineHeight: 1.2, color: text }}>
+                    #{prod.production_number} {prod.title}
+                  </p>
+                  <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
+                    <span style={{ fontSize: `${fit(16, 12)}px`, color: muted, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                      Event {dateStr}
+                    </span>
+                    {tag && (
+                      <span
+                        style={{
+                          fontSize: `${fit(12, 9)}px`,
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          background: tag.bg,
+                          color: '#ffffff',
+                          letterSpacing: '0.02em',
+                          textTransform: 'uppercase' as const,
+                        }}
+                      >
+                        {tag.text}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 3.75fr)', gap: '22px' }}>
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -389,7 +464,7 @@ export default function TasksSignagePage() {
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <h2 style={{ margin: 0, fontSize: `${fs.sectionTitle}px` }}>Staff Workload</h2>
           <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr', gap: '22px', paddingRight: '6px' }}>
-            {staffCards.map(({ member, personTasks, personOverdue, personProds, next5DayProds, checklistOpen }) => (
+            {staffCards.map(({ member, personTasks, personOverdue, personInProgressProds, personUpcomingProds, next5DayProds, checklistOpen }) => (
               <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '14px', padding: '18px 22px', background: 'rgba(255,255,255,0.035)', boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '12px' }}>
                   <div style={{ width: `${fitStaff(48, 32)}px`, height: `${fitStaff(48, 32)}px`, borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${fitStaff(18, 12)}px`, fontWeight: 800 }}>
@@ -398,7 +473,7 @@ export default function TasksSignagePage() {
                   <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 800, lineHeight: 1.2 }}>{member.name}</p>
                 </div>
                 <p style={{ margin: '0 0 14px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.35 }}>
-                  {personTasks.length} open · {personOverdue} overdue · {personProds.length} upcoming · {checklistOpen} checklist
+                  {personTasks.length} open · {personOverdue} overdue · {personInProgressProds.length} in progress · {personUpcomingProds.length} upcoming · {checklistOpen} checklist
                 </p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px 36px', alignItems: 'start' }}>
                   <div style={{ display: 'grid', gap: '10px' }}>
@@ -420,7 +495,57 @@ export default function TasksSignagePage() {
                   </div>
 
                   <div style={{ display: 'grid', gap: '10px' }}>
-                    <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
+                    {personInProgressProds.length > 0 && (
+                      <>
+                        <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#f0b840', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
+                          In progress
+                        </p>
+                        {personInProgressProds.slice(0, 6).map((pm, idx) => {
+                          const prod = pm.productions
+                          const tag = signageTypeTag(prod?.request_type_label)
+                          const dateStr = formatProductionDateShort(prod?.start_datetime ?? null)
+                          const list = personInProgressProds.slice(0, 6)
+                          return (
+                            <div
+                              key={`ip-${pm.production_id}-${pm.user_id}`}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '20px',
+                                padding: '10px 0',
+                                borderBottom: idx < list.length - 1 ? `1px solid rgba(240,184,64,0.25)` : 'none',
+                                minHeight: `${Math.round(fs.prodLine * 1.45)}px`,
+                              }}
+                            >
+                              <span style={{ flex: '0 0 auto', fontSize: `${fs.prodDate}px`, color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const, fontVariantNumeric: 'tabular-nums' }}>
+                                {dateStr}
+                              </span>
+                              <span style={{ flex: 1, minWidth: 0, fontSize: `${fs.prodLine}px`, color: '#f5d78e', fontWeight: 600, lineHeight: 1.35, paddingRight: '8px' }}>
+                                #{prod?.production_number} {prod?.title}
+                              </span>
+                              {tag && (
+                                <span
+                                  style={{
+                                    flexShrink: 0,
+                                    fontSize: `${fs.prodTag}px`,
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    background: tag.bg,
+                                    color: '#ffffff',
+                                    letterSpacing: '0.02em',
+                                    textTransform: 'uppercase' as const,
+                                  }}
+                                >
+                                  {tag.text}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
+                    <p style={{ margin: personInProgressProds.length > 0 ? '8px 0 0' : 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800 }}>
                       Upcoming (next 5 days)
                     </p>
                     {next5DayProds.slice(0, 10).map((pm, idx) => {

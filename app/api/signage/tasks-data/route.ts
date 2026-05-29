@@ -6,6 +6,10 @@ import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/sta
 
 export const dynamic = 'force-dynamic'
 
+function normalizeProductionStatus(status: string | null | undefined): string {
+  return status ? status.replace(/^\d+\s*-\s*/, '') : ''
+}
+
 function absoluteIntakeUrl(stored: string | null): string | null {
   if (!stored || !String(stored).trim()) return null
   const t = String(stored).trim()
@@ -119,21 +123,43 @@ export async function GET(request: Request) {
     }
   }
 
-  const upcomingProds = ((prodsRes.data || []) as Array<{
+  const allProds = ((prodsRes.data || []) as Array<{
     id: string
+    production_number: number
+    title: string
     status?: string | null
     start_datetime?: string | null
     start_datetime_label?: string | null
     event_date?: string | null
-  }>)
-    .map(p => normalizeProductionDatetimeFields(p))
+    request_type_label?: string | null
+  }>).map(p => normalizeProductionDatetimeFields(p))
+
+  const inProgressProductions = allProds
+    .filter(p => normalizeProductionStatus(p.status) === 'In Progress')
+    .map(p => ({
+      id: p.id,
+      production_number: p.production_number,
+      title: p.title,
+      start_datetime: p.start_datetime ?? null,
+      request_type_label: p.request_type_label ?? null,
+    }))
+    .sort((a, b) => {
+      const aMs = a.start_datetime ? new Date(a.start_datetime).getTime() : Number.MAX_SAFE_INTEGER
+      const bMs = b.start_datetime ? new Date(b.start_datetime).getTime() : Number.MAX_SAFE_INTEGER
+      return aMs - bMs
+    })
+
+  const upcomingProds = allProds
     .filter(p => isProductionInDateWindow(p, start, end))
     .filter(p => {
       const status = (p.status || '').toLowerCase()
       return status !== 'complete' && status !== 'abandoned' && status !== 'cancelled'
     })
-  const prodById = new Map(upcomingProds.map((p: { id: string }) => [p.id, p]))
-  const prodIds = upcomingProds.map((p: { id: string }) => p.id)
+  const prodById = new Map(allProds.map(p => [p.id, p]))
+  const prodIds = [...new Set([
+    ...inProgressProductions.map(p => p.id),
+    ...upcomingProds.map(p => p.id),
+  ])]
   let prodMembers: Array<{
     production_id: string
     user_id: string
@@ -196,6 +222,7 @@ export async function GET(request: Request) {
     tasks: tasksPayload,
     team: teamRes.data || [],
     prodMembers,
+    inProgressProductions,
     checklistOpenByUser,
     checklistUnassignedOpen,
     taskIntakeUrl,

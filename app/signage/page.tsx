@@ -35,10 +35,9 @@ function normalizeProductionStatus(status: string | null | undefined): string {
   return status ? status.replace(/^\d+\s*-\s*/, '') : ''
 }
 
-/** Calendar shows only approved-or-later pipeline (not ideas, not abandoned). */
+/** Calendar shows scheduled shoots only — not active edit/post work (see task ops board). */
 const SIGNAGE_CALENDAR_STATUSES = new Set([
   'Approved/Scheduled',
-  'In Progress',
   'Complete Requested',
   'Complete',
 ])
@@ -153,7 +152,6 @@ export default function SignagePage() {
   const getHoursForUser = (userId: string): string | null =>
     resolveDayHours(userId, today, schedDefaults, schedOverrides)
 
-  const inProgressProds = productions.filter(p => normalizeProductionStatus(p.status) === 'In Progress')
   const endOfWeek = new Date(sunday); endOfWeek.setDate(endOfWeek.getDate() + 7)
   const thisWeekProds = productions.filter(p => {
     if (!showProductionOnSignageCalendar(p) || !p.start_datetime) return false
@@ -230,7 +228,6 @@ export default function SignagePage() {
         <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#60b8f0', fontWeight: 700 }}>THIS WEEK</span> <span style={{ fontWeight: 600 }}>{thisWeekProds.length}</span> production{thisWeekProds.length !== 1 ? 's' : ''}</span>
         <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#34d399', fontWeight: 700 }}>YEAR</span> <span style={{ fontWeight: 600 }}>{ytdCompleted}</span>/{ytdTotal} completed{ytdTotal > 0 ? ` (${Math.round(ytdCompleted / ytdTotal * 100)}%)` : ''}</span>
         {ytdVidsProduced > 0 && <span style={{ background: cardBg, border: `1px solid ${gridBorder}`, borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#ef4444', fontWeight: 700 }}>VIDEOS</span> <span style={{ fontWeight: 600 }}>{ytdVidsProduced}</span> produced</span>}
-        {inProgressProds.length > 0 && <span style={{ background: cardBg, border: '1px solid rgba(251,191,36,0.2)', borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#fbbf24', fontWeight: 700 }}>IN PROGRESS</span> {inProgressProds.map(p => p.title).join(' · ')}</span>}
         {outlookEnabled && <span style={{ background: cardBg, border: '1px solid rgba(8,145,178,0.25)', borderRadius: '8px', padding: '5px 12px' }}><span style={{ color: '#0891b2', fontWeight: 700 }}>OUTLOOK</span> teal = room calendar only (not already in Hub)</span>}
       </div>
 
@@ -277,8 +274,7 @@ export default function SignagePage() {
               const past = date < today && !isSameDay(date, today)
               const todayCell = isSameDay(date, today)
               const isWeekend = di === 0 || di === 6
-              const hasActive = dayProds.some(p => normalizeProductionStatus(p.status) === 'In Progress')
-              const opacity = past ? (hasActive ? 0.8 : 0.3) : 1
+              const opacity = past ? 0.3 : 1
               const ds = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
               const officeClosed = officeClosedOnDate(ds, officeClosedDays)
               const closedLine = formatOfficeClosedSignageLine(officeClosed)
@@ -360,7 +356,6 @@ export default function SignagePage() {
                     const ini = members.map(m => m.team ? getInitials(m.team.name) : '').filter(Boolean).join(' ')
                     const st = normalizeProductionStatus(p.status)
                     const done = st === 'Complete'
-                    const active = st === 'In Progress'
                     const d = p.start_datetime ? new Date(p.start_datetime) : null
                     const time = d ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
                     const loc = getSchoolName(p.filming_location) || p.filming_location || getSchoolName(p.school_department) || ''
@@ -372,7 +367,7 @@ export default function SignagePage() {
                         opacity: done ? 0.4 : 1,
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: active ? 800 : 700, color: done ? dimmed : tc, flex: 1, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, textDecoration: done ? 'line-through' : 'none', lineHeight: 1.2 }}>{p.title}</span>
+                          <span style={{ fontSize: `${Math.round(18 * s)}px`, fontWeight: 700, color: done ? dimmed : tc, flex: 1, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const, textDecoration: done ? 'line-through' : 'none', lineHeight: 1.2 }}>{p.title}</span>
                           {ini && <span style={{ fontSize: `${Math.round(13 * s)}px`, color: done ? dimmed : '#c0ccdd', fontWeight: 500, flexShrink: 0 }}>{ini}</span>}
                         </div>
                         {(time || loc) && !done && (
