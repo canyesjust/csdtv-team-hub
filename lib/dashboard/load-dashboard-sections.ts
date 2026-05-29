@@ -7,6 +7,7 @@ import {
 } from '@/lib/dashboard/youtube-link-followup'
 import { matchesSchoolYearFilter, PLANNING_SCHOOL_YEARS } from '@/lib/school-year'
 import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
 export interface DashboardProduction {
   id: string
@@ -17,6 +18,8 @@ export interface DashboardProduction {
   status: string | null
   school_year?: string | null
   start_datetime: string | null
+  start_datetime_label?: string | null
+  event_date?: string | null
   filming_location: string | null
   school_department: string | null
   checklist_items?: { id: string; title: string; completed: boolean }[]
@@ -63,13 +66,15 @@ export async function loadManagerOpsData(
   const { data: allManagerProds } = await supabase
     .from('productions')
     .select(
-      'id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
+      'id, title, production_number, request_type_label, type, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
     )
     .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
     .order('start_datetime', { ascending: true, nullsFirst: false })
     .limit(200)
 
-  const managerProds = (allManagerProds as unknown as DashboardProduction[]) || []
+  const managerProds = ((allManagerProds as unknown as DashboardProduction[]) || []).map(p =>
+    normalizeProductionDatetimeFields(p),
+  )
 
   const soonProdIds = managerProds
     .filter((p) => {
@@ -86,7 +91,7 @@ export async function loadManagerOpsData(
     supabase.from('tasks').select('assigned_to,due_date').neq('status', 'complete').not('assigned_to', 'is', null).lt('due_date', todayIso).limit(3000),
     supabase
       .from('productions')
-      .select('id, request_type_label, type, status, livestream_url, youtube_link_email_sent_at, school_year, start_datetime')
+      .select('id, request_type_label, type, status, livestream_url, youtube_link_email_sent_at, school_year, start_datetime, start_datetime_label, event_date')
       .neq('status', 'Abandoned'),
   ])
 
@@ -132,9 +137,17 @@ export async function loadManagerOpsData(
       youtube_link_email_sent_at?: string | null
       school_year?: string | null
       start_datetime?: string | null
-    }[]).filter(p =>
+      start_datetime_label?: string | null
+      event_date?: string | null
+    }[]).map(p => normalizeProductionDatetimeFields(p)).filter(p =>
       matchesSchoolYearFilter(
-        { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
+        {
+          school_year: p.school_year,
+          start_datetime: p.start_datetime,
+          start_datetime_label: p.start_datetime_label,
+          event_date: p.event_date,
+          status: p.status,
+        },
         PLANNING_SCHOOL_YEARS,
       ),
     )

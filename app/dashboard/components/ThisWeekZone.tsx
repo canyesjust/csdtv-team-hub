@@ -16,6 +16,8 @@ export interface WeekProduction {
   status: string | null
   school_year?: string | null
   start_datetime: string | null
+  start_datetime_label?: string | null
+  event_date?: string | null
   filming_location: string | null
   school_department: string | null
   checklist_items?: { id: string; title: string; completed: boolean }[]

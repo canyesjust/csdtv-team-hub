@@ -23,6 +23,7 @@ import {
 } from '@/lib/dashboard/youtube-link-followup'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
 import { isOverdueProd as isOverdueProduction } from '@/lib/productions/detail-panel-shared'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 import {
   ALL_SCHOOL_YEARS,
   PLANNING_SCHOOL_YEARS,
@@ -45,6 +46,7 @@ interface Production {
   start_datetime: string | null; end_datetime: string | null; filming_location: string | null
   event_location: string | null
   school_year: string | null; synced_at: string | null
+  start_datetime_label: string | null; event_date: string | null
   additional_notes: string | null; video_description: string | null
   team_notes: string | null
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
@@ -129,6 +131,8 @@ const PRODUCTION_LIST_SELECT = `
   livestream_url,
   youtube_link_email_sent_at,
   start_datetime,
+  start_datetime_label,
+  event_date,
   end_datetime,
   filming_location,
   event_location,
@@ -361,14 +365,17 @@ function ProductionsPageContent() {
     setTeam(teamList)
     if (userRes?.data) setCurrentUser(userRes.data as CurrentUser)
     // Defensive normalization in case the sync sends prefixed values from the district site
-    const cleaned: Production[] = (prodsData || []).map((p: any) => ({
-      ...p,
-      status: p.status ? p.status.replace(/^\d+\s*-\s*/, '') : p.status,
-      production_members: (p.production_members || []).map((m: any) => ({
-        ...m,
-        team: Array.isArray(m.team) ? (m.team[0] || null) : (m.team || null),
-      })),
-    }))
+    const cleaned: Production[] = (prodsData || []).map((p: any) => {
+      const normalized = normalizeProductionDatetimeFields(p)
+      return {
+        ...normalized,
+        status: normalized.status ? normalized.status.replace(/^\d+\s*-\s*/, '') : normalized.status,
+        production_members: (p.production_members || []).map((m: any) => ({
+          ...m,
+          team: Array.isArray(m.team) ? (m.team[0] || null) : (m.team || null),
+        })),
+      }
+    })
     setProductions(sortProductions(cleaned))
 
     const dismissedData = dismissedDataRes.data
@@ -852,7 +859,13 @@ function ProductionsPageContent() {
 
   const yearScopedProductions = useMemo(() => productions.filter(p => (
     matchesSchoolYearFilter(
-      { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
+      {
+        school_year: p.school_year,
+        start_datetime: p.start_datetime,
+        start_datetime_label: p.start_datetime_label,
+        event_date: p.event_date,
+        status: p.status,
+      },
       schoolYearFilter,
     )
   )), [productions, schoolYearFilter])
@@ -1131,7 +1144,12 @@ function ProductionsPageContent() {
     const current: Production[] = []
     const upcoming: Production[] = []
     for (const p of prods) {
-      if (isNextSchoolYearOnlyProduction({ school_year: p.school_year, start_datetime: p.start_datetime })) {
+      if (isNextSchoolYearOnlyProduction({
+        school_year: p.school_year,
+        start_datetime: p.start_datetime,
+        start_datetime_label: p.start_datetime_label,
+        event_date: p.event_date,
+      })) {
         upcoming.push(p)
       } else {
         current.push(p)

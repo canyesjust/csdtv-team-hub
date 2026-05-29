@@ -1,4 +1,5 @@
 import { isActiveProductionStatus } from '@/lib/productions/status-filters'
+import { parseProductionStartInstant, type ProductionDateInput } from '@/lib/productions/effective-datetime'
 
 export const ALL_SCHOOL_YEARS = 'all'
 
@@ -32,9 +33,10 @@ function normalizeStoredSchoolYear(raw: string | null | undefined): string | nul
 }
 
 /** School year for filtering — uses event date when set (synced school_year is often the *next* year for spring graduations). */
-export function resolvedSchoolYearKey(input: { school_year?: string | null; start_datetime?: string | null }): string | null {
-  if (input.start_datetime) {
-    const fromDate = schoolYearKeyForDate(input.start_datetime)
+export function resolvedSchoolYearKey(input: ProductionDateInput & { school_year?: string | null }): string | null {
+  const event = parseProductionStartInstant(input)
+  if (event) {
+    const fromDate = schoolYearKeyForDate(event)
     if (fromDate) return fromDate
   }
   return normalizeStoredSchoolYear(input.school_year)
@@ -58,7 +60,7 @@ function isFinishedStatus(status: string | null | undefined): boolean {
 
 /** Drop completed/abandoned productions that only belong to school years before the current one. */
 export function excludeOldFinishedProduction(
-  input: { school_year?: string | null; start_datetime?: string | null; status?: string | null },
+  input: ProductionDateInput & { school_year?: string | null; status?: string | null },
   now: Date = new Date(),
 ): boolean {
   if (!isFinishedStatus(input.status)) return true
@@ -73,13 +75,14 @@ export function excludeOldFinishedProduction(
   return !onlyBeforeCurrent
 }
 
-function eventSchoolYearKey(input: { start_datetime?: string | null }): string | null {
-  if (!input.start_datetime) return null
-  return schoolYearKeyForDate(input.start_datetime)
+function eventSchoolYearKey(input: ProductionDateInput): string | null {
+  const event = parseProductionStartInstant(input)
+  if (!event) return null
+  return schoolYearKeyForDate(event)
 }
 
 export function matchesSchoolYearFilter(
-  input: { school_year?: string | null; start_datetime?: string | null; status?: string | null },
+  input: ProductionDateInput & { school_year?: string | null; status?: string | null },
   selectedFilter: string,
   now: Date = new Date(),
 ): boolean {
@@ -113,7 +116,7 @@ export function inSelectedSchoolYear(
 
 /** Production is tagged for next school year only (divider in pipeline). */
 export function isNextSchoolYearOnlyProduction(
-  input: { school_year?: string | null; start_datetime?: string | null },
+  input: ProductionDateInput & { school_year?: string | null },
   now: Date = new Date(),
 ): boolean {
   const current = currentSchoolYearKey(now)
@@ -146,9 +149,8 @@ export function nextSchoolYearKey(now: Date = new Date()): string {
 }
 
 /** All school year labels that apply to a production (event date + synced field). */
-export function schoolYearsForProduction(input: {
+export function schoolYearsForProduction(input: ProductionDateInput & {
   school_year?: string | null
-  start_datetime?: string | null
 }): string[] {
   const keys = new Set<string>()
   const resolved = resolvedSchoolYearKey(input)
@@ -160,7 +162,7 @@ export function schoolYearsForProduction(input: {
 
 /** Dropdown options: prior / current / next year, plus any year present in data. */
 export function buildSchoolYearFilterOptions(
-  productions: Iterable<{ school_year?: string | null; start_datetime?: string | null }>,
+  productions: Iterable<ProductionDateInput & { school_year?: string | null }>,
   now: Date = new Date(),
 ): string[] {
   const keys = new Set<string>([

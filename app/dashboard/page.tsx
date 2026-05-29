@@ -23,6 +23,11 @@ import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
 import { isLowPrepAttention, isUnderstaffed, startsWithinDays } from '@/lib/dashboard/production-attention'
 import { loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
+import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
+import {
+  isProductionInDateWindow,
+  normalizeProductionDatetimeFields,
+} from '@/lib/productions/effective-datetime'
 
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
 interface CurrentUser { id: string; name: string; role: string }
@@ -93,14 +98,22 @@ export default function DashboardPage() {
         supabase
           .from('productions')
           .select(
-            'id, title, production_number, request_type_label, type, status, school_year, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
+            'id, title, production_number, request_type_label, type, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
           )
-          .gte('start_datetime', todayStart.toISOString())
-          .lte('start_datetime', weekEnd.toISOString())
-          .order('start_datetime', { ascending: true }),
+          .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
+          .order('production_number', { ascending: true }),
       ])
 
-      const weekData = (weekProdsRes.data as unknown as WeekProduction[]) ?? []
+      if (weekProdsRes.error) throw weekProdsRes.error
+
+      const weekData = ((weekProdsRes.data as unknown as WeekProduction[]) ?? [])
+        .map(row => normalizeProductionDatetimeFields(row))
+        .filter(row => isProductionInDateWindow(row, todayStart, weekEnd))
+        .sort((a, b) => {
+          const aMs = a.start_datetime ? new Date(a.start_datetime).getTime() : 0
+          const bMs = b.start_datetime ? new Date(b.start_datetime).getTime() : 0
+          return aMs - bMs
+        })
       setWeekProductions(weekData)
       setTeamMembers(teamRes.data || [])
 
@@ -184,7 +197,13 @@ export default function DashboardPage() {
     () =>
       managerProductions.filter(p =>
         matchesSchoolYearFilter(
-          { school_year: p.school_year, start_datetime: p.start_datetime, status: p.status },
+          {
+            school_year: p.school_year,
+            start_datetime: p.start_datetime,
+            start_datetime_label: p.start_datetime_label,
+            event_date: p.event_date,
+            status: p.status,
+          },
           schoolYearFilter,
         ),
       ),
