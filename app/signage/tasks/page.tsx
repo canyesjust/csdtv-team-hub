@@ -504,7 +504,46 @@ export default function TasksSignagePage() {
                   </div>
 
                   <div style={{ display: 'grid', gap: '6px', minWidth: 0, alignContent: 'start' }}>
-                    <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
+                    {personInProgressProds.length > 0 && (
+                      <>
+                        <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#f0b840', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
+                          In progress
+                        </p>
+                        {personInProgressProds.map((pm, idx) => {
+                          const prod = pm.productions
+                          const tag = signageTypeTag(prod?.request_type_label)
+                          const dateStr = formatProductionDateShort(prod?.start_datetime ?? null)
+                          const list = personInProgressProds
+                          return (
+                            <div
+                              key={`ip-${pm.production_id}-${pm.user_id}`}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '12px',
+                                padding: '4px 0',
+                                borderBottom: idx < list.length - 1 ? '1px solid rgba(240,184,64,0.25)' : 'none',
+                              }}
+                            >
+                              <span style={{ flex: '0 0 auto', fontSize: `${fs.prodDate}px`, color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const, fontVariantNumeric: 'tabular-nums', paddingTop: '2px' }}>
+                                {dateStr}
+                              </span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: '#f5d78e', fontWeight: 600, lineHeight: 1.3 }}>
+                                  #{prod?.production_number} {prod?.title}
+                                </p>
+                                {tag && (
+                                  <p style={{ margin: '3px 0 0', fontSize: `${fs.prodTag}px`, color: muted, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.03em' }}>
+                                    {tag.text}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
+                    <p style={{ margin: personInProgressProds.length > 0 ? '6px 0 0' : 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
                       Upcoming (next 5 days)
                     </p>
                     {next5DayProds.slice(0, 6).map((pm, idx) => {
