@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { SIGNAGE_TASK_INTAKE_APP_SETTINGS_KEY } from '@/lib/equipment-power'
+import { isProductionInDateWindow, normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
+import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 
 export const dynamic = 'force-dynamic'
 
@@ -64,9 +66,8 @@ export async function GET(request: Request) {
       .order('name'),
     supabase
       .from('productions')
-      .select('id,production_number,title,start_datetime,status,request_type_label')
-      .gte('start_datetime', start.toISOString())
-      .lt('start_datetime', end.toISOString()),
+      .select('id,production_number,title,start_datetime,start_datetime_label,event_date,status,request_type_label')
+      .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES),
   ])
 
   let tasksRes = tasksResInitial
@@ -118,10 +119,19 @@ export async function GET(request: Request) {
     }
   }
 
-  const upcomingProds = (prodsRes.data || []).filter((p: { status?: string | null }) => {
-    const status = (p.status || '').toLowerCase()
-    return status !== 'complete' && status !== 'abandoned' && status !== 'cancelled'
-  })
+  const upcomingProds = ((prodsRes.data || []) as Array<{
+    id: string
+    status?: string | null
+    start_datetime?: string | null
+    start_datetime_label?: string | null
+    event_date?: string | null
+  }>)
+    .map(p => normalizeProductionDatetimeFields(p))
+    .filter(p => isProductionInDateWindow(p, start, end))
+    .filter(p => {
+      const status = (p.status || '').toLowerCase()
+      return status !== 'complete' && status !== 'abandoned' && status !== 'cancelled'
+    })
   const prodById = new Map(upcomingProds.map((p: { id: string }) => [p.id, p]))
   const prodIds = upcomingProds.map((p: { id: string }) => p.id)
   let prodMembers: Array<{

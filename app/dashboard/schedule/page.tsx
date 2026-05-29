@@ -13,6 +13,8 @@ import { getMondayStr, resolveDayHours, toLocalDateStr, WEEKDAY_KEYS } from '@/l
 import { isGoneOnDate, type ScheduleGoneDay } from '@/lib/team-gone-days'
 import { officeClosedOnDate, type ScheduleOfficeClosedDay } from '@/lib/team-office-closed'
 import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
+import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 
 // ─── Pay periods: authoritative rows from district PDF + synthetic extension ──
 type PayPeriodRow = { num: number; start: string; end: string; cutoff: string; payday: string }
@@ -338,18 +340,12 @@ export default function SchedulePage() {
     setGoneDays((goneRes.data as ScheduleGoneDay[]) || [])
     setOfficeClosedDays((closedRes.data as ScheduleOfficeClosedDay[]) || [])
 
-    // Load ALL productions for the viewed month (not just user's)
-    const queryStart = new Date(firstOfMonth)
-    queryStart.setDate(queryStart.getDate() - 1)
-    const queryEnd = new Date(lastOfMonth)
-    queryEnd.setDate(queryEnd.getDate() + 1)
+    // Load active productions; dates may only exist on start_datetime_label from sync.
     const prodsRes = await supabase
       .from('productions')
-      .select('id,title,production_number,request_type_label,start_datetime')
-      .not('start_datetime', 'is', null)
-      .gte('start_datetime', toLocalDateStr(queryStart))
-      .lte('start_datetime', toLocalDateStr(queryEnd) + 'T23:59:59')
-    setProductions(prodsRes.data || [])
+      .select('id,title,production_number,request_type_label,start_datetime,start_datetime_label,event_date')
+      .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
+    setProductions(((prodsRes.data || []) as Production[]).map(p => normalizeProductionDatetimeFields(p)))
 
     // Pre-fill edit forms with current user's data
     const myDef = (defRes.data || []).find((d: ScheduleDefault) => d.user_id === targetId)

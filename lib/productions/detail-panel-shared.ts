@@ -1,4 +1,5 @@
 import { getSchoolName } from '@/lib/schools'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
 export const PRODUCTION_DETAIL_SELECT = `
   id,
@@ -16,6 +17,8 @@ export const PRODUCTION_DETAIL_SELECT = `
   livestream_url,
   youtube_link_email_sent_at,
   start_datetime,
+  start_datetime_label,
+  event_date,
   end_datetime,
   filming_location,
   event_location,
@@ -44,6 +47,8 @@ export interface ProductionDetail {
   livestream_url: string | null
   youtube_link_email_sent_at: string | null
   start_datetime: string | null
+  start_datetime_label?: string | null
+  event_date?: string | null
   end_datetime: string | null
   filming_location: string | null
   event_location: string | null
@@ -104,11 +109,11 @@ export interface EmailTemplate {
 }
 
 export function normalizeProductionRow(p: unknown): ProductionDetail {
-  const row = p as ProductionDetail & { production_members?: unknown[] }
+  const normalized = normalizeProductionDatetimeFields(p as ProductionDetail)
   return {
-    ...row,
-    status: row.status ? row.status.replace(/^\d+\s*-\s*/, '') : row.status,
-    production_members: (row.production_members || []).map((m: Record<string, unknown>) => ({
+    ...normalized,
+    status: normalized.status ? normalized.status.replace(/^\d+\s*-\s*/, '') : normalized.status,
+    production_members: (normalized.production_members || []).map((m: Record<string, unknown>) => ({
       ...(m as { user_id: string }),
       team: Array.isArray(m.team) ? ((m.team as { name: string; avatar_color: string }[])[0] || null) : ((m.team as { name: string; avatar_color: string } | null) || null),
     })),
@@ -195,9 +200,10 @@ function daysFromToday(d: string | null): number | null {
 }
 
 export function isOverdueProd(p: ProductionDetail): boolean {
-  if (!p.start_datetime) return false
-  if (p.status === 'Complete' || p.status === 'Abandoned') return false
-  const df = daysFromToday(p.start_datetime)
+  const normalized = normalizeProductionDatetimeFields(p)
+  if (!normalized.start_datetime) return false
+  if (normalized.status === 'Complete' || normalized.status === 'Abandoned') return false
+  const df = daysFromToday(normalized.start_datetime)
   return df !== null && df < 0
 }
 

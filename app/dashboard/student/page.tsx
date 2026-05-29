@@ -11,6 +11,7 @@ import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole } from '@/lib/roles'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
 interface Task {
   id: string
@@ -29,6 +30,8 @@ interface Production {
   type: string | null
   status: string | null
   start_datetime: string | null
+  start_datetime_label?: string | null
+  event_date?: string | null
   filming_location: string | null
   school_department: string | null
   checklist_items?: { id: string; title: string; completed: boolean }[]
@@ -112,19 +115,22 @@ export default function StudentHomePage() {
     const { data: prods } = await supabase
       .from('productions')
       .select(
-        'id, production_number, title, request_type_label, type, status, start_datetime, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)'
+        'id, production_number, title, request_type_label, type, status, start_datetime, start_datetime_label, event_date, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)'
       )
       .in('id', ids)
       .order('start_datetime', { ascending: true, nullsFirst: false })
       .limit(30)
 
-    const cleaned: Production[] = (prods || []).map((p: any) => ({
-      ...p,
-      production_members: (Array.isArray(p.production_members) ? p.production_members : []).map((m: any) => ({
-        ...m,
-        team: Array.isArray(m?.team) ? (m.team[0] || null) : (m?.team || null),
-      })),
-    })) as Production[]
+    const cleaned: Production[] = (prods || []).map((p: any) => {
+      const normalized = normalizeProductionDatetimeFields(p)
+      return {
+        ...normalized,
+        production_members: (Array.isArray(normalized.production_members) ? normalized.production_members : []).map((m: any) => ({
+          ...m,
+          team: Array.isArray(m?.team) ? (m.team[0] || null) : (m?.team || null),
+        })),
+      }
+    }) as Production[]
 
     setMyProductions(cleaned)
     setLoading(false)

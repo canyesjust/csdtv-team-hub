@@ -9,6 +9,7 @@ import {
   type DigestTask,
   type DigestTeamMember,
 } from '@/lib/daily-staff-digest'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
 export function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -55,16 +56,26 @@ export async function loadDailyDigestContext(
   const { data: prods, error: prodErr } = await supabase
     .from('productions')
     .select(
-      'id, title, production_number, status, start_datetime, request_type_label, filming_location'
+      'id, title, production_number, status, start_datetime, start_datetime_label, event_date, request_type_label, filming_location'
     )
     .not('status', 'eq', 'Abandoned')
-    .gte('start_datetime', windowStart)
-    .lte('start_datetime', windowEnd)
-    .order('start_datetime', { ascending: true })
 
   if (prodErr) return { ok: false, error: prodErr.message }
 
-  const productions = (prods || []) as DigestProduction[]
+  const windowStartMs = new Date(windowStart).getTime()
+  const windowEndMs = new Date(windowEnd).getTime()
+  const productions = ((prods || []) as DigestProduction[])
+    .map(p => normalizeProductionDatetimeFields(p))
+    .filter(p => {
+      if (!p.start_datetime) return false
+      const ms = new Date(p.start_datetime).getTime()
+      return ms >= windowStartMs && ms <= windowEndMs
+    })
+    .sort((a, b) => {
+      const aMs = a.start_datetime ? new Date(a.start_datetime).getTime() : 0
+      const bMs = b.start_datetime ? new Date(b.start_datetime).getTime() : 0
+      return aMs - bMs
+    })
   const prodIds = productions.map(p => p.id)
 
   const prodZonedDay = new Map<string, string | null>()

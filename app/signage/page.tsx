@@ -7,11 +7,13 @@ import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
 import { resolveDayHours, toLocalDateStr } from '@/lib/team-schedule'
 import { formatGoneSignageLine, goneFirstNamesForDate, isGoneOnDate, type ScheduleGoneDay } from '@/lib/team-gone-days'
 import { formatOfficeClosedSignageLine, officeClosedOnDate, type ScheduleOfficeClosedDay } from '@/lib/team-office-closed'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
 interface Production {
   id: string; production_number: number; title: string
   request_type_label: string | null; status: string | null; school_year: string | null
-  start_datetime: string | null; filming_location: string | null; school_department: string | null
+  start_datetime: string | null; start_datetime_label?: string | null; event_date?: string | null
+  filming_location: string | null; school_department: string | null
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
 }
 interface TeamMember { id: string; name: string; avatar_color: string; role: string }
@@ -76,7 +78,7 @@ export default function SignagePage() {
     const rangeEnd = toLocalDateStr(rangeEndDate)
 
     const [prodsRes, teamRes, defsRes, ovrsRes, schoolsRes, eventsRes, goneRes, closedRes] = await Promise.all([
-      supabase.from('productions').select('id, production_number, title, request_type_label, status, school_year, start_datetime, filming_location, school_department, deliverables_count, production_members(user_id, team(name, avatar_color))').not('start_datetime', 'is', null).order('start_datetime'),
+      supabase.from('productions').select('id, production_number, title, request_type_label, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, deliverables_count, production_members(user_id, team(name, avatar_color))').order('production_number'),
       supabase.from('team').select('id, name, avatar_color, role').eq('active', true),
       supabase.from('schedule_defaults').select('*'),
       supabase.from('schedule_overrides').select('*'),
@@ -85,7 +87,7 @@ export default function SignagePage() {
       supabase.from('schedule_gone_days').select('id, user_id, date').gte('date', rangeStart).lte('date', rangeEnd),
       supabase.from('schedule_office_closed_days').select('id, date, label').gte('date', rangeStart).lte('date', rangeEnd),
     ])
-    setProductions((prodsRes.data as any) || [])
+    setProductions(((prodsRes.data as unknown as Production[]) || []).map(p => normalizeProductionDatetimeFields(p)))
     setTeam(teamRes.data || [])
     setSchedDefaults(defsRes.data || [])
     setSchedOverrides(ovrsRes.data || [])
