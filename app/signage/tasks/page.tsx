@@ -86,6 +86,31 @@ function formatProductionDateShort(iso: string | null | undefined): string {
   return `${mm}/${dd}/${yyyy}`
 }
 
+/** Pick the widest grid that keeps staff cards to at most two rows (no scrolling on wall displays). */
+function staffGridColumns(count: number, viewportW: number): number {
+  if (count <= 1) return 1
+  const maxCols = viewportW >= 1700 ? 5 : viewportW >= 1500 ? 4 : viewportW >= 1200 ? 3 : 2
+  const cappedMax = Math.min(maxCols, count)
+  for (let cols = cappedMax; cols >= 2; cols--) {
+    if (Math.ceil(count / cols) <= 2) return cols
+  }
+  return Math.max(1, Math.min(cappedMax, count))
+}
+
+/** Cap list length per card when many people share the board — keeps type large, trims rows. */
+function staffContentLimits(count: number): { tasks: number; upcoming: number } {
+  if (count >= 11) return { tasks: 3, upcoming: 2 }
+  if (count >= 9) return { tasks: 4, upcoming: 3 }
+  if (count >= 7) return { tasks: 4, upcoming: 3 }
+  if (count >= 5) return { tasks: 6, upcoming: 4 }
+  return { tasks: 8, upcoming: 6 }
+}
+
+/** Inline banner saves vertical space when the team or in-progress list grows. */
+function useCompactInProgressBanner(staffCount: number, inProgressCount: number): boolean {
+  return staffCount >= 6 || inProgressCount >= 5
+}
+
 export default function TasksSignagePage() {
   const [now, setNow] = useState(new Date())
   const [viewport, setViewport] = useState({ w: 1920, h: 1080 })
@@ -311,7 +336,11 @@ export default function TasksSignagePage() {
   const border = 'rgba(255,255,255,0.12)'
   // Wall display: scale to viewport, but never shrink below readable signage sizes.
   const baseScale = Math.max(0.88, Math.min(1.25, Math.min(viewport.w / 1920, viewport.h / 1080)))
-  const staffGridCols = staffCount <= 2 ? 1 : staffCount <= 4 ? 2 : viewport.w >= 1600 ? 3 : 2
+  const staffGridCols = staffGridColumns(staffCount, viewport.w)
+  const largeTeam = staffCount >= 6
+  const compactInProgressBanner = useCompactInProgressBanner(staffCount, inProgressProductions.length)
+  const { tasks: maxTasksShown, upcoming: maxUpcomingShown } = staffContentLimits(staffCount)
+  const maxUnassignedShown = largeTeam ? 5 : 8
   const inProgressGridCols = inProgressProductions.length <= 3 ? inProgressProductions.length : inProgressProductions.length <= 6 ? 3 : 4
   const densityPenalty = Math.max(0, staffMaxTasks - 6) * 0.6 + Math.max(0, unassignedCount - 8) * 0.4
   const fit = (max: number, min: number, penalty = 0) => Math.max(min, Math.round(max * baseScale - penalty))
@@ -360,7 +389,9 @@ export default function TasksSignagePage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', gap: '14px', flexWrap: 'wrap' as const, flexShrink: 0 }}>
         <div style={{ flex: '1 1 280px', minWidth: 0 }}>
           <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.05 }}>CSDtv Task Ops Board</h1>
-          <p style={{ margin: '4px 0 0', color: muted, fontSize: `${fs.subtitle}px` }}>Unassigned work, in-progress productions, and upcoming 14-day load</p>
+          {!largeTeam && (
+            <p style={{ margin: '4px 0 0', color: muted, fontSize: `${fs.subtitle}px` }}>Unassigned work, in-progress productions, and upcoming 14-day load</p>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexShrink: 0 }}>
           {taskIntakeQrDataUrl && taskIntakeUrl && (
@@ -394,10 +425,25 @@ export default function TasksSignagePage() {
       </div>
 
       {hasInProgressStrip && (
-        <div style={{ background: cardBg, border: '1px solid rgba(240,184,64,0.5)', borderRadius: '12px', padding: '12px 14px', marginBottom: '10px', flexShrink: 0 }}>
+        <div style={{ background: cardBg, border: '1px solid rgba(240,184,64,0.5)', borderRadius: '12px', padding: compactInProgressBanner ? '10px 14px' : '12px 14px', marginBottom: '10px', flexShrink: 0, overflow: 'hidden' }}>
           <p style={{ margin: 0, fontSize: `${fs.inProgressBannerLabel}px`, color: '#f0b840', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>
             In progress productions
           </p>
+          {compactInProgressBanner ? (
+            <p style={{ margin: '8px 0 0', fontSize: `${fs.inProgressBannerTitle}px`, fontWeight: 700, lineHeight: 1.35, color: text }}>
+              {inProgressProductions.map((prod, idx) => {
+                const dateStr = formatProductionDateShort(prod.start_datetime)
+                const tag = signageTypeTag(prod.request_type_label)
+                return (
+                  <span key={prod.id}>
+                    {idx > 0 && <span style={{ color: muted, fontWeight: 500 }}> · </span>}
+                    <span style={{ color: '#f5d78e', fontWeight: 800 }}>#{prod.production_number} {prod.title}</span>
+                    <span style={{ color: muted, fontWeight: 600, fontSize: `${fs.inProgressBannerMeta}px` }}> ({dateStr}{tag ? ` · ${tag.text}` : ''})</span>
+                  </span>
+                )
+              })}
+            </p>
+          ) : (
           <div
             style={{
               marginTop: '10px',
@@ -430,16 +476,17 @@ export default function TasksSignagePage() {
               )
             })}
           </div>
+          )}
         </div>
       )}
 
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 3.75fr)', gap: '16px', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: largeTeam ? 'minmax(0, 0.85fr) minmax(0, 4.15fr)' : 'minmax(0, 1fr) minmax(0, 3.75fr)', gap: largeTeam ? '12px' : '16px', overflow: 'hidden' }}>
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
           <h2 style={{ margin: 0, fontSize: `${fs.sectionTitle}px`, flexShrink: 0 }}>Unassigned Tasks</h2>
-          <div style={{ marginTop: '10px', overflow: 'auto', display: 'grid', gap: '8px', minHeight: 0, flex: 1 }}>
+          <div style={{ marginTop: '10px', overflow: 'hidden', display: 'grid', gap: largeTeam ? '6px' : '8px', minHeight: 0, flex: 1, alignContent: 'start' }}>
             {unassignedTasks.length === 0 ? (
               <p style={{ color: muted, fontSize: `${fs.empty}px` }}>No unassigned tasks right now.</p>
-            ) : unassignedTasks.slice(0, 10).map(task => {
+            ) : unassignedTasks.slice(0, maxUnassignedShown).map(task => {
               const d = daysFromToday(task.due_date)
               const dueLabel = d === null ? 'No due date' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `Due in ${d}d`
               return (
@@ -451,6 +498,9 @@ export default function TasksSignagePage() {
                 </div>
               )
             })}
+            {unassignedTasks.length > maxUnassignedShown && (
+              <p style={{ margin: 0, fontSize: `${fs.cardMeta}px`, color: muted }}>+{unassignedTasks.length - maxUnassignedShown} more unassigned</p>
+            )}
           </div>
         </div>
 
@@ -459,19 +509,19 @@ export default function TasksSignagePage() {
           <div
             style={{
               marginTop: '10px',
-              overflow: 'auto',
+              overflow: 'hidden',
               minHeight: 0,
               flex: 1,
               display: 'grid',
               gridTemplateColumns: `repeat(${staffGridCols}, minmax(0, 1fr))`,
-              gridAutoRows: 'minmax(0, 1fr)',
-              gap: '14px',
+              gridTemplateRows: `repeat(${Math.ceil(staffCount / staffGridCols)}, minmax(0, 1fr))`,
+              gap: largeTeam ? '10px' : '14px',
               paddingRight: '4px',
               alignContent: 'stretch',
             }}
           >
             {staffCards.map(({ member, personTasks, personOverdue, personInProgressProds, personUpcomingProds, next5DayProds, checklistOpen }) => (
-              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '12px', padding: '14px 16px', background: 'rgba(255,255,255,0.035)', boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div key={member.id} style={{ border: `1px solid ${border}`, borderRadius: '12px', padding: largeTeam ? '10px 12px' : '14px 16px', background: 'rgba(255,255,255,0.035)', boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexShrink: 0 }}>
                   <div style={{ width: `${fit(44, 34)}px`, height: `${fit(44, 34)}px`, borderRadius: '999px', background: member.avatar_color, color: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: `${fit(16, 12)}px`, fontWeight: 800, flexShrink: 0 }}>
                     {initials(member.name)}
@@ -481,12 +531,12 @@ export default function TasksSignagePage() {
                 <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
                   {personTasks.length} open · {personOverdue} overdue · {personInProgressProds.length} in progress · {personUpcomingProds.length} upcoming · {checklistOpen} checklist
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px', alignItems: 'start', flex: 1, minHeight: 0 }}>
-                  <div style={{ display: 'grid', gap: '6px', minWidth: 0, alignContent: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: largeTeam ? '12px 14px' : '16px 20px', alignItems: 'start', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gap: largeTeam ? '4px' : '6px', minWidth: 0, alignContent: 'start', overflow: 'hidden' }}>
                     <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
                       Open tasks
                     </p>
-                    {personTasks.slice(0, 8).map(t => {
+                    {personTasks.slice(0, maxTasksShown).map(t => {
                       const d = daysFromToday(t.due_date)
                       const dueLabel = d === null ? 'No due' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `${d}d`
                       return (
@@ -495,25 +545,25 @@ export default function TasksSignagePage() {
                         </p>
                       )
                     })}
-                    {personTasks.length > 8 && (
-                      <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, padding: '3px 0' }}>+{personTasks.length - 8} more</p>
+                    {personTasks.length > maxTasksShown && (
+                      <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, padding: '3px 0' }}>+{personTasks.length - maxTasksShown} more</p>
                     )}
                     {personTasks.length === 0 && (
                       <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, padding: '3px 0' }}>No open tasks assigned.</p>
                     )}
                   </div>
 
-                  <div style={{ display: 'grid', gap: '6px', minWidth: 0, alignContent: 'start' }}>
+                  <div style={{ display: 'grid', gap: largeTeam ? '4px' : '6px', minWidth: 0, alignContent: 'start', overflow: 'hidden' }}>
                     {personInProgressProds.length > 0 && (
                       <>
                         <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#f0b840', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
                           In progress
                         </p>
-                        {personInProgressProds.map((pm, idx) => {
+                        {personInProgressProds.slice(0, largeTeam ? 2 : personInProgressProds.length).map((pm, idx) => {
                           const prod = pm.productions
                           const tag = signageTypeTag(prod?.request_type_label)
                           const dateStr = formatProductionDateShort(prod?.start_datetime ?? null)
-                          const list = personInProgressProds
+                          const list = personInProgressProds.slice(0, largeTeam ? 2 : personInProgressProds.length)
                           return (
                             <div
                               key={`ip-${pm.production_id}-${pm.user_id}`}
@@ -541,16 +591,19 @@ export default function TasksSignagePage() {
                             </div>
                           )
                         })}
+                        {largeTeam && personInProgressProds.length > 2 && (
+                          <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted, padding: '2px 0' }}>+{personInProgressProds.length - 2} more in progress</p>
+                        )}
                       </>
                     )}
                     <p style={{ margin: personInProgressProds.length > 0 ? '6px 0 0' : 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
                       Upcoming (next 5 days)
                     </p>
-                    {next5DayProds.slice(0, 6).map((pm, idx) => {
+                    {next5DayProds.slice(0, maxUpcomingShown).map((pm, idx) => {
                       const prod = pm.productions
                       const tag = signageTypeTag(prod?.request_type_label)
                       const dateStr = formatProductionDateShort(prod?.start_datetime ?? null)
-                      const list = next5DayProds.slice(0, 6)
+                      const list = next5DayProds.slice(0, maxUpcomingShown)
                       return (
                         <div
                           key={`${pm.production_id}-${pm.user_id}`}
@@ -578,8 +631,8 @@ export default function TasksSignagePage() {
                         </div>
                       )
                     })}
-                    {next5DayProds.length > 6 && (
-                      <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted, padding: '3px 0' }}>+{next5DayProds.length - 6} more</p>
+                    {next5DayProds.length > maxUpcomingShown && (
+                      <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted, padding: '3px 0' }}>+{next5DayProds.length - maxUpcomingShown} more</p>
                     )}
                     {next5DayProds.length === 0 && (
                       <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted, padding: '6px 0' }}>No upcoming in next 5 days.</p>
