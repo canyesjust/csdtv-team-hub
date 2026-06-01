@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { SIGNAGE_TASK_INTAKE_APP_SETTINGS_KEY } from '@/lib/equipment-power'
 import { isProductionInDateWindow, normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
+import { fetchTaskAssignments } from '@/lib/task-assignments'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,6 +105,26 @@ export async function GET(request: Request) {
       purchase_request: Boolean(row.purchase_request),
     }))
     .filter((row) => !Boolean(row['hide_from_signage']))
+
+  // Tasks can have multiple assignees via task_assignments; tasks.assigned_to is only
+  // the primary assignee. Attach the full assignee list so signage can show a task on
+  // every assigned person's card.
+  const taskIds = tasksPayload.map((row) => String(row.id)).filter(Boolean)
+  let assigneesByTask = new Map<string, string[]>()
+  try {
+    assigneesByTask = await fetchTaskAssignments(supabase, taskIds)
+  } catch {
+    assigneesByTask = new Map()
+  }
+  const tasksWithAssignees = tasksPayload.map((row) => {
+    const id = String(row.id)
+    const ids = assigneesByTask.get(id)
+    const assignedTo = row.assigned_to ? String(row.assigned_to) : null
+    return {
+      ...row,
+      assignee_ids: ids && ids.length > 0 ? ids : assignedTo ? [assignedTo] : [],
+    }
+  })
 
   const { data: checklistRowsRaw, error: checklistErr } = await supabase
     .from('checklist_items')
@@ -219,7 +240,7 @@ export async function GET(request: Request) {
   )
 
   return NextResponse.json({
-    tasks: tasksPayload,
+    tasks: tasksWithAssignees,
     team: teamRes.data || [],
     prodMembers,
     inProgressProductions,

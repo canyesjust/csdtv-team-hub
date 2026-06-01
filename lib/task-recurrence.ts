@@ -144,7 +144,11 @@ export async function createRecurrence(
   }
 
   // Materialize the current cycle immediately if today is a show day (idempotent server-side).
-  await supabase.rpc('generate_recurring_tasks', { p_run_date: localDateStr() }).catch(() => {})
+  try {
+    await supabase.rpc('generate_recurring_tasks', { p_run_date: localDateStr() })
+  } catch {
+    // Non-fatal: the daily cron will still pick it up.
+  }
 
   return recurrenceId
 }

@@ -21,6 +21,14 @@ import {
   taskIsUnassigned,
 } from '@/lib/task-assignments'
 import TaskAssigneePicker from '../components/TaskAssigneePicker'
+import {
+  type RecurrenceFormState,
+  defaultRecurrenceForm,
+  buildRecurrenceInsert,
+  describeRecurrence,
+  createRecurrence,
+  WEEKDAY_LABELS,
+} from '@/lib/task-recurrence'
 
 interface Production {
   id: string; title: string; production_number: number
@@ -41,6 +49,7 @@ interface Task {
   intake_submitter_name?: string | null
   intake_submitter_email?: string | null
   completed_at: string | null; recurring: string | null; recurring_interval: number | null
+  recurrence_id?: string | null
   blocked_by: string | null; scanned_sheet_id: string | null
   source?: 'task' | 'checklist'
   checklist_item_id?: string | null
@@ -136,8 +145,8 @@ export default function TasksPage() {
     purchase_request: false,
     purchase_request_link: '',
     hide_from_signage: false,
-    recurring: '',
   })
+  const [recur, setRecur] = useState<RecurrenceFormState>(defaultRecurrenceForm())
   const [panelNotes, setPanelNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [search, setSearch] = useState('')
@@ -798,8 +807,53 @@ export default function TasksPage() {
     setCompletedTasks([])
   }, [supabase, completedTasks])
 
+  const resetNewTaskForm = useCallback(() => {
+    setNewTask({
+      title: '',
+      description: '',
+      priority: 'normal',
+      assignee_ids: currentUser?.id ? [currentUser.id] : [],
+      due_date: '',
+      production_id: '',
+      needs_equipment: false,
+      purchase_request: false,
+      purchase_request_link: '',
+      hide_from_signage: false,
+    })
+    setRecur(defaultRecurrenceForm())
+  }, [currentUser])
+
   const createTask = useCallback(async () => {
     if (!newTask.title || !currentUser) return
+
+    // Recurring series: create a rule that materializes per-person copies on a schedule.
+    if (recur.frequency) {
+      const payload = buildRecurrenceInsert(
+        {
+          title: newTask.title,
+          description: newTask.description || null,
+          priority: newTask.priority,
+          production_id: newTask.production_id || null,
+          needs_equipment: newTask.needs_equipment,
+          hide_from_signage: newTask.hide_from_signage,
+          createdBy: currentUser.id,
+        },
+        recur,
+      )
+      if (!payload) return
+      try {
+        await createRecurrence(supabase, payload, newTask.assignee_ids)
+      } catch {
+        toast('Failed to create recurring task', 'error')
+        return
+      }
+      await loadData()
+      resetNewTaskForm()
+      setShowNewTask(false)
+      toast('Recurring task scheduled', 'success')
+      return
+    }
+
     const primaryAssignee = newTask.assignee_ids[0] ?? null
     const { data, error } = await supabase.from('tasks').insert({
       title: newTask.title, description: newTask.description || null,
@@ -809,8 +863,8 @@ export default function TasksPage() {
       purchase_request: newTask.purchase_request,
       purchase_request_link: newTask.purchase_request_link?.trim() || null,
       hide_from_signage: newTask.hide_from_signage,
-      recurring: newTask.recurring || null,
-      recurring_interval: newTask.recurring ? 1 : null, status: 'pending', created_by: currentUser.id,
+      recurring: null,
+      recurring_interval: null, status: 'pending', created_by: currentUser.id,
     }).select('*').single()
     if (error) { toast('Failed to create task', 'error'); return }
     if (data) {
@@ -831,23 +885,11 @@ export default function TasksPage() {
         ...prev,
       ])
       for (const id of assignee_ids) void sendAssignEmail(id, newTask.title)
-      setNewTask({
-        title: '',
-        description: '',
-        priority: 'normal',
-        assignee_ids: currentUser.id ? [currentUser.id] : [],
-        due_date: '',
-        production_id: '',
-        needs_equipment: false,
-        purchase_request: false,
-        purchase_request_link: '',
-        hide_from_signage: false,
-        recurring: '',
-      })
+      resetNewTaskForm()
       setShowNewTask(false)
       toast('Task created', 'success')
     }
-  }, [newTask, currentUser, supabase, sendAssignEmail, allProductions])
+  }, [newTask, recur, currentUser, supabase, sendAssignEmail, allProductions, loadData, resetNewTaskForm])
 
   const completeTask = useCallback(async (task: Task) => {
     if (task.source === 'checklist' && task.checklist_item_id) {
@@ -870,8 +912,9 @@ export default function TasksPage() {
       setTasks(prev => prev.map(t => t.blocked_by === task.id ? { ...t, blocked_by: null } : t))
     }
 
-    // Auto-create next recurring task
-    if (task.recurring && task.due_date) {
+    // Auto-create next recurring task (legacy completion-spawn). Recurrence-series
+    // instances are materialized by the scheduled generator instead — skip them.
+    if (task.recurring && task.due_date && !task.recurrence_id) {
       const interval = task.recurring_interval || 1
       const nextDate = new Date(task.due_date + 'T00:00:00')
       if (task.recurring === 'daily') nextDate.setDate(nextDate.getDate() + interval)
@@ -1541,17 +1584,80 @@ export default function TasksPage() {
                 />
                 <label htmlFor="hide_from_signage" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Hide from task signage</label>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                <label style={{ fontSize: '13px', color: muted }}>Repeat:</label>
-                <select value={newTask.recurring} onChange={e => setNewTask(p => ({ ...p, recurring: e.target.value }))} style={{ ...inputStyle, width: 'auto', minWidth: '110px' }}>
-                  <option value="">Never</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
+              <div style={{ border: `1px solid ${border}`, borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', background: 'var(--surface-2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontSize: '13px', color: muted }}>Repeat:</label>
+                  <select
+                    value={recur.frequency}
+                    onChange={e => setRecur(p => ({ ...p, frequency: e.target.value as RecurrenceFormState['frequency'] }))}
+                    style={{ ...inputStyle, width: 'auto', minWidth: '110px' }}
+                  >
+                    <option value="">Never</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                {recur.frequency && (
+                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
+                    {recur.frequency === 'weekly' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <label style={{ fontSize: '12px', color: muted }}>
+                          Appears on
+                          <select value={recur.showWeekday} onChange={e => setRecur(p => ({ ...p, showWeekday: Number(e.target.value) }))} style={{ ...inputStyle, marginTop: '3px' }}>
+                            {WEEKDAY_LABELS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                          </select>
+                        </label>
+                        <label style={{ fontSize: '12px', color: muted }}>
+                          Due on
+                          <select value={recur.dueWeekday} onChange={e => setRecur(p => ({ ...p, dueWeekday: Number(e.target.value) }))} style={{ ...inputStyle, marginTop: '3px' }}>
+                            {WEEKDAY_LABELS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                    )}
+                    {recur.frequency === 'monthly' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <label style={{ fontSize: '12px', color: muted }}>
+                          Day of month
+                          <input type="number" min={1} max={31} value={recur.showMonthday} onChange={e => setRecur(p => ({ ...p, showMonthday: Math.min(31, Math.max(1, Number(e.target.value) || 1)) }))} style={{ ...inputStyle, marginTop: '3px' }} />
+                        </label>
+                        <label style={{ fontSize: '12px', color: muted }}>
+                          Due (days later)
+                          <input type="number" min={0} value={recur.dueOffsetDays} onChange={e => setRecur(p => ({ ...p, dueOffsetDays: Math.max(0, Number(e.target.value) || 0) }))} style={{ ...inputStyle, marginTop: '3px' }} />
+                        </label>
+                      </div>
+                    )}
+                    {recur.frequency === 'daily' && (
+                      <label style={{ fontSize: '12px', color: muted }}>
+                        Due (days after it appears)
+                        <input type="number" min={0} value={recur.dueOffsetDays} onChange={e => setRecur(p => ({ ...p, dueOffsetDays: Math.max(0, Number(e.target.value) || 0) }))} style={{ ...inputStyle, marginTop: '3px', maxWidth: '160px' }} />
+                      </label>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <label style={{ fontSize: '12px', color: muted }}>
+                        Starts
+                        <input type="date" value={recur.startDate} onChange={e => setRecur(p => ({ ...p, startDate: e.target.value }))} style={{ ...inputStyle, marginTop: '3px' }} />
+                      </label>
+                      <label style={{ fontSize: '12px', color: muted }}>
+                        Until (optional)
+                        <input type="date" value={recur.endDate} onChange={e => setRecur(p => ({ ...p, endDate: e.target.value }))} style={{ ...inputStyle, marginTop: '3px' }} />
+                      </label>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--brand-primary)', fontWeight: 500, lineHeight: 1.4 }}>
+                      {describeRecurrence(recur, newTask.assignee_ids.length)}
+                    </p>
+                    {newTask.assignee_ids.length === 0 && (
+                      <p style={{ margin: 0, fontSize: '12px', color: statusTone.warning.color }}>
+                        Pick who this repeats for in the assignees above — each person gets their own copy.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={createTask} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Create task</button>
+                <button onClick={createTask} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{recur.frequency ? 'Schedule recurring task' : 'Create task'}</button>
                 <button onClick={() => setShowNewTask(false)} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '8px', background: 'transparent', color: muted, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
               </div>
             </div>
@@ -1768,7 +1874,7 @@ export default function TasksPage() {
                           {task.hide_from_signage && task.source !== 'checklist' && <span style={{ color: muted, fontWeight: 600, whiteSpace: 'nowrap' as const }}>Off signage</span>}
                           {task.source === 'checklist' && <span style={{ color: info, fontWeight: 700, whiteSpace: 'nowrap' as const }}>Checklist</span>}
                           {task.intake_source === 'magic_link' && <span style={{ color: review, fontWeight: 700, whiteSpace: 'nowrap' as const }}>Intake</span>}
-                          {task.recurring && <span style={{ whiteSpace: 'nowrap' as const }}>Recurring</span>}
+                          {(task.recurring || task.recurrence_id) && <span style={{ whiteSpace: 'nowrap' as const }}>Recurring</span>}
                           {task.blocked_by && <span style={{ color: review, whiteSpace: 'nowrap' as const, fontWeight: 600 }}>Blocked</span>}
                         </div>
                       </div>

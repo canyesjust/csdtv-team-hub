@@ -185,6 +185,9 @@ begin
 end;
 $$;
 
+-- Allow the app to materialize the current cycle immediately after creating a rule.
+grant execute on function public.generate_recurring_tasks(date) to authenticated;
+
 -- Daily schedule at 12:00 UTC (~6/7am Central). pg_cron upserts by job name.
 select cron.schedule(
   'generate-recurring-tasks',

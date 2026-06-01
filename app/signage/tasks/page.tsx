@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { isStudentInternRole } from '@/lib/roles'
+import { mergeAssigneeIds, taskIsUnassigned } from '@/lib/task-assignments'
 
 interface TaskRow {
   id: string
@@ -9,6 +10,7 @@ interface TaskRow {
   priority: string
   due_date: string | null
   assigned_to: string | null
+  assignee_ids: string[]
   production_id: string | null
   purchase_request: boolean
   status?: string | null
@@ -393,6 +395,7 @@ export default function TasksSignagePage() {
       priority: string
       due_date: string | null
       assigned_to: string | null
+      assignee_ids?: string[] | null
       production_id: string | null
       purchase_request: boolean | null
       status?: string | null
@@ -405,6 +408,7 @@ export default function TasksSignagePage() {
         priority: row.priority,
         due_date: row.due_date,
         assigned_to: row.assigned_to,
+        assignee_ids: mergeAssigneeIds(row.assigned_to, Array.isArray(row.assignee_ids) ? row.assignee_ids : undefined),
         production_id: row.production_id,
         purchase_request: !!row.purchase_request,
         status: row.status ?? null,
@@ -485,7 +489,7 @@ export default function TasksSignagePage() {
   )
 
   const unassignedTasks = useMemo(
-    () => displayTasks.filter(t => !t.assigned_to).sort((a, b) => (daysFromToday(a.due_date) ?? 9999) - (daysFromToday(b.due_date) ?? 9999)),
+    () => displayTasks.filter(t => taskIsUnassigned(t.assignee_ids, t.assigned_to)).sort((a, b) => (daysFromToday(a.due_date) ?? 9999) - (daysFromToday(b.due_date) ?? 9999)),
     [displayTasks]
   )
 
@@ -505,9 +509,11 @@ export default function TasksSignagePage() {
   const staffCards = useMemo(() => {
     const byPersonTasks = new Map<string, TaskRow[]>()
     displayTasks.forEach(t => {
-      if (!t.assigned_to) return
-      if (!byPersonTasks.has(t.assigned_to)) byPersonTasks.set(t.assigned_to, [])
-      byPersonTasks.get(t.assigned_to)!.push(t)
+      const ids = mergeAssigneeIds(t.assigned_to, t.assignee_ids)
+      ids.forEach(id => {
+        if (!byPersonTasks.has(id)) byPersonTasks.set(id, [])
+        byPersonTasks.get(id)!.push(t)
+      })
     })
 
     const byPersonProds = new Map<string, ProductionMemberRow[]>()
