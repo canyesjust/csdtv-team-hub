@@ -47,6 +47,12 @@ function sameLocalDay(a: Date, b: Date): boolean {
   )
 }
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  return (parts[0] || '?').slice(0, 2).toUpperCase()
+}
+
 function dayHeaderLabel(day: Date, index: number): { primary: string; secondary: string } {
   if (index === 0) return { primary: 'Today', secondary: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
   if (index === 1) return { primary: 'Tomorrow', secondary: day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }
@@ -75,6 +81,10 @@ function CalendarEvent({ prod }: { prod: WeekProduction }) {
     ''
 
   const typeLabel = prod.request_type_label || prod.type || 'Production'
+
+  const crew = (prod.production_members ?? [])
+    .map(m => m.team)
+    .filter((t): t is { name: string; avatar_color: string } => Boolean(t))
 
   return (
     <div
@@ -126,10 +136,7 @@ function CalendarEvent({ prod }: { prod: WeekProduction }) {
           fontWeight: 600,
           color: 'var(--text-primary)',
           lineHeight: 1.35,
-          overflow: 'hidden',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
+          overflowWrap: 'anywhere' as const,
         }}
       >
         #{prod.production_number} {prod.title}
@@ -139,15 +146,59 @@ function CalendarEvent({ prod }: { prod: WeekProduction }) {
           margin: '3px 0 0',
           fontSize: '10px',
           color: 'var(--text-muted)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap' as const,
+          lineHeight: 1.3,
+          overflowWrap: 'anywhere' as const,
         }}
       >
         {typeLabel}
         {loc ? ` · ${loc}` : ''}
         {prepPct !== null ? ` · ${prepPct}%` : ''}
       </p>
+      <div style={{ margin: '6px 0 0' }}>
+        {crew.length === 0 ? (
+          <span style={{ fontSize: '10px', color: statusTone.warning.color, fontWeight: 600 }}>
+            No crew assigned
+          </span>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '4px' }}>
+            {crew.map((m, i) => (
+              <span
+                key={`${m.name}-${i}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '999px',
+                  padding: '1px 7px 1px 1px',
+                }}
+              >
+                <span
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '50%',
+                    background: m.avatar_color,
+                    color: '#0a0f1e',
+                    fontSize: '8px',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {getInitials(m.name)}
+                </span>
+                <span style={{ fontSize: '10px', color: 'var(--text-primary)', fontWeight: 500 }}>
+                  {m.name.split(' ')[0]}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
