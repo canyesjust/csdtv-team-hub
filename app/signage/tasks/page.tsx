@@ -102,15 +102,20 @@ interface PersonCardProps {
 }
 
 function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, maxListedTasks }: PersonCardProps) {
-  const { member, personTasks } = card
+  const { personTasks, personInProgressProds } = card
   const activeTasks = personTasks.filter(t => isActiveWorkTaskStatus(t.status))
   const openTasks = personTasks.filter(t => !isActiveWorkTaskStatus(t.status))
   const hasTasks = personTasks.length > 0
+  const inProgressProds = personInProgressProds
+  const hasProds = inProgressProds.length > 0
   const slots = Math.max(4, maxListedTasks)
   const shownActive = activeTasks.slice(0, slots)
   const openSlots = Math.max(0, slots - shownActive.length)
   const shownOpen = openTasks.slice(0, openSlots)
-  const hiddenCount = personTasks.length - shownActive.length - shownOpen.length
+  const hiddenTaskCount = personTasks.length - shownActive.length - shownOpen.length
+  const prodSlots = Math.max(4, maxListedTasks)
+  const shownProds = inProgressProds.slice(0, prodSlots)
+  const hiddenProdCount = inProgressProds.length - shownProds.length
 
   return (
     <div
@@ -130,15 +135,15 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, ma
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexShrink: 0 }}>
         <div
           style={{
-            width: `${fit(46, 36)}px`,
-            height: `${fit(46, 36)}px`,
+            width: `${fit(50, 40)}px`,
+            height: `${fit(50, 40)}px`,
             borderRadius: '999px',
             background: member.avatar_color,
             color: '#0a0f1e',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: `${fit(17, 13)}px`,
+            fontSize: `${fit(19, 15)}px`,
             fontWeight: 800,
             flexShrink: 0,
           }}
@@ -150,72 +155,117 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, ma
         </p>
       </div>
 
-      {hasTasks ? (
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, overflow: 'hidden' }}>
-          <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
-            {activeTasks.length} in progress · {openTasks.length} open
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0, overflow: 'hidden', flex: 1 }}>
-            {shownActive.map(t => (
-              <p
-                key={t.id}
-                style={{
-                  margin: 0,
-                  fontSize: `${fs.taskLine}px`,
-                  color: '#d8e4ff',
-                  lineHeight: 1.35,
-                  padding: '3px 0',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span style={{ color: '#f0c060', marginRight: '4px' }}>●</span>
-                {t.title}
-              </p>
-            ))}
-            {shownOpen.map(t => (
-              <p
-                key={t.id}
-                style={{
-                  margin: 0,
-                  fontSize: `${fs.taskLine}px`,
-                  color: '#b8c8e8',
-                  lineHeight: 1.35,
-                  padding: '3px 0',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span style={{ color: muted, marginRight: '6px' }}>○</span>
-                {t.title}
-              </p>
-            ))}
-            {hiddenCount > 0 && (
-              <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
-                +{hiddenCount} more
-              </p>
-            )}
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, overflow: 'hidden' }}>
+        {hasTasks ? (
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: hasProds ? '0 1 auto' : 1, overflow: 'hidden' }}>
+            <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
+              {activeTasks.length} in progress · {openTasks.length} open
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0, overflow: 'hidden', flex: hasProds ? undefined : 1 }}>
+              {shownActive.map(t => (
+                <p
+                  key={t.id}
+                  style={{
+                    margin: 0,
+                    fontSize: `${fs.taskLine}px`,
+                    color: '#d8e4ff',
+                    lineHeight: 1.35,
+                    padding: '3px 0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <span style={{ color: '#f0c060', marginRight: '4px' }}>●</span>
+                  {t.title}
+                </p>
+              ))}
+              {shownOpen.map(t => (
+                <p
+                  key={t.id}
+                  style={{
+                    margin: 0,
+                    fontSize: `${fs.taskLine}px`,
+                    color: '#b8c8e8',
+                    lineHeight: 1.35,
+                    padding: '3px 0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <span style={{ color: muted, marginRight: '6px' }}>○</span>
+                  {t.title}
+                </p>
+              ))}
+              {hiddenTaskCount > 0 && (
+                <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
+                  +{hiddenTaskCount} more
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '1px dashed rgba(255,255,255,0.12)',
-            borderRadius: '6px',
-            minHeight: `${fit(56, 44)}px`,
-          }}
-        >
-          <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: emptyMuted, fontWeight: 500 }}>
-            No tasks assigned
-          </p>
-        </div>
-      )}
+        ) : !hasProds ? (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px dashed rgba(255,255,255,0.12)',
+              borderRadius: '6px',
+              minHeight: `${fit(56, 44)}px`,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: emptyMuted, fontWeight: 500 }}>
+              No tasks assigned
+            </p>
+          </div>
+        ) : null}
+
+        {hasProds && (
+          <div
+            style={{
+              marginTop: hasTasks ? '10px' : 0,
+              paddingTop: hasTasks ? '10px' : 0,
+              borderTop: hasTasks ? '1px solid rgba(240,192,96,0.25)' : 'none',
+              flexShrink: 0,
+              minHeight: 0,
+              overflow: 'hidden',
+              flex: hasTasks ? undefined : 1,
+            }}
+          >
+            <p style={{ margin: '0 0 8px', fontSize: `${fs.staffStat}px`, color: '#f0c060', fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
+              {inProgressProds.length} production{inProgressProds.length !== 1 ? 's' : ''} in progress
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflow: 'hidden' }}>
+              {shownProds.map(pm => (
+                <p
+                  key={`prod-${pm.production_id}`}
+                  style={{
+                    margin: 0,
+                    fontSize: `${fs.taskLine}px`,
+                    color: '#f5d78e',
+                    fontWeight: 600,
+                    lineHeight: 1.35,
+                    padding: '3px 0',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {pm.productions?.title || 'Untitled production'}
+                </p>
+              ))}
+              {hiddenProdCount > 0 && (
+                <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
+                  +{hiddenProdCount} more
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -398,14 +448,15 @@ export default function TasksSignagePage() {
         const d = daysFromToday(t.due_date)
         return d !== null && d < 0
       }).length
-      const personProds = (byPersonProds.get(member.id) || [])
+      const allPersonProds = byPersonProds.get(member.id) || []
+      const personInProgressProds = allPersonProds.filter(
+        p => normalizeProductionStatus(p.productions?.status) === 'In Progress',
+      )
+      const personProds = allPersonProds
         .filter(p => p.productions?.start_datetime)
         .sort((a, b) => new Date(a.productions!.start_datetime!).getTime() - new Date(b.productions!.start_datetime!).getTime())
-      const personInProgressProds = personProds.filter(
-        p => normalizeProductionStatus(p.productions?.status) === 'In Progress'
-      )
       const personUpcomingProds = personProds.filter(
-        p => normalizeProductionStatus(p.productions?.status) !== 'In Progress'
+        p => normalizeProductionStatus(p.productions?.status) !== 'In Progress',
       )
       const next5DayProds = personUpcomingProds.filter(p => {
         const startIso = p.productions?.start_datetime
@@ -448,25 +499,26 @@ export default function TasksSignagePage() {
     kpiValue: fit(70, 50),
     bandLabel: fit(24, 18),
     unassignedHeading: fit(32, 26),
-    unassignedTask: fit(30, 24),
     unassignedMeta: fit(22, 17),
-    staffName: fit(38, 30),
-    staffStat: fit(26, 20),
-    taskLine: fit(28, 22, densityPenalty * 0.15),
-    railOverdue: fit(16, 12),
+    staffName: fit(44, 34),
+    staffStat: fit(30, 24),
+    taskLine: fit(32, 26, densityPenalty * 0.15),
+    railOverdue: fit(20, 16),
   }
   const qrSize = Math.min(140, Math.round(120 * (viewport.w / 1920)))
 
   const maxTasksPerCard = useMemo(() => {
     const mainH = viewport.h - fit(200, 170)
     const halfRow = mainH / 2
-    const linePx = fit(28, 22) * 1.35 + 8
+    const linePx = fit(32, 26) * 1.35 + 8
     return Math.max(6, Math.min(16, Math.floor((halfRow - 72) / linePx)))
   }, [viewport.h, baseScale])
 
+  const railWidthPx = Math.max(300, Math.min(400, Math.round(viewport.w * 0.26)))
+
   const railVisibleCount = useMemo(() => {
     const available = Math.max(160, viewport.h - fit(200, 170))
-    const perRow = fit(34, 28)
+    const perRow = fit(52, 42)
     return Math.max(6, Math.floor(available / perRow))
   }, [viewport.h, baseScale])
 
@@ -600,7 +652,7 @@ export default function TasksSignagePage() {
           flex: 1,
           minHeight: 0,
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 240px)',
+          gridTemplateColumns: `minmax(0, 1fr) minmax(${railWidthPx}px, ${railWidthPx}px)`,
           gap: '11px',
           overflow: 'hidden',
         }}
@@ -722,14 +774,14 @@ export default function TasksSignagePage() {
               marginTop: '10px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px',
+              gap: '8px',
               flex: 1,
               minHeight: 0,
               overflow: 'hidden',
             }}
           >
             {unassignedCount === 0 ? (
-              <p style={{ margin: 0, fontSize: `${fs.unassignedTask}px`, color: emptyMuted, fontWeight: 600 }}>Nothing unassigned</p>
+              <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: emptyMuted, fontWeight: 600 }}>Nothing unassigned</p>
             ) : (
               <>
                 {railShown.map(task => {
@@ -739,38 +791,35 @@ export default function TasksSignagePage() {
                     <div
                       key={task.id}
                       style={{
-                        display: 'flex',
-                        alignItems: 'baseline',
-                        gap: '8px',
                         minWidth: 0,
-                        lineHeight: 1.25,
+                        padding: '2px 0',
                       }}
                     >
-                      <span
+                      <p
                         style={{
-                          flex: 1,
-                          fontSize: `${fs.unassignedTask}px`,
+                          margin: 0,
+                          fontSize: `${fs.taskLine}px`,
                           color: text,
                           fontWeight: 700,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          lineHeight: 1.35,
+                          wordBreak: 'break-word',
+                          overflowWrap: 'anywhere',
                         }}
                       >
                         {task.title}
-                      </span>
+                      </p>
                       {overdue && (
-                        <span
+                        <p
                           style={{
-                            flexShrink: 0,
+                            margin: '4px 0 0',
                             fontSize: `${fs.railOverdue}px`,
                             fontWeight: 700,
                             color: '#ef4444',
-                            whiteSpace: 'nowrap',
+                            lineHeight: 1.2,
                           }}
                         >
                           {Math.abs(d!)}d overdue
-                        </span>
+                        </p>
                       )}
                     </div>
                   )
