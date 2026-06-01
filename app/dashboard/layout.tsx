@@ -1,11 +1,8 @@
-'use client'
+import DashboardShell from './DashboardShell'
 
-import AppLayout from './components/AppLayout'
+/** Dashboard is auth-gated and uses Supabase in the shell — skip static prerender without env. */
+export const dynamic = 'force-dynamic'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AppLayout>
-      {children}
-    </AppLayout>
-  )
+  return <DashboardShell>{children}</DashboardShell>
 }

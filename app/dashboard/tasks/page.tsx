@@ -124,6 +124,7 @@ export default function TasksPage() {
   const [allProductions, setAllProductions] = useState<Production[]>([])
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [completing, setCompleting] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [focusFilter, setFocusFilter] = useState<FocusFilter>('all')
@@ -320,6 +321,7 @@ export default function TasksPage() {
   }, [supabase])
 
   const loadData = useCallback(async () => {
+    setLoadError(null)
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     const teamRow = await resolveEffectiveTeamRow<CurrentUser>(supabase, 'id, name, role')
@@ -327,8 +329,8 @@ export default function TasksPage() {
     const uid = userRes.data?.id
     const isStu = isStudentInternRole(userRes.data?.role)
 
-    let tasksRes: { data: Task[] | null }
-    let completedRes: { data: Task[] | null }
+    let tasksRes: { data: Task[] | null; error?: { message: string } | null }
+    let completedRes: { data: Task[] | null; error?: { message: string } | null }
     let teamList: TeamMember[]
     let prodsList: Production[]
     let checklistRows: ChecklistRow[] = []
@@ -380,6 +382,13 @@ export default function TasksPage() {
         prodsList = (data as Production[]) || []
       }
       teamList = userRes.data ? [userRes.data as TeamMember] : []
+      if (tasksRes.error || completedRes.error) {
+        const msg = tasksRes.error?.message || completedRes.error?.message || 'Failed to load tasks'
+        setLoadError(msg)
+        toast(msg, 'error')
+        setLoading(false)
+        return
+      }
     } else {
       const [tRes, cRes, tmRes, pRes] = await Promise.all([
         supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }),
@@ -393,6 +402,13 @@ export default function TasksPage() {
         .eq('completed', false)
         .order('sort_order', { ascending: true })
       checklistRows = ((checklistData as ChecklistRow[] | null) || [])
+      if (tRes.error || cRes.error) {
+        const msg = tRes.error?.message || cRes.error?.message || 'Failed to load tasks'
+        setLoadError(msg)
+        toast(msg, 'error')
+        setLoading(false)
+        return
+      }
       tasksRes = tRes
       completedRes = cRes
       teamList = (tmRes.data as TeamMember[]) || []
@@ -843,8 +859,9 @@ export default function TasksPage() {
       if (!payload) return
       try {
         await createRecurrence(supabase, payload, newTask.assignee_ids)
-      } catch {
-        toast('Failed to create recurring task', 'error')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to create recurring task'
+        toast(msg, 'error')
         return
       }
       await loadData()
@@ -1178,6 +1195,33 @@ export default function TasksPage() {
   }, [intakePanelLoading, intakeRotateNotice, intakeActive, intakeNeedsLegacyRotate, intakeUrlReveal, intakeLastUsedAt])
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}><Loader /></div>
+  if (loadError) {
+    return (
+      <div style={{ padding: '32px', maxWidth: '520px' }}>
+        <p style={{ margin: '0 0 12px', fontSize: '16px', color: 'var(--text-primary)' }}>
+          Could not load tasks.
+        </p>
+        <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--text-muted)' }}>{loadError}</p>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); void loadData() }}
+          style={{
+            fontSize: '14px',
+            padding: '9px 18px',
+            borderRadius: '8px',
+            background: 'var(--brand-primary)',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            fontWeight: 600,
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   const renderStatusPill = (status: string) => {
     const tone = STATUS_TONE[status]
