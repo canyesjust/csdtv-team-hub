@@ -95,13 +95,12 @@ interface PersonCardProps {
   fit: (max: number, min: number, penalty?: number) => number
   cardBg: string
   border: string
-  text: string
   muted: string
   emptyMuted: string
   maxListedTasks: number
 }
 
-function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, maxListedTasks }: PersonCardProps) {
+function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListedTasks }: PersonCardProps) {
   const { member, personTasks, personInProgressProds } = card
   const activeTasks = personTasks.filter(t => isActiveWorkTaskStatus(t.status))
   const openTasks = personTasks.filter(t => !isActiveWorkTaskStatus(t.status))
@@ -769,7 +768,6 @@ export default function TasksSignagePage() {
                   fit={fit}
                   cardBg={cardBg}
                   border={border}
-                  text={text}
                   muted={muted}
                   emptyMuted={emptyMuted}
                   maxListedTasks={maxTasksPerCard}
@@ -810,7 +808,6 @@ export default function TasksSignagePage() {
                   fit={fit}
                   cardBg={cardBg}
                   border={border}
-                  text={text}
                   muted={muted}
                   emptyMuted={emptyMuted}
                   maxListedTasks={maxTasksPerCard}
