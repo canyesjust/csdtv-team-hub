@@ -90,7 +90,7 @@ export default function DashboardPage() {
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
       const weekEnd = new Date(todayStart)
-      weekEnd.setDate(weekEnd.getDate() + 14)
+      weekEnd.setDate(weekEnd.getDate() + 7)
       weekEnd.setHours(23, 59, 59, 999)
 
       const [teamRes, weekProdsRes] = await Promise.all([

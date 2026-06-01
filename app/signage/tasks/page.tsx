@@ -616,10 +616,11 @@ export default function TasksSignagePage() {
           <div
             key={stat.label}
             style={{
-              background: cardBg,
+              background: '#15233a',
               border: `1px solid ${border}`,
+              borderLeft: `5px solid ${stat.color}`,
               borderRadius: '10px',
-              padding: '10px 12px',
+              padding: '10px 14px',
               display: 'flex',
               alignItems: 'baseline',
               justifyContent: 'space-between',
@@ -630,16 +631,16 @@ export default function TasksSignagePage() {
             <span
               style={{
                 fontSize: `${fs.kpiLabel}px`,
-                color: muted,
+                color: '#ffffff',
                 textTransform: 'uppercase',
                 letterSpacing: '1px',
-                fontWeight: 700,
+                fontWeight: 800,
                 whiteSpace: 'nowrap',
               }}
             >
               {stat.label}
             </span>
-            <span style={{ fontSize: `${fs.kpiValue}px`, color: stat.color, fontWeight: 800, lineHeight: 1 }}>
+            <span style={{ fontSize: `${fs.kpiValue}px`, color: '#ffffff', fontWeight: 800, lineHeight: 1 }}>
               {stat.value}
             </span>
           </div>

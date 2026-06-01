@@ -250,7 +250,7 @@ export function ThisWeekZone({ weekProductions }: ThisWeekZoneProps) {
     const days: Date[] = []
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 7; i++) {
       const d = new Date(today)
       d.setDate(d.getDate() + i)
       days.push(d)
@@ -271,8 +271,8 @@ export function ThisWeekZone({ weekProductions }: ThisWeekZoneProps) {
   return (
     <section style={{ ...uiStyles.zoneSection, marginBottom: 0 }}>
       <ZoneHeader
-        label="Next two weeks"
-        hint={prodCount === 0 ? 'Next 14 days' : `${prodCount} production${prodCount > 1 ? 's' : ''}`}
+        label="This week"
+        hint={prodCount === 0 ? 'Next 7 days' : `${prodCount} production${prodCount > 1 ? 's' : ''}`}
         accent="var(--brand-primary)"
       />
       <div
@@ -309,16 +309,16 @@ export function ThisWeekZone({ weekProductions }: ThisWeekZoneProps) {
         }
         @media (max-width: 767px) {
           .week-cal-grid {
-            min-width: 980px;
+            min-width: 560px;
           }
           .week-cal-col {
-            min-width: 70px;
+            min-width: 80px;
           }
         }
         @media (min-width: 768px) {
           .week-cal-grid {
             display: grid;
-            grid-template-columns: repeat(14, minmax(0, 1fr));
+            grid-template-columns: repeat(7, minmax(0, 1fr));
           }
           .week-cal-col {
             border-right: 1px solid var(--border-subtle);
