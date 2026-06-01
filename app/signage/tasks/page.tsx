@@ -11,6 +11,7 @@ interface TaskRow {
   assigned_to: string | null
   production_id: string | null
   purchase_request: boolean
+  status?: string | null
   productions?: { production_number: number; title: string } | null
 }
 
@@ -19,14 +20,6 @@ interface TeamMember {
   name: string
   avatar_color: string
   role?: string | null
-}
-
-interface InProgressProduction {
-  id: string
-  production_number: number
-  title: string
-  start_datetime: string | null
-  request_type_label: string | null
 }
 
 function normalizeProductionStatus(status: string | null | undefined): string {
@@ -45,6 +38,14 @@ interface ProductionMemberRow {
   } | null
 }
 
+interface InProgressProduction {
+  id: string
+  production_number: number
+  title: string
+  start_datetime: string | null
+  request_type_label: string | null
+}
+
 function daysFromToday(dateStr: string | null): number | null {
   if (!dateStr) return null
   const due = new Date(`${dateStr}T00:00:00`)
@@ -61,44 +62,13 @@ function initials(name: string): string {
   return (parts[0] || '?').slice(0, 2).toUpperCase()
 }
 
-/** Short label for wall display from `request_type_label`. */
-function signageTypeTag(label: string | null | undefined): { text: string; bg: string } | null {
-  const raw = (label || '').trim()
-  if (!raw) return null
-  const t = raw.toLowerCase()
-  if (t.includes('livestream') || t.includes('live stream')) return { text: 'Livestream', bg: '#2563eb' }
-  if (t.includes('board')) return { text: 'Board', bg: '#7c3aed' }
-  if (t.includes('record') || t.includes('recording') || t.includes('studio') || t.includes('multi-cam')) {
-    return { text: 'Recording', bg: '#059669' }
-  }
-  const short = raw.split('(')[0]?.trim() || raw
-  const cap = short.length > 18 ? `${short.slice(0, 16)}…` : short
-  return { text: cap, bg: 'rgba(100,116,139,0.55)' }
+function isTaskInProgressStatus(status: string | null | undefined): boolean {
+  return (status || '').toLowerCase().trim() === 'in progress'
 }
 
-/** Compact wall display: MM/DD/YYYY in local time. */
-function formatProductionDateShort(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const yyyy = d.getFullYear()
-  return `${mm}/${dd}/${yyyy}`
-}
-
-const IN_PROGRESS_TILES_PER_ROW = 7
-const STUDENT_INTERN_ROW_COLUMNS = 4
-
-function splitInProgressRows(productions: InProgressProduction[]): {
-  row1: InProgressProduction[]
-  row2: InProgressProduction[]
-} {
-  return {
-    row1: productions.slice(0, IN_PROGRESS_TILES_PER_ROW),
-    row2: productions.slice(IN_PROGRESS_TILES_PER_ROW, IN_PROGRESS_TILES_PER_ROW * 2),
-  }
-}
+const STAFF_GRID_COLUMNS = 3
+const STUDENT_INTERN_GRID_COLUMNS = 4
+const MAX_IN_PROGRESS_TITLES = 3
 
 type PersonCardData = {
   member: TeamMember
@@ -112,214 +82,120 @@ type PersonCardData = {
 
 interface PersonCardProps {
   card: PersonCardData
-  variant: 'student-intern' | 'staff'
   fs: {
-    staffName: number
-    staffStat: number
-    subLabel: number
-    taskLine: number
-    prodLine: number
-    prodTag: number
+    personName: number
+    personMeta: number
+    taskTitle: number
+    taskMore: number
+    emptyState: number
   }
   fit: (max: number, min: number, penalty?: number) => number
-  muted: string
-  text: string
+  cardBg: string
   border: string
+  muted: string
+  emptyMuted: string
 }
 
-function PersonCard({ card, variant, fs, fit, muted, text, border }: PersonCardProps) {
-  const {
-    member,
-    personTasks,
-    personOverdue,
-    personInProgressProds,
-    next5DayProds,
-    checklistOpen,
-  } = card
-  const maxTasks = variant === 'student-intern' ? 5 : 4
-  const maxInProgress = 4
-  const maxUpcoming = variant === 'student-intern' ? 2 : 4
+function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted }: PersonCardProps) {
+  const { member, personTasks } = card
+  const inProgressTasks = personTasks.filter(t => isTaskInProgressStatus(t.status))
+  const openTasks = personTasks.filter(t => !isTaskInProgressStatus(t.status))
+  const hasTasks = personTasks.length > 0
+  const shownInProgress = inProgressTasks.slice(0, MAX_IN_PROGRESS_TITLES)
+  const moreInProgress = inProgressTasks.length - shownInProgress.length
+  const openRemainder = openTasks.length
 
   return (
     <div
       style={{
         border: `1px solid ${border}`,
-        borderRadius: '12px',
-        padding: '12px 14px',
-        background: 'rgba(255,255,255,0.035)',
-        boxShadow: '0 0 0 1px rgba(255,255,255,0.03) inset',
+        borderRadius: '8px',
+        padding: `${fit(10, 8)}px`,
+        background: cardBg,
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
         overflow: 'hidden',
         height: '100%',
+        boxSizing: 'border-box',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: `${fit(8, 6)}px`, flexShrink: 0 }}>
         <div
           style={{
-            width: `${fit(46, 36)}px`,
-            height: `${fit(46, 36)}px`,
+            width: `${fit(22, 18)}px`,
+            height: `${fit(22, 18)}px`,
             borderRadius: '999px',
             background: member.avatar_color,
             color: '#0a0f1e',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: `${fit(17, 13)}px`,
+            fontSize: `${fit(9, 8)}px`,
             fontWeight: 800,
             flexShrink: 0,
           }}
         >
           {initials(member.name)}
         </div>
-        <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 800, lineHeight: 1.15 }}>{member.name}</p>
+        <p style={{ margin: 0, fontSize: `${fs.personName}px`, fontWeight: 500, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {member.name}
+        </p>
       </div>
-      <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
-        {personTasks.length} open
-        {personOverdue > 0 ? ` · ${personOverdue} overdue` : ''}
-        {personInProgressProds.length > 0 ? ` · ${personInProgressProds.length} in progress` : ''}
-        {checklistOpen > 0 ? ` · ${checklistOpen} checklist` : ''}
-      </p>
 
-      {variant === 'student-intern' ? (
-        <div style={{ display: 'grid', gap: '6px', minHeight: 0, overflow: 'hidden', flex: 1 }}>
-          <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
-            Open tasks
+      {hasTasks ? (
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, marginTop: `${fit(8, 6)}px`, overflow: 'hidden' }}>
+          <p style={{ margin: 0, fontSize: `${fs.personMeta}px`, color: muted, lineHeight: 1.3, flexShrink: 0 }}>
+            {inProgressTasks.length} in progress · {openTasks.length} open
           </p>
-          {personTasks.slice(0, maxTasks).map(t => {
-            const d = daysFromToday(t.due_date)
-            const dueLabel = d === null ? 'No due' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `${d}d`
-            return (
-              <p key={t.id} style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: '#d8e4ff', lineHeight: 1.35, padding: '3px 0' }}>
-                {t.title} · <span style={{ color: muted }}>{dueLabel}</span>
+          <div style={{ marginTop: `${fit(6, 4)}px`, display: 'flex', flexDirection: 'column', gap: `${fit(3, 2)}px`, minHeight: 0, overflow: 'hidden', flex: 1 }}>
+            {shownInProgress.map(t => (
+              <p
+                key={t.id}
+                style={{
+                  margin: 0,
+                  fontSize: `${fs.taskTitle}px`,
+                  color: '#eef2ff',
+                  lineHeight: 1.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{ color: '#f0c060', marginRight: '4px' }}>●</span>
+                {t.title}
               </p>
-            )
-          })}
-          {personTasks.length > maxTasks && (
-            <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted }}>+{personTasks.length - maxTasks} more tasks</p>
-          )}
-          {personTasks.length === 0 && (
-            <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted }}>No open tasks assigned.</p>
-          )}
+            ))}
+            {moreInProgress > 0 && (
+              <p style={{ margin: 0, fontSize: `${fs.taskMore}px`, color: muted, lineHeight: 1.2 }}>
+                +{moreInProgress} more
+              </p>
+            )}
+            {openRemainder > 0 && (
+              <p style={{ margin: 0, fontSize: `${fs.taskMore}px`, color: muted, lineHeight: 1.2 }}>
+                + {openRemainder} open task{openRemainder !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 16px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
-            <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
-              Open tasks
-            </p>
-            {personTasks.slice(0, maxTasks).map(t => {
-              const d = daysFromToday(t.due_date)
-              const dueLabel = d === null ? 'No due' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `${d}d`
-              return (
-                <p key={t.id} style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: '#d8e4ff', lineHeight: 1.35, padding: '3px 0' }}>
-                  {t.title} · <span style={{ color: muted }}>{dueLabel}</span>
-                </p>
-              )
-            })}
-            {personTasks.length > maxTasks && (
-              <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted }}>+{personTasks.length - maxTasks} more</p>
-            )}
-            {personTasks.length === 0 && (
-              <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted }}>No open tasks.</p>
-            )}
-          </div>
-          <div style={{ display: 'grid', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
-            {personInProgressProds.length > 0 && (
-              <>
-                <p style={{ margin: 0, fontSize: `${fs.subLabel}px`, color: '#f0b840', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
-                  In progress
-                </p>
-                {personInProgressProds.slice(0, maxInProgress).map((pm, idx) => {
-                  const prod = pm.productions
-                  const list = personInProgressProds.slice(0, maxInProgress)
-                  return (
-                    <div
-                      key={`ip-${pm.production_id}-${pm.user_id}`}
-                      style={{
-                        padding: '4px 0',
-                        borderBottom: idx < list.length - 1 ? '1px solid rgba(240,184,64,0.25)' : 'none',
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: '#f5d78e', fontWeight: 600, lineHeight: 1.3 }}>
-                        {prod?.title || 'Untitled production'}
-                      </p>
-                    </div>
-                  )
-                })}
-              </>
-            )}
-            <p style={{ margin: personInProgressProds.length > 0 ? '6px 0 0' : 0, fontSize: `${fs.subLabel}px`, color: '#8dc4ff', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 800 }}>
-              Upcoming (5 days)
-            </p>
-            {next5DayProds.slice(0, maxUpcoming).map((pm, idx) => {
-              const prod = pm.productions
-              const tag = signageTypeTag(prod?.request_type_label)
-              const dateStr = formatProductionDateShort(prod?.start_datetime ?? null)
-              const list = next5DayProds.slice(0, maxUpcoming)
-              return (
-                <div
-                  key={`${pm.production_id}-${pm.user_id}`}
-                  style={{
-                    padding: '4px 0',
-                    borderBottom: idx < list.length - 1 ? `1px solid ${border}` : 'none',
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: '#a7c4ee', fontWeight: 600, lineHeight: 1.3 }}>
-                    <span style={{ color: muted, fontWeight: 600, marginRight: '8px' }}>{dateStr}</span>
-                    #{prod?.production_number} {prod?.title}
-                  </p>
-                  {tag && (
-                    <p style={{ margin: '2px 0 0', fontSize: `${fs.prodTag}px`, color: muted, fontWeight: 700, textTransform: 'uppercase' as const }}>
-                      {tag.text}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-            {next5DayProds.length === 0 && (
-              <p style={{ margin: 0, fontSize: `${fs.prodLine}px`, color: muted }}>Nothing in the next 5 days.</p>
-            )}
-          </div>
+        <div
+          style={{
+            flex: 1,
+            marginTop: `${fit(8, 6)}px`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px dashed rgba(255,255,255,0.12)',
+            borderRadius: '6px',
+            minHeight: `${fit(48, 36)}px`,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: `${fs.emptyState}px`, color: emptyMuted, fontWeight: 500 }}>
+            No tasks assigned
+          </p>
         </div>
       )}
-    </div>
-  )
-}
-
-function InProgressTile({
-  prod,
-  titleSize,
-  metaSize,
-  text,
-  muted,
-}: {
-  prod: InProgressProduction
-  titleSize: number
-  metaSize: number
-  text: string
-  muted: string
-}) {
-  const tag = signageTypeTag(prod.request_type_label)
-  const dateStr = formatProductionDateShort(prod.start_datetime)
-  return (
-    <div
-      style={{
-        border: '1px solid rgba(240,184,64,0.4)',
-        borderRadius: '10px',
-        padding: '10px 12px',
-        background: 'rgba(240,184,64,0.1)',
-        minWidth: 0,
-        minHeight: '100%',
-      }}
-    >
-      <p style={{ margin: 0, fontSize: `${titleSize}px`, fontWeight: 800, lineHeight: 1.2, color: text }}>
-        #{prod.production_number} {prod.title}
-      </p>
-      <p style={{ margin: '6px 0 0', fontSize: `${metaSize}px`, color: muted, fontWeight: 600, lineHeight: 1.25 }}>
-        {dateStr}{tag ? ` · ${tag.text}` : ''}
-      </p>
     </div>
   )
 }
@@ -373,6 +249,7 @@ export default function TasksSignagePage() {
       assigned_to: string | null
       production_id: string | null
       purchase_request: boolean | null
+      status?: string | null
       productions?: { production_number: number; title: string } | { production_number: number; title: string }[] | null
     }>).map(row => {
       const prod = Array.isArray(row.productions) ? row.productions[0] || null : row.productions || null
@@ -384,6 +261,7 @@ export default function TasksSignagePage() {
         assigned_to: row.assigned_to,
         production_id: row.production_id,
         purchase_request: !!row.purchase_request,
+        status: row.status ?? null,
         productions: prod ? { production_number: prod.production_number, title: prod.title } : null,
       }
     })
@@ -478,12 +356,6 @@ export default function TasksSignagePage() {
     [displayTasks]
   )
 
-  const checklistOpenTotal = useMemo(() => {
-    let n = checklistUnassignedOpen
-    for (const v of Object.values(checklistOpenByUser)) n += v
-    return n
-  }, [checklistOpenByUser, checklistUnassignedOpen])
-
   const staffCards = useMemo(() => {
     const byPersonTasks = new Map<string, TaskRow[]>()
     displayTasks.forEach(t => {
@@ -536,42 +408,46 @@ export default function TasksSignagePage() {
     [staffCards]
   )
 
-  const inProgressRows = useMemo(() => splitInProgressRows(inProgressProductions), [inProgressProductions])
-
-  const hasInProgressStrip = inProgressProductions.length > 0
+  const inProgressTaskCount = displayTasks.filter(t => isTaskInProgressStatus(t.status)).length
   const staffMaxTasks = Math.max(0, ...staffCards.map(c => c.personTasks.length))
   const unassignedCount = unassignedTasks.length
   const bg = '#070d18'
   const cardBg = '#0f1828'
   const text = '#eef2ff'
   const muted = '#8ea3c6'
+  const emptyMuted = '#6b7894'
   const border = 'rgba(255,255,255,0.12)'
   const baseScale = Math.max(0.88, Math.min(1.25, Math.min(viewport.w / 1920, viewport.h / 1080)))
   const densityPenalty = Math.max(0, staffMaxTasks - 8) * 0.35
   const fit = (max: number, min: number, penalty = 0) => Math.max(min, Math.round(max * baseScale - penalty))
   const fs = {
-    title: fit(50, 38),
-    clock: fit(64, 42),
-    kpiLabel: fit(17, 13),
-    kpiValue: fit(66, 46),
-    sectionTitle: fit(36, 26),
-    bandLabel: fit(22, 16),
-    unassignedHeading: fit(30, 24),
-    unassignedTask: fit(28, 22),
-    unassignedMeta: fit(20, 16),
-    staffName: fit(36, 28),
-    staffStat: fit(24, 17),
-    taskLine: fit(26, 20, densityPenalty * 0.2),
-    subLabel: fit(20, 15),
-    prodLine: fit(24, 18, densityPenalty * 0.2),
-    prodTag: fit(14, 11),
-    inProgressBannerLabel: fit(30, 24),
-    inProgressBannerTitle: fit(26, 20),
-    inProgressBannerMeta: fit(17, 13),
+    title: fit(32, 26),
+    subtitle: fit(14, 11),
+    clock: fit(34, 24),
+    kpiLabel: fit(11, 9),
+    kpiValue: fit(20, 16),
+    bandLabel: fit(11, 9),
+    railLabel: fit(13, 11),
+    railTask: fit(12, 10),
+    railMore: fit(11, 9),
+    railOverdue: fit(10, 8),
+    personName: fit(14, 12),
+    personMeta: fit(11, 9),
+    taskTitle: fit(12, 10, densityPenalty * 0.15),
+    taskMore: fit(11, 9),
+    emptyState: fit(12, 10),
+    qrCaption: fit(12, 10),
   }
-  const studentInternCols = Math.max(1, Math.min(STUDENT_INTERN_ROW_COLUMNS, studentInternCards.length))
-  const staffRowCols = Math.max(1, staffRowCards.length)
-  const maxUnassignedShown = 8
+  const qrSize = Math.min(96, Math.round(88 * (viewport.w / 1920)))
+
+  const railVisibleCount = useMemo(() => {
+    const available = Math.max(120, viewport.h - 220)
+    const perRow = fit(16, 13)
+    return Math.max(4, Math.floor(available / perRow))
+  }, [viewport.h, baseScale])
+
+  const railShown = unassignedTasks.slice(0, railVisibleCount)
+  const railMore = unassignedCount - railShown.length
 
   if (loading) {
     return (
@@ -582,9 +458,21 @@ export default function TasksSignagePage() {
   }
 
   return (
-    <div style={{ background: bg, color: text, height: '100vh', padding: '12px 14px', fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div
+      style={{
+        background: bg,
+        color: text,
+        height: '100vh',
+        padding: '10px 16px 12px',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
+    >
       {loadError && (
-        <div style={{ marginBottom: '10px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(18, 13)}px`, fontWeight: 600 }}>
+        <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(18, 13)}px`, fontWeight: 600, flexShrink: 0 }}>
           <div>{loadError.message}</div>
           {loadError.hint && (
             <div style={{ marginTop: '6px', fontSize: `${fit(15, 11)}px`, fontWeight: 500, opacity: 0.95 }}>
@@ -593,188 +481,129 @@ export default function TasksSignagePage() {
           )}
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', gap: '14px', flexWrap: 'wrap' as const, flexShrink: 0 }}>
-        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.05 }}>CSDtv Task Ops Board</h1>
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexShrink: 0, marginBottom: '8px' }}>
+        <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+          <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.1, fontWeight: 700 }}>CSDtv Task Ops Board</h1>
+          <p style={{ margin: '4px 0 0', fontSize: `${fs.subtitle}px`, color: muted, lineHeight: 1.2 }}>
+            Who&apos;s assigned what — at a glance
+          </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
           {taskIntakeQrDataUrl && taskIntakeUrl && (
-            <div style={{ textAlign: 'center' as const }}>
-              <p style={{ margin: 0, fontSize: `${fit(16, 11)}px`, color: muted, fontWeight: 700, letterSpacing: '0.04em' }}>Submit a task</p>
+            <div style={{ textAlign: 'center' as const, flexShrink: 0 }}>
+              <p style={{ margin: 0, fontSize: `${fs.qrCaption}px`, color: muted, fontWeight: 700, letterSpacing: '0.04em' }}>Submit a task</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={taskIntakeQrDataUrl} alt="" width={Math.min(140, Math.round(120 * (viewport.w / 1920)))} height={Math.min(140, Math.round(120 * (viewport.w / 1920)))} style={{ display: 'block', marginTop: '6px', borderRadius: '10px', border: `1px solid ${border}` }} />
+              <img
+                src={taskIntakeQrDataUrl}
+                alt=""
+                width={qrSize}
+                height={qrSize}
+                style={{ display: 'block', marginTop: '4px', borderRadius: '8px', border: `1px solid ${border}` }}
+              />
             </div>
           )}
-          <div style={{ fontSize: `${fs.clock}px`, fontWeight: 800, color: '#60b8f0', lineHeight: 1, alignSelf: 'center' }}>
+          <div
+            style={{
+              fontSize: `${fs.clock}px`,
+              fontWeight: 800,
+              color: '#60b8f0',
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
             {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '10px', marginBottom: '10px', flexShrink: 0 }}>
+      {/* KPI strip — 6 columns */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+          gap: '8px',
+          marginBottom: '10px',
+          flexShrink: 0,
+        }}
+      >
         {[
           { label: 'Unassigned', value: unassignedTasks.length, color: '#fbbf24' },
+          { label: 'Open', value: displayTasks.length, color: '#34d399' },
           { label: 'Overdue', value: overdueTasks.length, color: '#ef4444' },
           { label: 'Due today', value: dueTodayCount, color: '#60b8f0' },
-          { label: 'Open tasks', value: displayTasks.length, color: '#34d399' },
-          { label: 'In progress', value: inProgressProductions.length, color: '#f0b840' },
-          { label: 'Checklist items', value: checklistOpenTotal, color: '#f472b6' },
-          { label: 'Request queue', value: purchaseQueueCount, color: '#c084fc' },
+          { label: 'In progress', value: inProgressTaskCount, color: '#f0c060' },
+          { label: 'Requests', value: purchaseQueueCount, color: '#c084fc' },
         ].map(stat => (
-          <div key={stat.label} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 12px' }}>
-            <p style={{ margin: 0, fontSize: `${fs.kpiLabel}px`, color: muted, textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>{stat.label}</p>
-            <p style={{ margin: '8px 0 0', fontSize: `${fs.kpiValue}px`, color: stat.color, fontWeight: 800, lineHeight: 1 }}>{stat.value}</p>
+          <div
+            key={stat.label}
+            style={{
+              background: cardBg,
+              border: `1px solid ${border}`,
+              borderRadius: '8px',
+              padding: '6px 10px',
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: '8px',
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                fontSize: `${fs.kpiLabel}px`,
+                color: muted,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {stat.label}
+            </span>
+            <span style={{ fontSize: `${fs.kpiValue}px`, color: stat.color, fontWeight: 700, lineHeight: 1 }}>
+              {stat.value}
+            </span>
           </div>
         ))}
       </div>
 
-      {hasInProgressStrip && (
-        <div style={{ background: cardBg, border: '1px solid rgba(240,184,64,0.5)', borderRadius: '12px', padding: '10px 12px', marginBottom: '8px', flexShrink: 0, overflow: 'hidden' }}>
-          <p style={{ margin: 0, fontSize: `${fs.inProgressBannerLabel}px`, color: '#f0b840', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>
-            In progress productions
-          </p>
-          <div
-            style={{
-              marginTop: '8px',
-              display: 'grid',
-              gridTemplateColumns: `repeat(${IN_PROGRESS_TILES_PER_ROW}, minmax(0, 1fr))`,
-              gap: '8px',
-            }}
-          >
-            {inProgressRows.row1.map(prod => (
-              <InProgressTile
-                key={prod.id}
-                prod={prod}
-                titleSize={fs.inProgressBannerTitle}
-                metaSize={fs.inProgressBannerMeta}
-                text={text}
-                muted={muted}
-              />
-            ))}
-          </div>
-          {inProgressRows.row2.length > 0 && (
+      {/* Main body: people (72) + rail (28) */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'grid',
+          gridTemplateColumns: '72fr 28fr',
+          gap: '11px',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Left — staff + student interns */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <p
+              style={{
+                margin: '0 0 6px',
+                fontSize: `${fs.bandLabel}px`,
+                color: muted,
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                flexShrink: 0,
+              }}
+            >
+              Staff
+            </p>
             <div
               style={{
-                marginTop: '8px',
+                flex: 1,
+                minHeight: 0,
                 display: 'grid',
-                gridTemplateColumns: `repeat(${IN_PROGRESS_TILES_PER_ROW}, minmax(0, 1fr))`,
+                gridTemplateColumns: `repeat(${STAFF_GRID_COLUMNS}, minmax(0, 1fr))`,
                 gap: '8px',
-              }}
-            >
-              {inProgressRows.row2.map(prod => (
-                <InProgressTile
-                  key={prod.id}
-                  prod={prod}
-                  titleSize={fs.inProgressBannerTitle}
-                  metaSize={fs.inProgressBannerMeta}
-                  text={text}
-                  muted={muted}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {unassignedCount > 0 && (
-        <div
-          style={{
-            flexShrink: 0,
-            marginBottom: '10px',
-            padding: '12px 14px',
-            background: cardBg,
-            border: '1px solid rgba(251,191,36,0.4)',
-            borderRadius: '12px',
-            overflow: 'hidden',
-          }}
-        >
-          <p style={{ margin: 0, fontSize: `${fs.unassignedHeading}px`, color: '#fbbf24', fontWeight: 800, letterSpacing: '0.03em' }}>
-            Unassigned tasks ({unassignedCount})
-          </p>
-          <div
-            style={{
-              marginTop: '10px',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: '10px',
-            }}
-          >
-            {unassignedTasks.slice(0, maxUnassignedShown).map(task => {
-              const d = daysFromToday(task.due_date)
-              const dueLabel = d === null ? 'No due date' : d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'Due today' : `Due in ${d}d`
-              return (
-                <div
-                  key={task.id}
-                  style={{
-                    border: `1px solid rgba(251,191,36,0.35)`,
-                    borderRadius: '10px',
-                    padding: '10px 12px',
-                    background: 'rgba(251,191,36,0.08)',
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: `${fs.unassignedTask}px`, fontWeight: 700, lineHeight: 1.25, color: text }}>
-                    {task.title}
-                  </p>
-                  <p style={{ margin: '6px 0 0', fontSize: `${fs.unassignedMeta}px`, color: muted, fontWeight: 600 }}>
-                    {dueLabel}
-                    {task.productions ? ` · #${task.productions.production_number} ${task.productions.title}` : ''}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-          {unassignedCount > maxUnassignedShown && (
-            <p style={{ margin: '10px 0 0', fontSize: `${fs.unassignedMeta}px`, color: muted, fontWeight: 600 }}>
-              +{unassignedCount - maxUnassignedShown} more unassigned tasks
-            </p>
-          )}
-        </div>
-      )}
-
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflow: 'hidden' }}>
-        {studentInternCards.length > 0 && (
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <p style={{ margin: '0 0 8px', fontSize: `${fs.bandLabel}px`, color: muted, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' as const, flexShrink: 0 }}>
-              Student interns
-            </p>
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                display: 'grid',
-                gridTemplateColumns: `repeat(${studentInternCols}, minmax(0, 1fr))`,
-                gap: '12px',
-                overflow: 'hidden',
-              }}
-            >
-              {studentInternCards.map(card => (
-                <PersonCard
-                  key={card.member.id}
-                  card={card}
-                  variant="student-intern"
-                  fs={fs}
-                  fit={fit}
-                  muted={muted}
-                  text={text}
-                  border={border}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {staffRowCards.length > 0 && (
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <p style={{ margin: '0 0 8px', fontSize: `${fs.bandLabel}px`, color: muted, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' as const, flexShrink: 0 }}>
-              Staff &amp; interns
-            </p>
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                display: 'grid',
-                gridTemplateColumns: `repeat(${staffRowCols}, minmax(0, 1fr))`,
-                gap: '12px',
                 overflow: 'hidden',
               }}
             >
@@ -782,17 +611,152 @@ export default function TasksSignagePage() {
                 <PersonCard
                   key={card.member.id}
                   card={card}
-                  variant="staff"
                   fs={fs}
                   fit={fit}
-                  muted={muted}
-                  text={text}
+                  cardBg={cardBg}
                   border={border}
+                  muted={muted}
+                  emptyMuted={emptyMuted}
                 />
               ))}
             </div>
           </div>
-        )}
+
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <p
+              style={{
+                margin: '0 0 6px',
+                fontSize: `${fs.bandLabel}px`,
+                color: muted,
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                flexShrink: 0,
+              }}
+            >
+              Student interns
+            </p>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: 'grid',
+                gridTemplateColumns: `repeat(${STUDENT_INTERN_GRID_COLUMNS}, minmax(0, 1fr))`,
+                gap: '8px',
+                overflow: 'hidden',
+              }}
+            >
+              {studentInternCards.map(card => (
+                <PersonCard
+                  key={card.member.id}
+                  card={card}
+                  fs={fs}
+                  fit={fit}
+                  cardBg={cardBg}
+                  border={border}
+                  muted={muted}
+                  emptyMuted={emptyMuted}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right — unassigned rail */}
+        <div
+          style={{
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            background: cardBg,
+            border: `1px solid ${border}`,
+            borderLeft: '3px solid #fbbf24',
+            borderRadius: '8px',
+            padding: '10px 10px 8px',
+            overflow: 'hidden',
+            boxSizing: 'border-box',
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: `${fs.railLabel}px`,
+              color: '#fbbf24',
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              flexShrink: 0,
+            }}
+          >
+            Up for grabs ({unassignedCount})
+          </p>
+          <div
+            style={{
+              marginTop: '8px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '3px',
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+            }}
+          >
+            {unassignedCount === 0 ? (
+              <p style={{ margin: 0, fontSize: `${fs.railTask}px`, color: emptyMuted }}>Nothing unassigned</p>
+            ) : (
+              <>
+                {railShown.map(task => {
+                  const d = daysFromToday(task.due_date)
+                  const overdue = d !== null && d < 0
+                  return (
+                    <div
+                      key={task.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        gap: '6px',
+                        minWidth: 0,
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      <span
+                        style={{
+                          flex: 1,
+                          fontSize: `${fs.railTask}px`,
+                          color: text,
+                          fontWeight: 500,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {task.title}
+                      </span>
+                      {overdue && (
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            fontSize: `${fs.railOverdue}px`,
+                            fontWeight: 700,
+                            color: '#ef4444',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {Math.abs(d!)}d overdue
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+                {railMore > 0 && (
+                  <p style={{ margin: '4px 0 0', fontSize: `${fs.railMore}px`, color: muted, fontWeight: 600 }}>
+                    +{railMore} more
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
