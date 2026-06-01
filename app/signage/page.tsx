@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { getSchoolName as getSchoolNameFallback } from '@/lib/schools'
 import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
 import { resolveDayHours, toLocalDateStr } from '@/lib/team-schedule'
-import { formatGoneSignageLine, goneFirstNamesForDate, isGoneOnDate, type ScheduleGoneDay } from '@/lib/team-gone-days'
+import { goneFirstNamesForDate, isGoneOnDate, type ScheduleGoneDay } from '@/lib/team-gone-days'
 import { formatOfficeClosedSignageLine, officeClosedOnDate, type ScheduleOfficeClosedDay } from '@/lib/team-office-closed'
 import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
@@ -49,6 +49,34 @@ function showProductionOnSignageCalendar(p: Production): boolean {
 function getSunday(d: Date): Date { const dt = new Date(d); dt.setDate(dt.getDate() - dt.getDay()); dt.setHours(0, 0, 0, 0); return dt }
 function isSameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate() }
 function getInitials(n: string) { const p = n.split(' '); return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase() }
+
+function GoneDayPills({ names, scale }: { names: string[]; scale: number }) {
+  if (names.length === 0) return null
+  const pillFont = Math.max(10, Math.round(12 * scale))
+  return (
+    <>
+      {names.map((name, i) => (
+        <span
+          key={`${name}-${i}`}
+          style={{
+            fontSize: `${pillFont}px`,
+            fontWeight: 700,
+            color: '#fecaca',
+            background: 'rgba(248,113,113,0.22)',
+            border: '1px solid rgba(248,113,113,0.55)',
+            borderRadius: '999px',
+            padding: `${Math.max(2, Math.round(2 * scale))}px ${Math.max(6, Math.round(8 * scale))}px`,
+            lineHeight: 1.2,
+            whiteSpace: 'nowrap' as const,
+            flexShrink: 0,
+          }}
+        >
+          {name} out
+        </span>
+      ))}
+    </>
+  )
+}
 
 export default function SignagePage() {
   const supabase = createClient()
@@ -297,13 +325,22 @@ export default function SignagePage() {
                   {officeClosed && closedLine ? (
                     <>
                       <div style={{
-                        fontSize: '15px',
-                        color: todayCell ? '#60b8f0' : '#c0ccdd',
-                        fontWeight: todayCell ? 800 : 600,
-                        textAlign: 'right' as const,
+                        display: 'flex',
+                        flexWrap: 'wrap' as const,
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: '4px',
                         flexShrink: 0,
                       }}>
-                        {date.getDate()}
+                        <GoneDayPills names={goneFirstNamesForDate(ds, goneDays, team)} scale={1} />
+                        <span style={{
+                          fontSize: '15px',
+                          color: todayCell ? '#60b8f0' : '#c0ccdd',
+                          fontWeight: todayCell ? 800 : 600,
+                          lineHeight: 1.2,
+                        }}>
+                          {date.getDate()}
+                        </span>
                       </div>
                       <div style={{
                         flex: 1,
@@ -338,7 +375,7 @@ export default function SignagePage() {
                     </>
                   ) : (() => {
                     const dayEvts = calEvents.filter(e => e.date === ds)
-                    const goneLine = formatGoneSignageLine(goneFirstNamesForDate(ds, goneDays, team))
+                    const goneNames = goneFirstNamesForDate(ds, goneDays, team)
                     // Outlook events with auto-dedup against productions
                     const dayOl = outlookEnabled
                       ? outlookEvents.filter(e => {
@@ -349,7 +386,25 @@ export default function SignagePage() {
                     const n = dayProds.length + dayEvts.length + dayOl.length
                     const s = n <= 3 ? 1 : Math.max(0.55, 3 / n)
                     return <>
-                  <div style={{ fontSize: `${Math.round(18 * s)}px`, color: todayCell ? '#60b8f0' : '#c0ccdd', fontWeight: todayCell ? 800 : 600, textAlign: 'right' as const, marginBottom: `${Math.round(2 * s)}px` }}>{date.getDate()}</div>
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap' as const,
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: `${Math.round(4 * s)}px`,
+                    marginBottom: `${Math.round(2 * s)}px`,
+                    flexShrink: 0,
+                  }}>
+                    <GoneDayPills names={goneNames} scale={s} />
+                    <span style={{
+                      fontSize: `${Math.round(18 * s)}px`,
+                      color: todayCell ? '#60b8f0' : '#c0ccdd',
+                      fontWeight: todayCell ? 800 : 600,
+                      lineHeight: 1.2,
+                    }}>
+                      {date.getDate()}
+                    </span>
+                  </div>
                   {dayProds.map(p => {
                     const tc = TYPE_COLORS[p.request_type_label || ''] || '#94a3b8'
                     const members = p.production_members || []
@@ -398,11 +453,6 @@ export default function SignagePage() {
                       {evt.start_time && <div style={{ fontSize: `${Math.round(15 * s)}px`, color: '#b0c8e0', lineHeight: 1.3 }}>{new Date(evt.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>}
                     </div>
                   ))}
-                  {goneLine && (
-                    <div style={{ fontSize: `${Math.round(12 * s)}px`, color: '#f87171', fontWeight: 500, marginTop: `${Math.round(2 * s)}px`, lineHeight: 1.2, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const, whiteSpace: 'nowrap' as const }}>
-                      {goneLine}
-                    </div>
-                  )}
                     </>
                   })()}
                 </div>
