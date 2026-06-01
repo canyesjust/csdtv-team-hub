@@ -62,13 +62,18 @@ function initials(name: string): string {
   return (parts[0] || '?').slice(0, 2).toUpperCase()
 }
 
-function isTaskInProgressStatus(status: string | null | undefined): boolean {
-  return (status || '').toLowerCase().trim() === 'in progress'
+function normalizeTaskStatus(status: string | null | undefined): string {
+  return (status || '').toLowerCase().trim()
+}
+
+/** Actively being worked — show with gold dot on person cards. */
+function isActiveWorkTaskStatus(status: string | null | undefined): boolean {
+  const s = normalizeTaskStatus(status)
+  return s === 'in progress' || s === 'in review'
 }
 
 const STAFF_GRID_COLUMNS = 3
 const STUDENT_INTERN_GRID_COLUMNS = 4
-const MAX_IN_PROGRESS_TITLES = 3
 
 type PersonCardData = {
   member: TeamMember
@@ -93,16 +98,19 @@ interface PersonCardProps {
   text: string
   muted: string
   emptyMuted: string
+  maxListedTasks: number
 }
 
-function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted }: PersonCardProps) {
+function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, maxListedTasks }: PersonCardProps) {
   const { member, personTasks } = card
-  const inProgressTasks = personTasks.filter(t => isTaskInProgressStatus(t.status))
-  const openTasks = personTasks.filter(t => !isTaskInProgressStatus(t.status))
+  const activeTasks = personTasks.filter(t => isActiveWorkTaskStatus(t.status))
+  const openTasks = personTasks.filter(t => !isActiveWorkTaskStatus(t.status))
   const hasTasks = personTasks.length > 0
-  const shownInProgress = inProgressTasks.slice(0, MAX_IN_PROGRESS_TITLES)
-  const moreInProgress = inProgressTasks.length - shownInProgress.length
-  const openRemainder = openTasks.length
+  const slots = Math.max(4, maxListedTasks)
+  const shownActive = activeTasks.slice(0, slots)
+  const openSlots = Math.max(0, slots - shownActive.length)
+  const shownOpen = openTasks.slice(0, openSlots)
+  const hiddenCount = personTasks.length - shownActive.length - shownOpen.length
 
   return (
     <div
@@ -145,10 +153,10 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted }: 
       {hasTasks ? (
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, overflow: 'hidden' }}>
           <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
-            {inProgressTasks.length} in progress · {openTasks.length} open
+            {activeTasks.length} in progress · {openTasks.length} open
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0, overflow: 'hidden', flex: 1 }}>
-            {shownInProgress.map(t => (
+            {shownActive.map(t => (
               <p
                 key={t.id}
                 style={{
@@ -166,14 +174,27 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted }: 
                 {t.title}
               </p>
             ))}
-            {moreInProgress > 0 && (
-              <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
-                +{moreInProgress} more
+            {shownOpen.map(t => (
+              <p
+                key={t.id}
+                style={{
+                  margin: 0,
+                  fontSize: `${fs.taskLine}px`,
+                  color: '#b8c8e8',
+                  lineHeight: 1.35,
+                  padding: '3px 0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{ color: muted, marginRight: '6px' }}>○</span>
+                {t.title}
               </p>
-            )}
-            {openRemainder > 0 && (
+            ))}
+            {hiddenCount > 0 && (
               <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
-                + {openRemainder} open task{openRemainder !== 1 ? 's' : ''}
+                +{hiddenCount} more
               </p>
             )}
           </div>
@@ -407,7 +428,7 @@ export default function TasksSignagePage() {
     [staffCards]
   )
 
-  const inProgressTaskCount = displayTasks.filter(t => isTaskInProgressStatus(t.status)).length
+  const inProgressTaskCount = displayTasks.filter(t => isActiveWorkTaskStatus(t.status)).length
   const staffMaxTasks = Math.max(0, ...staffCards.map(c => c.personTasks.length))
   const unassignedCount = unassignedTasks.length
   const bg = '#070d18'
@@ -420,26 +441,33 @@ export default function TasksSignagePage() {
   const densityPenalty = Math.max(0, staffMaxTasks - 8) * 0.35
   const fit = (max: number, min: number, penalty = 0) => Math.max(min, Math.round(max * baseScale - penalty))
   const fs = {
-    title: fit(50, 38),
-    subtitle: fit(20, 15),
+    title: fit(54, 42),
+    subtitle: fit(22, 17),
     clock: fit(64, 42),
-    kpiLabel: fit(17, 13),
-    kpiValue: fit(66, 46),
-    bandLabel: fit(22, 16),
-    unassignedHeading: fit(30, 24),
-    unassignedTask: fit(28, 22),
-    unassignedMeta: fit(20, 16),
-    staffName: fit(36, 28),
-    staffStat: fit(24, 17),
-    taskLine: fit(26, 20, densityPenalty * 0.2),
-    railOverdue: fit(14, 11),
+    kpiLabel: fit(18, 14),
+    kpiValue: fit(70, 50),
+    bandLabel: fit(24, 18),
+    unassignedHeading: fit(32, 26),
+    unassignedTask: fit(30, 24),
+    unassignedMeta: fit(22, 17),
+    staffName: fit(38, 30),
+    staffStat: fit(26, 20),
+    taskLine: fit(28, 22, densityPenalty * 0.15),
+    railOverdue: fit(16, 12),
   }
   const qrSize = Math.min(140, Math.round(120 * (viewport.w / 1920)))
 
+  const maxTasksPerCard = useMemo(() => {
+    const mainH = viewport.h - fit(200, 170)
+    const halfRow = mainH / 2
+    const linePx = fit(28, 22) * 1.35 + 8
+    return Math.max(6, Math.min(16, Math.floor((halfRow - 72) / linePx)))
+  }, [viewport.h, baseScale])
+
   const railVisibleCount = useMemo(() => {
-    const available = Math.max(120, viewport.h - 220)
-    const perRow = fit(32, 26)
-    return Math.max(4, Math.floor(available / perRow))
+    const available = Math.max(160, viewport.h - fit(200, 170))
+    const perRow = fit(34, 28)
+    return Math.max(6, Math.floor(available / perRow))
   }, [viewport.h, baseScale])
 
   const railShown = unassignedTasks.slice(0, railVisibleCount)
@@ -572,7 +600,7 @@ export default function TasksSignagePage() {
           flex: 1,
           minHeight: 0,
           display: 'grid',
-          gridTemplateColumns: '72fr 28fr',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 240px)',
           gap: '11px',
           overflow: 'hidden',
         }}
@@ -614,6 +642,7 @@ export default function TasksSignagePage() {
                   text={text}
                   muted={muted}
                   emptyMuted={emptyMuted}
+                  maxListedTasks={maxTasksPerCard}
                 />
               ))}
             </div>
@@ -654,6 +683,7 @@ export default function TasksSignagePage() {
                   text={text}
                   muted={muted}
                   emptyMuted={emptyMuted}
+                  maxListedTasks={maxTasksPerCard}
                 />
               ))}
             </div>
