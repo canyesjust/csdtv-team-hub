@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { isStudentInternRole } from '@/lib/roles'
 
 interface TaskRow {
@@ -117,6 +117,80 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, ma
   const shownProds = inProgressProds.slice(0, prodSlots)
   const hiddenProdCount = inProgressProds.length - shownProds.length
 
+  const chipFs = fit(20, 14)
+  const chip = (bg: string, color: string, bd: string): CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '2px 9px',
+    borderRadius: '999px',
+    background: bg,
+    color,
+    border: `1px solid ${bd}`,
+    fontSize: `${chipFs}px`,
+    fontWeight: 700,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap',
+  })
+
+  const renderTaskRow = (t: TaskRow, active: boolean) => {
+    const d = daysFromToday(t.due_date)
+    const overdue = d !== null && d < 0
+    const dueToday = d === 0
+    const dueSoon = d !== null && d > 0 && d <= 2
+    let dueBadge: { label: string; color: string; bg: string } | null = null
+    if (overdue) dueBadge = { label: `${Math.abs(d!)}d`, color: '#fca5a5', bg: 'rgba(239,68,68,0.18)' }
+    else if (dueToday) dueBadge = { label: 'today', color: '#fcd9a5', bg: 'rgba(240,160,60,0.18)' }
+    else if (dueSoon) dueBadge = { label: `${d}d`, color: '#cfe0ff', bg: 'rgba(255,255,255,0.08)' }
+    return (
+      <div
+        key={t.id}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '4px 9px',
+          borderRadius: '6px',
+          background: active ? 'rgba(240,192,96,0.12)' : 'rgba(255,255,255,0.04)',
+          borderLeft: `3px solid ${active ? '#f0c060' : 'rgba(255,255,255,0.14)'}`,
+          minWidth: 0,
+        }}
+      >
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: `${fs.taskLine}px`,
+            color: active ? '#f5e2b0' : '#c3d2ee',
+            fontWeight: active ? 700 : 500,
+            lineHeight: 1.3,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {t.title}
+        </span>
+        {dueBadge && (
+          <span
+            style={{
+              flexShrink: 0,
+              fontSize: `${fit(19, 13)}px`,
+              fontWeight: 800,
+              color: dueBadge.color,
+              background: dueBadge.bg,
+              borderRadius: '5px',
+              padding: '1px 6px',
+              lineHeight: 1.25,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {dueBadge.label}
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -150,56 +224,40 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, ma
         >
           {initials(member.name)}
         </div>
-        <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 800, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {member.name}
-        </p>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 800, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {member.name}
+          </p>
+          {hasTasks && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '5px' }}>
+              {activeTasks.length > 0 && (
+                <span style={chip('rgba(240,192,96,0.18)', '#f5d78e', 'rgba(240,192,96,0.5)')}>
+                  {activeTasks.length} active
+                </span>
+              )}
+              {openTasks.length > 0 && (
+                <span style={chip('rgba(255,255,255,0.06)', muted, border)}>
+                  {openTasks.length} open
+                </span>
+              )}
+              {card.personOverdue > 0 && (
+                <span style={chip('rgba(239,68,68,0.16)', '#fca5a5', 'rgba(239,68,68,0.5)')}>
+                  {card.personOverdue} overdue
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, overflow: 'hidden' }}>
         {hasTasks ? (
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: hasProds ? '0 1 auto' : 1, overflow: 'hidden' }}>
-            <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
-              {activeTasks.length} active · {openTasks.length} open
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0, overflow: 'hidden', flex: hasProds ? undefined : 1 }}>
-              {shownActive.map(t => (
-                <p
-                  key={t.id}
-                  style={{
-                    margin: 0,
-                    fontSize: `${fs.taskLine}px`,
-                    color: '#d8e4ff',
-                    lineHeight: 1.35,
-                    padding: '3px 0',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <span style={{ color: '#f0c060', marginRight: '4px' }}>●</span>
-                  {t.title}
-                </p>
-              ))}
-              {shownOpen.map(t => (
-                <p
-                  key={t.id}
-                  style={{
-                    margin: 0,
-                    fontSize: `${fs.taskLine}px`,
-                    color: '#b8c8e8',
-                    lineHeight: 1.35,
-                    padding: '3px 0',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <span style={{ color: muted, marginRight: '6px' }}>○</span>
-                  {t.title}
-                </p>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minHeight: 0, overflow: 'hidden', flex: hasProds ? undefined : 1 }}>
+              {shownActive.map(t => renderTaskRow(t, true))}
+              {shownOpen.map(t => renderTaskRow(t, false))}
               {hiddenTaskCount > 0 && (
-                <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
+                <p style={{ margin: '2px 0 0', fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
                   +{hiddenTaskCount} more
                 </p>
               )}
@@ -235,27 +293,46 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, ma
               flex: hasTasks ? undefined : 1,
             }}
           >
-            <p style={{ margin: '0 0 8px', fontSize: `${fs.staffStat}px`, color: '#f0c060', fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
-              {inProgressProds.length} production{inProgressProds.length !== 1 ? 's' : ''} in progress
+            <p style={{ margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '7px', fontSize: `${fs.staffStat}px`, color: '#f0c060', fontWeight: 800, lineHeight: 1.2, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.7em' }}>●</span>
+              {inProgressProds.length} in progress
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', overflow: 'hidden' }}>
               {shownProds.map(pm => (
-                <p
+                <div
                   key={`prod-${pm.production_id}`}
-                  style={{
-                    margin: 0,
-                    fontSize: `${fs.taskLine}px`,
-                    color: '#f5d78e',
-                    fontWeight: 600,
-                    lineHeight: 1.35,
-                    padding: '3px 0',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}
                 >
-                  {pm.productions?.title || 'Untitled production'}
-                </p>
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      fontSize: `${fit(19, 13)}px`,
+                      fontWeight: 800,
+                      color: '#0a0f1e',
+                      background: '#f0c060',
+                      borderRadius: '5px',
+                      padding: '1px 7px',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    #{pm.productions?.production_number ?? '—'}
+                  </span>
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: `${fs.taskLine}px`,
+                      color: '#f5d78e',
+                      fontWeight: 600,
+                      lineHeight: 1.3,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {pm.productions?.title || 'Untitled production'}
+                  </span>
+                </div>
               ))}
               {hiddenProdCount > 0 && (
                 <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
