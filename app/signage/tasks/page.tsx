@@ -159,7 +159,7 @@ function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, ma
         {hasTasks ? (
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: hasProds ? '0 1 auto' : 1, overflow: 'hidden' }}>
             <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
-              {activeTasks.length} in progress · {openTasks.length} open
+              {activeTasks.length} active · {openTasks.length} open
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0, overflow: 'hidden', flex: hasProds ? undefined : 1 }}>
               {shownActive.map(t => (
@@ -610,7 +610,7 @@ export default function TasksSignagePage() {
           { label: 'Open', value: displayTasks.length, color: '#34d399' },
           { label: 'Overdue', value: overdueTasks.length, color: '#ef4444' },
           { label: 'Due today', value: dueTodayCount, color: '#60b8f0' },
-          { label: 'In progress', value: inProgressTaskCount, color: '#f0c060' },
+          { label: 'Active', value: inProgressTaskCount, color: '#f0c060' },
           { label: 'Requests', value: purchaseQueueCount, color: '#c084fc' },
         ].map(stat => (
           <div
