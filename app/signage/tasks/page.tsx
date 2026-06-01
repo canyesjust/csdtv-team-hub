@@ -102,7 +102,7 @@ interface PersonCardProps {
 }
 
 function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted, maxListedTasks }: PersonCardProps) {
-  const { personTasks, personInProgressProds } = card
+  const { member, personTasks, personInProgressProds } = card
   const activeTasks = personTasks.filter(t => isActiveWorkTaskStatus(t.status))
   const openTasks = personTasks.filter(t => !isActiveWorkTaskStatus(t.status))
   const hasTasks = personTasks.length > 0
