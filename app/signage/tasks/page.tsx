@@ -83,20 +83,19 @@ type PersonCardData = {
 interface PersonCardProps {
   card: PersonCardData
   fs: {
-    personName: number
-    personMeta: number
-    taskTitle: number
-    taskMore: number
-    emptyState: number
+    staffName: number
+    staffStat: number
+    taskLine: number
   }
   fit: (max: number, min: number, penalty?: number) => number
   cardBg: string
   border: string
+  text: string
   muted: string
   emptyMuted: string
 }
 
-function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted }: PersonCardProps) {
+function PersonCard({ card, fs, fit, cardBg, border, text, muted, emptyMuted }: PersonCardProps) {
   const { member, personTasks } = card
   const inProgressTasks = personTasks.filter(t => isTaskInProgressStatus(t.status))
   const openTasks = personTasks.filter(t => !isTaskInProgressStatus(t.status))
@@ -110,7 +109,7 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted }: Person
       style={{
         border: `1px solid ${border}`,
         borderRadius: '8px',
-        padding: `${fit(10, 8)}px`,
+        padding: '12px 14px',
         background: cardBg,
         display: 'flex',
         flexDirection: 'column',
@@ -120,43 +119,44 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted }: Person
         boxSizing: 'border-box',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: `${fit(8, 6)}px`, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexShrink: 0 }}>
         <div
           style={{
-            width: `${fit(22, 18)}px`,
-            height: `${fit(22, 18)}px`,
+            width: `${fit(46, 36)}px`,
+            height: `${fit(46, 36)}px`,
             borderRadius: '999px',
             background: member.avatar_color,
             color: '#0a0f1e',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: `${fit(9, 8)}px`,
+            fontSize: `${fit(17, 13)}px`,
             fontWeight: 800,
             flexShrink: 0,
           }}
         >
           {initials(member.name)}
         </div>
-        <p style={{ margin: 0, fontSize: `${fs.personName}px`, fontWeight: 500, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <p style={{ margin: 0, fontSize: `${fs.staffName}px`, fontWeight: 800, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {member.name}
         </p>
       </div>
 
       {hasTasks ? (
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, marginTop: `${fit(8, 6)}px`, overflow: 'hidden' }}>
-          <p style={{ margin: 0, fontSize: `${fs.personMeta}px`, color: muted, lineHeight: 1.3, flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1, overflow: 'hidden' }}>
+          <p style={{ margin: '0 0 10px', fontSize: `${fs.staffStat}px`, color: text, fontWeight: 700, lineHeight: 1.3, flexShrink: 0 }}>
             {inProgressTasks.length} in progress · {openTasks.length} open
           </p>
-          <div style={{ marginTop: `${fit(6, 4)}px`, display: 'flex', flexDirection: 'column', gap: `${fit(3, 2)}px`, minHeight: 0, overflow: 'hidden', flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0, overflow: 'hidden', flex: 1 }}>
             {shownInProgress.map(t => (
               <p
                 key={t.id}
                 style={{
                   margin: 0,
-                  fontSize: `${fs.taskTitle}px`,
-                  color: '#eef2ff',
-                  lineHeight: 1.25,
+                  fontSize: `${fs.taskLine}px`,
+                  color: '#d8e4ff',
+                  lineHeight: 1.35,
+                  padding: '3px 0',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -167,12 +167,12 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted }: Person
               </p>
             ))}
             {moreInProgress > 0 && (
-              <p style={{ margin: 0, fontSize: `${fs.taskMore}px`, color: muted, lineHeight: 1.2 }}>
+              <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
                 +{moreInProgress} more
               </p>
             )}
             {openRemainder > 0 && (
-              <p style={{ margin: 0, fontSize: `${fs.taskMore}px`, color: muted, lineHeight: 1.2 }}>
+              <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
                 + {openRemainder} open task{openRemainder !== 1 ? 's' : ''}
               </p>
             )}
@@ -182,16 +182,15 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted }: Person
         <div
           style={{
             flex: 1,
-            marginTop: `${fit(8, 6)}px`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             border: '1px dashed rgba(255,255,255,0.12)',
             borderRadius: '6px',
-            minHeight: `${fit(48, 36)}px`,
+            minHeight: `${fit(56, 44)}px`,
           }}
         >
-          <p style={{ margin: 0, fontSize: `${fs.emptyState}px`, color: emptyMuted, fontWeight: 500 }}>
+          <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: emptyMuted, fontWeight: 500 }}>
             No tasks assigned
           </p>
         </div>
@@ -421,28 +420,25 @@ export default function TasksSignagePage() {
   const densityPenalty = Math.max(0, staffMaxTasks - 8) * 0.35
   const fit = (max: number, min: number, penalty = 0) => Math.max(min, Math.round(max * baseScale - penalty))
   const fs = {
-    title: fit(32, 26),
-    subtitle: fit(14, 11),
-    clock: fit(34, 24),
-    kpiLabel: fit(11, 9),
-    kpiValue: fit(20, 16),
-    bandLabel: fit(11, 9),
-    railLabel: fit(13, 11),
-    railTask: fit(12, 10),
-    railMore: fit(11, 9),
-    railOverdue: fit(10, 8),
-    personName: fit(14, 12),
-    personMeta: fit(11, 9),
-    taskTitle: fit(12, 10, densityPenalty * 0.15),
-    taskMore: fit(11, 9),
-    emptyState: fit(12, 10),
-    qrCaption: fit(12, 10),
+    title: fit(50, 38),
+    subtitle: fit(20, 15),
+    clock: fit(64, 42),
+    kpiLabel: fit(17, 13),
+    kpiValue: fit(66, 46),
+    bandLabel: fit(22, 16),
+    unassignedHeading: fit(30, 24),
+    unassignedTask: fit(28, 22),
+    unassignedMeta: fit(20, 16),
+    staffName: fit(36, 28),
+    staffStat: fit(24, 17),
+    taskLine: fit(26, 20, densityPenalty * 0.2),
+    railOverdue: fit(14, 11),
   }
-  const qrSize = Math.min(96, Math.round(88 * (viewport.w / 1920)))
+  const qrSize = Math.min(140, Math.round(120 * (viewport.w / 1920)))
 
   const railVisibleCount = useMemo(() => {
     const available = Math.max(120, viewport.h - 220)
-    const perRow = fit(16, 13)
+    const perRow = fit(32, 26)
     return Math.max(4, Math.floor(available / perRow))
   }, [viewport.h, baseScale])
 
@@ -463,7 +459,7 @@ export default function TasksSignagePage() {
         background: bg,
         color: text,
         height: '100vh',
-        padding: '10px 16px 12px',
+        padding: '12px 14px',
         fontFamily: 'system-ui, -apple-system, sans-serif',
         display: 'flex',
         flexDirection: 'column',
@@ -472,7 +468,7 @@ export default function TasksSignagePage() {
       }}
     >
       {loadError && (
-        <div style={{ marginBottom: '8px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(18, 13)}px`, fontWeight: 600, flexShrink: 0 }}>
+        <div style={{ marginBottom: '10px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(18, 13)}px`, fontWeight: 600, flexShrink: 0 }}>
           <div>{loadError.message}</div>
           {loadError.hint && (
             <div style={{ marginTop: '6px', fontSize: `${fit(15, 11)}px`, fontWeight: 500, opacity: 0.95 }}>
@@ -483,24 +479,24 @@ export default function TasksSignagePage() {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexShrink: 0, marginBottom: '8px' }}>
-        <div style={{ minWidth: 0, flex: '1 1 auto' }}>
-          <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.1, fontWeight: 700 }}>CSDtv Task Ops Board</h1>
-          <p style={{ margin: '4px 0 0', fontSize: `${fs.subtitle}px`, color: muted, lineHeight: 1.2 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', gap: '14px', flexShrink: 0 }}>
+        <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+          <h1 style={{ margin: 0, fontSize: `${fs.title}px`, lineHeight: 1.05 }}>CSDtv Task Ops Board</h1>
+          <p style={{ margin: '6px 0 0', fontSize: `${fs.subtitle}px`, color: muted, lineHeight: 1.25 }}>
             Who&apos;s assigned what — at a glance
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexShrink: 0 }}>
           {taskIntakeQrDataUrl && taskIntakeUrl && (
             <div style={{ textAlign: 'center' as const, flexShrink: 0 }}>
-              <p style={{ margin: 0, fontSize: `${fs.qrCaption}px`, color: muted, fontWeight: 700, letterSpacing: '0.04em' }}>Submit a task</p>
+              <p style={{ margin: 0, fontSize: `${fit(16, 11)}px`, color: muted, fontWeight: 700, letterSpacing: '0.04em' }}>Submit a task</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={taskIntakeQrDataUrl}
                 alt=""
                 width={qrSize}
                 height={qrSize}
-                style={{ display: 'block', marginTop: '4px', borderRadius: '8px', border: `1px solid ${border}` }}
+                style={{ display: 'block', marginTop: '6px', borderRadius: '10px', border: `1px solid ${border}` }}
               />
             </div>
           )}
@@ -524,7 +520,7 @@ export default function TasksSignagePage() {
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
-          gap: '8px',
+          gap: '10px',
           marginBottom: '10px',
           flexShrink: 0,
         }}
@@ -542,12 +538,12 @@ export default function TasksSignagePage() {
             style={{
               background: cardBg,
               border: `1px solid ${border}`,
-              borderRadius: '8px',
-              padding: '6px 10px',
+              borderRadius: '10px',
+              padding: '10px 12px',
               display: 'flex',
               alignItems: 'baseline',
               justifyContent: 'space-between',
-              gap: '8px',
+              gap: '10px',
               minWidth: 0,
             }}
           >
@@ -556,14 +552,14 @@ export default function TasksSignagePage() {
                 fontSize: `${fs.kpiLabel}px`,
                 color: muted,
                 textTransform: 'uppercase',
-                letterSpacing: '0.06em',
+                letterSpacing: '1px',
                 fontWeight: 700,
                 whiteSpace: 'nowrap',
               }}
             >
               {stat.label}
             </span>
-            <span style={{ fontSize: `${fs.kpiValue}px`, color: stat.color, fontWeight: 700, lineHeight: 1 }}>
+            <span style={{ fontSize: `${fs.kpiValue}px`, color: stat.color, fontWeight: 800, lineHeight: 1 }}>
               {stat.value}
             </span>
           </div>
@@ -586,11 +582,11 @@ export default function TasksSignagePage() {
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <p
               style={{
-                margin: '0 0 6px',
+                margin: '0 0 8px',
                 fontSize: `${fs.bandLabel}px`,
                 color: muted,
                 fontWeight: 800,
-                letterSpacing: '0.1em',
+                letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 flexShrink: 0,
               }}
@@ -603,7 +599,7 @@ export default function TasksSignagePage() {
                 minHeight: 0,
                 display: 'grid',
                 gridTemplateColumns: `repeat(${STAFF_GRID_COLUMNS}, minmax(0, 1fr))`,
-                gap: '8px',
+                gap: '12px',
                 overflow: 'hidden',
               }}
             >
@@ -615,6 +611,7 @@ export default function TasksSignagePage() {
                   fit={fit}
                   cardBg={cardBg}
                   border={border}
+                  text={text}
                   muted={muted}
                   emptyMuted={emptyMuted}
                 />
@@ -625,11 +622,11 @@ export default function TasksSignagePage() {
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <p
               style={{
-                margin: '0 0 6px',
+                margin: '0 0 8px',
                 fontSize: `${fs.bandLabel}px`,
                 color: muted,
                 fontWeight: 800,
-                letterSpacing: '0.1em',
+                letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 flexShrink: 0,
               }}
@@ -642,7 +639,7 @@ export default function TasksSignagePage() {
                 minHeight: 0,
                 display: 'grid',
                 gridTemplateColumns: `repeat(${STUDENT_INTERN_GRID_COLUMNS}, minmax(0, 1fr))`,
-                gap: '8px',
+                gap: '12px',
                 overflow: 'hidden',
               }}
             >
@@ -654,6 +651,7 @@ export default function TasksSignagePage() {
                   fit={fit}
                   cardBg={cardBg}
                   border={border}
+                  text={text}
                   muted={muted}
                   emptyMuted={emptyMuted}
                 />
@@ -671,8 +669,8 @@ export default function TasksSignagePage() {
             background: cardBg,
             border: `1px solid ${border}`,
             borderLeft: '3px solid #fbbf24',
-            borderRadius: '8px',
-            padding: '10px 10px 8px',
+            borderRadius: '10px',
+            padding: '12px 14px',
             overflow: 'hidden',
             boxSizing: 'border-box',
           }}
@@ -680,11 +678,10 @@ export default function TasksSignagePage() {
           <p
             style={{
               margin: 0,
-              fontSize: `${fs.railLabel}px`,
+              fontSize: `${fs.unassignedHeading}px`,
               color: '#fbbf24',
               fontWeight: 800,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
               flexShrink: 0,
             }}
           >
@@ -692,17 +689,17 @@ export default function TasksSignagePage() {
           </p>
           <div
             style={{
-              marginTop: '8px',
+              marginTop: '10px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '3px',
+              gap: '6px',
               flex: 1,
               minHeight: 0,
               overflow: 'hidden',
             }}
           >
             {unassignedCount === 0 ? (
-              <p style={{ margin: 0, fontSize: `${fs.railTask}px`, color: emptyMuted }}>Nothing unassigned</p>
+              <p style={{ margin: 0, fontSize: `${fs.unassignedTask}px`, color: emptyMuted, fontWeight: 600 }}>Nothing unassigned</p>
             ) : (
               <>
                 {railShown.map(task => {
@@ -714,7 +711,7 @@ export default function TasksSignagePage() {
                       style={{
                         display: 'flex',
                         alignItems: 'baseline',
-                        gap: '6px',
+                        gap: '8px',
                         minWidth: 0,
                         lineHeight: 1.25,
                       }}
@@ -722,9 +719,9 @@ export default function TasksSignagePage() {
                       <span
                         style={{
                           flex: 1,
-                          fontSize: `${fs.railTask}px`,
+                          fontSize: `${fs.unassignedTask}px`,
                           color: text,
-                          fontWeight: 500,
+                          fontWeight: 700,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -749,7 +746,7 @@ export default function TasksSignagePage() {
                   )
                 })}
                 {railMore > 0 && (
-                  <p style={{ margin: '4px 0 0', fontSize: `${fs.railMore}px`, color: muted, fontWeight: 600 }}>
+                  <p style={{ margin: '8px 0 0', fontSize: `${fs.unassignedMeta}px`, color: muted, fontWeight: 600 }}>
                     +{railMore} more
                   </p>
                 )}
