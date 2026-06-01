@@ -8,6 +8,11 @@ export type TeamUser = {
   role: string
 }
 
+/** Supabase client using the signed-in user's session (respects RLS). */
+export async function createAuthSupabaseClient() {
+  return createAuthServerClient()
+}
+
 async function createAuthServerClient() {
   const cookieStore = await cookies()
   return createServerClient(

@@ -1,17 +1,19 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from 'react'
+import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from '../components/Loader'
-import CommentsSection from '../components/CommentsSection'
+import type { TasksDashboardPayload } from '@/lib/dashboard/load-tasks-data'
+import { useTasksSummary } from '@/lib/hooks/dashboard-cache'
 import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
-import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
 import {
   fetchTaskAssignments,
@@ -20,6 +22,13 @@ import {
   taskHasAssignee,
   taskIsUnassigned,
 } from '@/lib/task-assignments'
+
+const CommentsSection = dynamic(() => import('../components/CommentsSection'), {
+  ssr: false,
+  loading: () => (
+    <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>Loading comments…</p>
+  ),
+})
 import TaskAssigneePicker from '../components/TaskAssigneePicker'
 import {
   type RecurrenceFormState,
@@ -116,6 +125,7 @@ function normalizeProductionRelation(
 export default function TasksPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
+  const router = useRouter()
   const supabase = createClient()
 
   const [tasks, setTasks] = useState<Task[]>([])
@@ -123,8 +133,9 @@ export default function TasksPage() {
   const [team, setTeam] = useState<TeamMember[]>([])
   const [allProductions, setAllProductions] = useState<Production[]>([])
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
-  const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const { data: tasksSummary, error: tasksError, isLoading: tasksLoading, mutate: refreshTasks } =
+    useTasksSummary<TasksDashboardPayload & { redirect?: string }>()
   const [completing, setCompleting] = useState<Set<string>>(new Set())
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [focusFilter, setFocusFilter] = useState<FocusFilter>('all')
@@ -320,179 +331,49 @@ export default function TasksPage() {
     })
   }, [supabase])
 
-  const loadData = useCallback(async () => {
+  const applyTasksSummary = useCallback((payload: TasksDashboardPayload) => {
     setLoadError(null)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const teamRow = await resolveEffectiveTeamRow<CurrentUser>(supabase, 'id, name, role')
-    const userRes = { data: teamRow }
-    const uid = userRes.data?.id
-    const isStu = isStudentInternRole(userRes.data?.role)
-
-    let tasksRes: { data: Task[] | null; error?: { message: string } | null }
-    let completedRes: { data: Task[] | null; error?: { message: string } | null }
-    let teamList: TeamMember[]
-    let prodsList: Production[]
-    let checklistRows: ChecklistRow[] = []
-
-    if (isStu && uid) {
-      const { data: myAssignmentRows, error: assignmentQueryError } = await supabase
-        .from('task_assignments')
-        .select('task_id')
-        .eq('team_id', uid)
-      const assignedTaskIds = assignmentQueryError
-        ? []
-        : [...new Set((myAssignmentRows || []).map(r => r.task_id as string))]
-      const openFilter =
-        assignedTaskIds.length > 0
-          ? `assigned_to.eq.${uid},id.in.(${assignedTaskIds.join(',')})`
-          : `assigned_to.eq.${uid}`
-      const doneFilter =
-        assignedTaskIds.length > 0
-          ? `assigned_to.eq.${uid},id.in.(${assignedTaskIds.join(',')})`
-          : `assigned_to.eq.${uid}`
-      ;[tasksRes, completedRes] = await Promise.all([
-        supabase
-          .from('tasks')
-          .select('*, productions(id,title,production_number,request_type_label,start_datetime,status)')
-          .or(openFilter)
-          .neq('status', 'complete')
-          .order('due_date', { ascending: true, nullsFirst: false }),
-        supabase
-          .from('tasks')
-          .select('*, productions(id,title,production_number,request_type_label,start_datetime,status)')
-          .or(doneFilter)
-          .eq('status', 'complete')
-          .order('completed_at', { ascending: false })
-          .limit(50),
-      ])
-      const { data: checklistData } = await supabase
-        .from('checklist_items')
-        .select('id,title,completed,assigned_to,production_id,productions(id,title,production_number,request_type_label,start_datetime,status)')
-        .eq('assigned_to', uid)
-        .eq('completed', false)
-        .order('sort_order', { ascending: true })
-      checklistRows = ((checklistData as ChecklistRow[] | null) || [])
-      const { data: memRows } = await supabase.from('production_members').select('production_id').eq('user_id', uid)
-      const pids = [...new Set((memRows || []).map(m => m.production_id).filter(Boolean))] as string[]
-      if (pids.length === 0) {
-        prodsList = []
-      } else {
-        const { data } = await supabase.from('productions').select('id,title,production_number,request_type_label,start_datetime,status').in('id', pids).order('production_number', { ascending: false })
-        prodsList = (data as Production[]) || []
-      }
-      teamList = userRes.data ? [userRes.data as TeamMember] : []
-      if (tasksRes.error || completedRes.error) {
-        const msg = tasksRes.error?.message || completedRes.error?.message || 'Failed to load tasks'
-        setLoadError(msg)
-        toast(msg, 'error')
-        setLoading(false)
-        return
-      }
-    } else {
-      const [tRes, cRes, tmRes, pRes] = await Promise.all([
-        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').neq('status', 'complete').order('due_date', { ascending: true, nullsFirst: false }),
-        supabase.from('tasks').select('*, productions(id,title,production_number,request_type_label,start_datetime,status)').eq('status', 'complete').order('completed_at', { ascending: false }).limit(50),
-        supabase.from('team').select('*').eq('active', true),
-        supabase.from('productions').select('id,title,production_number,request_type_label,start_datetime,status').order('production_number', { ascending: false }).limit(100),
-      ])
-      const { data: checklistData } = await supabase
-        .from('checklist_items')
-        .select('id,title,completed,assigned_to,production_id,productions(id,title,production_number,request_type_label,start_datetime,status)')
-        .eq('completed', false)
-        .order('sort_order', { ascending: true })
-      checklistRows = ((checklistData as ChecklistRow[] | null) || [])
-      if (tRes.error || cRes.error) {
-        const msg = tRes.error?.message || cRes.error?.message || 'Failed to load tasks'
-        setLoadError(msg)
-        toast(msg, 'error')
-        setLoading(false)
-        return
-      }
-      tasksRes = tRes
-      completedRes = cRes
-      teamList = (tmRes.data as TeamMember[]) || []
-      prodsList = (pRes.data as Production[]) || []
-    }
-
-    const checklistAsTasks: Task[] = checklistRows.map((row) => ({
-      id: `checklist:${row.id}`,
-      title: row.title,
-      description: null,
-      status: 'pending',
-      priority: 'normal',
-      due_date: null,
-      created_at: new Date().toISOString(),
-      assigned_to: row.assigned_to,
-      created_by: row.assigned_to || uid || '',
-      production_id: row.production_id,
-      needs_equipment: false,
-      notes: null,
-      purchase_request: false,
-      purchase_request_link: null,
-      hide_from_signage: false,
-      completed_at: null,
-      recurring: null,
-      recurring_interval: null,
-      blocked_by: null,
-      scanned_sheet_id: null,
-      source: 'checklist',
-      checklist_item_id: row.id,
-      productions: normalizeProductionRelation(row.productions),
-    }))
-
-    const enrichedOpen = await enrichTasksWithAssignees([...(tasksRes.data || []), ...checklistAsTasks])
-    const enrichedDone = await enrichTasksWithAssignees(completedRes.data || [])
-    setTasks(enrichedOpen)
-    setCompletedTasks(enrichedDone)
-    setTeam(teamList)
-    setCurrentUser(userRes.data)
-    setAllProductions(prodsList)
-
-    if (isStu) {
+    setCurrentUser(payload.user)
+    setTasks(payload.tasks as Task[])
+    setCompletedTasks(payload.completedTasks as Task[])
+    setTeam(payload.team as TeamMember[])
+    setAllProductions(payload.allProductions as Production[])
+    setTemplates(payload.templates as TaskTemplate[])
+    setSubtaskCounts(payload.subtaskCounts)
+    setMyProductions(payload.myProductions)
+    if (isStudentInternRole(payload.user.role)) {
       setTemplates([])
       setShowTemplates(false)
-    } else {
-      const { data: tplData } = await supabase.from('task_templates').select('*, items:task_template_items(*)').order('name')
-      setTemplates((tplData || []).map((t: any) => ({ ...t, items: t.items?.sort((a: any, b: any) => a.sort_order - b.sort_order) })))
     }
+  }, [])
 
-    const taskIdsForSubs = [...new Set([
-      ...(tasksRes.data || []).map((t: { id: string }) => t.id),
-      ...(completedRes.data || []).map((t: { id: string }) => t.id),
-    ])]
-    const SUBTASK_ID_CHUNK = 120
-    const allSubs: { task_id: string; completed: boolean }[] = []
-    for (let i = 0; i < taskIdsForSubs.length; i += SUBTASK_ID_CHUNK) {
-      const chunk = taskIdsForSubs.slice(i, i + SUBTASK_ID_CHUNK)
-      const { data: subChunk } = await supabase.from('subtasks').select('task_id, completed').in('task_id', chunk)
-      if (subChunk) allSubs.push(...subChunk)
+  useEffect(() => {
+    if (!tasksSummary) return
+    if (tasksSummary.redirect) {
+      router.replace(tasksSummary.redirect)
+      return
     }
-    const counts: Record<string, { total: number; done: number }> = {}
-    allSubs.forEach((s: any) => {
-      if (!counts[s.task_id]) counts[s.task_id] = { total: 0, done: 0 }
-      counts[s.task_id].total++
-      if (s.completed) counts[s.task_id].done++
-    })
-    setSubtaskCounts(counts)
+    applyTasksSummary(tasksSummary)
+  }, [tasksSummary, router, applyTasksSummary])
 
-    if (userRes.data) {
-      const { data: myProdMembers } = await supabase.from('production_members').select('production_id').eq('user_id', userRes.data.id)
-      if (myProdMembers && myProdMembers.length > 0) {
-        const prodIds = myProdMembers.map(m => m.production_id)
-        const { data: prods } = await supabase.from('productions').select('id, title, production_number, status, checklist_items(completed)').in('id', prodIds).not('status', 'in', '("Complete","Abandoned")').order('production_number', { ascending: false })
-        const withCounts = (prods || []).map((p: any) => {
-          const items = p.checklist_items || []
-          return { id: p.id, title: p.title, production_number: p.production_number, total: items.length, done: items.filter((i: any) => i.completed).length }
-        }).filter(p => p.total > 0 && p.done < p.total)
-        setMyProductions(withCounts)
-      }
+  useEffect(() => {
+    if (tasksError) {
+      setLoadError(tasksError.message)
+      toast(tasksError.message, 'error')
     }
+  }, [tasksError])
 
-    setLoading(false)
-  }, [supabase, enrichTasksWithAssignees])
+  const loading = tasksLoading && !tasksSummary
 
-  useEffect(() => { loadData() }, [loadData])
+  const loadData = useCallback(async () => {
+    try {
+      await refreshTasks()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load tasks'
+      setLoadError(msg)
+      toast(msg, 'error')
+    }
+  }, [refreshTasks])
 
   const isStudentInternUser = useMemo(() => isStudentInternRole(currentUser?.role), [currentUser?.role])
 
@@ -1204,7 +1085,7 @@ export default function TasksPage() {
         <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--text-muted)' }}>{loadError}</p>
         <button
           type="button"
-          onClick={() => { setLoading(true); void loadData() }}
+          onClick={() => void loadData()}
           style={{
             fontSize: '14px',
             padding: '9px 18px',

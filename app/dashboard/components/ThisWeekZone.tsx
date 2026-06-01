@@ -20,7 +20,7 @@ export interface WeekProduction {
   event_date?: string | null
   filming_location: string | null
   school_department: string | null
-  checklist_items?: { id: string; title: string; completed: boolean }[]
+  checklist_items?: { id?: string; title?: string; completed: boolean }[]
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
 }
 

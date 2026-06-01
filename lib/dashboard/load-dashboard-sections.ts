@@ -22,7 +22,7 @@ export interface DashboardProduction {
   event_date?: string | null
   filming_location: string | null
   school_department: string | null
-  checklist_items?: { id: string; title: string; completed: boolean }[]
+  checklist_items?: { id?: string; title?: string; completed: boolean }[]
   production_members?: { user_id: string; team: { name: string; avatar_color: string } | null }[]
 }
 
@@ -60,15 +60,25 @@ export interface InsightsData {
   totalYtViews: number
 }
 
+const MANAGER_PRODUCTION_SELECT =
+  'id, title, production_number, request_type_label, type, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(completed)'
+
+/** Eligible statuses for YouTube link follow-up (narrower than all non-abandoned). */
+const YT_FOLLOWUP_STATUS_OR =
+  'status.ilike.%approved%,status.ilike.%in progress%,status.ilike.%in%20progress%'
+
 export async function loadManagerOpsData(
   supabase: SupabaseClient,
 ): Promise<ManagerOpsData> {
+  const horizonStart = new Date()
+  horizonStart.setDate(horizonStart.getDate() - 21)
+  horizonStart.setHours(0, 0, 0, 0)
+
   const { data: allManagerProds } = await supabase
     .from('productions')
-    .select(
-      'id, title, production_number, request_type_label, type, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
-    )
+    .select(MANAGER_PRODUCTION_SELECT)
     .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
+    .or(`start_datetime.gte.${horizonStart.toISOString()},start_datetime.is.null`)
     .order('start_datetime', { ascending: true, nullsFirst: false })
     .limit(200)
 
@@ -92,7 +102,8 @@ export async function loadManagerOpsData(
     supabase
       .from('productions')
       .select('id, request_type_label, type, status, livestream_url, youtube_link_email_sent_at, school_year, start_datetime, start_datetime_label, event_date')
-      .neq('status', 'Abandoned'),
+      .neq('status', 'Abandoned')
+      .or(YT_FOLLOWUP_STATUS_OR),
   ])
 
   let crewSlotsTotal = 0

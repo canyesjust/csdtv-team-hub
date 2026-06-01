@@ -21,13 +21,16 @@ import {
 } from '@/lib/school-year'
 import { dayDiffFromToday, DAY_MS } from '@/lib/dashboard/day-diff'
 import { isLowPrepAttention, isUnderstaffed, startsWithinDays } from '@/lib/dashboard/production-attention'
-import { loadManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
-import { fetchEffectiveTeam } from '@/lib/effective-team-client'
-import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
-import {
-  isProductionInDateWindow,
-  normalizeProductionDatetimeFields,
-} from '@/lib/productions/effective-datetime'
+import type { ManagerOpsData } from '@/lib/dashboard/load-dashboard-sections'
+import { useDashboardHome } from '@/lib/hooks/dashboard-cache'
+
+type DashboardHomeResponse = {
+  redirect?: string
+  user?: { id: string; name: string; role: string }
+  teamMembers?: TeamMember[]
+  weekProductions?: WeekProduction[]
+  managerOps?: ManagerOpsData | null
+}
 
 interface TeamMember { id: string; name: string; role: string; avatar_color: string }
 interface CurrentUser { id: string; name: string; role: string }
@@ -61,11 +64,9 @@ export default function DashboardPage() {
   const [schoolYearOptions, setSchoolYearOptions] = useState<string[]>([])
   const [managerOpen, setManagerOpen] = useState(false)
   const [showQuickTaskModal, setShowQuickTaskModal] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [managerDataLoaded, setManagerDataLoaded] = useState(false)
-  const [managerOpsLoading, setManagerOpsLoading] = useState(false)
-
+  const { data: homeData, error: homeError, isLoading: homeLoading, mutate: refreshHome } =
+    useDashboardHome<DashboardHomeResponse>()
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
   const border = 'var(--border-subtle)'
@@ -73,99 +74,69 @@ export default function DashboardPage() {
   const review = statusTone.review.color
   const info = statusTone.info.color
 
-  const loadData = useCallback(async () => {
-    setLoadError(null)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-      const effective = await fetchEffectiveTeam()
-      if (!effective?.team) return
-      const user = effective.team
-      if (isStudentInternRole(user.role)) {
-        router.replace(STUDENT_INTERN_HOME_PATH)
-        return
-      }
-      setCurrentUser({ id: user.id, name: user.name, role: user.role })
-
-      const todayStart = new Date()
-      todayStart.setHours(0, 0, 0, 0)
-      const weekEnd = new Date(todayStart)
-      weekEnd.setDate(weekEnd.getDate() + 7)
-      weekEnd.setHours(23, 59, 59, 999)
-
-      const [teamRes, weekProdsRes] = await Promise.all([
-        supabase.from('team').select('id, name, role, avatar_color').eq('active', true),
-        supabase
-          .from('productions')
-          .select(
-            'id, title, production_number, request_type_label, type, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(id, title, completed)',
-          )
-          .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
-          .order('production_number', { ascending: true }),
+  const applyManagerOps = useCallback((data: ManagerOpsData) => {
+    setManagerProductions(data.managerProductions as WeekProduction[])
+    setManagerRiskCounts(data.managerRiskCounts)
+    setOverdueOwnerRows(data.overdueOwnerRows)
+    setCrewSlotsTotal(data.crewSlotsTotal)
+    setCrewSlotsFilled(data.crewSlotsFilled)
+    setYtEmailPendingCount(data.ytEmailPendingCount)
+    setYtMissingLinkCount(data.ytMissingLinkCount)
+    setSchoolYearOptions(prev => {
+      const merged = new Set([
+        ...prev,
+        ...buildSchoolYearFilterOptions(data.managerProductions as WeekProduction[]),
       ])
-
-      if (weekProdsRes.error) throw weekProdsRes.error
-
-      const weekData = ((weekProdsRes.data as unknown as WeekProduction[]) ?? [])
-        .map(row => normalizeProductionDatetimeFields(row))
-        .filter(row => isProductionInDateWindow(row, todayStart, weekEnd))
-        .sort((a, b) => {
-          const aMs = a.start_datetime ? new Date(a.start_datetime).getTime() : 0
-          const bMs = b.start_datetime ? new Date(b.start_datetime).getTime() : 0
-          return aMs - bMs
-        })
-      setWeekProductions(weekData)
-      setTeamMembers(teamRes.data || [])
-
-      setSchoolYearOptions(buildSchoolYearFilterOptions(weekData))
-
-      setManagerDataLoaded(false)
-    } catch (err) {
-      console.error('Failed to load dashboard', err)
-      setLoadError('Failed to load dashboard data. Please refresh.')
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase, router])
+      return Array.from(merged).sort((a, b) => b.localeCompare(a))
+    })
+  }, [])
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    if (!homeData) return
+    setLoadError(null)
+
+    if (typeof homeData.redirect === 'string') {
+      router.replace(homeData.redirect)
+      return
+    }
+
+    const user = homeData.user
+    if (!user) return
+
+    if (isStudentInternRole(user.role)) {
+      router.replace(STUDENT_INTERN_HOME_PATH)
+      return
+    }
+
+    setCurrentUser(user)
+    setTeamMembers(homeData.teamMembers || [])
+    const weekData = (homeData.weekProductions || []) as WeekProduction[]
+    setWeekProductions(weekData)
+    setSchoolYearOptions(buildSchoolYearFilterOptions(weekData))
+
+    if (homeData.managerOps) {
+      applyManagerOps(homeData.managerOps)
+    } else {
+      setManagerProductions([])
+      setManagerRiskCounts({ unassigned: 0, blocked: 0, overdue: 0 })
+      setOverdueOwnerRows([])
+      setCrewSlotsTotal(0)
+      setCrewSlotsFilled(0)
+      setYtEmailPendingCount(0)
+      setYtMissingLinkCount(0)
+    }
+  }, [homeData, router, applyManagerOps])
+
+  useEffect(() => {
+    if (homeError) {
+      console.error('Failed to load dashboard', homeError)
+      setLoadError('Failed to load dashboard data. Please refresh.')
+    }
+  }, [homeError])
+
+  const loading = homeLoading && !homeData
 
   const isManager = (currentUser?.role || '').toLowerCase() === 'manager'
-
-  useEffect(() => {
-    if (loading || !currentUser || !isManager || managerDataLoaded) return
-    let cancelled = false
-    setManagerOpsLoading(true)
-    loadManagerOpsData(supabase)
-      .then(data => {
-        if (cancelled) return
-        setManagerProductions(data.managerProductions as WeekProduction[])
-        setManagerRiskCounts(data.managerRiskCounts)
-        setOverdueOwnerRows(data.overdueOwnerRows)
-        setCrewSlotsTotal(data.crewSlotsTotal)
-        setCrewSlotsFilled(data.crewSlotsFilled)
-        setYtEmailPendingCount(data.ytEmailPendingCount)
-        setYtMissingLinkCount(data.ytMissingLinkCount)
-        setManagerDataLoaded(true)
-
-        setSchoolYearOptions(prev => {
-          const merged = new Set([
-            ...prev,
-            ...buildSchoolYearFilterOptions(data.managerProductions as WeekProduction[]),
-          ])
-          return Array.from(merged).sort((a, b) => b.localeCompare(a))
-        })
-      })
-      .catch(err => console.error('Failed to load manager ops', err))
-      .finally(() => {
-        if (!cancelled) setManagerOpsLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [loading, currentUser, isManager, managerDataLoaded, supabase])
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -482,11 +453,6 @@ export default function DashboardPage() {
           />
           {managerOpen && (
             <div id="manager-ops-content">
-              {managerOpsLoading && !managerDataLoaded && (
-                <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>
-                  Loading manager data…
-                </p>
-              )}
               <div
                 className="manager-kpis"
                 style={{
@@ -795,6 +761,7 @@ export default function DashboardPage() {
           onClose={() => setShowQuickTaskModal(false)}
           currentUser={currentUser}
           teamMembers={teamMembers.map(m => ({ id: m.id, name: m.name, avatar_color: m.avatar_color }))}
+          onCreated={() => void refreshHome()}
         />
       )}
 
