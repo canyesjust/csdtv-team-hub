@@ -10,11 +10,23 @@ type MeetingRow = {
   production_number: number
   title: string
   start_datetime: string | null
+  event_date: string | null
   status: string | null
   board_meeting?: {
     broadcast_status: string
     agenda_locked: boolean
+    scheduled_public_start: string | null
   } | null
+}
+
+/** Board meetings often only have schedule on board_meetings, not productions.start_datetime. */
+function meetingDateIso(row: MeetingRow): string | null {
+  return (
+    row.start_datetime ??
+    row.board_meeting?.scheduled_public_start ??
+    row.event_date ??
+    null
+  )
 }
 
 function parseProductionInstant(iso: string): Date {
@@ -34,8 +46,9 @@ function daysFromToday(d: string | null): number | null {
 }
 
 function meetingInstant(row: MeetingRow): number | null {
-  if (!row.start_datetime) return null
-  const t = parseProductionInstant(row.start_datetime).getTime()
+  const d = meetingDateIso(row)
+  if (!d) return null
+  const t = parseProductionInstant(d).getTime()
   return Number.isNaN(t) ? null : t
 }
 
@@ -78,7 +91,7 @@ export default function MeetingsTab() {
   const load = useCallback(async () => {
     const { data: prods, error: prodErr } = await supabase
       .from('productions')
-      .select('id, production_number, title, start_datetime, status')
+      .select('id, production_number, title, start_datetime, event_date, status')
       .eq('request_type_number', 4)
 
     if (prodErr) {
@@ -98,7 +111,7 @@ export default function MeetingsTab() {
     const ids = list.map(p => p.id)
     const { data: bms } = await supabase
       .from('board_meetings')
-      .select('production_id, broadcast_status, agenda_locked')
+      .select('production_id, broadcast_status, agenda_locked, scheduled_public_start')
       .in('production_id', ids)
 
     const bmByProd = new Map((bms || []).map(b => [b.production_id, b]))
@@ -154,9 +167,22 @@ export default function MeetingsTab() {
         <div>
           <div style={{ fontWeight: 600, fontSize: '15px' }}>#{r.production_number} {r.title}</div>
           <div style={{ fontSize: '13px', color: muted, marginTop: '4px' }}>
-            {r.start_datetime
-              ? new Date(r.start_datetime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-              : 'Date TBD'}
+            {(() => {
+              const when = meetingDateIso(r)
+              if (!when) return 'Date TBD'
+              const dt = parseProductionInstant(when)
+              const dateLabel = dt.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })
+              const hasTime = when.includes('T') || /\d{2}:\d{2}/.test(when)
+              const timeLabel = hasTime
+                ? dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                : null
+              return timeLabel ? `${dateLabel} · ${timeLabel}` : dateLabel
+            })()}
             {r.board_meeting ? ` · ${r.board_meeting.broadcast_status}${r.board_meeting.agenda_locked ? ' · agenda locked' : ''}` : ' · not started'}
           </div>
         </div>
