@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadAgendaItemRowById, loadAgendaItemRows } from '@/lib/board-meetings/agenda-item-select'
+import { sortByBoardSeatOrder } from '@/lib/board-meetings/lower-third-board-order'
 import type { ControlAgendaItem, LowerThirdPerson } from '@/lib/board-meetings/types'
 
 /** Locked agenda items per meeting — immutable until agenda is unlocked. */
@@ -33,9 +34,8 @@ export async function getCachedBoardMembersForAttendance(service: SupabaseClient
     .select(PEOPLE_SELECT)
     .eq('is_active', true)
     .eq('category', 'board_member')
-    .order('display_name')
 
-  boardMembersForAttendanceCache = (data || []) as LowerThirdPerson[]
+  boardMembersForAttendanceCache = sortByBoardSeatOrder((data || []) as LowerThirdPerson[])
   return boardMembersForAttendanceCache
 }
 

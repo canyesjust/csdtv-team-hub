@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { BUILTIN_QR_PRESET_KEYS } from '@/lib/board-meetings/qr-presets'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,11 +28,21 @@ export async function POST(request: Request) {
   if (!body?.key || !body?.label) {
     return NextResponse.json({ error: 'key and label required' }, { status: 400 })
   }
+  const key = String(body.key).trim()
+  if (!/^[a-z][a-z0-9_]*$/.test(key)) {
+    return NextResponse.json(
+      { error: 'Key must be lowercase letters, numbers, and underscores (start with a letter)' },
+      { status: 400 },
+    )
+  }
+  if (BUILTIN_QR_PRESET_KEYS.has(key)) {
+    return NextResponse.json({ error: 'That key is reserved for a built-in preset' }, { status: 400 })
+  }
 
   const { data, error } = await service
     .from('qr_presets')
     .insert({
-      key: body.key,
+      key,
       label: body.label,
       url_template: body.url_template ?? null,
       description: body.description ?? null,

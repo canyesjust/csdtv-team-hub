@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast'
 import type { AgendaItemUI, BoardMeetingRecord } from '@/lib/board-meetings/types'
 import type { AgendaDiffEntry } from '@/lib/board-meetings/agenda-diff'
 import MeetingPlaylistSection from './MeetingPlaylistSection'
+import PublicAgendaUrlCard from './PublicAgendaUrlCard'
 
 type Phase = 'loading' | 'empty' | 'extracting' | 'review' | 'locked' | 'diff' | 'readonly'
 
@@ -356,6 +357,11 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
 
       {phase === 'review' && (
         <div>
+          <PublicAgendaUrlCard
+            productionId={productionId}
+            initialUrl={meeting?.public_agenda_url}
+            onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
+          />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Review extracted items. Use arrows to reorder or remove items you do not need.</p>
             <button
@@ -500,6 +506,11 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
 
       {phase === 'locked' && (
         <div>
+          <PublicAgendaUrlCard
+            productionId={productionId}
+            initialUrl={meeting?.public_agenda_url}
+            onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
+          />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <div>
               <p style={{ margin: 0, fontWeight: 600, color: text }}>Agenda locked</p>

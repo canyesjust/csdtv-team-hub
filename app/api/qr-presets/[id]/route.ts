@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
-import { BUILTIN_KEYS } from '@/lib/board-meetings/qr-control'
+import { BUILTIN_QR_PRESET_KEYS } from '@/lib/board-meetings/qr-presets'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +24,9 @@ export async function PATCH(
   if (body.url_template !== undefined) patch.url_template = body.url_template
   if (body.description !== undefined) patch.description = body.description
   if (body.sort_order !== undefined) patch.sort_order = body.sort_order
-  if (body.key !== undefined && existing && !BUILTIN_KEYS.has(existing.key)) patch.key = body.key
+  if (body.key !== undefined && existing && !BUILTIN_QR_PRESET_KEYS.has(existing.key)) {
+    patch.key = body.key
+  }
 
   const { data, error } = await service.from('qr_presets').update(patch).eq('id', id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -43,7 +45,7 @@ export async function DELETE(
 
   const { id } = await params
   const { data: existing } = await service.from('qr_presets').select('key').eq('id', id).maybeSingle()
-  if (existing && BUILTIN_KEYS.has(existing.key)) {
+  if (existing && BUILTIN_QR_PRESET_KEYS.has(existing.key)) {
     return NextResponse.json({ error: 'Cannot delete built-in preset' }, { status: 400 })
   }
 

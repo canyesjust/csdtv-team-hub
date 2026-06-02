@@ -160,8 +160,14 @@ export async function setCurrentItem(
   itemId: string | null,
   operatorId: string,
 ) {
+  const { findPrimaryMotionIdForAgendaItem } = await import('@/lib/board-meetings/agenda-motions-sync')
+  const activeMotionId = itemId
+    ? await findPrimaryMotionIdForAgendaItem(service, boardMeetingId, itemId)
+    : null
+
   const patch = {
     current_agenda_item_id: itemId,
+    active_motion_id: activeMotionId,
     agenda_branding_hold: false,
     updated_at: new Date().toISOString(),
     updated_by: operatorId,

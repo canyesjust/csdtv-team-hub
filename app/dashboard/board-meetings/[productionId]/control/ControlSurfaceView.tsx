@@ -8,6 +8,7 @@ import TransportCard from './components/TransportCard'
 import LowerThirdPanel from './components/LowerThirdPanel'
 import QRPushPanel from './components/QRPushPanel'
 import MotionAndVoteCard from './components/MotionAndVoteCard'
+import MotionTemplatePanel from './components/MotionTemplatePanel'
 import UtilityPanel from './components/UtilityPanel'
 import PreRollPanel from './components/PreRollPanel'
 import ModesTimersPanel from './components/ModesTimersPanel'
@@ -28,6 +29,7 @@ type Props = {
   onPatchAgendaItem?: (itemId: string, patch: Partial<ControlBundle['agenda_items'][number]>) => void | Promise<void>
   onMoveAgendaItem?: (itemId: string, direction: 'up' | 'down') => void | Promise<void>
   onListeningChange?: (channelId: string, enabled: boolean) => void | Promise<void>
+  onSaveMotionTemplate?: (itemId: string, suggested_motion_text: string | null) => Promise<void>
 }
 
 export default function ControlSurfaceView({
@@ -42,6 +44,7 @@ export default function ControlSurfaceView({
   onPatchAgendaItem,
   onMoveAgendaItem,
   onListeningChange,
+  onSaveMotionTemplate,
 }: Props) {
   const { meeting, broadcast_state, agenda_items, motion_lifecycle, lower_third_active, result_overlay } = bundle
   const meetingTitle = meeting?.title || 'Board Meeting'
@@ -177,6 +180,8 @@ export default function ControlSurfaceView({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <QRPushPanel
               canControl={canControl}
+              productionId={productionId}
+              publicAgendaUrl={bundle.board_meeting?.public_agenda_url}
               activeQR={activeQR}
               hasCurrentDocument={hasCurrentDocument}
               hasYoutube={hasYoutube}
@@ -188,6 +193,13 @@ export default function ControlSurfaceView({
               lifecycle={motion_lifecycle}
               resultOverlay={result_overlay}
               canControl={canControl}
+              savedMotionPreview={
+                resolveCurrentAgendaItem(
+                  agenda_items,
+                  broadcast_state?.current_agenda_item_id,
+                  bundle.current_agenda_item,
+                )?.suggested_motion_text?.trim() || null
+              }
               motionHref={`/control/${productionId}/motion`}
               onPushResult={
                 motion_lifecycle?.active_motion?.id
@@ -243,6 +255,26 @@ export default function ControlSurfaceView({
               onListeningChange={onListeningChange}
             />
           </UtilityPanel>
+          <UtilityPanel
+            title="Motion templates"
+            summary={summarizeMotionTemplates(agenda_items, broadcast_state?.current_agenda_item_id)}
+            icon="motion"
+          >
+            <MotionTemplatePanel
+              items={agenda_items}
+              currentItem={resolveCurrentAgendaItem(
+                agenda_items,
+                broadcast_state?.current_agenda_item_id,
+                bundle.current_agenda_item,
+              )}
+              canControl={canControl}
+              busy={busy || agendaEditBusy}
+              onSave={async (itemId, text) => {
+                if (!onSaveMotionTemplate) return
+                await onSaveMotionTemplate(itemId, text)
+              }}
+            />
+          </UtilityPanel>
         </div>
       </div>
     </div>
@@ -272,6 +304,20 @@ function summarizeModesTimers(state: ControlBundle['broadcast_state'], timer: Co
   if (state?.mode && state.mode !== 'normal') parts.push(state.mode.replace('_', ' '))
   if (timer) parts.push('timer running')
   return parts.length ? parts.join(' · ') : 'Recess, tech diff, timers'
+}
+
+function summarizeMotionTemplates(
+  items: ControlBundle['agenda_items'],
+  currentId: string | null | undefined,
+): string {
+  const actionItems = (items || []).filter(i => i.type === 'action' || i.action_requested)
+  const saved = actionItems.filter(i => i.suggested_motion_text?.trim()).length
+  const current = currentId ? actionItems.find(i => i.id === currentId) : null
+  if (current?.suggested_motion_text?.trim()) {
+    return `${current.item_number}: template saved`
+  }
+  if (saved > 0) return `${saved} of ${actionItems.length} action items have saved motions`
+  return actionItems.length > 0 ? 'Save motion text per action item' : 'No action items'
 }
 
 function summarizeChannels(assignments: ControlBundle['channel_assignments'], channels: ControlBundle['channels']): string {

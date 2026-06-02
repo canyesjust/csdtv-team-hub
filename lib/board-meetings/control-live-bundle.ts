@@ -33,6 +33,7 @@ function buildMotionLifecycle(
   const { active, parent, activeRow } = pickActiveMotions(
     motions,
     (state?.active_motion_id as string | null | undefined) ?? null,
+    (state?.current_agenda_item_id as string | null | undefined) ?? null,
   )
 
   if (!activeRow || !active) {

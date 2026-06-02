@@ -410,8 +410,14 @@ export async function updateMotion(
     seconded_by_person_id?: string | null
   },
 ) {
-  const motion = await loadMotion(service, motionId, boardMeetingId)
-  if (!motion) throw new Error('Motion not found')
+  const { data: motion, error: motionErr } = await service
+    .from('meeting_motions')
+    .select('status, moved_by_person_id, seconded_by_person_id')
+    .eq('id', motionId)
+    .eq('board_meeting_id', boardMeetingId)
+    .maybeSingle()
+  if (motionErr || !motion) throw new Error(motionErr?.message || 'Motion not found')
+
   const textOnly = patch.motion_text !== undefined && Object.keys(patch).length === 1
   const allowedStatuses: string[] = textOnly
     ? ['open_for_discussion', 'voting', 'passed', 'failed']

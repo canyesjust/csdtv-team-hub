@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { syncAgendaMotions } from '@/lib/board-meetings/agenda-motions-sync'
 import type { ExtractedAgendaItem, ExtractedAgendaResponse } from '@/lib/board-meetings/extraction'
 import { enrichExtractedItems } from '@/lib/board-meetings/extraction'
 
@@ -67,6 +68,7 @@ export async function replaceAgendaItemsFromExtraction(
   service: SupabaseClient,
   boardMeetingId: string,
   extracted: ExtractedAgendaResponse,
+  openedBy?: string | null,
 ): Promise<void> {
   const items = enrichExtractedItems(extracted)
 
@@ -84,6 +86,7 @@ export async function replaceAgendaItemsFromExtraction(
         ...schedulePatchFromMeeting(extracted.meeting),
       })
       .eq('id', boardMeetingId)
+    await syncAgendaMotions(service, boardMeetingId, openedBy ?? null)
     return
   }
 
@@ -103,6 +106,7 @@ export async function replaceAgendaItemsFromExtraction(
     subitems: it.subitems != null ? JSON.parse(JSON.stringify(it.subitems)) : null,
     needs_review: !!it.needs_review,
     review_notes: it.review_notes ?? null,
+    suggested_motion_text: it.suggested_motion_text?.trim() || null,
   }))
 
   const { data: inserted, error: insErr } = await service
@@ -150,6 +154,8 @@ export async function replaceAgendaItemsFromExtraction(
     })
     .eq('id', boardMeetingId)
   if (upErr) throw new Error(upErr.message)
+
+  await syncAgendaMotions(service, boardMeetingId, openedBy ?? null)
 }
 
 /** Interpret date + HH:MM as America/Denver wall time, return UTC ISO. */
@@ -237,6 +243,7 @@ export async function insertAgendaItemTree(
       subitems: it.subitems != null ? JSON.parse(JSON.stringify(it.subitems)) : null,
       needs_review: !!it.needs_review,
       review_notes: it.review_notes ?? null,
+      suggested_motion_text: it.suggested_motion_text?.trim() || null,
     })
     .select('id')
     .single()
@@ -269,6 +276,7 @@ export async function updateAgendaItemFromExtracted(
       subitems: it.subitems != null ? JSON.parse(JSON.stringify(it.subitems)) : null,
       needs_review: !!it.needs_review,
       review_notes: it.review_notes ?? null,
+      suggested_motion_text: it.suggested_motion_text?.trim() || null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', itemId)

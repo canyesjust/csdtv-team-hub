@@ -1,3 +1,4 @@
+import { pickMainMotionForAgendaItem } from '@/lib/board-meetings/agenda-motions-sync'
 import type { ActiveMotion, EnrichedMotion } from '@/lib/board-meetings/motion-types'
 
 export const CLOSED_MOTION_STATUSES = new Set([
@@ -43,32 +44,30 @@ export function toActiveMotion(m: EnrichedMotion): ActiveMotion {
 
 /**
  * Picks the motion the operator UI should focus on.
- * Prefers an in-play substitute, then broadcast active_motion_id, then newest non-terminal open motion.
+ * Prefers in-play substitute, then the current agenda item's motion, then broadcast active_motion_id.
  */
 export function pickActiveMotions(
   motions: EnrichedMotion[],
   broadcastActiveMotionId?: string | null,
+  currentAgendaItemId?: string | null,
 ): { active: ActiveMotion | null; parent: ActiveMotion | null; activeRow: EnrichedMotion | null } {
-  const openMotions = motions
-    .filter(m => !CLOSED_MOTION_STATUSES.has(m.status))
-    .sort((a, b) => new Date(b.opened_at).getTime() - new Date(a.opened_at).getTime())
+  const openMotions = motions.filter(m => !CLOSED_MOTION_STATUSES.has(m.status))
 
   const substitute = openMotions.find(isSubstituteInPlay)
   let activeRow: EnrichedMotion | undefined = substitute
 
-  if (!activeRow && broadcastActiveMotionId) {
-    const fromBroadcast = motions.find(m => m.id === broadcastActiveMotionId)
-    if (
-      fromBroadcast &&
-      !CLOSED_MOTION_STATUSES.has(fromBroadcast.status) &&
-      !TERMINAL_VOTE_STATUSES.has(fromBroadcast.status)
-    ) {
-      activeRow = fromBroadcast
+  if (!activeRow && currentAgendaItemId) {
+    const forItem = pickMainMotionForAgendaItem(motions, currentAgendaItemId)
+    if (forItem) {
+      activeRow = motions.find(m => m.id === forItem.id)
     }
   }
 
-  if (!activeRow) {
-    activeRow = openMotions.find(m => !TERMINAL_VOTE_STATUSES.has(m.status))
+  if (!activeRow && broadcastActiveMotionId) {
+    const fromBroadcast = motions.find(m => m.id === broadcastActiveMotionId)
+    if (fromBroadcast && !CLOSED_MOTION_STATUSES.has(fromBroadcast.status)) {
+      activeRow = fromBroadcast
+    }
   }
 
   if (!activeRow) {

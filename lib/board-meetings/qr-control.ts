@@ -2,7 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSiteBaseUrl } from '@/lib/board-meetings/time-format'
 import { ensureBroadcastState, logMeetingEvent } from '@/lib/board-meetings/broadcast-control'
 
-const BUILTIN_KEYS = new Set(['document_current_item', 'youtube_live', 'archive', 'submit_comment'])
+import { BUILTIN_QR_PRESET_KEYS, templateUsesAgendaUrl } from '@/lib/board-meetings/qr-presets'
+
+const BUILTIN_KEYS = BUILTIN_QR_PRESET_KEYS
 const DEFAULT_QR_DURATION = 12
 
 export type QrStateFields = {
@@ -32,6 +34,17 @@ export function isQrActive(state: QrStateFields): boolean {
   return getActiveQrRemainingSeconds(state) > 0
 }
 
+function applyQrUrlTemplate(
+  template: string,
+  vars: { production_number: string; youtube_url: string; agenda_url: string },
+): string {
+  let url = template
+  for (const [key, value] of Object.entries(vars)) {
+    url = url.replace(new RegExp(`\\{${key}\\}`, 'g'), value)
+  }
+  return url
+}
+
 export async function resolvePresetQrUrl(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -41,11 +54,34 @@ export async function resolvePresetQrUrl(
   const { data: preset } = await service.from('qr_presets').select('*').eq('key', presetKey).maybeSingle()
   if (!preset) throw new Error('Preset not found')
 
-  const { data: prod } = await service
-    .from('productions')
-    .select('production_number, livestream_url, title')
-    .eq('id', productionId)
-    .maybeSingle()
+  const [{ data: prod }, { data: bm }] = await Promise.all([
+    service
+      .from('productions')
+      .select('production_number, livestream_url, title')
+      .eq('id', productionId)
+      .maybeSingle(),
+    service
+      .from('board_meetings')
+      .select('public_agenda_url')
+      .eq('id', boardMeetingId)
+      .maybeSingle(),
+  ])
+
+  const templateVars = {
+    production_number: String(prod?.production_number ?? ''),
+    youtube_url: (prod?.livestream_url || '').trim(),
+    agenda_url: (bm?.public_agenda_url || '').trim(),
+  }
+
+  if (presetKey === 'agenda') {
+    if (!templateVars.agenda_url) {
+      throw new Error('Set the public agenda URL on the Board Meeting tab before pushing this QR')
+    }
+    if (!isValidHttpUrl(templateVars.agenda_url)) {
+      throw new Error('Public agenda URL is invalid')
+    }
+    return { url: templateVars.agenda_url, label: preset.label }
+  }
 
   if (presetKey === 'document_current_item') {
     const { data: bstate } = await service
@@ -72,9 +108,13 @@ export async function resolvePresetQrUrl(
   }
 
   if (preset.url_template) {
-    const url = preset.url_template
-      .replace(/\{production_number\}/g, String(prod?.production_number ?? ''))
-      .replace(/\{youtube_url\}/g, (prod?.livestream_url || '').trim())
+    if (templateUsesAgendaUrl(preset.url_template) && !templateVars.agenda_url) {
+      throw new Error('This preset needs a public agenda URL — set it on the Board Meeting tab')
+    }
+    const url = applyQrUrlTemplate(preset.url_template, templateVars)
+    if (!isValidHttpUrl(url)) {
+      throw new Error('Preset URL could not be resolved to a valid link')
+    }
     return { url, label: preset.label }
   }
 

@@ -4,6 +4,7 @@ export const LIVE_LOCKED_AGENDA_FIELDS = [
   'item_number',
   'is_broadcastable',
   'type',
+  'suggested_motion_text',
 ] as const
 
 export function canEditAgendaWhileLocked(broadcastStatus: string | null | undefined): boolean {
@@ -13,7 +14,13 @@ export function canEditAgendaWhileLocked(broadcastStatus: string | null | undefi
 export function buildLiveLockedAgendaPatch(body: Record<string, unknown>): Record<string, unknown> {
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   for (const field of LIVE_LOCKED_AGENDA_FIELDS) {
-    if (body[field] !== undefined) patch[field] = body[field]
+    if (body[field] === undefined) continue
+    if (field === 'suggested_motion_text' && typeof body[field] === 'string') {
+      const trimmed = body[field].trim()
+      patch[field] = trimmed.length > 0 ? trimmed : null
+    } else {
+      patch[field] = body[field]
+    }
   }
   return patch
 }

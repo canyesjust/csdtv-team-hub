@@ -1,4 +1,63 @@
-import type { MotionScreenBundle, VoteRecord, VoteValue } from '@/lib/board-meetings/motion-types'
+import type {
+  ActiveMotion,
+  MotionScreenBundle,
+  VoteRecord,
+  VoteValue,
+} from '@/lib/board-meetings/motion-types'
+
+/** Client placeholder until POST /motion/open returns a real id. */
+export const PENDING_MOTION_ID = '__pending_motion__'
+
+export function isPendingMotionId(id: string | undefined | null): boolean {
+  return !id || id === PENDING_MOTION_ID
+}
+
+function memberName(bundle: MotionScreenBundle, personId: string | null): string | null {
+  if (!personId) return null
+  return bundle.voting_members.find(m => m.id === personId)?.display_name ?? null
+}
+
+export function buildOpenOptimisticMotion(
+  bundle: MotionScreenBundle,
+  body?: { agenda_item_id?: string | null; mover_id?: string | null; motion_text?: string | null },
+  pendingMotionText?: string | null,
+): ActiveMotion {
+  const moverId = body?.mover_id ?? null
+  const text =
+    body?.motion_text?.trim() ||
+    pendingMotionText?.trim() ||
+    bundle.suggested_motion_text
+  return {
+    id: PENDING_MOTION_ID,
+    motion_type: 'main',
+    text,
+    agenda_item_id: body?.agenda_item_id ?? bundle.current_agenda_item_id,
+    mover_id: moverId,
+    mover_name: memberName(bundle, moverId),
+    seconder_id: null,
+    seconder_name: null,
+    vote_type: 'voice',
+    status: 'drafting',
+    parent_motion_id: null,
+    created_at: new Date().toISOString(),
+  }
+}
+
+export function buildOpenApiPayload(
+  bundle: MotionScreenBundle,
+  body?: Record<string, unknown>,
+  pendingMotionText?: string | null,
+) {
+  const motion_text =
+    (typeof body?.motion_text === 'string' && body.motion_text.trim()) ||
+    pendingMotionText?.trim() ||
+    bundle.suggested_motion_text
+  return {
+    agenda_item_id: (body?.agenda_item_id as string | null | undefined) ?? bundle.current_agenda_item_id,
+    mover_id: (body?.mover_id as string | null | undefined) ?? null,
+    motion_text,
+  }
+}
 
 export const VOTE_CYCLE: Record<VoteValue, VoteValue> = {
   yea: 'nay',

@@ -61,7 +61,7 @@ export async function POST(
       }
     }
 
-    await replaceAgendaItemsFromExtraction(service, bm.id, extracted)
+    await replaceAgendaItemsFromExtraction(service, bm.id, extracted, teamUser.id)
 
     const livestream = extracted.meeting?.livestream_url?.trim()
     if (livestream) {

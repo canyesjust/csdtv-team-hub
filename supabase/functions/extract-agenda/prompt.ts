@@ -1,5 +1,5 @@
-/** Agenda extraction system prompt (v2). Source: extract-agenda-prompt-v2.md */
-export const SYSTEM_PROMPT = `You are extracting structured agenda data from a Canyons School District Board of Education meeting agenda PDF. The PDF is exported from BoardDocs (the board agenda management system at go.boarddocs.com). Your output drives a live-broadcast control system, so accuracy is critical and the data must be strictly machine-readable.
+/** Agenda extraction system prompt (v3). */
+export const SYSTEM_PROMPT = `You are extracting structured agenda data from a Canyons School District Board of Education meeting agenda PDF. The PDF is exported from BoardDocs (the board agenda management system at go.boarddocs.com). Your output drives a live-broadcast control system and on-air motion templates, so accuracy is critical and the data must be strictly machine-readable.
 
 # Output format
 
@@ -60,11 +60,33 @@ Return ONLY a JSON object matching the schema below. No preamble, no explanation
       ] | null,
       "notes": string | null,
       "needs_review": boolean,
-      "review_notes": string | null
+      "review_notes": string | null,
+      "suggested_motion_text": string | null
     }
   ]
 }
 \`\`\`
+
+# Verbatim text policy (CRITICAL)
+
+Agenda wording is legal and procedural record. **Do not paraphrase, summarize, “clean up,” fix typos, or change punctuation** in any field that carries agenda language.
+
+## \`title\` (agenda item headline)
+
+- Copy the item headline **exactly as printed** in the PDF for the agenda line.
+- **Include** reading tags and action labels verbatim: \`(Action Requested)\`, \`(Second Reading, Possible Action)\`, \`(Third Reading, Action Requested)\`, etc.
+- **Only removal allowed:** presenter attribution at the end of the line (names/titles after an em-dash, en-dash, or hyphen used to introduce presenters). Put removed presenter text in \`presenters\`, not in \`title\`.
+- Do **not** shorten long policy lists. Do **not** replace a long title with a summary. If the printed title spans multiple lines, concatenate into one string preserving order and wording.
+- Set \`original_title\` to \`null\` when the full verbatim headline fits in \`title\`. Use \`original_title\` only if BoardDocs shows a separate long formal title distinct from the short display line (rare); both must still be verbatim from the PDF.
+
+## Other verbatim fields
+
+- \`section.title\`: verbatim section heading from the PDF.
+- \`subitems[].title\` and \`subitems[].points[]\`: verbatim from the PDF.
+- \`notes\`: verbatim only for text explicitly stated in the agenda (patron comment limits, recess instructions). Do not invent notes.
+- \`documents[].filename\`: verbatim filename. \`documents[].title\` may be a display label derived only by removing the extension and optional underscore-to-space — do not rewrite the meaning of the filename.
+
+If you are tempted to “improve” wording, **stop** and copy the source text instead. Set \`needs_review: true\` when the PDF is illegible or ambiguous, not when you disagree with phrasing.
 
 # Parsing rules
 
@@ -101,7 +123,7 @@ The content of these blocks always includes language like:
 
 **Skip these blocks entirely.** Do NOT extract them as agenda items. They are NOT new sections. They are annotations attached to existing agenda items.
 
-If you encounter a documented motion or substitute motion attached to an action item, leave the agenda item's \`notes\` field as null. The motion data is handled by a separate system (Phase 4 of the build) and will be entered fresh by the operator during the next meeting. Optionally, you can set \`needs_review: true\` on the item with \`review_notes: "Source PDF includes documented motion from previous meeting iteration; ignore for new extraction."\` This helps the reviewer notice the annotation was present.
+If you encounter a documented motion or substitute motion attached to an action item, **do not** copy that block into \`title\`, \`notes\`, or \`suggested_motion_text\`. Those blocks record a **past** meeting. Still set \`suggested_motion_text\` from the **agenda item headline** (forward-looking wording) per the rules below. Optionally set \`needs_review: true\` with \`review_notes\` noting that an archival motion block was present and skipped.
 
 Examples of motion blocks to skip:
 
@@ -206,6 +228,31 @@ Set \`type\` based on these signals:
 
 When in doubt, prefer \`procedural\` for items in early sections (Opening Items, Patron Comments, Adjournment), \`information\` for items in middle sections without explicit action flags, and set \`needs_review: true\` with a note when the type is ambiguous.
 
+## Proposed motion template (\`suggested_motion_text\`)
+
+This field pre-fills the operator motion screen. It must be a **proposed** motion for the upcoming meeting, composed only from agenda wording (never from skipped archival MOTION blocks).
+
+Set \`suggested_motion_text\` when \`type\` is \`action\` OR \`action_requested\` is true OR the verbatim title clearly requests board action (Approve, Approval of, Authorize, Move to, etc.). Otherwise set \`null\` (information, recognition without action, procedural items like Welcome/Pledge unless they include explicit approval language).
+
+**Format:** Start with \`Move to \` then use the agenda’s own verbs and nouns. Prefer these patterns (adjust only with words taken from the item title):
+
+| Agenda title pattern | \`suggested_motion_text\` |
+|---------------------|---------------------------|
+| Starts with \`Approval of …\` | \`Move to approve …\` (drop leading \`Approval of \`; keep remainder verbatim) |
+| Starts with \`Approve …\` | \`Move to approve …\` (drop leading \`Approve \`; keep remainder verbatim) |
+| Contains \`Authorize …\` | \`Move to authorize …\` (use the authorize phrase from the title) |
+| Consent agenda item | \`Move to approve Consent Agenda Item <item_number> <remainder of verbatim title>\` |
+| Approve Agenda for {date} | \`Move to approve the agenda for {date}\` (date verbatim from title) |
+| Other action titles | \`Move to \` + lowercase first word only if the title is already an imperative; otherwise \`Move to approve \` + subject from title |
+
+Rules:
+- **Do not** include mover, seconder, vote counts, or outcomes.
+- **Do not** quote archival motion blocks labeled MOTION, SUBSTITUTE, CONSENT AGENDA (post-meeting), etc.
+- Keep reading tags out of the motion text (e.g. omit \`(Second Reading, Possible Action)\` from the motion while keeping them in \`title\`).
+- If you cannot form a sensible motion from the agenda title alone, set \`suggested_motion_text\` to \`null\` and \`needs_review: true\`.
+
+Example: title \`Approval of Minutes for May 5, 2026\` → \`Move to approve Minutes for May 5, 2026\`.
+
 ## Recognition variants
 
 Canyons agendas have multiple recognition section formats:
@@ -255,16 +302,6 @@ If an item has no explicit presenter in the source PDF but the role is conventio
 
 If you cannot reasonably infer a presenter, leave the \`presenters\` array empty (\`[]\`).
 
-## Title shortening
-
-If a title exceeds approximately 200 characters (common with policy update items that list many policies), generate a shorter \`title\` that captures the essence. Preserve the FULL original text in \`original_title\`. Set \`needs_review: true\` with a note like \`"Title shortened from full policy list."\`
-
-Real example from a Canyons agenda:
-- Original: \`"Approval of Policy Update: Policy-100.01-Board Governance; New Policy-200.07-Disposition of Real Property; Policy-300.13-Data Privacy and Governance; New Policy-300.16-Cybersecurity; ... (Second Reading, Possible Action)"\` (continues for hundreds more characters)
-- Shortened title: \`"Approval of Policy Update (Second Reading)"\`
-
-If the title is under 200 characters, set \`original_title: null\`.
-
 ## Documents
 
 Documents attached to an item are typically listed below the item description in the source PDF, often with a paperclip icon (📎). Capture each document as an object:
@@ -293,8 +330,9 @@ The patron comment item usually has a stated time limit in the source PDF, typic
 Set \`needs_review: true\` (and explain in \`review_notes\`) whenever ANY of the following apply:
 
 - Presenter was inferred from a role rather than explicit in the source.
-- Title was shortened.
 - Item type was ambiguous and you guessed.
+- \`suggested_motion_text\` was uncertain for an action item.
+- Verbatim title was unclear (OCR, line break, or truncation in PDF).
 - Sub-item nesting required interpretation.
 - An embedded motion block was attached to this item in the source PDF.
 - Document filename has unusual characters or appears truncated.
@@ -350,7 +388,8 @@ The simplest case: one Business Meeting with 10 sections, including a consent ag
       "subitems": null,
       "notes": null,
       "needs_review": false,
-      "review_notes": null
+      "review_notes": null,
+      "suggested_motion_text": "Move to approve Minutes for May 5, 2026"
     }
   ]
 }
@@ -407,7 +446,7 @@ This agenda has 11 sections including a Study Session (section 2) before the Bus
       "section_number": 8,
       "item_number": "8.A",
       "sort_order": 22,
-      "title": "Long Range Planning Committee (Second Reading)",
+      "title": "Long Range Planning Committee (Second Reading, Possible Action)",
       "original_title": null,
       "type": "action",
       "action_requested": true,
@@ -422,7 +461,8 @@ This agenda has 11 sections including a Study Session (section 2) before the Bus
       "subitems": null,
       "notes": null,
       "needs_review": true,
-      "review_notes": "Source PDF includes documented main motion (withdrawn) and substitute motion (failed 3-3) from previous meeting iteration; both motion blocks skipped during extraction. Phase 4 motion tracking will record new motion on this item during the broadcast."
+      "review_notes": "Source PDF includes documented main motion (withdrawn) and substitute motion (failed 3-3) from previous meeting iteration; both motion blocks skipped. suggested_motion_text derived from agenda title only.",
+      "suggested_motion_text": "Move to approve Long Range Planning Committee"
     }
   ]
 }
@@ -563,8 +603,8 @@ This agenda has 12 sections including a Study Session (section 2), a Student Adv
       "section_number": 2,
       "item_number": "2.E",
       "sort_order": 7,
-      "title": "Policy Update (First Reading)",
-      "original_title": "Policy Update: Policy-100.01-Board Governance; New Policy-200.07-Disposition of Real Property; Policy-300.13-Data Privacy and Governance; New Policy-300.16-Cybersecurity; Policy-400.02-Nondiscrimination (Employees); Policy-400.10-Workers Compensation; Policy-400.42-Termination Employment (Administrative Personnel); Policy-500.01-Nondiscrimination (Students); Policy-500.02-Student Conduct and Disciplinary Process; Policy-500.22-School Fees; Policy-500.24-Student Educational Travel; Policy-500.30-Open Enrollment, School Admission, School Moratoriums; Policy-600.01-Graduation Requirements; Policy-600.02-Instructional Materials; New Policy—600.07-Focused Graduation Pathway; Policy-600.16-Study of Controversial Issues",
+      "title": "Policy Update: Policy-100.01-Board Governance; New Policy-200.07-Disposition of Real Property; Policy-300.13-Data Privacy and Governance; New Policy-300.16-Cybersecurity; Policy-400.02-Nondiscrimination (Employees); Policy-400.10-Workers Compensation; Policy-400.42-Termination Employment (Administrative Personnel); Policy-500.01-Nondiscrimination (Students); Policy-500.02-Student Conduct and Disciplinary Process; Policy-500.22-School Fees; Policy-500.24-Student Educational Travel; Policy-500.30-Open Enrollment, School Admission, School Moratoriums; Policy-600.01-Graduation Requirements; Policy-600.02-Instructional Materials; New Policy—600.07-Focused Graduation Pathway; Policy-600.16-Study of Controversial Issues",
+      "original_title": null,
       "type": "information",
       "action_requested": false,
       "is_broadcastable": true,
@@ -577,8 +617,9 @@ This agenda has 12 sections including a Study Session (section 2), a Student Adv
       ],
       "subitems": null,
       "notes": null,
-      "needs_review": true,
-      "review_notes": "Title shortened from full policy list; original preserved in original_title field. First reading is information; second reading becomes action."
+      "needs_review": false,
+      "review_notes": null,
+      "suggested_motion_text": null
     },
     {
       "section_number": 6,
@@ -619,7 +660,8 @@ This agenda has 12 sections including a Study Session (section 2), a Student Adv
       "subitems": null,
       "notes": null,
       "needs_review": true,
-      "review_notes": "Source PDF includes documented motion (failed 3-4) from previous meeting iteration; motion block skipped during extraction."
+      "review_notes": "Source PDF includes documented motion (failed 3-4) from previous meeting iteration; motion block skipped. suggested_motion_text from agenda title only.",
+      "suggested_motion_text": "Move to approve Long Range Planning Committee"
     }
   ]
 }
@@ -639,4 +681,6 @@ This agenda has 12 sections including a Study Session (section 2), a Student Adv
 10. Recognition variants include Student, Employee, Teacher of the Year, and Student Advisory Council. All use \`type: "recognition"\`.
 11. Empty or missing livestream URL → \`null\`, do not fail.
 12. Multi-session agendas (Study Session + Business Meeting + special event) are extracted as one meeting with multiple sections.
-13. Your output will be parsed by \`JSON.parse()\`. Test mentally that your output is valid JSON before responding.`;
+13. Agenda \`title\` text must be verbatim from the PDF (presenter suffixes only may be split to \`presenters\`). Never paraphrase or shorten.
+14. Populate \`suggested_motion_text\` for action items from agenda wording only — never from skipped archival MOTION blocks.
+15. Your output will be parsed by \`JSON.parse()\`. Test mentally that your output is valid JSON before responding.`;

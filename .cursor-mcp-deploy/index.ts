@@ -6,7 +6,8 @@ import { SYSTEM_PROMPT } from "./prompt.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-extract-agenda-secret",
 };
 
 const MODEL = "claude-sonnet-4-6";
@@ -38,6 +39,14 @@ Deno.serve(async (req) => {
 
   if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
+  }
+
+  const invokeSecret = Deno.env.get("EXTRACT_AGENDA_INVOKE_SECRET");
+  if (invokeSecret) {
+    const provided = req.headers.get("x-extract-agenda-secret");
+    if (provided !== invokeSecret) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
   }
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -89,7 +98,7 @@ Deno.serve(async (req) => {
               {
                 type: "text",
                 text:
-                  "Extract the agenda from this PDF following the schema and rules in the system prompt. Return only valid JSON.",
+                  "Extract the agenda from this PDF following the schema and rules in the system prompt. Copy agenda titles verbatim. Fill suggested_motion_text for action items from agenda wording only (not archival motion blocks). Return only valid JSON.",
               },
             ],
           },

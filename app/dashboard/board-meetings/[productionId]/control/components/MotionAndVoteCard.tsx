@@ -7,6 +7,7 @@ type Props = {
   lifecycle: MotionLifecycleState | null
   resultOverlay: ResultOverlayState | null
   canControl: boolean
+  savedMotionPreview?: string | null
   onPushResult?: () => void
   onHoldResult: () => void
   onDismissResult: () => void
@@ -22,6 +23,7 @@ export default function MotionAndVoteCard(props: Props) {
     onHoldResult,
     onDismissResult,
     motionHref,
+    savedMotionPreview,
   } = props
 
   if (resultOverlay?.active) {
@@ -38,10 +40,18 @@ export default function MotionAndVoteCard(props: Props) {
     return <StateB lifecycle={lifecycle} motionHref={motionHref} />
   }
 
-  return <StateA canControl={canControl} motionHref={motionHref} />
+  return <StateA canControl={canControl} motionHref={motionHref} savedMotionPreview={savedMotionPreview} />
 }
 
-function StateA({ canControl, motionHref }: { canControl: boolean; motionHref: string }) {
+function StateA({
+  canControl,
+  motionHref,
+  savedMotionPreview,
+}: {
+  canControl: boolean
+  motionHref: string
+  savedMotionPreview?: string | null
+}) {
   const router = useRouter()
   return (
     <div className="cs-card">
@@ -49,6 +59,11 @@ function StateA({ canControl, motionHref }: { canControl: boolean; motionHref: s
         <span className="cs-eyebrow" style={{ marginBottom: 0 }}>Motion &amp; vote</span>
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>no motion on floor</span>
       </div>
+      {savedMotionPreview ? (
+        <p style={{ margin: '0 0 10px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+          Saved motion: <span style={{ color: 'var(--text-primary)' }}>{savedMotionPreview}</span>
+        </p>
+      ) : null}
       <button
         type="button"
         className="cs-touchbtn"

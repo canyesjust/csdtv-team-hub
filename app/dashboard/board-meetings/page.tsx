@@ -9,12 +9,13 @@ import PeopleTab from './components/PeopleTab'
 import OutputChannelsTab from './components/OutputChannelsTab'
 import MediaTab from './components/MediaTab'
 import TemplatesTab from './components/TemplatesTab'
+import QRCodesTab from './components/QRCodesTab'
 import BoardUpdateTab from './components/BoardUpdateTab'
 import VotingRecordsTab from './components/VotingRecordsTab'
 
-type Tab = 'meetings' | 'people' | 'channels' | 'media' | 'templates' | 'email' | 'voting'
+type Tab = 'meetings' | 'people' | 'channels' | 'media' | 'templates' | 'qr' | 'email' | 'voting'
 
-const VALID_TABS: Tab[] = ['meetings', 'people', 'channels', 'media', 'templates', 'email', 'voting']
+const VALID_TABS: Tab[] = ['meetings', 'people', 'channels', 'media', 'templates', 'qr', 'email', 'voting']
 
 function BoardMeetingsPageContent() {
   const { theme } = useTheme()
@@ -81,6 +82,7 @@ function BoardMeetingsPageContent() {
         {tabBtn('channels', 'Output Channels')}
         {tabBtn('media', 'Media')}
         {tabBtn('templates', 'Templates')}
+        {tabBtn('qr', 'QR codes')}
         {tabBtn('email', 'Board email')}
         {tabBtn('voting', 'Voting records')}
       </div>
@@ -90,6 +92,7 @@ function BoardMeetingsPageContent() {
       {tab === 'channels' && <OutputChannelsTab />}
       {tab === 'media' && <MediaTab />}
       {tab === 'templates' && <TemplatesTab />}
+      {tab === 'qr' && <QRCodesTab />}
       {tab === 'email' && <BoardUpdateTab />}
       {tab === 'voting' && <VotingRecordsTab />}
     </div>

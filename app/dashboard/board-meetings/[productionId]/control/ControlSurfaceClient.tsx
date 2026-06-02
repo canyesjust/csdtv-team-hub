@@ -748,12 +748,13 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         action_requested: it.action_requested,
         is_broadcastable: it.is_broadcastable,
         consent_block: it.consent_block ?? null,
+        suggested_motion_text: it.suggested_motion_text ?? null,
       }))
     setBundle(prev => (prev ? { ...prev, agenda_items, items: agenda_items } : prev))
   }, [productionId])
 
   const patchAgendaItem = useCallback(
-    async (itemId: string, patch: Partial<ControlAgendaItem>) => {
+    async (itemId: string, patch: Partial<ControlAgendaItem>): Promise<boolean> => {
       setBundle(prev => {
         if (!prev) return prev
         const existing =
@@ -791,7 +792,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         if (!res.ok) {
           toast((data as { error?: string }).error || 'Failed to update agenda item', 'error')
           void load()
+          return false
         }
+        return true
       } finally {
         setAgendaEditBusy(false)
       }
@@ -894,6 +897,10 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       onPatchAgendaItem={patchAgendaItem}
       onMoveAgendaItem={moveAgendaItem}
       onListeningChange={onListeningChange}
+      onSaveMotionTemplate={async (itemId, suggested_motion_text) => {
+        const ok = await patchAgendaItem(itemId, { suggested_motion_text })
+        if (!ok) throw new Error('save failed')
+      }}
     />
   )
 }

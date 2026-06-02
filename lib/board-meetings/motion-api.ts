@@ -25,7 +25,13 @@ import type {
 } from '@/lib/board-meetings/motion-types'
 import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
 import { loadAgendaItemRowById } from '@/lib/board-meetings/agenda-item-select'
+import {
+  findPrimaryMotionIdForAgendaItem,
+  syncMotionTextForAgendaItem,
+} from '@/lib/board-meetings/agenda-motions-sync'
+import { sortByBoardSeatOrder } from '@/lib/board-meetings/lower-third-board-order'
 import { pickActiveMotions } from '@/lib/board-meetings/motion-active-pick'
+import { resolveSuggestedMotionText } from '@/lib/board-meetings/suggested-motion-text'
 
 export type MotionActionContext = {
   service: SupabaseClient
@@ -46,24 +52,7 @@ function formatElapsed(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function suggestedTextFromTitleHeuristic(item: AgendaItem): string {
-  const title = item.title
-  if (item.type === 'action' || /approval of|approve /i.test(title)) {
-    if (/^approval of /i.test(title)) {
-      return `Move to approve ${title.replace(/^approval of /i, '')}`
-    }
-    return `Move to ${title.replace(/^approve /i, 'approve ').toLowerCase()}`
-  }
-  return `Move to approve ${title}`
-}
-
-/** Agenda template when set; otherwise title/type heuristics. */
-export function resolveSuggestedMotionText(item: AgendaItem | null): string {
-  if (!item) return 'Move to approve the item'
-  const template = item.suggested_motion_text?.trim()
-  if (template) return template
-  return suggestedTextFromTitleHeuristic(item)
-}
+export { resolveSuggestedMotionText } from '@/lib/board-meetings/suggested-motion-text'
 
 /**
  * Loads the full bundle the motion screen needs (uses real schema via motion-control).
@@ -102,17 +91,23 @@ export async function loadMotionScreenBundle(
     }
   }
 
-  const { active, parent, activeRow } = pickActiveMotions(motions, state?.active_motion_id)
+  const { active, parent, activeRow } = pickActiveMotions(
+    motions,
+    state?.active_motion_id,
+    state?.current_agenda_item_id,
+  )
 
-  const voting_members: VotingMember[] = (people || [])
-    .filter(p => p.category === 'board_member')
-    .map(p => ({
-      id: p.id,
-      display_name: p.display_name,
-      district: p.affiliation || null,
-      officer_position: p.officer_position || null,
-      initials: initials(p.display_name),
-    }))
+  const voting_members: VotingMember[] = sortByBoardSeatOrder(
+    (people || [])
+      .filter(p => p.category === 'board_member')
+      .map(p => ({
+        id: p.id,
+        display_name: p.display_name,
+        district: p.affiliation || null,
+        officer_position: p.officer_position || null,
+        initials: initials(p.display_name),
+      })),
+  )
 
   const votes: Record<string, VoteRecord> = {}
   const tally = { yea: 0, nay: 0, abstain: 0, absent: 0 }
@@ -193,6 +188,36 @@ export async function openMotion(
   moverPersonId: string | null,
   motionTextOverride?: string | null,
 ) {
+  if (agendaItemId) {
+    const existingId = await findPrimaryMotionIdForAgendaItem(
+      ctx.service,
+      ctx.boardMeetingId,
+      agendaItemId,
+    )
+    if (existingId) {
+      if (moverPersonId) {
+        await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
+          moved_by_person_id: moverPersonId,
+        })
+      }
+      const trimmedOverride = motionTextOverride?.trim()
+      if (trimmedOverride) {
+        await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
+          motion_text: trimmedOverride,
+        })
+      }
+      await ctx.service
+        .from('meeting_broadcast_state')
+        .update({
+          active_motion_id: existingId,
+          updated_at: new Date().toISOString(),
+          updated_by: ctx.teamUserId,
+        })
+        .eq('board_meeting_id', ctx.boardMeetingId)
+      return { motion_id: existingId }
+    }
+  }
+
   const trimmedOverride = motionTextOverride?.trim()
   const motionText =
     trimmedOverride ||
@@ -206,6 +231,8 @@ export async function openMotion(
   })
   return { motion_id: motion.id }
 }
+
+export { syncAgendaMotions, syncMotionTextForAgendaItem } from '@/lib/board-meetings/agenda-motions-sync'
 
 export async function setMover(
   ctx: MotionActionContext,

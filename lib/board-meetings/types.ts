@@ -19,6 +19,8 @@ export type BoardMeetingRecord = {
   agenda_locked: boolean
   agenda_locked_at: string | null
   agenda_locked_by: string | null
+  /** Public link pushed via “View meeting agenda” QR preset. */
+  public_agenda_url?: string | null
 }
 
 export type AgendaItemUI = {

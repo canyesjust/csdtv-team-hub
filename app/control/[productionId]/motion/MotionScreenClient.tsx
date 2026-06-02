@@ -8,6 +8,10 @@ import type { MotionScreenBundle, VoteValue } from '@/lib/board-meetings/motion-
 import {
   applyVoiceVoteDefaults,
   applyVoteToBundle,
+  buildOpenApiPayload,
+  buildOpenOptimisticMotion,
+  isPendingMotionId,
+  PENDING_MOTION_ID,
 } from '@/lib/board-meetings/motion-screen-optimistic'
 
 async function readApiError(res: Response): Promise<string> {
@@ -21,6 +25,8 @@ async function readApiError(res: Response): Promise<string> {
   return txt || `Request failed (${res.status})`
 }
 
+type PendingMotionAction = { action: string; body?: unknown }
+
 /** Actions that update local state immediately; no global busy lock. */
 const INSTANT_ACTIONS = new Set([
   'record-vote',
@@ -28,7 +34,10 @@ const INSTANT_ACTIONS = new Set([
   'set-seconder',
   'set-text',
   'set-vote-type',
+  'open',
 ])
+
+const PENDING_QUEUEABLE = new Set(['set-mover', 'set-seconder', 'set-text', 'set-vote-type'])
 
 /** Optimistic actions that should not refetch the full bundle after success. */
 const SKIP_SUCCESS_REFRESH = new Set([...INSTANT_ACTIONS, 'open-vote', 'open-discussion'])
@@ -53,8 +62,14 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
   const bundleRef = useRef(bundle)
   bundleRef.current = bundle
 
+  const pendingMotionTextRef = useRef(pendingMotionText)
+  pendingMotionTextRef.current = pendingMotionText
+
   const suppressRefreshUntilRef = useRef(0)
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingActionsRef = useRef<PendingMotionAction[]>([])
+  const prevAgendaItemIdRef = useRef<string | null>(initialBundle.current_agenda_item_id)
+  const activatedAgendaItemRef = useRef<string | null>(null)
 
   const bundleForView: MotionScreenBundle = {
     ...bundle,
@@ -62,7 +77,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
   }
 
   const markLocalMutation = useCallback((action?: string) => {
-    const ms = action === 'record-vote' ? LOCAL_SUPPRESS_MS : 1200
+    const ms = action === 'record-vote' ? LOCAL_SUPPRESS_MS : 2000
     suppressRefreshUntilRef.current = Date.now() + ms
   }, [])
 
@@ -90,39 +105,35 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     }, 400)
   }, [refresh])
 
-  useEffect(() => {
-    if (!bundleRef.current.active_motion) {
-      setPendingMotionText(null)
-    }
-  }, [bundle.current_agenda_item_id])
+  const resolveMotionId = useCallback((motionId: string) => {
+    if (!isPendingMotionId(motionId)) return motionId
+    return null
+  }, [])
 
-  useEffect(() => {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
-
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    )
-
-    const meetingId = initialBundle.meeting.id
-    const channel = supabase
-      .channel(`motion-screen-${meetingId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` },
-        refreshDebounced,
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` },
-        refreshDebounced,
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [initialBundle.meeting.id, refreshDebounced])
+  const flushPendingMotionActions = useCallback(
+    (motionId: string) => {
+      const queued = pendingActionsRef.current.splice(0)
+      for (const item of queued) {
+        void fetch(`/api/board-meetings/${productionId}/motion/${motionId}/${item.action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: item.body !== undefined ? JSON.stringify(item.body) : undefined,
+        })
+          .then(async res => {
+            if (!res.ok) {
+              setError(await readApiError(res))
+              refreshInBackground()
+            }
+          })
+          .catch(() => {
+            setError('Action failed')
+            refreshInBackground()
+          })
+      }
+    },
+    [productionId, refreshInBackground],
+  )
 
   const applyOptimistic = useCallback(
     (action: string, body?: unknown) => {
@@ -130,6 +141,14 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
       if (action === 'record-vote') {
         const { person_id, vote } = body as { person_id: string; vote: VoteValue }
         setBundle(applyVoteToBundle(b, person_id, vote))
+        return
+      }
+      if (action === 'open') {
+        const openBody = body as { agenda_item_id?: string | null; mover_id?: string | null; motion_text?: string | null }
+        setBundle({
+          ...b,
+          active_motion: buildOpenOptimisticMotion(b, openBody, pendingMotionTextRef.current),
+        })
         return
       }
       if (action === 'set-mover') {
@@ -199,9 +218,27 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
             return
           }
           if (action === 'open') {
+            const data = (await res.json().catch(() => ({}))) as { motion_id?: string }
+            if (data.motion_id) {
+              setBundle(prev => {
+                if (!prev.active_motion) return prev
+                if (
+                  prev.active_motion.id !== PENDING_MOTION_ID &&
+                  prev.active_motion.id !== data.motion_id
+                ) {
+                  return prev
+                }
+                return {
+                  ...prev,
+                  active_motion: { ...prev.active_motion, id: data.motion_id! },
+                }
+              })
+              flushPendingMotionActions(data.motion_id)
+            }
             setPendingMotionText(null)
-            refreshInBackground()
-          } else if (!SKIP_SUCCESS_REFRESH.has(action)) {
+            return
+          }
+          if (!SKIP_SUCCESS_REFRESH.has(action)) {
             refreshInBackground()
           }
         })
@@ -210,7 +247,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
           refreshInBackground()
         })
     },
-    [refreshInBackground],
+    [flushPendingMotionActions, refreshInBackground],
   )
 
   const onAction = useCallback(
@@ -224,11 +261,22 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
 
       try {
         const activeId = bundleRef.current.active_motion?.id
-        const motionId = activeId || bundleRef.current.parent_motion?.id || ''
+        const resolvedActiveId = activeId ? resolveMotionId(activeId) : null
+        const motionId = resolvedActiveId || bundleRef.current.parent_motion?.id || ''
 
         if (action === 'set-text' && !activeId) {
           const text = (body as { text?: string } | undefined)?.text ?? ''
           setPendingMotionText(text)
+          return
+        }
+
+        if (action === 'open' && activeId && isPendingMotionId(activeId)) {
+          const moverId = (body as { mover_id?: string | null }).mover_id
+          if (moverId) {
+            markLocalMutation('set-mover')
+            applyOptimistic('set-mover', { person_id: moverId })
+            pendingActionsRef.current.push({ action: 'set-mover', body: { person_id: moverId } })
+          }
           return
         }
 
@@ -237,9 +285,21 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
           applyOptimistic(action, body)
         }
 
+        if (activeId && isPendingMotionId(activeId) && PENDING_QUEUEABLE.has(action)) {
+          pendingActionsRef.current.push({ action, body })
+          return
+        }
+
         let url: string
+        let payload: unknown = body
+
         if (action === 'open') {
           url = `/api/board-meetings/${productionId}/motion/open`
+          payload = buildOpenApiPayload(
+            bundleRef.current,
+            body as Record<string, unknown> | undefined,
+            pendingMotionTextRef.current,
+          )
         } else if (action === 'result-hold') {
           url = `/api/board-meetings/${productionId}/motion/result/hold`
         } else if (action === 'result-dismiss') {
@@ -249,11 +309,6 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
         } else {
           throw new Error('No active motion for action: ' + action)
         }
-
-        const payload =
-          action === 'open' && pendingMotionText
-            ? { ...(body as Record<string, unknown>), motion_text: pendingMotionText }
-            : body
 
         if (fireAndForget) {
           postActionInBackground(url, payload, action)
@@ -269,8 +324,18 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
         if (!res.ok) throw new Error(await readApiError(res))
 
         if (action === 'open') {
+          const data = (await res.json().catch(() => ({}))) as { motion_id?: string }
+          if (data.motion_id) {
+            setBundle(prev => {
+              if (!prev.active_motion) return prev
+              return {
+                ...prev,
+                active_motion: { ...prev.active_motion, id: data.motion_id! },
+              }
+            })
+            flushPendingMotionActions(data.motion_id)
+          }
           setPendingMotionText(null)
-          refreshInBackground()
         } else if (!SKIP_SUCCESS_REFRESH.has(action)) {
           refreshInBackground()
         }
@@ -285,13 +350,82 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     },
     [
       productionId,
-      pendingMotionText,
       markLocalMutation,
       applyOptimistic,
       refreshInBackground,
       postActionInBackground,
+      resolveMotionId,
+      flushPendingMotionActions,
     ],
   )
+
+  /** When the on-air agenda item changes, load that item's pre-created motion (server sets active_motion_id). */
+  useEffect(() => {
+    const nextId = bundle.current_agenda_item_id
+    if (prevAgendaItemIdRef.current === nextId) return
+    prevAgendaItemIdRef.current = nextId
+    activatedAgendaItemRef.current = null
+    setPendingMotionText(null)
+    pendingActionsRef.current = []
+    markLocalMutation()
+    void refresh()
+  }, [bundle.current_agenda_item_id, markLocalMutation, refresh])
+
+  /** Point broadcast active_motion at this item's pre-created row (no insert if it already exists). */
+  useEffect(() => {
+    const itemId = bundle.current_agenda_item_id
+    if (!itemId) return
+    if (bundle.active_motion?.agenda_item_id === itemId && !isPendingMotionId(bundle.active_motion.id)) {
+      activatedAgendaItemRef.current = itemId
+      return
+    }
+    if (activatedAgendaItemRef.current === itemId) return
+    activatedAgendaItemRef.current = itemId
+    void onAction('open', {
+      agenda_item_id: itemId,
+      motion_text: bundle.suggested_motion_text,
+    })
+  }, [
+    bundle.current_agenda_item_id,
+    bundle.active_motion?.agenda_item_id,
+    bundle.active_motion?.id,
+    bundle.suggested_motion_text,
+    onAction,
+  ])
+
+  useEffect(() => {
+    if (!bundleRef.current.active_motion) {
+      setPendingMotionText(null)
+    }
+  }, [bundle.active_motion?.id])
+
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return
+
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    )
+
+    const meetingId = initialBundle.meeting.id
+    const channel = supabase
+      .channel(`motion-screen-${meetingId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_motions', filter: `board_meeting_id=eq.${meetingId}` },
+        refreshDebounced,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meeting_broadcast_state', filter: `board_meeting_id=eq.${meetingId}` },
+        refreshDebounced,
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [initialBundle.meeting.id, refreshDebounced])
 
   const onMinimize = useCallback(() => {
     router.push(`/control/${productionId}`)
@@ -299,7 +433,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
 
   const onPushResult = useCallback(async () => {
     const motionId = bundleRef.current.active_motion?.id
-    if (!motionId) return
+    if (!motionId || isPendingMotionId(motionId)) return
     setBusy(true)
     setError(null)
     try {

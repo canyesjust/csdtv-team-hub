@@ -17,6 +17,7 @@ export type StoredAgendaItem = {
   subitems: unknown
   needs_review: boolean
   review_notes: string | null
+  suggested_motion_text?: string | null
   presenters?: { name: string; title?: string | null; affiliation?: string | null }[]
   documents?: { title: string; filename: string; source_url?: string | null }[]
 }
@@ -53,6 +54,7 @@ function serializeForCompare(
     | 'original_title'
     | 'notes'
     | 'review_notes'
+    | 'suggested_motion_text'
     | 'subitems'
   > & {
     presenters?: StoredAgendaItem['presenters']
@@ -72,6 +74,7 @@ function serializeForCompare(
     original_title: it.original_title ?? null,
     notes: it.notes ?? null,
     review_notes: it.review_notes ?? null,
+    suggested_motion_text: it.suggested_motion_text ?? null,
     subitems: it.subitems ?? null,
     presenters: normalizePresenters(it.presenters),
     documents: normalizeDocuments(it.documents),
@@ -111,6 +114,7 @@ export function buildAgendaDiff(
       original_title: item.original_title ?? null,
       notes: item.notes ?? null,
       review_notes: item.review_notes ?? null,
+      suggested_motion_text: item.suggested_motion_text ?? null,
       subitems: item.subitems ?? null,
       presenters: item.presenters,
       documents: item.documents,

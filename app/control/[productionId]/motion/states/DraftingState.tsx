@@ -32,17 +32,21 @@ export default function DraftingState({ bundle, active, busy, error, onAction, o
     ? 'SELECT MOVER · TAP A MEMBER'
     : 'SELECT SECONDER · TAP A MEMBER'
 
-  const onPickMember = async (personId: string) => {
+  const onPickMember = (personId: string) => {
     if (!active) {
-      await onAction('open', { agenda_item_id: bundle.current_agenda_item_id, mover_id: personId })
       setPickingFor('seconder')
+      void onAction('open', {
+        agenda_item_id: bundle.current_agenda_item_id,
+        mover_id: personId,
+        motion_text: bundle.suggested_motion_text,
+      })
       return
     }
     if (pickingFor === 'mover') {
-      await onAction('set-mover', { person_id: personId })
       setPickingFor('seconder')
+      void onAction('set-mover', { person_id: personId })
     } else {
-      await onAction('set-seconder', { person_id: personId })
+      void onAction('set-seconder', { person_id: personId })
     }
   }
 

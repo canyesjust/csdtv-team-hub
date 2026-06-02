@@ -1,6 +1,12 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import {
+  BUILTIN_QR_PRESET_KEYS,
+  templateUsesAgendaUrl,
+  type QrPresetRow,
+} from '@/lib/board-meetings/qr-presets'
 
 type ActiveQR = {
   url: string
@@ -17,6 +23,8 @@ type PushPayload = {
 
 type Props = {
   canControl: boolean
+  productionId: string
+  publicAgendaUrl?: string | null
   activeQR?: ActiveQR | null
   hasCurrentDocument?: boolean
   hasYoutube?: boolean
@@ -25,16 +33,49 @@ type Props = {
   onDismiss: () => void
 }
 
-type Template = {
-  key: string
-  label: string
-  description: string
-  available: boolean
-  unavailableHint?: string
+function presetAvailability(
+  preset: QrPresetRow,
+  opts: { hasCurrentDocument: boolean; hasYoutube: boolean; publicAgendaUrl: string | null },
+): { available: boolean; hint?: string } {
+  const agenda = opts.publicAgendaUrl?.trim() || ''
+
+  switch (preset.key) {
+    case 'document_current_item':
+      return opts.hasCurrentDocument
+        ? { available: true }
+        : { available: false, hint: 'No document on the current agenda item' }
+    case 'youtube_live':
+      return opts.hasYoutube
+        ? { available: true }
+        : { available: false, hint: 'No livestream URL on this production' }
+    case 'agenda':
+      return agenda
+        ? { available: true }
+        : {
+            available: false,
+            hint: 'Set the public agenda URL on the Board Meeting tab',
+          }
+    case 'archive':
+    case 'submit_comment':
+      return { available: true }
+    default:
+      if (!preset.url_template) {
+        return { available: false, hint: 'No URL template configured' }
+      }
+      if (templateUsesAgendaUrl(preset.url_template) && !agenda) {
+        return {
+          available: false,
+          hint: 'Needs a public agenda URL on the Board Meeting tab',
+        }
+      }
+      return { available: true }
+  }
 }
 
 export default function QRPushPanel({
   canControl,
+  productionId,
+  publicAgendaUrl,
   activeQR,
   hasCurrentDocument,
   hasYoutube,
@@ -140,6 +181,8 @@ export default function QRPushPanel({
 
       {modalOpen ? (
         <PushQRModal
+          productionId={productionId}
+          publicAgendaUrl={publicAgendaUrl}
           hasCurrentDocument={!!hasCurrentDocument}
           hasYoutube={!!hasYoutube}
           onPush={(payload) => {
@@ -154,47 +197,46 @@ export default function QRPushPanel({
 }
 
 function PushQRModal({
+  productionId,
+  publicAgendaUrl,
   hasCurrentDocument,
   hasYoutube,
   onPush,
   onClose,
 }: {
+  productionId: string
+  publicAgendaUrl?: string | null
   hasCurrentDocument: boolean
   hasYoutube: boolean
   onPush: (payload: PushPayload) => void
   onClose: () => void
 }) {
+  const [presets, setPresets] = useState<QrPresetRow[]>([])
+  const [loading, setLoading] = useState(true)
   const [customUrl, setCustomUrl] = useState('')
   const [customLabel, setCustomLabel] = useState('')
 
-  const templates: Template[] = [
-    {
-      key: 'document_current_item',
-      label: 'Current item document',
-      description: 'Pushes the document attached to the current agenda item',
-      available: hasCurrentDocument,
-      unavailableHint: 'No document on the current agenda item',
-    },
-    {
-      key: 'youtube_live',
-      label: 'Watch live (YouTube)',
-      description: 'Pushes the YouTube livestream URL',
-      available: hasYoutube,
-      unavailableHint: 'No livestream URL set on this production',
-    },
-    {
-      key: 'archive',
-      label: 'View archive',
-      description: 'Pushes the meeting archive URL',
-      available: true,
-    },
-    {
-      key: 'submit_comment',
-      label: 'Submit public comment',
-      description: 'Pushes the public comment form URL',
-      available: true,
-    },
-  ]
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/qr-presets')
+      .then(res => res.json())
+      .then(body => {
+        if (cancelled) return
+        setPresets(body.presets || [])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const opts = {
+    hasCurrentDocument,
+    hasYoutube,
+    publicAgendaUrl: publicAgendaUrl ?? null,
+  }
 
   const handlePushCustom = () => {
     if (!customUrl.trim()) return
@@ -217,45 +259,78 @@ function PushQRModal({
           <button type="button" className="cs-modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
 
+        {!publicAgendaUrl?.trim() ? (
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--semantic-warning-text)', lineHeight: 1.45 }}>
+            Add a{' '}
+            <Link
+              href={`/dashboard/productions/${productionId}?tab=boardmeeting`}
+              style={{ color: 'inherit', fontWeight: 600 }}
+            >
+              public agenda URL
+            </Link>{' '}
+            on the Board Meeting tab to enable the agenda QR preset.
+          </p>
+        ) : (
+          <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+            Agenda: {publicAgendaUrl.trim()}
+          </p>
+        )}
+
         <div className="cs-modal-section">
-          <label className="cs-modal-label">Quick push</label>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 8,
-            }}
-          >
-            {templates.map(t => (
-              <button
-                key={t.key}
-                type="button"
-                disabled={!t.available}
-                title={t.available ? t.description : t.unavailableHint}
-                onClick={() => onPush({ preset_key: t.key })}
-                style={{
-                  padding: '12px',
-                  borderRadius: 10,
-                  border: '0.5px solid var(--border-subtle)',
-                  background: 'var(--surface-2)',
-                  color: 'var(--text-primary)',
-                  fontFamily: 'inherit',
-                  cursor: t.available ? 'pointer' : 'not-allowed',
-                  opacity: t.available ? 1 : 0.45,
-                  textAlign: 'left',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 3,
-                  minHeight: 60,
-                }}
-              >
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {t.available ? t.description : t.unavailableHint}
-                </span>
-              </button>
-            ))}
-          </div>
+          <label className="cs-modal-label">From library</label>
+          {loading ? (
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>Loading presets…</p>
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 8,
+                maxHeight: 'min(50vh, 360px)',
+                overflowY: 'auto',
+              }}
+            >
+              {presets.map(p => {
+                const { available, hint } = presetAvailability(p, opts)
+                const desc =
+                  p.description ||
+                  (p.key === 'agenda'
+                    ? 'Public agenda link for this meeting'
+                    : BUILTIN_QR_PRESET_KEYS.has(p.key)
+                      ? 'Built-in preset'
+                      : p.url_template || '')
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={!available}
+                    title={available ? desc : hint}
+                    onClick={() => onPush({ preset_key: p.key })}
+                    style={{
+                      padding: '12px',
+                      borderRadius: 10,
+                      border: '0.5px solid var(--border-subtle)',
+                      background: 'var(--surface-2)',
+                      color: 'var(--text-primary)',
+                      fontFamily: 'inherit',
+                      cursor: available ? 'pointer' : 'not-allowed',
+                      opacity: available ? 1 : 0.45,
+                      textAlign: 'left',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 3,
+                      minHeight: 60,
+                    }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{p.label}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {available ? desc : hint}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         <div className="cs-modal-divider" />

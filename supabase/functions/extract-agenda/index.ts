@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
               {
                 type: "text",
                 text:
-                  "Extract the agenda from this PDF following the schema and rules in the system prompt. Return only valid JSON.",
+                  "Extract the agenda from this PDF following the schema and rules in the system prompt. Copy agenda titles verbatim. Fill suggested_motion_text for action items from agenda wording only (not archival motion blocks). Return only valid JSON.",
               },
             ],
           },

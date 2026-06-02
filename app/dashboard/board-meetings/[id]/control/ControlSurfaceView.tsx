@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { sortByBoardSeatOrder } from '@/lib/board-meetings/lower-third-board-order'
 import MotionAndVoteCard from './components/MotionAndVoteCard'
 
 type AgendaItem = {
@@ -127,7 +128,9 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
     ? formatElapsed(Date.now() - new Date(broadcast_state.live_started_at).getTime())
     : null
 
-  const boardMembers = (bundle.lower_third_people || []).filter(p => p.category === 'board_member')
+  const boardMembers = sortByBoardSeatOrder(
+    (bundle.lower_third_people || []).filter(p => p.category === 'board_member'),
+  )
   const staffAndOther = (bundle.lower_third_people || []).filter(p => p.category !== 'board_member')
   const activeLowerThirdId = broadcast_state?.active_lower_third_person_id || null
   const activeLowerThirdPerson = (bundle.lower_third_people || []).find(p => p.id === activeLowerThirdId) || null

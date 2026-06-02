@@ -23,6 +23,8 @@ export type ExtractedAgendaItem = {
   notes?: string | null
   needs_review?: boolean
   review_notes?: string | null
+  /** Proposed motion for operator template; from agenda wording only. */
+  suggested_motion_text?: string | null
 }
 
 export type ExtractedAgendaResponse = {
@@ -71,6 +73,10 @@ export function enrichExtractedItems(extracted: ExtractedAgendaResponse): Extrac
       is_broadcastable: it.is_broadcastable !== false,
       needs_review: !!it.needs_review,
       notes: it.notes ?? null,
+      suggested_motion_text:
+        typeof it.suggested_motion_text === 'string' && it.suggested_motion_text.trim()
+          ? it.suggested_motion_text.trim()
+          : null,
     }
   })
 }

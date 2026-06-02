@@ -9,6 +9,7 @@ import {
   liveLockedAgendaPatchHasChanges,
 } from '@/lib/board-meetings/agenda-live-edit'
 import { isMissingSuggestedMotionTextColumn } from '@/lib/board-meetings/agenda-item-select'
+import { syncAgendaMotions, syncMotionTextForAgendaItem } from '@/lib/board-meetings/agenda-motions-sync'
 import { clearLockedAgendaCache } from '@/lib/board-meetings/control-meeting-cache'
 
 export const dynamic = 'force-dynamic'
@@ -111,6 +112,17 @@ export async function PATCH(
   }
 
   if (bm.agenda_locked) clearLockedAgendaCache(bm.id)
+
+  if (
+    patch.suggested_motion_text !== undefined ||
+    patch.type !== undefined ||
+    patch.action_requested !== undefined
+  ) {
+    if (patch.suggested_motion_text !== undefined) {
+      await syncMotionTextForAgendaItem(service, bm.id, item_id)
+    }
+    await syncAgendaMotions(service, bm.id, teamUser.id)
+  }
 
   return NextResponse.json({ success: true })
 }

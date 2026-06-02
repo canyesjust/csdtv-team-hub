@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { sortByBoardSeatOrder } from '@/lib/board-meetings/lower-third-board-order'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 export const dynamic = 'force-dynamic'
@@ -32,12 +33,11 @@ export async function GET() {
     .select('id, display_name, primary_title, officer_position, photo_path')
     .eq('category', 'board_member')
     .eq('is_active', true)
-    .order('display_name')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const members = await Promise.all(
-    (data || []).map(async m => ({
+    sortByBoardSeatOrder(data || []).map(async m => ({
       id: m.id,
       display_name: m.display_name,
       primary_title: m.primary_title,
