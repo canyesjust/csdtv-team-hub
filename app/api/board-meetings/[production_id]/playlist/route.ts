@@ -10,7 +10,9 @@ export async function GET(
   { params }: { params: Promise<{ production_id: string }> },
 ) {
   const { production_id } = await params
-  return withPlaylistContext(production_id, async ({ service, boardMeetingId }) => {
+  return withPlaylistContext(
+    production_id,
+    async ({ service, boardMeetingId }) => {
     const bundle = await loadMeetingPlaylistBundle(service, boardMeetingId)
     if (!bundle) return NextResponse.json({ playlist: null, items: [] })
 
@@ -24,7 +26,9 @@ export async function GET(
     })
 
     return NextResponse.json({ playlist: bundle.playlist, items })
-  })
+  },
+    { notifyOutputs: false },
+  )
 }
 
 export async function PATCH(

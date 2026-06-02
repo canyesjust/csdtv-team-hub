@@ -9,9 +9,13 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params
-  return withControlContext(id, async ({ service, productionId }) => {
+  return withControlContext(
+    id,
+    async ({ service, productionId }) => {
     const bundle = await loadMotionScreenBundle(service, productionId)
     if (!bundle) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 })
     return NextResponse.json(bundle)
-  })
+  },
+    { notifyOutputs: false },
+  )
 }

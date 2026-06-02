@@ -10,9 +10,13 @@ export async function GET(
 ) {
   const { production_id } = await params
   const full = new URL(request.url).searchParams.get('full') === '1'
-  return withControlContext(production_id, async ({ service, productionId }) => {
+  return withControlContext(
+    production_id,
+    async ({ service, productionId }) => {
     const bundle = await loadControlBundle(service, productionId, { slim: !full })
     if (!bundle) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
     return NextResponse.json(bundle)
-  })
+  },
+    { notifyOutputs: false },
+  )
 }

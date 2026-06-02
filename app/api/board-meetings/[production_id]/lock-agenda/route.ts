@@ -9,6 +9,7 @@ import {
   clearBoardMemberPeopleCache,
   getAgendaItemsForControl,
 } from '@/lib/board-meetings/control-meeting-cache'
+import { notifyBoardOutputsForMeeting } from '@/lib/board-meetings/output-realtime'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,8 @@ export async function POST(
     const motionsSync = await syncAgendaMotions(service, bm.id, teamUser.id)
     clearBoardMemberPeopleCache()
     await getAgendaItemsForControl(service, bm.id, true)
+
+    void notifyBoardOutputsForMeeting(service, bm.id).catch(() => {})
 
     return NextResponse.json({ success: true, people_sync: peopleSync, motions_sync: motionsSync })
   } catch (e) {

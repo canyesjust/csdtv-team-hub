@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
+import { notifyBoardOutputsForMeeting } from '@/lib/board-meetings/output-realtime'
 
 export type ControlContext = {
   service: SupabaseClient
@@ -14,10 +15,31 @@ export type ControlContext = {
 const boardMeetingIdCache = new Map<string, { boardMeetingId: string; expires: number }>()
 const BOARD_MEETING_CACHE_MS = 60_000
 
+type ControlContextOptions = {
+  /** When true (default), assigned OBS outputs refresh via Realtime after a successful handler. */
+  notifyOutputs?: boolean
+}
+
+async function runControlHandler(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  handler: (ctx: ControlContext) => Promise<NextResponse>,
+  ctx: ControlContext,
+  notifyOutputs: boolean,
+): Promise<NextResponse> {
+  const response = await handler(ctx)
+  if (notifyOutputs && response.status >= 200 && response.status < 300) {
+    void notifyBoardOutputsForMeeting(service, boardMeetingId).catch(() => {})
+  }
+  return response
+}
+
 export async function withControlContext(
   productionId: string,
   handler: (ctx: ControlContext) => Promise<NextResponse>,
+  options: ControlContextOptions = {},
 ): Promise<NextResponse> {
+  const notifyOutputs = options.notifyOutputs !== false
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -33,12 +55,18 @@ export async function withControlContext(
 
   const cached = boardMeetingIdCache.get(resolvedProductionId)
   if (cached && cached.expires > Date.now()) {
-    return handler({
+    return runControlHandler(
       service,
-      teamUserId: teamUser.id,
-      productionId: resolvedProductionId,
-      boardMeetingId: cached.boardMeetingId,
-    })
+      cached.boardMeetingId,
+      handler,
+      {
+        service,
+        teamUserId: teamUser.id,
+        productionId: resolvedProductionId,
+        boardMeetingId: cached.boardMeetingId,
+      },
+      notifyOutputs,
+    )
   }
 
   const { data: bm } = await service
@@ -54,12 +82,18 @@ export async function withControlContext(
     expires: Date.now() + BOARD_MEETING_CACHE_MS,
   })
 
-  return handler({
+  return runControlHandler(
     service,
-    teamUserId: teamUser.id,
-    productionId: resolvedProductionId,
-    boardMeetingId: bm.id,
-  })
+    bm.id,
+    handler,
+    {
+      service,
+      teamUserId: teamUser.id,
+      productionId: resolvedProductionId,
+      boardMeetingId: bm.id,
+    },
+    notifyOutputs,
+  )
 }
 
 export function controlError(message: string, status = 400) {

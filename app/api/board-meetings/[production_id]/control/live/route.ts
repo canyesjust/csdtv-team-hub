@@ -9,7 +9,9 @@ export async function GET(
   { params }: { params: Promise<{ production_id: string }> },
 ) {
   const { production_id } = await params
-  return withControlContext(production_id, async ({ service, boardMeetingId }) => {
+  return withControlContext(
+    production_id,
+    async ({ service, boardMeetingId }) => {
     const { data: bm } = await service
       .from('board_meetings')
       .select('broadcast_status, scheduled_public_start')
@@ -20,5 +22,7 @@ export async function GET(
 
     const live = await buildControlLiveBundle(service, boardMeetingId, bm)
     return NextResponse.json(live)
-  })
+  },
+    { notifyOutputs: false },
+  )
 }

@@ -8,6 +8,8 @@ export const POLL_IDLE_MS = 5_000
 export const POLL_PREROLL_MS = 1_000
 /** Overlay, dais, and second screen during prepared or live — operator-driven, near real-time. */
 export const POLL_LIVE_MS = 350
+/** Slow safety poll while Supabase Realtime broadcast is connected. */
+export const POLL_REALTIME_FALLBACK_MS = 5_000
 /** @deprecated Use POLL_LIVE_MS — kept for any external references. */
 export const POLL_LIVE_OVERLAY_MS = POLL_LIVE_MS
 

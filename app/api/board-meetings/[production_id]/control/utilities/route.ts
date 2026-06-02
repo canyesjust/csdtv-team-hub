@@ -9,8 +9,12 @@ export async function GET(
   { params }: { params: Promise<{ production_id: string }> },
 ) {
   const { production_id } = await params
-  return withControlContext(production_id, async ({ service, boardMeetingId }) => {
+  return withControlContext(
+    production_id,
+    async ({ service, boardMeetingId }) => {
     const utilities = await loadControlUtilities(service, boardMeetingId)
     return NextResponse.json(utilities)
-  })
+  },
+    { notifyOutputs: false },
+  )
 }

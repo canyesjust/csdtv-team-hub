@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
+import { notifyBoardOutputsForMeeting } from '@/lib/board-meetings/output-realtime'
 
 export type PlaylistContext = {
   service: SupabaseClient
@@ -10,10 +11,16 @@ export type PlaylistContext = {
   boardMeetingId: string
 }
 
+type PlaylistContextOptions = {
+  notifyOutputs?: boolean
+}
+
 export async function withPlaylistContext(
   productionId: string,
   handler: (ctx: PlaylistContext) => Promise<NextResponse>,
+  options: PlaylistContextOptions = {},
 ): Promise<NextResponse> {
+  const notifyOutputs = options.notifyOutputs !== false
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -33,7 +40,11 @@ export async function withPlaylistContext(
 
   if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
 
-  return handler({ service, productionId, boardMeetingId: bm.id })
+  const response = await handler({ service, productionId, boardMeetingId: bm.id })
+  if (notifyOutputs && response.status >= 200 && response.status < 300) {
+    void notifyBoardOutputsForMeeting(service, bm.id).catch(() => {})
+  }
+  return response
 }
 
 export function playlistError(message: string, status = 400) {
