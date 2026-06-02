@@ -894,7 +894,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           return next
         })
       }}
-      onPatchAgendaItem={patchAgendaItem}
+      onPatchAgendaItem={async (itemId, patch) => {
+        await patchAgendaItem(itemId, patch)
+      }}
       onMoveAgendaItem={moveAgendaItem}
       onListeningChange={onListeningChange}
       onSaveMotionTemplate={async (itemId, suggested_motion_text) => {
