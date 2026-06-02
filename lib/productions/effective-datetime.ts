@@ -1,4 +1,8 @@
-/** Resolve when a production happens — synced rows often only have start_datetime_label set. */
+/**
+ * Resolve when a production happens — synced rows often only have start_datetime_label set.
+ * Postgres trigger `productions_sync_datetimes_from_labels` backfills `start_datetime` / `end_datetime` on sync;
+ * this helper remains for client-side reads before sync or legacy rows.
+ */
 export type ProductionDateInput = {
   start_datetime?: string | null
   start_datetime_label?: string | null
