@@ -80,6 +80,7 @@ export default function NotificationPanel({ onClose, onUnreadChange, userId }: P
     if (type === 'assigned') return '📋'
     if (type === 'completed') return '✅'
     if (type === 'production') return '🎬'
+    if (type === 'weekly_backup') return '💾'
     return '🔔'
   }
 

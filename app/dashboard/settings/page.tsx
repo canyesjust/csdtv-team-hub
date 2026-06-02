@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
@@ -8,6 +9,7 @@ import { toast } from '@/lib/toast'
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth-constants'
 import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
 import SignatureAssetsPanel from './components/SignatureAssetsPanel'
+import BackupsPanel from './components/BackupsPanel'
 
 interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string; supabase_user_id: string | null }
 interface SchoolListRow {
@@ -66,6 +68,7 @@ export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
+  const searchParams = useSearchParams()
 
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [team, setTeam] = useState<TeamMember[]>([])
@@ -505,8 +508,13 @@ export default function SettingsPage() {
 
   const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 14px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box', minHeight: '44px' }
   const isManager = currentUser?.role === 'Manager'
-  type SettingsTab = 'account' | 'notifications' | 'signage' | 'team' | 'admin'
+  type SettingsTab = 'account' | 'notifications' | 'signage' | 'team' | 'admin' | 'backups'
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'backups' && isManager) setActiveTab('backups')
+  }, [searchParams, isManager])
 
   const addSchool = async () => {
     if (!newSchoolCode.trim() || !newSchoolName.trim()) return
@@ -650,7 +658,13 @@ export default function SettingsPage() {
           { id: 'account', label: 'Account' },
           { id: 'notifications', label: 'Notifications' },
           { id: 'signage', label: 'Signage' },
-          ...(isManager ? [{ id: 'team', label: 'Team' }, { id: 'admin', label: 'Admin' }] : []),
+          ...(isManager
+            ? [
+                { id: 'team', label: 'Team' },
+                { id: 'backups', label: 'Backups' },
+                { id: 'admin', label: 'Admin' },
+              ]
+            : []),
         ].map(tab => {
           const active = activeTab === (tab.id as SettingsTab)
           return (
@@ -1125,6 +1139,13 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {isManager && (
+        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '16px', display: activeTab === 'backups' ? 'block' : 'none' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Backups</h2>
+          <BackupsPanel text={text} muted={muted} border={border} cardBg={cardBg} />
         </div>
       )}
 
