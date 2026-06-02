@@ -11,7 +11,7 @@ const ACTIONS = [
   { label: 'Recess', path: 'recess', body: { message: 'Recess' } },
   { label: 'Tech difficulties', path: 'technical-difficulties' },
   { label: 'Clear mode', path: 'clear-mode' },
-  { label: 'End preroll', path: 'end-preroll' },
+  { label: 'Go live', path: 'end-preroll' },
   { label: 'End meeting', path: 'end-meeting', danger: true },
 ] as const
 

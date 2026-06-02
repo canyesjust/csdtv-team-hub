@@ -20,16 +20,12 @@ export default function PreRollPanel({ canControl, isLive, state, meetingPlaylis
     void onAction(`playlist-${action}`, body)
   }
 
-  if (!meetingPlaylist) {
-    return <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No pre-roll playlist.</p>
-  }
-
   return (
     <>
       {!isLive ? (
         <>
           <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-            End pre-roll when you are ready to take the meeting agenda on overlay and dais.
+            Go live when you are ready to take the meeting agenda on overlay and dais.
           </p>
           <button
             type="button"
@@ -38,12 +34,16 @@ export default function PreRollPanel({ canControl, isLive, state, meetingPlaylis
             onClick={() => onAction('end-preroll')}
             style={{ width: '100%', minHeight: 48, marginBottom: 14 }}
           >
-            End preroll
+            Go live
           </button>
         </>
       ) : (
         <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>Meeting is live.</p>
       )}
+      {!meetingPlaylist ? (
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No pre-roll playlist configured.</p>
+      ) : (
+        <>
       <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>
         Playback: <strong>{playback}</strong>
       </p>
@@ -73,6 +73,8 @@ export default function PreRollPanel({ canControl, isLive, state, meetingPlaylis
           </button>
         ))}
       </div>
+        </>
+      )}
     </>
   )
 }

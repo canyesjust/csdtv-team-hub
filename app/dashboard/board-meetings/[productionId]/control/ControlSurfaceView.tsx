@@ -147,6 +147,22 @@ export default function ControlSurfaceView({
             isLive={isLive}
           />
 
+          {isPrepared && canControl ? (
+            <div className="cs-go-live-row">
+              <button
+                type="button"
+                className="cs-touchbtn cs-touchbtn-primary cs-go-live-btn"
+                onClick={() => onAction('end-preroll')}
+                disabled={busy}
+              >
+                Go live
+              </button>
+              <p className="cs-go-live-hint">
+                Starts the official meeting — agenda on overlay and dais, LIVE indicator, and stops any pre-roll playlist.
+              </p>
+            </div>
+          ) : null}
+
           <LowerThirdPanel
             active={lower_third_active}
             people={bundle.lower_third_people || []}
