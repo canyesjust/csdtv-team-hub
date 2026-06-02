@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
+import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import {
   PrerollAgendaPreviewCard,
@@ -53,7 +54,10 @@ export default function BoardPrerollView({
 
   if (!state?.active) {
     const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
-    return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
+    if (state?.show_channel_ident) {
+      return <BoardIdleBranding screenName={screenName} variant="fullscreen" statusLine={null} />
+    }
+    return <BoardBlankFullscreen />
   }
 
   const meetingTitle = state.meeting?.title || 'Board Meeting'
@@ -131,12 +135,11 @@ function PrerollMainContent({
   videoRef: React.RefObject<HTMLVideoElement | null>
 }) {
   if (!playlist || playlist.playback_state === 'idle' || (!playlist.current_item && !playlist.replace_now_asset)) {
-    return (
-      <div style={{ textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: '28px', fontWeight: 600 }}>Meeting begins shortly</p>
-        <p style={{ margin: '12px 0 0', fontSize: '15px', color: '#8899bb' }}>Pre-show playlist is idle</p>
-      </div>
-    )
+    if (state.show_channel_ident) {
+      const screenName = state.channel_name || `Channel ${state.channel_number}`
+      return <BoardIdleBranding screenName={screenName} variant="fullscreen" statusLine={null} />
+    }
+    return <BoardBlankFullscreen />
   }
 
   const replace = playlist.replace_now_asset

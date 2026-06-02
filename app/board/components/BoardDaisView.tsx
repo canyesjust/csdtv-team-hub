@@ -7,6 +7,7 @@ import { useElementFullscreen } from '@/app/board/hooks/useElementFullscreen'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
+import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import { AgendaContextStrip, motionDisplayText } from '@/app/board/components/MotionFloorGraphics'
 import { CANYONS_LOGO_SRC } from '@/app/board/branding-assets'
@@ -86,7 +87,7 @@ export default function BoardDaisView({
   if (!state?.active) {
     return (
       <DaisShell {...shellProps}>
-        <BoardIdleBranding screenName={screenNameForIdle} variant="fullscreen" />
+        <BoardBlankFullscreen />
       </DaisShell>
     )
   }
@@ -186,9 +187,9 @@ export default function BoardDaisView({
                   </div>
                 )}
               </div>
-            ) : (
-              <p style={waitingText}>Standing by for agenda item…</p>
-            )}
+            ) : state.show_channel_ident ? (
+              <BoardIdleBranding screenName={screenNameForIdle} variant="fullscreen" statusLine={null} />
+            ) : null}
           </section>
 
           <aside style={sideCol}>
@@ -719,13 +720,6 @@ const itemTitle: React.CSSProperties = {
 const presenterLine: React.CSSProperties = { margin: '0 0 8px', fontSize: 'clamp(18px, 2vw, 26px)', lineHeight: 1.35 }
 const presenterName: React.CSSProperties = { color: C.text, fontWeight: 600 }
 const presenterTitle: React.CSSProperties = { color: C.textSoft, fontWeight: 400 }
-
-const waitingText: React.CSSProperties = {
-  margin: '32px 0 0',
-  fontSize: '28px',
-  color: C.textDim,
-  fontWeight: 500,
-}
 
 const docList: React.CSSProperties = { marginTop: '28px', display: 'flex', flexDirection: 'column', gap: '8px' }
 const docRow: React.CSSProperties = {

@@ -39,6 +39,7 @@ const OPTIMISTIC_ACTIONS = new Set([
   'show-agenda-branding',
   'toggle-overlay',
   'toggle-channel',
+  'toggle-channel-ident',
   'reset-elapsed',
   'clear-elapsed',
 ])
@@ -430,9 +431,21 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           ...prev,
           channel_assignments: has
             ? (prev.channel_assignments || []).filter(a => a.output_channel_id !== channelId)
-            : [...(prev.channel_assignments || []), { output_channel_id: channelId }],
+            : [...(prev.channel_assignments || []), { output_channel_id: channelId, show_channel_ident: false }],
           channels: (prev.channels || []).map(ch =>
             ch.id === channelId ? { ...ch, obs_polling_enabled: !has } : ch,
+          ),
+        }
+      }
+
+      if (action === 'toggle-channel-ident') {
+        const channelId = payload?.output_channel_id as string
+        const show = payload?.show as boolean | undefined
+        if (!channelId || typeof show !== 'boolean') return prev
+        return {
+          ...prev,
+          channel_assignments: (prev.channel_assignments || []).map(a =>
+            a.output_channel_id === channelId ? { ...a, show_channel_ident: show } : a,
           ),
         }
       }
@@ -549,6 +562,26 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
             const data = await res.json().catch(() => ({}))
             if (!res.ok) {
               toast((data as { error?: string }).error || 'Channel update failed', 'error')
+              onFailure()
+            }
+          })
+          .catch(() => onFailure())
+        return
+      }
+
+      if (action === 'toggle-channel-ident') {
+        const channelId = payload?.output_channel_id as string
+        const show = payload?.show as boolean | undefined
+        if (!channelId || typeof show !== 'boolean') return
+        void fetch(`/api/board-meetings/${productionId}/channels/ident`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ output_channel_id: channelId, show }),
+        })
+          .then(async res => {
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              toast((data as { error?: string }).error || 'Channel ID update failed', 'error')
               onFailure()
             }
           })

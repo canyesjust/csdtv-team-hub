@@ -75,7 +75,7 @@ export async function buildControlSurfaceBundle(
     service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', bm.id).maybeSingle(),
     service
       .from('channel_assignments')
-      .select('id, output_channel_id, assigned_at, unassigned_at')
+      .select('id, output_channel_id, assigned_at, unassigned_at, show_channel_ident')
       .eq('board_meeting_id', bm.id)
       .is('unassigned_at', null),
     service
@@ -193,6 +193,7 @@ export async function buildControlSurfaceBundle(
     playlist_state,
     channel_assignments: (assignments || []).map(a => ({
       output_channel_id: a.output_channel_id,
+      show_channel_ident: !!a.show_channel_ident,
     })),
     channels: channels || [],
     output_channels: channels || [],

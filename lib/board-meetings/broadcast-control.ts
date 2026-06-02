@@ -472,6 +472,25 @@ export async function assignChannel(
   await logMeetingEvent(service, boardMeetingId, 'channel_assign', operatorId, { output_channel_id: outputChannelId })
 }
 
+export async function setChannelShowIdent(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  outputChannelId: string,
+  show: boolean,
+  operatorId: string,
+) {
+  const { error } = await service
+    .from('channel_assignments')
+    .update({ show_channel_ident: show })
+    .eq('board_meeting_id', boardMeetingId)
+    .eq('output_channel_id', outputChannelId)
+    .is('unassigned_at', null)
+  if (error) throw new Error(error.message)
+  void logMeetingEvent(service, boardMeetingId, show ? 'channel_ident_on' : 'channel_ident_off', operatorId, {
+    output_channel_id: outputChannelId,
+  })
+}
+
 export async function setOutputChannelObsPolling(
   service: SupabaseClient,
   outputChannelId: string,

@@ -29,6 +29,7 @@ export type PublicChannelLivePatch = Pick<
   | 'upcoming_items'
   | 'elapsed_started_at'
   | 'agenda_branding_hold'
+  | 'show_channel_ident'
 > & {
   meeting?: Pick<NonNullable<PublicChannelState['meeting']>, 'broadcast_status'> | null
 }
@@ -104,6 +105,8 @@ export function mergePublicChannelState(
       live.elapsed_started_at !== undefined ? live.elapsed_started_at : prev.elapsed_started_at,
     agenda_branding_hold:
       live.agenda_branding_hold !== undefined ? live.agenda_branding_hold : prev.agenda_branding_hold,
+    show_channel_ident:
+      live.show_channel_ident !== undefined ? live.show_channel_ident : prev.show_channel_ident,
     state:
       live.state && prev.state
         ? { ...prev.state, ...live.state }
@@ -147,11 +150,12 @@ export async function buildPublicChannelLivePatch(
     timer: null,
     elapsed_started_at: null,
     agenda_branding_hold: false,
+    show_channel_ident: false,
   }
 
   const { data: assignment } = await service
     .from('channel_assignments')
-    .select('board_meeting_id')
+    .select('board_meeting_id, show_channel_ident')
     .eq('output_channel_id', channel.id)
     .is('unassigned_at', null)
     .maybeSingle()
@@ -262,6 +266,7 @@ export async function buildPublicChannelLivePatch(
 
   return {
     active: true,
+    show_channel_ident: !!assignment.show_channel_ident,
     ...pollingFor(true, bm.broadcast_status),
     meeting: { broadcast_status: bm.broadcast_status },
     result_overlay,

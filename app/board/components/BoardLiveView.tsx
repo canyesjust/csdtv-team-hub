@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
 
@@ -91,7 +92,10 @@ export default function BoardLiveView({
 
   if (!state?.active) {
     const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
-    return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
+    if (state?.show_channel_ident) {
+      return <BoardIdleBranding screenName={screenName} variant="fullscreen" statusLine={null} />
+    }
+    return <BoardBlankFullscreen />
   }
 
   const item = state.current_item

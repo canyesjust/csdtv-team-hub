@@ -126,7 +126,7 @@ export async function buildControlLiveBundle(
     service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', boardMeetingId).maybeSingle(),
     service
       .from('channel_assignments')
-      .select('output_channel_id')
+      .select('output_channel_id, show_channel_ident')
       .eq('board_meeting_id', boardMeetingId)
       .is('unassigned_at', null),
     service
@@ -212,6 +212,7 @@ export async function buildControlLiveBundle(
     current_documents,
     channel_assignments: (assignments || []).map(a => ({
       output_channel_id: a.output_channel_id,
+      show_channel_ident: !!a.show_channel_ident,
     })),
   }
 }

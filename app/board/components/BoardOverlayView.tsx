@@ -7,6 +7,8 @@ import type { PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
+import { BoardBlankOverlay } from '@/app/board/components/BoardBlankOutput'
+import { overlayShouldShowChannelIdent } from '@/app/board/lib/channel-ident'
 import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
 import {
   overlayPanelStyle,
@@ -96,7 +98,7 @@ export default function BoardOverlayView({
   const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
 
   if (!state?.active) {
-    return <BoardIdleBranding screenName={screenName} variant="overlay" />
+    return <BoardBlankOverlay />
   }
 
   const b = state.state
@@ -124,9 +126,6 @@ export default function BoardOverlayView({
   const qr = b?.active_qr
   const lowerThird = b?.active_lower_third
   const showLowerThird = !!lowerThird && mode !== 'technical_difficulties'
-  const showIdleBranding =
-    mode === 'normal' && !showVoteResult && !showMotion && !showItem && !showBrandingHold && !showTimer && !qr && !lowerThird
-
   if (mode === 'recess') {
     return (
       <>
@@ -156,7 +155,7 @@ export default function BoardOverlayView({
     )
   }
 
-  if (showIdleBranding) {
+  if (state && overlayShouldShowChannelIdent(state)) {
     return <BoardIdleBranding screenName={screenName} variant="overlay" statusLine={null} />
   }
 

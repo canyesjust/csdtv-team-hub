@@ -1,14 +1,13 @@
-import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
+import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 
 export default function BoardPlaceholder({
-  channelNumber,
-  viewLabel,
-  channelName,
+  channelNumber: _channelNumber,
+  viewLabel: _viewLabel,
+  channelName: _channelName,
 }: {
   channelNumber: number
   viewLabel: string
-  channelName?: string
+  channelName: string
 }) {
-  const screenName = channelName || `${viewLabel} · Channel ${channelNumber}`
-  return <BoardIdleBranding screenName={screenName} variant="fullscreen" />
+  return <BoardBlankFullscreen />
 }

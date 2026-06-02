@@ -213,7 +213,7 @@ export type ControlBundle = {
     held_item_id: string | null
     current_item_id: string | null
   } | null
-  channel_assignments: { output_channel_id: string }[]
+  channel_assignments: { output_channel_id: string; show_channel_ident?: boolean }[]
   channels: {
     id: string
     channel_number: number

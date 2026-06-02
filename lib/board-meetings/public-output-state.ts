@@ -149,6 +149,8 @@ export type PublicChannelState = {
   elapsed_started_at: string | null
   /** When true, outputs show CSDtv branding instead of the current agenda item. */
   agenda_branding_hold: boolean
+  /** Operator opt-in: show channel identification card (default off). */
+  show_channel_ident: boolean
 }
 
 async function loadItemExtras(
@@ -239,11 +241,12 @@ export async function buildPublicChannelState(
     live_started_at: null,
     elapsed_started_at: null,
     agenda_branding_hold: false,
+    show_channel_ident: false,
   }
 
   const { data: assignment } = await service
     .from('channel_assignments')
-    .select('board_meeting_id')
+    .select('board_meeting_id, show_channel_ident')
     .eq('output_channel_id', channelRow.id)
     .is('unassigned_at', null)
     .maybeSingle()
@@ -398,6 +401,7 @@ export async function buildPublicChannelState(
 
   return attachPollingMeta(channelRow, true, bm.broadcast_status, {
     active: true,
+    show_channel_ident: !!assignment.show_channel_ident,
     channel_number: channelRow.channel_number,
     channel_name: channelRow.channel_name,
     result_overlay,
