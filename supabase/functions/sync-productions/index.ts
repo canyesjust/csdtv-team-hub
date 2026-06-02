@@ -1,3 +1,10 @@
+/**
+ * District site → Team Hub production sync.
+ *
+ * SAFETY: UPSERT ONLY — never delete, archive, or prune productions here.
+ * The browser extension sends paginated batches, not a full snapshot in one request.
+ * Any "remove rows missing from payload" logic will mass-delete the database.
+ */
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const SYNC_TOKEN = Deno.env.get('SYNC_TOKEN')
@@ -17,78 +24,17 @@ function json(body: unknown, status = 200) {
   })
 }
 
-type SyncBody = {
-  productions?: unknown[]
-  /** When true (default), Hub rows absent from this payload are removed. Set false for partial updates. */
-  full_snapshot?: boolean
-}
-
-function parsePayload(raw: unknown): { productions: Record<string, unknown>[]; fullSnapshot: boolean } | null {
-  if (Array.isArray(raw)) {
-    return { productions: raw as Record<string, unknown>[], fullSnapshot: true }
-  }
-  if (raw && typeof raw === 'object' && Array.isArray((raw as SyncBody).productions)) {
-    const body = raw as SyncBody
+function parseProductionsPayload(raw: unknown): Record<string, unknown>[] | { error: string } {
+  if (!Array.isArray(raw)) {
     return {
-      productions: body.productions as Record<string, unknown>[],
-      fullSnapshot: body.full_snapshot !== false,
+      error:
+        'Expected a JSON array of productions. This endpoint only upserts; it never deletes Hub rows.',
     }
   }
-  return null
-}
-
-function productionNumbers(rows: Record<string, unknown>[]): number[] {
-  const out: number[] = []
-  for (const row of rows) {
-    const n = row.production_number
-    if (typeof n === 'number' && Number.isFinite(n)) out.push(n)
-    else if (typeof n === 'string' && n.trim() !== '' && Number.isFinite(Number(n))) {
-      out.push(Number(n))
-    }
+  if (raw.length === 0) {
+    return { error: 'Expected a non-empty array of productions' }
   }
-  return [...new Set(out)]
-}
-
-/** Remove Hub productions no longer present on the district site (full snapshot sync). */
-async function pruneMissingFromSnapshot(
-  supabase: ReturnType<typeof createClient>,
-  keepNumbers: number[],
-): Promise<{ removed: number; errors: string[] }> {
-  if (keepNumbers.length === 0) {
-    return { removed: 0, errors: ['prune skipped: no production_number values in payload'] }
-  }
-
-  const list = `(${keepNumbers.join(',')})`
-  const { data: stale, error: listErr } = await supabase
-    .from('productions')
-    .select('id, production_number')
-    .not('production_number', 'in', list)
-
-  if (listErr) return { removed: 0, errors: [listErr.message] }
-  const rows = stale || []
-  if (rows.length === 0) return { removed: 0, errors: [] }
-
-  const ids = rows.map(r => r.id as string)
-  const errors: string[] = []
-
-  const { error: videoErr } = await supabase.from('videos').update({ production_id: null }).in('production_id', ids)
-  if (videoErr) errors.push(`videos unlink: ${videoErr.message}`)
-
-  for (const id of ids) {
-    await supabase.from('dismissed_conflicts').delete().or(`production_a_id.eq.${id},production_b_id.eq.${id}`)
-  }
-
-  const { error: delErr } = await supabase.from('productions').delete().in('id', ids)
-  if (delErr) {
-    errors.push(`productions delete: ${delErr.message}`)
-    return { removed: 0, errors }
-  }
-
-  console.log(
-    `Pruned ${rows.length} production(s) not in snapshot:`,
-    rows.map(r => r.production_number).join(', '),
-  )
-  return { removed: rows.length, errors }
+  return raw as Record<string, unknown>[]
 }
 
 Deno.serve(async req => {
@@ -112,16 +58,16 @@ Deno.serve(async req => {
     return json({ error: 'Invalid JSON' }, 400)
   }
 
-  const parsed = parsePayload(raw)
-  if (!parsed || parsed.productions.length === 0) {
-    return json({ error: 'Expected a non-empty array of productions (or { productions: [...] })' }, 400)
+  const parsed = parseProductionsPayload(raw)
+  if ('error' in parsed) {
+    return json({ error: parsed.error }, 400)
   }
 
   const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_KEY!)
 
   const { data, error } = await supabase
     .from('productions')
-    .upsert(parsed.productions, { onConflict: 'production_number' })
+    .upsert(parsed, { onConflict: 'production_number' })
     .select('id, production_number')
 
   if (error) {
@@ -129,21 +75,7 @@ Deno.serve(async req => {
     return json({ error: error.message }, 500)
   }
 
-  let pruned = 0
-  let pruneErrors: string[] = []
-  if (parsed.fullSnapshot) {
-    const keep = productionNumbers(parsed.productions)
-    const pruneResult = await pruneMissingFromSnapshot(supabase, keep)
-    pruned = pruneResult.removed
-    pruneErrors = pruneResult.errors
-  }
-
-  console.log(`Synced ${data?.length ?? 0} productions; pruned ${pruned}`)
-  return json({
-    success: true,
-    synced: data?.length ?? 0,
-    pruned,
-    full_snapshot: parsed.fullSnapshot,
-    ...(pruneErrors.length > 0 ? { prune_warnings: pruneErrors } : {}),
-  })
+  const synced = data?.length ?? 0
+  console.log(`Synced ${synced} production(s) (upsert only)`)
+  return json({ success: true, synced, mode: 'upsert_only' })
 })
