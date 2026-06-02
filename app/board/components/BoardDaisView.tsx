@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import type { PublicAgendaItem } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
+import { useAgendaItemCache } from '@/app/board/hooks/useAgendaItemCache'
 import { useElementFullscreen } from '@/app/board/hooks/useElementFullscreen'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
@@ -48,6 +49,16 @@ export default function BoardDaisView({
 }) {
   const wantAutoFullscreen = autoFullscreen
   const state = useBoardChannelState(channelNumber, { livePriority: true })
+  const seedItems = useMemo(
+    () => (state?.current_item ? [state.current_item] : []),
+    [state?.current_item],
+  )
+  const { resolveItem, resolveSummary } = useAgendaItemCache(
+    channelNumber,
+    !!state?.active,
+    seedItems,
+    state?.meeting?.production_number,
+  )
   const fullscreen = useElementFullscreen()
   const [now, setNow] = useState(() => Date.now())
   const [autoFsPrompt, setAutoFsPrompt] = useState(false)
@@ -92,7 +103,7 @@ export default function BoardDaisView({
     )
   }
 
-  const item = state.current_item
+  const item = resolveItem(state.current_item)
   const timer = state.timer
   const mode = state.state?.mode
   const brandingHold = !!(state.agenda_branding_hold || state.state?.agenda_branding_hold)
@@ -159,21 +170,7 @@ export default function BoardDaisView({
                     ) : null}
                   </>
                 ) : (
-                  <>
-                    <div style={itemBadgeRow}>
-                      <span style={itemBadge}>{item.item_number}</span>
-                      {item.type && <span style={typePill}>{item.type.replace('_', ' ')}</span>}
-                    </div>
-                    <h1 style={itemTitle}>{item.title}</h1>
-                    {item.presenters?.[0] && (
-                      <p style={presenterLine}>
-                        <span style={presenterName}>{item.presenters[0].name}</span>
-                        {item.presenters[0].title && (
-                          <span style={presenterTitle}> · {item.presenters[0].title}</span>
-                        )}
-                      </p>
-                    )}
-                  </>
+                  <DaisAgendaItemHero item={item} />
                 )}
 
                 {(item.documents?.length ?? 0) > 0 && (
@@ -224,8 +221,66 @@ export default function BoardDaisView({
             )}
           </aside>
         </main>
+
+        {state.upcoming_items.length > 0 ? (
+          <DaisAgendaPrerenderHost items={state.upcoming_items.slice(0, 3)} resolveSummary={resolveSummary} />
+        ) : null}
       </div>
     </DaisShell>
+  )
+}
+
+function DaisAgendaItemHero({ item }: { item: PublicAgendaItem }) {
+  return (
+    <>
+      <div style={itemBadgeRow}>
+        <span style={itemBadge}>{item.item_number}</span>
+        {item.type ? <span style={typePill}>{item.type.replace('_', ' ')}</span> : null}
+      </div>
+      <h1 style={itemTitle}>{item.title}</h1>
+      {item.presenters?.[0] ? (
+        <p style={presenterLine}>
+          <span style={presenterName}>{item.presenters[0].name}</span>
+          {item.presenters[0].title ? (
+            <span style={presenterTitle}> · {item.presenters[0].title}</span>
+          ) : null}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
+/** Off-screen paint so the browser has fonts/layout ready before Advance. */
+function DaisAgendaPrerenderHost({
+  items,
+  resolveSummary,
+}: {
+  items: { id: string; item_number: string; title: string; type: string }[]
+  resolveSummary: ReturnType<typeof useAgendaItemCache>['resolveSummary']
+}) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'fixed',
+        left: -10000,
+        top: 0,
+        width: 1920,
+        visibility: 'hidden',
+        pointerEvents: 'none',
+        contain: 'strict',
+      }}
+    >
+      {items.map(summary => {
+        const item = resolveSummary(summary)
+        return (
+          <div key={summary.id} style={nowBlock}>
+            <p style={nowLabel}>Now</p>
+            <DaisAgendaItemHero item={item} />
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

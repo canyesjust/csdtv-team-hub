@@ -439,3 +439,53 @@ export async function buildPublicChannelState(
     agenda_branding_hold: !!bstate?.agenda_branding_hold,
   })
 }
+
+/** Full broadcastable agenda with presenters/docs — one fetch for dais browser cache. */
+export async function buildPublicAgendaItemsForChannel(
+  service: SupabaseClient,
+  channelNumber: number,
+): Promise<PublicAgendaItem[]> {
+  const { data: channel } = await service
+    .from('output_channels')
+    .select('id')
+    .eq('channel_number', channelNumber)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (!channel) return []
+
+  const { data: assignment } = await service
+    .from('channel_assignments')
+    .select('board_meeting_id')
+    .eq('output_channel_id', channel.id)
+    .is('unassigned_at', null)
+    .maybeSingle()
+
+  if (!assignment?.board_meeting_id) return []
+
+  const { data: bm } = await service
+    .from('board_meetings')
+    .select('id, agenda_locked')
+    .eq('id', assignment.board_meeting_id)
+    .maybeSingle()
+
+  if (!bm) return []
+
+  const agendaNav = await resolveAgendaNavigation(service, bm.id, !!bm.agenda_locked, null)
+  const rows = agendaNav.broadcastable_items
+
+  return Promise.all(
+    rows.map(async row => {
+      const extras = await loadItemExtras(service, row.id)
+      return {
+        id: row.id,
+        section_number: row.section_number,
+        section_title: row.section_title,
+        item_number: row.item_number,
+        title: row.title,
+        type: row.type,
+        ...extras,
+      }
+    }),
+  )
+}
