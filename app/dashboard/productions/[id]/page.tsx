@@ -145,33 +145,6 @@ interface ThumbnailDraft {
   svgInput: string
 }
 
-const PRODUCTION_TABS = [
-  'checklist',
-  'info',
-  'team',
-  'links',
-  'activity',
-  'comments',
-  'videos',
-  'thumbnail',
-  'callsheet',
-  'studentcrew',
-  'boardmeeting',
-] as const
-
-type ProductionTab = (typeof PRODUCTION_TABS)[number]
-
-function parseProductionTabFromUrl(
-  raw: string | null,
-  isBoardMeeting: boolean,
-): ProductionTab | null {
-  if (!raw) return null
-  const tab = raw.toLowerCase() as ProductionTab
-  if (!PRODUCTION_TABS.includes(tab)) return null
-  if (tab === 'boardmeeting' && !isBoardMeeting) return null
-  return tab
-}
-
 export default function ProductionDetailPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
@@ -195,7 +168,7 @@ export default function ProductionDetailPage() {
   const [generatingSheet, setGeneratingSheet] = useState(false)
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<ProductionTab>('checklist')
+  const [activeTab, setActiveTab] = useState<'checklist'|'info'|'team'|'links'|'activity'|'comments'|'videos'|'thumbnail'|'callsheet'|'studentcrew'|'boardmeeting'>('checklist')
   const [selectedMember, setSelectedMember] = useState<string|null>(null)
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
@@ -321,6 +294,7 @@ export default function ProductionDetailPage() {
 
     setCameraPackages((camPkgRes.data as CameraPackageRow[]) || [])
     setChecklist(checkRes.data || [])
+    if ((checkRes.data || []).length === 0) setActiveTab('info')
     setMembers(membersRes.data || [])
     setAllTeam(teamRes.data || [])
     setLinks(linksRes.data || [])
@@ -358,27 +332,14 @@ export default function ProductionDetailPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const isBoardMeetingProduction = production?.request_type_number === 4
-
-  const setProductionTab = useCallback(
-    (tab: ProductionTab) => {
-      setActiveTab(tab)
-      router.replace(`/dashboard/productions/${productionNum}?tab=${tab}`, { scroll: false })
-    },
-    [router, productionNum],
-  )
-
   useEffect(() => {
-    if (loading || !production) return
-    const urlTab = parseProductionTabFromUrl(searchParams.get('tab'), isBoardMeetingProduction)
-    if (urlTab) {
-      setActiveTab(urlTab)
-      return
+    if (searchParams.get('tab') === 'boardmeeting' && production?.request_type_number === 4) {
+      setActiveTab('boardmeeting')
     }
-    if (checklist.length === 0) setActiveTab('info')
-  }, [loading, production, searchParams, checklist.length, isBoardMeetingProduction])
+  }, [searchParams, production?.request_type_number])
 
   const getTypeLabel = (prod: Production) => prod.request_type_label || prod.type || 'Unknown'
+  const isBoardMeetingProduction = production?.request_type_number === 4
 
   const formatOutsourcedUsd = (n: number) =>
     `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -528,7 +489,7 @@ export default function ProductionDetailPage() {
         body: JSON.stringify({ production: { ...production, id: uuid, team_names: teamNames, checklist_items: checklistTitles, resolved_school: schoolName, resolved_location: locationName, school_address: schoolAddress, school_phone: schoolPhone } }),
       })
       const result = await res.json()
-      if (result.success) { setCallSheet(result.call_sheet); setProductionTab('callsheet') }
+      if (result.success) { setCallSheet(result.call_sheet); setActiveTab('callsheet') }
       else toast(result.error || 'Failed to generate call sheet', 'error')
     } catch { toast('Failed to generate call sheet') }
     setGeneratingSheet(false)
@@ -1071,8 +1032,8 @@ export default function ProductionDetailPage() {
     : production?.status || null
   const brandTone = 'var(--brand-primary)'
 
-  const tabBtn = (tab: ProductionTab, label: string, count?: number) => (
-    <button key={tab} onClick={() => setProductionTab(tab)} style={{
+  const tabBtn = (tab: typeof activeTab, label: string, count?: number) => (
+    <button key={tab} onClick={() => setActiveTab(tab)} style={{
       fontSize: '13px', padding: '10px 14px', border: 'none', background: 'transparent',
       cursor: 'pointer', fontFamily: 'inherit',
       color: activeTab === tab ? infoTone : muted,

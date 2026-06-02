@@ -124,18 +124,9 @@ export default function VideosPage() {
   const syncChannel = async () => {
     setSyncing(true)
     try {
-      const res = await fetch('/api/youtube/channel', { cache: 'no-store' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast((data as { error?: string }).error || 'Failed to fetch channel videos', 'error')
-        setSyncing(false)
-        return
-      }
-      if (!Array.isArray((data as { videos?: unknown }).videos)) {
-        toast('Channel sync returned an unexpected response', 'error')
-        setSyncing(false)
-        return
-      }
+      const res = await fetch('/api/youtube/channel')
+      if (!res.ok) { toast('Failed to fetch channel videos', 'error'); setSyncing(false); return }
+      const data = await res.json()
       // Check which videos already exist in our DB
       const existingIds = new Set(videos.map((v: any) => v.youtube_id).filter(Boolean))
 
@@ -171,9 +162,7 @@ export default function VideosPage() {
       const missingNote = missing.length > 0 ? ` ${missing.length} no longer on YouTube.` : ''
       toast(`Found ${data.total} videos. ${newCount} new.${missingNote}${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
       if (dateFixed > 0) await loadData()
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Channel sync failed', 'error')
-    }
+    } catch { toast('Channel sync failed', 'error') }
     setSyncing(false)
   }
 
