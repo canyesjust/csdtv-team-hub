@@ -3,6 +3,36 @@ import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 
 const CHANNEL_HANDLE = '@canyonsdistricttv'
 
+function parseIsoDuration(iso: string | undefined | null): string {
+  if (!iso) return '0:00'
+  const durMatch = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!durMatch) return '0:00'
+  const h = parseInt(durMatch[1] || '0', 10)
+  const m = parseInt(durMatch[2] || '0', 10)
+  const s = parseInt(durMatch[3] || '0', 10)
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`
+}
+
+function localDateFromIso(iso: string | undefined | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
+  return `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+}
+
+async function youtubeErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: { message?: string } }
+    if (body.error?.message) return body.error.message
+  } catch {
+    /* ignore */
+  }
+  return fallback
+}
+
 export async function GET(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) {
@@ -14,13 +44,22 @@ export async function GET(request: Request) {
 
   try {
     // Step 1: Resolve handle to channel ID + uploads playlist
-    const chRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?forHandle=${CHANNEL_HANDLE}&part=contentDetails,snippet,statistics&key=${apiKey}`)
-    if (!chRes.ok) return NextResponse.json({ error: 'Failed to fetch channel' }, { status: 502 })
+    const handleParam = encodeURIComponent(CHANNEL_HANDLE.replace(/^@/, ''))
+    const chRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?forHandle=${handleParam}&part=contentDetails,snippet,statistics&key=${apiKey}`,
+    )
+    if (!chRes.ok) {
+      const message = await youtubeErrorMessage(chRes, 'Failed to fetch channel from YouTube')
+      return NextResponse.json({ error: message }, { status: 502 })
+    }
     const chData = await chRes.json()
     if (!chData.items?.length) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
 
     const channel = chData.items[0]
-    const uploadsPlaylistId = channel.contentDetails.relatedPlaylists.uploads
+    const uploadsPlaylistId = channel.contentDetails?.relatedPlaylists?.uploads
+    if (!uploadsPlaylistId) {
+      return NextResponse.json({ error: 'Channel uploads playlist not found' }, { status: 502 })
+    }
     const channelTitle = channel.snippet.title
 
     // Step 2: Fetch all videos from uploads playlist (paginated, max 500)
@@ -46,27 +85,13 @@ export async function GET(request: Request) {
       if (!vRes.ok) continue
       const vData = await vRes.json()
       for (const item of vData.items || []) {
-        // Parse duration
-        const durMatch = item.contentDetails.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
-        const h = parseInt(durMatch?.[1] || '0')
-        const m = parseInt(durMatch?.[2] || '0')
-        const s = parseInt(durMatch?.[3] || '0')
-        const duration = h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`
-
-        // Determine the best date:
-        // 1. liveStreamingDetails.actualStartTime (for livestreams)
-        // 2. Date extracted from video title (e.g. "Board Meeting 3/31/2026")
-        // 3. publishedAt adjusted to Mountain Time
-        // Date priority: livestream's broadcaster-set scheduledStartTime, then
-        // the video's publishedAt for non-livestream uploads. actualStartTime and
-        // title-regex parsing are intentionally not used — the former is missing for
-        // upcoming livestreams and the latter only catches "M/D/YYYY" not "May 7, 2026".
-        let bestDate: string
+        const duration = parseIsoDuration(item.contentDetails?.duration)
         const scheduled = item.liveStreamingDetails?.scheduledStartTime
-        const dateSource = scheduled || item.snippet.publishedAt
-        const d = new Date(dateSource)
-        const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
-        bestDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+        const dateSource = scheduled || item.snippet?.publishedAt
+        const bestDate =
+          localDateFromIso(dateSource) ||
+          localDateFromIso(item.snippet?.publishedAt) ||
+          null
 
         videos.push({
           youtube_id: item.id,
@@ -89,6 +114,8 @@ export async function GET(request: Request) {
       videos,
     })
   } catch (err) {
-    return NextResponse.json({ error: 'Channel sync failed' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Channel sync failed'
+    console.error('YouTube channel sync error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
