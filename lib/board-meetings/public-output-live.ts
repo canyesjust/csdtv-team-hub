@@ -9,6 +9,7 @@ import {
   shouldPlaylistRun,
   tickMeetingPlaylist,
 } from '@/lib/board-meetings/playlist-playback'
+import { resolveOutputPollIntervalMs } from '@/lib/board-meetings/output-polling'
 import type {
   PublicAgendaItem,
   PublicChannelState,
@@ -18,7 +19,16 @@ import type {
 /** Volatile overlay fields — no event log, completed list, or presenter/doc lookups. */
 export type PublicChannelLivePatch = Pick<
   PublicChannelState,
-  'active' | 'result_overlay' | 'state' | 'current_item' | 'timer' | 'upcoming_items' | 'elapsed_started_at' | 'agenda_branding_hold'
+  | 'active'
+  | 'obs_polling_enabled'
+  | 'poll_interval_ms'
+  | 'result_overlay'
+  | 'state'
+  | 'current_item'
+  | 'timer'
+  | 'upcoming_items'
+  | 'elapsed_started_at'
+  | 'agenda_branding_hold'
 > & {
   meeting?: Pick<NonNullable<PublicChannelState['meeting']>, 'broadcast_status'> | null
 }
@@ -80,6 +90,8 @@ export function mergePublicChannelState(
   return {
     ...prev,
     active: live.active ?? prev.active,
+    obs_polling_enabled: live.obs_polling_enabled ?? prev.obs_polling_enabled,
+    poll_interval_ms: live.poll_interval_ms ?? prev.poll_interval_ms,
     meeting:
       live.meeting !== undefined && prev.meeting
         ? { ...prev.meeting, ...live.meeting }
@@ -107,15 +119,27 @@ export async function buildPublicChannelLivePatch(
 ): Promise<PublicChannelLivePatch | null> {
   const { data: channel } = await service
     .from('output_channels')
-    .select('id, channel_number, channel_name, view_type')
+    .select('id, channel_number, channel_name, view_type, obs_polling_enabled')
     .eq('channel_number', channelNumber)
     .eq('is_active', true)
     .maybeSingle()
 
   if (!channel) return null
 
+  const obs_polling_enabled = !!channel.obs_polling_enabled
+  const pollingFor = (active: boolean, broadcast_status: string | null): Pick<PublicChannelLivePatch, 'obs_polling_enabled' | 'poll_interval_ms'> => ({
+    obs_polling_enabled,
+    poll_interval_ms: resolveOutputPollIntervalMs({
+      obs_polling_enabled,
+      active,
+      view_type: channel.view_type,
+      broadcast_status,
+    }),
+  })
+
   const idle: PublicChannelLivePatch = {
     active: false,
+    ...pollingFor(false, null),
     result_overlay: null,
     state: null,
     current_item: null,
@@ -238,6 +262,7 @@ export async function buildPublicChannelLivePatch(
 
   return {
     active: true,
+    ...pollingFor(true, bm.broadcast_status),
     meeting: { broadcast_status: bm.broadcast_status },
     result_overlay,
     state: {

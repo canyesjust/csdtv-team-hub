@@ -2,36 +2,30 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
+import { POLL_LISTEN_CHECK_MS } from '@/lib/board-meetings/output-polling'
 import {
   mergePublicChannelState,
   type PublicChannelLivePatch,
 } from '@/lib/board-meetings/public-output-live'
 
-/** When a meeting is live on this channel (overlay / operator). */
-const LIVE_POLL_MS = 350
-/** Assigned meeting but not in live-priority mode. */
-const IDLE_POLL_MS = 2000
-/** No meeting assigned — check occasionally for assignment / go-live. */
-const AWAKE_POLL_MS = 60_000
-
 type Options = {
-  /** Overlay / operator displays — poll live state aggressively when a meeting is active. */
+  /** @deprecated Server chooses interval from view_type; kept for call-site compatibility. */
   livePriority?: boolean
 }
 
-/** OBS/browser sources: add ?standby=1 (or ?poll=0) to stop recurring API requests until go-live. */
+/** Legacy escape hatch: no recurring polls (use dashboard Listening toggle instead). */
 export function isBoardOutputStandbyMode(): boolean {
   if (typeof window === 'undefined') return false
   const params = new URLSearchParams(window.location.search)
   return params.get('standby') === '1' || params.get('poll') === '0'
 }
 
-export function useBoardChannelState(channelNumber: number, options: Options = {}) {
-  const { livePriority = false } = options
+export function useBoardChannelState(channelNumber: number, _options: Options = {}) {
   const [state, setState] = useState<PublicChannelState | null>(null)
   const hasFullRef = useRef(false)
   const inflightLiveRef = useRef(false)
   const activeRef = useRef(false)
+  const pollIntervalMsRef = useRef(POLL_LISTEN_CHECK_MS)
   const standbyRef = useRef(false)
 
   useEffect(() => {
@@ -39,6 +33,7 @@ export function useBoardChannelState(channelNumber: number, options: Options = {
     let pollTimer: ReturnType<typeof setTimeout> | null = null
     hasFullRef.current = false
     standbyRef.current = isBoardOutputStandbyMode()
+    pollIntervalMsRef.current = POLL_LISTEN_CHECK_MS
 
     const clearPoll = () => {
       if (pollTimer !== null) {
@@ -47,13 +42,20 @@ export function useBoardChannelState(channelNumber: number, options: Options = {
       }
     }
 
+    const applyPollingFromState = (data: PublicChannelState | PublicChannelLivePatch) => {
+      if (data.poll_interval_ms != null && data.poll_interval_ms > 0) {
+        pollIntervalMsRef.current = data.poll_interval_ms
+      }
+      if (data.active !== undefined) activeRef.current = data.active
+    }
+
     const loadFull = async () => {
       try {
         const res = await fetch(`/api/board/output/${channelNumber}/state`, { cache: 'no-store' })
         if (!res.ok) return
         const data = (await res.json()) as PublicChannelState
         if (!cancelled) {
-          activeRef.current = data.active
+          applyPollingFromState(data)
           setState(data)
           hasFullRef.current = true
         }
@@ -70,7 +72,7 @@ export function useBoardChannelState(channelNumber: number, options: Options = {
         if (!res.ok) return
         const patch = (await res.json()) as PublicChannelLivePatch
         if (!cancelled) {
-          if (patch.active !== undefined) activeRef.current = patch.active
+          applyPollingFromState(patch)
           setState(prev => (prev ? mergePublicChannelState(prev, patch) : prev))
         }
       } catch {
@@ -84,6 +86,7 @@ export function useBoardChannelState(channelNumber: number, options: Options = {
       clearPoll()
       if (cancelled || standbyRef.current) return
 
+      const ms = pollIntervalMsRef.current
       if (!hasFullRef.current) {
         pollTimer = setTimeout(() => {
           void loadFull().then(() => scheduleNext())
@@ -94,11 +97,10 @@ export function useBoardChannelState(channelNumber: number, options: Options = {
       if (!activeRef.current) {
         pollTimer = setTimeout(() => {
           void loadFull().then(() => scheduleNext())
-        }, AWAKE_POLL_MS)
+        }, ms)
         return
       }
 
-      const ms = livePriority ? LIVE_POLL_MS : IDLE_POLL_MS
       pollTimer = setTimeout(() => {
         void loadLive().then(() => scheduleNext())
       }, ms)
@@ -114,7 +116,7 @@ export function useBoardChannelState(channelNumber: number, options: Options = {
       cancelled = true
       clearPoll()
     }
-  }, [channelNumber, livePriority])
+  }, [channelNumber])
 
   return state
 }

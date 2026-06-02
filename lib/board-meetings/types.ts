@@ -63,6 +63,7 @@ export type OutputChannel = {
   tier: string
   access_secret: string
   is_active: boolean
+  obs_polling_enabled: boolean
 }
 
 export type ControlAgendaItem = {
@@ -213,7 +214,14 @@ export type ControlBundle = {
     current_item_id: string | null
   } | null
   channel_assignments: { output_channel_id: string }[]
-  channels: { id: string; channel_number: number; channel_name: string; view_type?: string; tier?: string }[]
+  channels: {
+    id: string
+    channel_number: number
+    channel_name: string
+    view_type?: string
+    tier?: string
+    obs_polling_enabled?: boolean
+  }[]
   active_timer: { id: string; label: string; duration_seconds?: number; started_at: string } | null
   recent_events: { event_type: string; created_at: string; occurred_at: string }[]
   timer_templates: { id: string; name: string; duration_seconds?: number }[]

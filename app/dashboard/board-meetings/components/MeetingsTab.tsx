@@ -19,14 +19,13 @@ type MeetingRow = {
   } | null
 }
 
-/** Board meetings often only have schedule on board_meetings, not productions.start_datetime. */
-function meetingDateIso(row: MeetingRow): string | null {
-  return (
-    row.start_datetime ??
-    row.board_meeting?.scheduled_public_start ??
-    row.event_date ??
-    null
-  )
+/** District sync schedule (productions.start_datetime). */
+function districtScheduleIso(row: MeetingRow): string | null {
+  return row.start_datetime ?? row.event_date ?? null
+}
+
+function broadcastScheduleIso(row: MeetingRow): string | null {
+  return row.board_meeting?.scheduled_public_start ?? null
 }
 
 function parseProductionInstant(iso: string): Date {
@@ -46,10 +45,49 @@ function daysFromToday(d: string | null): number | null {
 }
 
 function meetingInstant(row: MeetingRow): number | null {
-  const d = meetingDateIso(row)
+  const d = districtScheduleIso(row) ?? broadcastScheduleIso(row)
   if (!d) return null
   const t = parseProductionInstant(d).getTime()
   return Number.isNaN(t) ? null : t
+}
+
+function formatScheduleInstant(iso: string): { dateLabel: string; timeLabel: string | null } {
+  const dt = parseProductionInstant(iso)
+  const dateLabel = dt.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  const hasTime = iso.includes('T') || /\d{1,2}:\d{2}/.test(iso)
+  const timeLabel = hasTime ? dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : null
+  return { dateLabel, timeLabel }
+}
+
+function formatMeetingScheduleLine(row: MeetingRow): string {
+  const district = districtScheduleIso(row)
+  const broadcast = broadcastScheduleIso(row)
+
+  if (!district && !broadcast) return 'Date TBD'
+
+  if (!district && broadcast) {
+    const b = formatScheduleInstant(broadcast)
+    return b.timeLabel ? `${b.dateLabel} · ${b.timeLabel} (broadcast)` : `${b.dateLabel} (broadcast)`
+  }
+
+  const d = formatScheduleInstant(district!)
+  let line = d.timeLabel ? `${d.dateLabel} · ${d.timeLabel}` : d.dateLabel
+
+  if (broadcast) {
+    const districtMs = parseProductionInstant(district!).getTime()
+    const broadcastMs = parseProductionInstant(broadcast).getTime()
+    if (!Number.isNaN(districtMs) && !Number.isNaN(broadcastMs) && Math.abs(districtMs - broadcastMs) > 60_000) {
+      const b = formatScheduleInstant(broadcast)
+      line += b.timeLabel ? ` · Broadcast ${b.dateLabel} · ${b.timeLabel}` : ` · Broadcast ${b.dateLabel}`
+    }
+  }
+
+  return line
 }
 
 function isPastMeeting(row: MeetingRow): boolean {
@@ -167,22 +205,7 @@ export default function MeetingsTab() {
         <div>
           <div style={{ fontWeight: 600, fontSize: '15px' }}>#{r.production_number} {r.title}</div>
           <div style={{ fontSize: '13px', color: muted, marginTop: '4px' }}>
-            {(() => {
-              const when = meetingDateIso(r)
-              if (!when) return 'Date TBD'
-              const dt = parseProductionInstant(when)
-              const dateLabel = dt.toLocaleDateString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })
-              const hasTime = when.includes('T') || /\d{2}:\d{2}/.test(when)
-              const timeLabel = hasTime
-                ? dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                : null
-              return timeLabel ? `${dateLabel} · ${timeLabel}` : dateLabel
-            })()}
+            {formatMeetingScheduleLine(r)}
             {r.board_meeting ? ` · ${r.board_meeting.broadcast_status}${r.board_meeting.agenda_locked ? ' · agenda locked' : ''}` : ' · not started'}
           </div>
         </div>

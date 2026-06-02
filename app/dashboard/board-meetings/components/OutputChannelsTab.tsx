@@ -16,6 +16,7 @@ export default function OutputChannelsTab() {
   const [channels, setChannels] = useState<OutputChannel[]>([])
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState<string | null>(null)
+  const [togglingPoll, setTogglingPoll] = useState<string | null>(null)
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
   const border = 'var(--border-subtle)'
@@ -48,6 +49,24 @@ export default function OutputChannelsTab() {
     load()
   }
 
+  const setListening = async (id: string, enabled: boolean) => {
+    setTogglingPoll(id)
+    const res = await fetch(`/api/output-channels/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ obs_polling_enabled: enabled }),
+    })
+    const body = await res.json()
+    setTogglingPoll(null)
+    if (!res.ok) {
+      toast(body.error || 'Could not update listening', 'error')
+      return
+    }
+    setChannels(prev =>
+      prev.map(ch => (ch.id === id ? { ...ch, obs_polling_enabled: enabled } : ch)),
+    )
+  }
+
   const siteBase = typeof window !== 'undefined'
     ? window.location.origin
     : (process.env.NEXT_PUBLIC_SITE_URL || '')
@@ -57,9 +76,10 @@ export default function OutputChannelsTab() {
   return (
     <div>
       <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px', lineHeight: 1.5, maxWidth: '720px' }}>
-        For OBS browser sources you leave open between meetings, use the <strong style={{ color: text }}>Standby</strong>{' '}
-        URL so the page does not poll the server. Remove <code style={{ fontSize: '12px' }}>?standby=1</code> (or switch
-        to the live URL) when you assign the channel and go live.
+        Put the <strong style={{ color: text }}>same URL</strong> in each OBS browser source and leave it open between
+        meetings. Use <strong style={{ color: text }}>Listening</strong> to wake outputs before a show (or assign the
+        channel on the control surface — that turns listening on automatically). Polling stays slow until go-live, then
+        speeds up on its own. Turn listening off after the meeting to go quiet again.
       </p>
       <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}` }}>
@@ -68,9 +88,10 @@ export default function OutputChannelsTab() {
             <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>#</th>
             <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>Name</th>
             <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>View</th>
+            <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>Listening</th>
             <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>Tier</th>
             <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>Secret</th>
-            <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>URLs</th>
+            <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}>URL</th>
             <th style={{ padding: '12px 14px', color: muted, fontWeight: 600 }}></th>
           </tr>
         </thead>
@@ -78,25 +99,43 @@ export default function OutputChannelsTab() {
           {channels.map(ch => {
             const slug = ch.view_type === 'second_screen' ? 'live' : ch.view_type
             const publicUrl = siteBase ? `${siteBase}/board/${ch.channel_number}/${slug}` : ''
-            const standbyUrl = publicUrl ? `${publicUrl}?standby=1` : ''
             const fullscreenUrl =
               ch.view_type === 'dais' && publicUrl ? `${publicUrl}?fullscreen=1` : ''
+            const listening = !!ch.obs_polling_enabled
             return (
               <tr key={ch.id} style={{ borderBottom: `0.5px solid ${border}` }}>
                 <td style={{ padding: '12px 14px', color: text, fontWeight: 600 }}>{ch.channel_number}</td>
                 <td style={{ padding: '12px 14px', color: text }}>{ch.channel_name}</td>
                 <td style={{ padding: '12px 14px', color: muted }}>{VIEW_LABELS[ch.view_type] || ch.view_type}</td>
+                <td style={{ padding: '12px 14px' }}>
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      cursor: togglingPoll === ch.id ? 'wait' : 'pointer',
+                      minHeight: 44,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      checked={listening}
+                      disabled={togglingPoll === ch.id}
+                      onChange={() => void setListening(ch.id, !listening)}
+                    />
+                    <span style={{ fontSize: '13px', color: listening ? text : muted }}>
+                      {listening ? 'On' : 'Off'}
+                    </span>
+                  </label>
+                </td>
                 <td style={{ padding: '12px 14px', color: muted, textTransform: 'capitalize' }}>{ch.tier}</td>
                 <td style={{ padding: '12px 14px', color: muted, fontFamily: 'monospace', fontSize: '12px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ch.access_secret}</td>
                 <td style={{ padding: '12px 14px', fontSize: '12px' }}>
                   {publicUrl ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <a href={standbyUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>
-                        {standbyUrl}
-                        <span style={{ color: muted }}> (standby — use in OBS between meetings)</span>
-                      </a>
-                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ color: muted, fontSize: '12px' }}>
-                        Live: {publicUrl}
+                      <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)' }}>
+                        {publicUrl}
                       </a>
                       {fullscreenUrl ? (
                         <a href={fullscreenUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-primary)', fontSize: '12px' }}>

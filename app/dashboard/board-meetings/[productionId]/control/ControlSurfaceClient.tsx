@@ -431,6 +431,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           channel_assignments: has
             ? (prev.channel_assignments || []).filter(a => a.output_channel_id !== channelId)
             : [...(prev.channel_assignments || []), { output_channel_id: channelId }],
+          channels: (prev.channels || []).map(ch =>
+            ch.id === channelId ? { ...ch, obs_polling_enabled: !has } : ch,
+          ),
         }
       }
 
@@ -566,6 +569,28 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     },
     [applyServerHints, loadLive, productionId],
   )
+
+  const onListeningChange = useCallback(async (channelId: string, enabled: boolean) => {
+    setBundle(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        channels: (prev.channels || []).map(ch =>
+          ch.id === channelId ? { ...ch, obs_polling_enabled: enabled } : ch,
+        ),
+      }
+    })
+    const res = await fetch(`/api/output-channels/${channelId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ obs_polling_enabled: enabled }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast((data as { error?: string }).error || 'Could not update listening', 'error')
+      void load()
+    }
+  }, [load])
 
   const onAction = async (action: string, body?: unknown) => {
     const payload = body as Record<string, unknown> | undefined
@@ -835,6 +860,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       }}
       onPatchAgendaItem={patchAgendaItem}
       onMoveAgendaItem={moveAgendaItem}
+      onListeningChange={onListeningChange}
     />
   )
 }

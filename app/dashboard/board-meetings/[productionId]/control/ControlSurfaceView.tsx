@@ -27,6 +27,7 @@ type Props = {
   onToggleAgendaEdit?: () => void
   onPatchAgendaItem?: (itemId: string, patch: Partial<ControlBundle['agenda_items'][number]>) => void | Promise<void>
   onMoveAgendaItem?: (itemId: string, direction: 'up' | 'down') => void | Promise<void>
+  onListeningChange?: (channelId: string, enabled: boolean) => void | Promise<void>
 }
 
 export default function ControlSurfaceView({
@@ -40,6 +41,7 @@ export default function ControlSurfaceView({
   onToggleAgendaEdit,
   onPatchAgendaItem,
   onMoveAgendaItem,
+  onListeningChange,
 }: Props) {
   const { meeting, broadcast_state, agenda_items, motion_lifecycle, lower_third_active, result_overlay } = bundle
   const meetingTitle = meeting?.title || 'Board Meeting'
@@ -233,7 +235,13 @@ export default function ControlSurfaceView({
             <ModesTimersPanel canControl={canControl} state={broadcast_state} timer={bundle.active_timer} templates={bundle.timer_templates} onAction={onAction} />
           </UtilityPanel>
           <UtilityPanel title="Output channels" summary={summarizeChannels(bundle.channel_assignments, bundle.channels)} icon="broadcast">
-            <OutputChannelsPanel canControl={canControl} channels={bundle.channels} assignments={bundle.channel_assignments} onAction={onAction} />
+            <OutputChannelsPanel
+              canControl={canControl}
+              channels={bundle.channels}
+              assignments={bundle.channel_assignments}
+              onAction={onAction}
+              onListeningChange={onListeningChange}
+            />
           </UtilityPanel>
         </div>
       </div>

@@ -19,6 +19,7 @@ import { isStudentInternRole } from '@/lib/roles'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { hubRequestProductionComplete, hubRequestProductionInProgress } from '@/lib/production-status-requests'
 import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker, schoolCodesMatch } from '@/lib/thumbnail-school-brand'
+import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
 interface Production {
   id: string; production_number: number; title: string
@@ -265,7 +266,7 @@ export default function ProductionDetailPage() {
         return
       }
     }
-    setProduction(prodRes.data)
+    setProduction(normalizeProductionDatetimeFields(prodRes.data as Production))
     setUuid(prodUUID)
     setTeamNotes(prodRes.data.team_notes || '')
     setDelivCount(prodRes.data.deliverables_count || 0)

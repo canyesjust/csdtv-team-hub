@@ -5,8 +5,19 @@ const TTL_MS = 5 * 60 * 1000
 type CacheEntry<T> = { at: number; data: T }
 
 let channelsCache: CacheEntry<
-  { id: string; channel_number: number; channel_name: string; view_type?: string; tier?: string }[]
+  {
+    id: string
+    channel_number: number
+    channel_name: string
+    view_type?: string
+    tier?: string
+    obs_polling_enabled?: boolean
+  }[]
 > | null = null
+
+export function invalidateOutputChannelsCache() {
+  channelsCache = null
+}
 
 let timerTemplatesCache: CacheEntry<{ id: string; name: string; duration_seconds?: number }[]> | null = null
 
@@ -18,7 +29,7 @@ export async function getCachedOutputChannels(service: SupabaseClient) {
   if (fresh(channelsCache)) return channelsCache.data
   const { data } = await service
     .from('output_channels')
-    .select('id, channel_number, channel_name, view_type, tier')
+    .select('id, channel_number, channel_name, view_type, tier, obs_polling_enabled')
     .eq('is_active', true)
     .order('channel_number')
   const rows = data || []

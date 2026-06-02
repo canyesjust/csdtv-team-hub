@@ -15,6 +15,7 @@ import {
   tickMeetingPlaylist,
 } from '@/lib/board-meetings/playlist-playback'
 import { resolveAgendaNavigation } from '@/lib/board-meetings/control-meeting-cache'
+import { resolveOutputPollIntervalMs } from '@/lib/board-meetings/output-polling'
 
 export type { PublicActiveMotion, PublicActiveVoteResult, PublicActiveLowerThird }
 
@@ -34,6 +35,33 @@ export type PublicVoteResultOverlay = {
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 const ADVANCE_EVENT_TYPES = ['agenda_item_advanced', 'advance', 'jump_to']
+
+type OutputChannelRow = {
+  id: string
+  channel_number: number
+  channel_name: string
+  view_type: string
+  obs_polling_enabled: boolean
+}
+
+function attachPollingMeta(
+  channel: OutputChannelRow,
+  active: boolean,
+  broadcast_status: string | null,
+  state: Omit<PublicChannelState, 'obs_polling_enabled' | 'poll_interval_ms'>,
+): PublicChannelState {
+  const obs_polling_enabled = !!channel.obs_polling_enabled
+  return {
+    ...state,
+    obs_polling_enabled,
+    poll_interval_ms: resolveOutputPollIntervalMs({
+      obs_polling_enabled,
+      active,
+      view_type: channel.view_type,
+      broadcast_status,
+    }),
+  }
+}
 
 export type PublicAgendaItem = {
   id: string
@@ -72,6 +100,10 @@ export type PublicActiveQr = {
 
 export type PublicChannelState = {
   active: boolean
+  /** Dashboard toggle — when false, browser sources poll only occasionally for config changes. */
+  obs_polling_enabled: boolean
+  /** Recommended client poll interval (ms); derived from assignment, go-live, and view type. */
+  poll_interval_ms: number
   channel_number: number
   channel_name: string
   result_overlay: PublicVoteResultOverlay | null
@@ -183,24 +215,26 @@ export async function buildPublicChannelState(
 ): Promise<PublicChannelState | null> {
   const { data: channel } = await service
     .from('output_channels')
-    .select('id, channel_number, channel_name, view_type')
+    .select('id, channel_number, channel_name, view_type, obs_polling_enabled')
     .eq('channel_number', channelNumber)
     .eq('is_active', true)
     .maybeSingle()
 
   if (!channel) return null
 
-  const idle: PublicChannelState = {
+  const channelRow = channel as OutputChannelRow
+
+  const idleCore = {
     active: false,
-    channel_number: channel.channel_number,
-    channel_name: channel.channel_name,
+    channel_number: channelRow.channel_number,
+    channel_name: channelRow.channel_name,
     result_overlay: null,
     meeting: null,
     state: null,
     current_item: null,
-    upcoming_items: [],
-    agenda_preview_items: [],
-    completed_items: [],
+    upcoming_items: [] as PublicChannelState['upcoming_items'],
+    agenda_preview_items: [] as PublicChannelState['agenda_preview_items'],
+    completed_items: [] as PublicChannelState['completed_items'],
     timer: null,
     live_started_at: null,
     elapsed_started_at: null,
@@ -210,11 +244,13 @@ export async function buildPublicChannelState(
   const { data: assignment } = await service
     .from('channel_assignments')
     .select('board_meeting_id')
-    .eq('output_channel_id', channel.id)
+    .eq('output_channel_id', channelRow.id)
     .is('unassigned_at', null)
     .maybeSingle()
 
-  if (!assignment?.board_meeting_id) return idle
+  if (!assignment?.board_meeting_id) {
+    return attachPollingMeta(channelRow, false, null, idleCore)
+  }
 
   const { data: bm } = await service
     .from('board_meetings')
@@ -222,7 +258,7 @@ export async function buildPublicChannelState(
     .eq('id', assignment.board_meeting_id)
     .maybeSingle()
 
-  if (!bm) return idle
+  if (!bm) return attachPollingMeta(channelRow, false, null, idleCore)
 
   const { data: prod } = await service
     .from('productions')
@@ -350,7 +386,7 @@ export async function buildPublicChannelState(
   )
 
   let playlist: PublicPlaylistState | null = null
-  if (channel.view_type === 'preroll') {
+  if (channelRow.view_type === 'preroll') {
     let bundle = await loadMeetingPlaylistBundle(service, bm.id)
     if (bundle && shouldPlaylistRun(bundle.playlist, bm.broadcast_status, bstate?.mode ?? 'normal')) {
       bundle = await tickMeetingPlaylist(service, bundle, bm.broadcast_status, bstate?.mode ?? 'normal')
@@ -360,10 +396,10 @@ export async function buildPublicChannelState(
     }
   }
 
-  return {
+  return attachPollingMeta(channelRow, true, bm.broadcast_status, {
     active: true,
-    channel_number: channel.channel_number,
-    channel_name: channel.channel_name,
+    channel_number: channelRow.channel_number,
+    channel_name: channelRow.channel_name,
     result_overlay,
     meeting: {
       title: prod?.title || 'Board Meeting',
@@ -397,5 +433,5 @@ export async function buildPublicChannelState(
     live_started_at,
     elapsed_started_at: (bstate?.elapsed_started_at as string | null | undefined) ?? null,
     agenda_branding_hold: !!bstate?.agenda_branding_hold,
-  }
+  })
 }

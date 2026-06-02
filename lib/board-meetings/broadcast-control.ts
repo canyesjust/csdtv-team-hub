@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getAgendaItemsForControl } from '@/lib/board-meetings/control-meeting-cache'
+import { invalidateOutputChannelsCache } from '@/lib/board-meetings/control-static-cache'
 import { stopPlaylistOnGoLive } from '@/lib/board-meetings/playlist-playback'
 
 export type BroadcastStateRow = {
@@ -230,6 +231,12 @@ export async function endMeeting(
   boardMeetingId: string,
   operatorId: string,
 ) {
+  const { data: activeAssignments } = await service
+    .from('channel_assignments')
+    .select('output_channel_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .is('unassigned_at', null)
+
   await service
     .from('board_meetings')
     .update({ broadcast_status: 'archived', updated_at: new Date().toISOString() })
@@ -240,6 +247,15 @@ export async function endMeeting(
     .update({ unassigned_at: new Date().toISOString(), unassigned_by: operatorId })
     .eq('board_meeting_id', boardMeetingId)
     .is('unassigned_at', null)
+
+  const channelIds = (activeAssignments || []).map(a => a.output_channel_id).filter(Boolean)
+  if (channelIds.length > 0) {
+    await service
+      .from('output_channels')
+      .update({ obs_polling_enabled: false, updated_at: new Date().toISOString() })
+      .in('id', channelIds)
+    invalidateOutputChannelsCache()
+  }
 
   await service
     .from('meeting_broadcast_state')
@@ -452,7 +468,21 @@ export async function assignChannel(
     assigned_by: operatorId,
   })
   if (error) throw new Error(error.message)
+  await setOutputChannelObsPolling(service, outputChannelId, true)
   await logMeetingEvent(service, boardMeetingId, 'channel_assign', operatorId, { output_channel_id: outputChannelId })
+}
+
+export async function setOutputChannelObsPolling(
+  service: SupabaseClient,
+  outputChannelId: string,
+  enabled: boolean,
+) {
+  const { error } = await service
+    .from('output_channels')
+    .update({ obs_polling_enabled: enabled, updated_at: new Date().toISOString() })
+    .eq('id', outputChannelId)
+  if (error) throw new Error(error.message)
+  invalidateOutputChannelsCache()
 }
 
 export async function unassignChannel(
@@ -468,6 +498,7 @@ export async function unassignChannel(
     .eq('output_channel_id', outputChannelId)
     .is('unassigned_at', null)
   if (error) throw new Error(error.message)
+  await setOutputChannelObsPolling(service, outputChannelId, false)
   await logMeetingEvent(service, boardMeetingId, 'channel_unassign', operatorId, {
     output_channel_id: outputChannelId,
   })

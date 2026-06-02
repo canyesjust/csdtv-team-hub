@@ -10,18 +10,8 @@ import type { DashboardProduction } from '@/lib/dashboard/load-dashboard-section
 export const WEEK_PRODUCTION_SELECT =
   'id, title, production_number, request_type_label, type, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, production_members(user_id, team(name, avatar_color)), checklist_items(completed)'
 
-const LABEL_ONLY_CAP = 40
-
-function mergeProductionRows(rows: DashboardProduction[]): DashboardProduction[] {
-  const byId = new Map<string, DashboardProduction>()
-  for (const row of rows) {
-    byId.set(row.id, row)
-  }
-  return [...byId.values()]
-}
-
 /**
- * Productions in the next 7 days — DB-bounded where possible, then normalized date filter.
+ * Productions in the next 7 days — filter on persisted start_datetime / event_date (sync trigger fills start_datetime).
  */
 export async function fetchWeekProductions(
   supabase: SupabaseClient,
@@ -35,33 +25,18 @@ export async function fetchWeekProductions(
 
   const inWindowOr =
     `and(start_datetime.gte.${startIso},start_datetime.lte.${endIso}),` +
-    `and(start_datetime.is.null,event_date.gte.${startDate},event_date.lte.${endDate})`
+    `and(event_date.gte.${startDate},event_date.lte.${endDate})`
 
-  const [inWindowRes, labelOnlyRes] = await Promise.all([
-    supabase
-      .from('productions')
-      .select(WEEK_PRODUCTION_SELECT)
-      .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
-      .or(inWindowOr)
-      .order('start_datetime', { ascending: true, nullsFirst: false }),
-    supabase
-      .from('productions')
-      .select(WEEK_PRODUCTION_SELECT)
-      .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
-      .is('start_datetime', null)
-      .is('event_date', null)
-      .limit(LABEL_ONLY_CAP),
-  ])
+  const { data, error } = await supabase
+    .from('productions')
+    .select(WEEK_PRODUCTION_SELECT)
+    .not('status', 'in', SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES)
+    .or(inWindowOr)
+    .order('start_datetime', { ascending: true, nullsFirst: false })
 
-  if (inWindowRes.error) throw inWindowRes.error
-  if (labelOnlyRes.error) throw labelOnlyRes.error
+  if (error) throw error
 
-  const merged = mergeProductionRows([
-    ...((inWindowRes.data || []) as unknown as DashboardProduction[]),
-    ...((labelOnlyRes.data || []) as unknown as DashboardProduction[]),
-  ])
-
-  return merged
+  return ((data || []) as unknown as DashboardProduction[])
     .map(row => normalizeProductionDatetimeFields(row))
     .filter(row => isProductionInDateWindow(row, windowStart, windowEnd))
     .sort((a, b) => {
