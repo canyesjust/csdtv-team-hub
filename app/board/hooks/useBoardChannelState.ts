@@ -42,11 +42,25 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       }
     }
 
+    let scheduleNext: (immediate?: boolean) => void = () => {}
+
     const applyPollingFromState = (data: PublicChannelState | PublicChannelLivePatch) => {
-      if (data.poll_interval_ms != null && data.poll_interval_ms > 0) {
-        pollIntervalMsRef.current = data.poll_interval_ms
-      }
+      const becameActive = data.active === true && !activeRef.current
       if (data.active !== undefined) activeRef.current = data.active
+
+      const nextInterval = data.poll_interval_ms
+      if (nextInterval != null && nextInterval > 0) {
+        const prevInterval = pollIntervalMsRef.current
+        pollIntervalMsRef.current = nextInterval
+        if (
+          hasFullRef.current &&
+          activeRef.current &&
+          !standbyRef.current &&
+          (becameActive || nextInterval < prevInterval)
+        ) {
+          scheduleNext(true)
+        }
+      }
     }
 
     const loadFull = async () => {
@@ -82,11 +96,11 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       }
     }
 
-    const scheduleNext = () => {
+    scheduleNext = (immediate = false) => {
       clearPoll()
       if (cancelled || standbyRef.current) return
 
-      const ms = pollIntervalMsRef.current
+      const ms = immediate ? 0 : pollIntervalMsRef.current
       if (!hasFullRef.current) {
         pollTimer = setTimeout(() => {
           void loadFull().then(() => scheduleNext())
