@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction, loadBoardMeetingBundle } from '@/lib/board-meetings/meeting-api'
+import { ensureBoardMeetingRow } from '@/lib/board-meetings/persist-agenda'
 import { isValidHttpUrl } from '@/lib/board-meetings/qr-control'
 
 export const dynamic = 'force-dynamic'
@@ -64,6 +65,13 @@ export async function PATCH(
 
   if (Object.keys(patch).length === 1) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+  }
+
+  try {
+    await ensureBoardMeetingRow(service, production_id)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Could not create board meeting'
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 
   const { data: bm, error } = await service
