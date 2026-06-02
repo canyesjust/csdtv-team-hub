@@ -66,10 +66,8 @@ export async function GET(request: Request) {
       hint: def.hint,
       filename: def.filename,
       publicPath: sigPublicPath(def.filename),
-      previewUrl: version
-        ? `${sigPublicPath(def.filename)}?v=${encodeURIComponent(version)}`
-        : sigPublicPath(def.filename),
-      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename, version) : null,
+      previewUrl: sigPublicPath(def.filename),
+      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename) : null,
       updatedAt: version,
       source: version ? ('storage' as const) : ('bundled' as const),
     }
@@ -123,8 +121,8 @@ export async function POST(request: Request) {
       filename: def.filename,
       updatedAt,
       publicPath: sigPublicPath(def.filename),
-      previewUrl: `${sigPublicPath(def.filename)}?v=${encodeURIComponent(updatedAt)}`,
-      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename, updatedAt) : null,
+      previewUrl: sigPublicPath(def.filename),
+      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename) : null,
       source: 'storage',
     },
   })

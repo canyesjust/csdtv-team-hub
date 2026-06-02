@@ -109,9 +109,8 @@ export default function SignatureAssetsPanel({
       </h2>
       <p style={{ fontSize: '13px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
         Hosted at stable URLs under <code style={{ fontSize: '12px' }}>/sig/</code> for Outlook and
-        other signatures. Upload replaces the bundled default on the next request. After updating,
-        refresh cached images in Outlook or bump the <code style={{ fontSize: '12px' }}>?v=</code>{' '}
-        query on the URL you paste.
+        other signatures. Upload replaces the file at that same URL. If Outlook still shows an old
+        image, remove and re-insert the picture in your signature.
       </p>
 
       {loading && assets.length === 0 ? (
@@ -151,7 +150,7 @@ export default function SignatureAssetsPanel({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={asset.previewUrl}
+                    src={asset.updatedAt ? `${asset.previewUrl}?_=${encodeURIComponent(asset.updatedAt)}` : asset.previewUrl}
                     alt={asset.label}
                     style={{ maxHeight: 64, maxWidth: 280, objectFit: 'contain' }}
                   />

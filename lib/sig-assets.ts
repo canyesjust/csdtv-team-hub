@@ -77,9 +77,7 @@ export function sigPublicPath(filename: string): string {
   return `/sig/${filename}`
 }
 
-export function sigAbsoluteUrl(siteBase: string, filename: string, version?: string | null): string {
+export function sigAbsoluteUrl(siteBase: string, filename: string): string {
   const base = siteBase.replace(/\/$/, '')
-  const path = sigPublicPath(filename)
-  if (!version) return `${base}${path}`
-  return `${base}${path}?v=${encodeURIComponent(version)}`
+  return `${base}${sigPublicPath(filename)}`
 }
