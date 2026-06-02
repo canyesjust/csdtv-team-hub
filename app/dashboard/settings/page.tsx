@@ -7,6 +7,7 @@ import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth-constants'
 import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
+import SignatureAssetsPanel from './components/SignatureAssetsPanel'
 
 interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string; supabase_user_id: string | null }
 interface SchoolListRow {
@@ -1143,6 +1144,17 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {isManager && (
+        <SignatureAssetsPanel
+          visible={activeTab === 'admin'}
+          text={text}
+          muted={muted}
+          border={border}
+          cardBg={cardBg}
+          inputBg={inputBg}
+        />
       )}
 
       {/* ── Email Templates ── */}
