@@ -22,6 +22,7 @@ import {
   productionIdsFromOrganizerYoutubeActivity,
 } from '@/lib/dashboard/youtube-link-followup'
 import { hubRequestProductionComplete, hubRequestProductionInProgress, type ProductionStatusWire } from '@/lib/production-status-requests'
+import DistrictSyncReviewPanel from './components/DistrictSyncReviewPanel'
 import { isOverdueProd as isOverdueProduction } from '@/lib/productions/detail-panel-shared'
 import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 import {
@@ -1269,6 +1270,7 @@ function ProductionsPageContent() {
 
   const selectedProd = productions.find(p => p.id === selectedProdId) || null
   const syncRecent = lastSync ? (Date.now() - new Date(lastSync).getTime()) < 24 * 60 * 60 * 1000 : false
+  const isManager = currentUser?.role === 'Manager'
 
   return (
     <div className="prod-shell" style={{ maxWidth: '1760px', margin: '0 auto' }}>
@@ -1330,6 +1332,8 @@ function ProductionsPageContent() {
               </div>
             </div>
           </header>
+
+          <DistrictSyncReviewPanel isManager={isManager} onChanged={() => void loadData()} />
 
           {(ytPendingOnly || focusFilter === 'live-email-pending') && (
             <div style={{ marginBottom: '16px', padding: '12px 14px', borderRadius: '12px', border: `1px solid ${info}`, background: dark ? 'rgba(91,163,224,0.08)' : 'rgba(91,163,224,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
