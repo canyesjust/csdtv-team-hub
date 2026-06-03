@@ -359,7 +359,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     ],
   )
 
-  /** When the on-air agenda item changes, load that item's pre-created motion (server sets active_motion_id). */
+  /** When the on-air agenda item changes, refresh motion state for the motion screen. */
   useEffect(() => {
     const nextId = bundle.current_agenda_item_id
     if (prevAgendaItemIdRef.current === nextId) return

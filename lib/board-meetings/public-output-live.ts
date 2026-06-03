@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { resolveAgendaNavigation } from '@/lib/board-meetings/control-meeting-cache'
 import { getActiveQrRemainingSeconds, isQrActive, clearExpiredQrIfNeeded } from '@/lib/board-meetings/qr-control'
-import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
+import { buildPublicActiveMotionForOutputs, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import { buildPublicLowerThirdPayload, normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import {
   buildPublicPlaylistPayload,
@@ -252,7 +252,7 @@ export async function buildPublicChannelLivePatch(
       },
     )
   } else if (bstate?.active_motion_id) {
-    active_motion = await buildPublicMotionPayload(service, bstate.active_motion_id, bm.id)
+    active_motion = await buildPublicActiveMotionForOutputs(service, bstate.active_motion_id, bm.id)
   }
 
   const active_lower_third = await buildPublicLowerThirdPayload(service, bstate?.active_lower_third_person_id)

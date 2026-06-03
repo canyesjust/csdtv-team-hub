@@ -161,9 +161,20 @@ export async function setCurrentItem(
   operatorId: string,
 ) {
   const { findPrimaryMotionIdForAgendaItem } = await import('@/lib/board-meetings/agenda-motions-sync')
-  const activeMotionId = itemId
-    ? await findPrimaryMotionIdForAgendaItem(service, boardMeetingId, itemId)
-    : null
+  let activeMotionId: string | null = null
+  if (itemId) {
+    const candidateId = await findPrimaryMotionIdForAgendaItem(service, boardMeetingId, itemId)
+    if (candidateId) {
+      const { data: motion } = await service
+        .from('meeting_motions')
+        .select('status, moved_by_person_id')
+        .eq('id', candidateId)
+        .maybeSingle()
+      if (motion && (motion.status === 'voting' || motion.moved_by_person_id)) {
+        activeMotionId = candidateId
+      }
+    }
+  }
 
   const patch = {
     current_agenda_item_id: itemId,

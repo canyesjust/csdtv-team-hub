@@ -1101,6 +1101,24 @@ export async function buildPublicMotionPayload(
   }
 }
 
+/** Public overlay/dais/live — hide draft motions until a mover is on the record or voting is open. */
+export function isMotionVisibleOnPublicOutputs(
+  motion: Pick<PublicActiveMotion, 'status' | 'moved_by_name'>,
+): boolean {
+  if (motion.status === 'voting') return true
+  return !!motion.moved_by_name
+}
+
+export async function buildPublicActiveMotionForOutputs(
+  service: SupabaseClient,
+  motionId: string,
+  boardMeetingId: string,
+): Promise<PublicActiveMotion | null> {
+  const payload = await buildPublicMotionPayload(service, motionId, boardMeetingId)
+  if (!payload || !isMotionVisibleOnPublicOutputs(payload)) return null
+  return payload
+}
+
 export async function buildPublicVoteResultPayload(
   service: SupabaseClient,
   motionId: string,

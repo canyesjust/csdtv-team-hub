@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getActiveQrRemainingSeconds, isQrActive, clearExpiredQrIfNeeded } from '@/lib/board-meetings/qr-control'
-import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
+import { buildPublicActiveMotionForOutputs, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
 import {
@@ -392,7 +392,7 @@ export async function buildPublicChannelState(
       },
     )
   } else if (bstate?.active_motion_id) {
-    active_motion = await buildPublicMotionPayload(service, bstate.active_motion_id, bm.id)
+    active_motion = await buildPublicActiveMotionForOutputs(service, bstate.active_motion_id, bm.id)
   }
 
   const active_lower_third = await buildPublicLowerThirdPayload(
