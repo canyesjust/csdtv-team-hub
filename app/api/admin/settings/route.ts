@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getAuthenticatedTeamUser, isManagerRole } from '@/lib/server/auth'
+import {
+  ensureAuthUserWithPassword,
+  validateTeamPassword,
+} from '@/lib/server/team-auth-provision'
+import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
 
 function normalizeOptionalHex(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -35,6 +40,147 @@ export async function POST(request: Request) {
   const supabase = createClient(url, key)
 
   try {
+    if (action === 'set_member_password') {
+      const { memberId, password: rawPassword } = payload || {}
+      if (!memberId) return NextResponse.json({ error: 'Missing team member id' }, { status: 400 })
+
+      let password: string
+      try {
+        password = validateTeamPassword(rawPassword)
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : 'Invalid password' },
+          { status: 400 },
+        )
+      }
+
+      const { data: member, error: memberErr } = await supabase
+        .from('team')
+        .select('id, name, email, role, supabase_user_id, active')
+        .eq('id', memberId)
+        .maybeSingle()
+      if (memberErr) return NextResponse.json({ error: memberErr.message }, { status: 400 })
+      if (!member) return NextResponse.json({ error: 'Team member not found' }, { status: 404 })
+
+      const email = normalizeTeamEmail(member.email)
+      let authUserId = member.supabase_user_id ?? undefined
+      let authUserCreated = false
+
+      try {
+        const ensured = await ensureAuthUserWithPassword(supabase, email, password)
+        authUserId = ensured.authUserId
+        authUserCreated = ensured.created
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : 'Could not set password' },
+          { status: 400 },
+        )
+      }
+
+      if (!member.supabase_user_id || !member.active) {
+        const { error: linkErr } = await supabase
+          .from('team')
+          .update({ supabase_user_id: authUserId, active: true })
+          .eq('id', memberId)
+        if (linkErr) {
+          return NextResponse.json({ error: linkErr.message }, { status: 400 })
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        authUserCreated,
+        email,
+        name: member.name,
+      })
+    }
+
+    if (action === 'provision_team_member') {
+      const {
+        email: rawEmail,
+        name: rawName,
+        role,
+        avatar_color,
+        dashboard_profile,
+        password: rawPassword,
+      } = payload || {}
+
+      let email: string
+      let name: string
+      let password: string
+      try {
+        email = normalizeTeamEmail(rawEmail)
+        name = normalizeTeamName(rawName)
+        password = validateTeamPassword(rawPassword)
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : 'Invalid invite details' },
+          { status: 400 },
+        )
+      }
+
+      if (typeof role !== 'string' || !role.trim()) {
+        return NextResponse.json({ error: 'Role is required' }, { status: 400 })
+      }
+
+      const { data: existingTeam } = await supabase
+        .from('team')
+        .select('id, email')
+        .eq('email', email)
+        .maybeSingle()
+      if (existingTeam) {
+        return NextResponse.json(
+          { error: 'Another team member already uses that email' },
+          { status: 400 },
+        )
+      }
+
+      let authUserId: string
+      try {
+        const ensured = await ensureAuthUserWithPassword(supabase, email, password)
+        authUserId = ensured.authUserId
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : 'Could not create auth account' },
+          { status: 400 },
+        )
+      }
+
+      const profile =
+        role === 'Production Focus' || dashboard_profile === 'production_focus'
+          ? 'production_focus'
+          : 'default'
+
+      const { data: newTeam, error: teamError } = await supabase
+        .from('team')
+        .insert({
+          name,
+          email,
+          role: role.trim(),
+          avatar_color: typeof avatar_color === 'string' ? avatar_color : '#e8a020',
+          supabase_user_id: authUserId,
+          active: true,
+          dashboard_profile: profile,
+        })
+        .select('id')
+        .single()
+
+      if (teamError) {
+        return NextResponse.json({ error: teamError.message }, { status: 400 })
+      }
+
+      const ob = await startOnboardingAfterInviteIfNeeded(supabase, newTeam.id, role.trim())
+
+      return NextResponse.json({
+        success: true,
+        teamId: newTeam.id,
+        email,
+        name,
+        onboardingStarted: ob.started,
+        onboardingError: ob.error,
+      })
+    }
+
     if (action === 'deactivate_member') {
       const { memberId } = payload || {}
       const { error } = await supabase.from('team').update({ active: false }).eq('id', memberId)

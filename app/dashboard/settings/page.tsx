@@ -62,6 +62,12 @@ const NOTIF_SETTINGS: { label: string; desc: string; emailKey: keyof Notificatio
 
 const AVATAR_COLORS = ['#e8a020', '#5ba3e0', '#22c55e', '#9b85e0', '#ef4444', '#f97316', '#06b6d4', '#ec4899']
 
+function generateTempPassword(): string {
+  const year = new Date().getFullYear()
+  const suffix = Math.floor(1000 + Math.random() * 9000)
+  return `CsdTv${year}!${suffix}`
+}
+
 const TEMPLATE_VARIABLES: { key: string; desc: string }[] = [
   { key: '{{name}}', desc: "organizer's first name" },
   { key: '{{title}}', desc: 'production title' },
@@ -91,6 +97,7 @@ export default function SettingsPage() {
   const [profileForm, setProfileForm] = useState({ name: '', email: '' })
   const [selectedColor, setSelectedColor] = useState('#e8a020')
   const [inviteEmail, setInviteEmail] = useState('')
+  const [invitePassword, setInvitePassword] = useState('')
   const [inviteRole, setInviteRole] = useState('Staff')
   const [inviteHubInterface, setInviteHubInterface] = useState<'default' | 'production_focus'>('default')
   const [inviteColor, setInviteColor] = useState('#5ba3e0')
@@ -99,6 +106,9 @@ export default function SettingsPage() {
   const [savedMsg, setSavedMsg] = useState('')
   const [editingTeamMember, setEditingTeamMember] = useState<string | null>(null)
   const [memberEditForm, setMemberEditForm] = useState({ name: '', email: '' })
+  const [memberPassword, setMemberPassword] = useState('')
+  const [memberPasswordConfirm, setMemberPasswordConfirm] = useState('')
+  const [settingPasswordMemberId, setSettingPasswordMemberId] = useState<string | null>(null)
   const [savingTeamMemberId, setSavingTeamMemberId] = useState<string | null>(null)
   const [schools, setSchools] = useState<SchoolListRow[]>([])
   const [schoolSearch, setSchoolSearch] = useState('')
@@ -283,7 +293,11 @@ export default function SettingsPage() {
 
   const inviteUser = async () => {
     if (!inviteEmail || !currentUser) return
-    if (!confirm(`Add ${inviteEmail} to the team as ${inviteRole}? They'll receive an email with a sign-in link.`)) return
+    const usePassword = invitePassword.trim().length >= MIN_PASSWORD_LENGTH
+    const confirmMsg = usePassword
+      ? `Add ${inviteEmail} to the team as ${inviteRole}? You'll set their login password directly (no invite email).`
+      : `Add ${inviteEmail} to the team as ${inviteRole}? They'll receive an email with a sign-in link.`
+    if (!confirm(confirmMsg)) return
     setInviting(true)
     setInviteResult(null)
 
@@ -295,9 +309,41 @@ export default function SettingsPage() {
       return
     }
 
+    const name = inviteEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+
+    if (usePassword) {
+      try {
+        const result = await callAdminSettings('provision_team_member', {
+          email: inviteEmail.trim().toLowerCase(),
+          name,
+          role: inviteRole,
+          avatar_color: inviteColor,
+          password: invitePassword,
+          dashboard_profile:
+            inviteRole === PRODUCTION_FOCUS_ROLE || inviteHubInterface === 'production_focus'
+              ? 'production_focus'
+              : 'default',
+        })
+        let message = `${name} was added with a login password. Share their email and password — they sign in at csdtvstaff.org with Password (not magic link).`
+        if (result.onboardingStarted) message += ' Onboarding checklist has been started for them.'
+        else if (result.onboardingError) message += ` Onboarding could not be started: ${result.onboardingError}`
+        setInviteResult({ success: true, message })
+        setInviteEmail('')
+        setInvitePassword('')
+        setInviting(false)
+        loadData()
+      } catch (e: unknown) {
+        setInviteResult({
+          success: false,
+          message: e instanceof Error ? e.message : 'Failed to add team member',
+        })
+        setInviting(false)
+      }
+      return
+    }
+
     // Use edge function to create auth account + team record + send invite
     try {
-      const name = inviteEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
       const { data: { session } } = await supabase.auth.refreshSession()
       if (!session) { setInviteResult({ success: false, message: 'Session expired. Please refresh the page and try again.' }); setInviting(false); return }
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`, {
@@ -374,11 +420,52 @@ export default function SettingsPage() {
   const startEditMember = (member: TeamMember) => {
     setEditingTeamMember(member.id)
     setMemberEditForm({ name: member.name, email: member.email })
+    setMemberPassword('')
+    setMemberPasswordConfirm('')
   }
 
   const cancelEditMember = () => {
     setEditingTeamMember(null)
     setMemberEditForm({ name: '', email: '' })
+    setMemberPassword('')
+    setMemberPasswordConfirm('')
+    setSettingPasswordMemberId(null)
+  }
+
+  const saveMemberPassword = async (member: TeamMember) => {
+    if (memberPassword.length < MIN_PASSWORD_LENGTH) {
+      toast(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, 'error')
+      return
+    }
+    if (memberPassword !== memberPasswordConfirm) {
+      toast('Passwords do not match', 'error')
+      return
+    }
+    if (
+      !confirm(
+        `Set a new login password for ${member.name}? They can sign in at csdtvstaff.org with their email and this password.`,
+      )
+    ) {
+      return
+    }
+    setSettingPasswordMemberId(member.id)
+    try {
+      await callAdminSettings('set_member_password', {
+        memberId: member.id,
+        password: memberPassword,
+      })
+      setMemberPassword('')
+      setMemberPasswordConfirm('')
+      toast(
+        `Password set for ${member.name}. Share their email and password — use Password sign-in, not magic link.`,
+        'success',
+      )
+      loadData()
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Failed to set password', 'error')
+    } finally {
+      setSettingPasswordMemberId(null)
+    }
   }
 
   const saveMemberEdit = async (memberId: string) => {
@@ -1117,7 +1204,7 @@ export default function SettingsPage() {
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'team' ? 'block' : 'none' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 8px' }}>Team</h2>
           <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px', lineHeight: 1.5 }}>
-            Use <strong style={{ fontWeight: 600, color: text }}>View as</strong> to see the dashboard with their role and data. Use <strong style={{ fontWeight: 600, color: text }}>Edit</strong> to change name or email — if they&apos;ve logged in before, their sign-in email is updated too.
+            Use <strong style={{ fontWeight: 600, color: text }}>View as</strong> to see the dashboard with their role and data. Use <strong style={{ fontWeight: 600, color: text }}>Edit</strong> to change name or email, or set a login password when invite emails are not working.
           </p>
 
           {team.map(member => (
@@ -1264,6 +1351,77 @@ export default function SettingsPage() {
                       ? 'Changing email updates their hub roster and Supabase sign-in (magic links will go to the new address).'
                       : 'They have not logged in yet — use Send invite after saving if you want a fresh sign-in link.'}
                   </p>
+                  <div style={{ marginTop: '4px', paddingTop: '12px', borderTop: `0.5px solid ${border}` }}>
+                    <p style={{ fontSize: '12px', color: muted, fontWeight: 600, margin: '0 0 8px' }}>
+                      Login password
+                      {member.role === 'Student Intern' && (
+                        <span style={{ marginLeft: '6px', fontWeight: 500, color: '#e8a020' }}>
+                          (recommended when invite email fails)
+                        </span>
+                      )}
+                    </p>
+                    <p style={{ fontSize: '12px', color: muted, margin: '0 0 10px', lineHeight: 1.45 }}>
+                      Set a password they can use on the login page under <strong>Password</strong> — no email required.
+                    </p>
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      <input
+                        type="password"
+                        value={memberPassword}
+                        onChange={e => setMemberPassword(e.target.value)}
+                        placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                        style={inputStyle}
+                        autoComplete="new-password"
+                      />
+                      <input
+                        type="password"
+                        value={memberPasswordConfirm}
+                        onChange={e => setMemberPasswordConfirm(e.target.value)}
+                        placeholder="Confirm password"
+                        style={inputStyle}
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' as const }}>
+                      <button
+                        type="button"
+                        disabled={settingPasswordMemberId === member.id}
+                        onClick={() => void saveMemberPassword(member)}
+                        style={{
+                          fontSize: '14px',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          background: '#1e6cb5',
+                          color: '#fff',
+                          border: 'none',
+                          cursor: settingPasswordMemberId === member.id ? 'wait' : 'pointer',
+                          fontFamily: 'inherit',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {settingPasswordMemberId === member.id ? 'Setting…' : 'Set password'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const generated = generateTempPassword()
+                          setMemberPassword(generated)
+                          setMemberPasswordConfirm(generated)
+                        }}
+                        style={{
+                          fontSize: '14px',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          background: 'transparent',
+                          border: `0.5px solid ${border}`,
+                          color: text,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        Generate password
+                      </button>
+                    </div>
+                  </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                       type="button"
@@ -1308,10 +1466,37 @@ export default function SettingsPage() {
           <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface-2)', borderRadius: '12px', border: `0.5px solid ${border}` }}>
             <h3 style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 4px' }}>Invite team member</h3>
             <p style={{ fontSize: '14px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
-              They&apos;ll receive an email with a one-click sign-in link to <strong>csdtvstaff.org</strong>. Their auth account is created automatically — no signup needed.
+              Send an invite email with a one-click sign-in link, or set a password below to skip email (useful when Resend is down).
             </p>
             <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
               <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="District email address" type="email" style={inputStyle} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px' }}>
+                <input
+                  value={invitePassword}
+                  onChange={e => setInvitePassword(e.target.value)}
+                  placeholder={`Optional login password (min ${MIN_PASSWORD_LENGTH} chars — skips invite email)`}
+                  type="password"
+                  style={inputStyle}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setInvitePassword(generateTempPassword())}
+                  style={{
+                    fontSize: '13px',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    background: 'var(--surface-2)',
+                    border: `0.5px solid ${border}`,
+                    color: text,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    whiteSpace: 'nowrap' as const,
+                  }}
+                >
+                  Generate
+                </button>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                 <select
                   value={inviteRole}
@@ -1350,7 +1535,11 @@ export default function SettingsPage() {
               </div>
             </div>
             <button onClick={inviteUser} disabled={inviting || !inviteEmail} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: inviteEmail ? '#1e6cb5' : 'var(--surface-2)', color: inviteEmail ? '#fff' : muted, border: 'none', cursor: inviteEmail ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
-              {inviting ? 'Sending invite...' : 'Invite to team'}
+              {inviting
+                ? 'Adding…'
+                : invitePassword.trim().length >= MIN_PASSWORD_LENGTH
+                  ? 'Add with password'
+                  : 'Invite to team'}
             </button>
             {inviteResult && (
               <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: inviteResult.success ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `0.5px solid ${inviteResult.success ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
