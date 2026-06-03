@@ -55,7 +55,7 @@ async function enrichLivePatch(
   }
 }
 
-async function sendBoardOutputBroadcast(
+async function sendBoardOutputBroadcastHttp(
   channelNumber: number,
   payload: BoardOutputBroadcastPayload,
 ): Promise<boolean> {
@@ -77,49 +77,31 @@ async function sendBoardOutputBroadcast(
             topic: boardOutputTopic(channelNumber),
             event: BOARD_OUTPUT_BROADCAST_EVENT,
             payload,
+            private: false,
           },
         ],
       }),
     })
-    return res.ok
+    return res.status === 202 || res.ok
   } catch {
     return false
   }
 }
 
-async function sendBoardOutputBroadcastViaClient(
+async function sendBoardOutputBroadcast(
   channelNumber: number,
   payload: BoardOutputBroadcastPayload,
 ): Promise<boolean> {
   const supabase = getServiceSupabaseClient()
-  if (!supabase) return false
+  if (!supabase) return sendBoardOutputBroadcastHttp(channelNumber, payload)
 
-  const topic = boardOutputTopic(channelNumber)
-  const channel = supabase.channel(topic)
-
-  return new Promise(resolve => {
-    const timeout = setTimeout(() => {
-      void supabase.removeChannel(channel)
-      resolve(false)
-    }, 3_000)
-
-    channel.subscribe(async status => {
-      if (status !== 'SUBSCRIBED') return
-      clearTimeout(timeout)
-      try {
-        const result = await channel.send({
-          type: 'broadcast',
-          event: BOARD_OUTPUT_BROADCAST_EVENT,
-          payload,
-        })
-        resolve(result === 'ok')
-      } catch {
-        resolve(false)
-      } finally {
-        void supabase.removeChannel(channel)
-      }
-    })
-  })
+  const channel = supabase.channel(boardOutputTopic(channelNumber))
+  try {
+    const result = await channel.httpSend(BOARD_OUTPUT_BROADCAST_EVENT, payload)
+    return result.success
+  } catch {
+    return sendBoardOutputBroadcastHttp(channelNumber, payload)
+  }
 }
 
 export async function notifyBoardOutputChannel(
@@ -130,10 +112,7 @@ export async function notifyBoardOutputChannel(
   const patch = rawPatch ? await enrichLivePatch(service, rawPatch) : null
   const payload: BoardOutputBroadcastPayload = { ts: Date.now(), patch }
 
-  const ok = await sendBoardOutputBroadcast(channelNumber, payload)
-  if (!ok) {
-    await sendBoardOutputBroadcastViaClient(channelNumber, payload)
-  }
+  await sendBoardOutputBroadcast(channelNumber, payload)
 }
 
 /** Push fresh state to every output channel assigned to this meeting. */

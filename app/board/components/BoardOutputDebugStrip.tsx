@@ -1,6 +1,12 @@
 'use client'
 
 import type { BoardOutputDebugInfo } from '@/app/board/hooks/useBoardChannelState'
+import { POLL_REALTIME_FALLBACK_MS } from '@/lib/board-meetings/output-polling'
+
+function formatAge(ms: number | null): string {
+  if (ms == null) return '—'
+  return `${Math.max(0, Math.round((Date.now() - ms) / 100) / 10)}s ago`
+}
 
 export default function BoardOutputDebugStrip({
   info,
@@ -9,8 +15,8 @@ export default function BoardOutputDebugStrip({
   info: BoardOutputDebugInfo
   pollMs?: number
 }) {
-  const age =
-    info.lastUpdateMs == null ? '—' : `${Math.max(0, Math.round((Date.now() - info.lastUpdateMs) / 100) / 10)}s ago`
+  const effectivePoll =
+    info.realtime === 'connected' ? POLL_REALTIME_FALLBACK_MS : (pollMs ?? '—')
 
   return (
     <div
@@ -30,10 +36,10 @@ export default function BoardOutputDebugStrip({
       }}
     >
       <div>Realtime: {info.realtime}</div>
-      <div>Poll: {pollMs ?? '—'}ms</div>
-      <div>
-        Last: {info.lastUpdate ?? '—'} ({age})
-      </div>
+      <div>Poll: {effectivePoll}ms{info.realtime === 'connected' ? ' (fallback)' : ''}</div>
+      <div>Broadcasts: {info.broadcastCount}</div>
+      <div>Last broadcast: {formatAge(info.lastBroadcastMs)}</div>
+      <div>Last poll: {formatAge(info.lastPollMs)}</div>
     </div>
   )
 }

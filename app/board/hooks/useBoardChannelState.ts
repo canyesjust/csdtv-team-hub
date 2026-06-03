@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
-import { POLL_LISTEN_CHECK_MS } from '@/lib/board-meetings/output-polling'
+import { POLL_LISTEN_CHECK_MS, POLL_REALTIME_FALLBACK_MS } from '@/lib/board-meetings/output-polling'
 import {
   BOARD_OUTPUT_BROADCAST_EVENT,
   boardOutputTopic,
@@ -23,6 +23,9 @@ export type BoardOutputDebugInfo = {
   realtime: 'off' | 'connecting' | 'connected' | 'error'
   lastUpdate: 'poll' | 'broadcast' | null
   lastUpdateMs: number | null
+  broadcastCount: number
+  lastBroadcastMs: number | null
+  lastPollMs: number | null
 }
 
 /** Legacy escape hatch: no recurring polls (use dashboard Listening toggle instead). */
@@ -45,10 +48,22 @@ export function isBoardOutputDebugMode(): boolean {
 
 function readBroadcastPayload(message: unknown): BoardOutputBroadcastPayload | null {
   if (!message || typeof message !== 'object') return null
-  const outer = message as { payload?: BoardOutputBroadcastPayload }
-  if (outer.payload?.ts != null) return outer.payload
-  const direct = message as BoardOutputBroadcastPayload
-  if (direct.ts != null) return direct
+  const record = message as Record<string, unknown>
+
+  const candidates: unknown[] = [record.payload, record]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    const body = candidate as Record<string, unknown>
+    if (typeof body.ts === 'number') {
+      return body as BoardOutputBroadcastPayload
+    }
+    if (body.payload && typeof body.payload === 'object') {
+      const nested = body.payload as Record<string, unknown>
+      if (typeof nested.ts === 'number') {
+        return nested as BoardOutputBroadcastPayload
+      }
+    }
+  }
   return null
 }
 
@@ -58,12 +73,16 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
     realtime: 'off',
     lastUpdate: null,
     lastUpdateMs: null,
+    broadcastCount: 0,
+    lastBroadcastMs: null,
+    lastPollMs: null,
   })
   const hasFullRef = useRef(false)
   const inflightLiveRef = useRef(false)
   const pendingLiveRef = useRef(false)
   const activeRef = useRef(false)
   const pollIntervalMsRef = useRef(POLL_LISTEN_CHECK_MS)
+  const realtimeConnectedRef = useRef(false)
   const standbyRef = useRef(false)
   const debugEnabledRef = useRef(false)
 
@@ -80,12 +99,19 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
 
     const markUpdate = (source: 'poll' | 'broadcast') => {
       if (!debugEnabledRef.current) return
+      const now = Date.now()
       setDebugInfo(prev => ({
         ...prev,
         lastUpdate: source,
-        lastUpdateMs: Date.now(),
+        lastUpdateMs: now,
+        ...(source === 'broadcast'
+          ? { broadcastCount: prev.broadcastCount + 1, lastBroadcastMs: now }
+          : { lastPollMs: now }),
       }))
     }
+
+    const effectivePollMs = () =>
+      realtimeConnectedRef.current ? POLL_REALTIME_FALLBACK_MS : pollIntervalMsRef.current
 
     const clearPoll = () => {
       if (pollTimer !== null) {
@@ -138,7 +164,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       }
     }
 
-    const loadLive = async () => {
+    const loadLive = async (source: 'poll' | 'broadcast' = 'poll') => {
       if (!hasFullRef.current || !activeRef.current) return
       if (inflightLiveRef.current) {
         pendingLiveRef.current = true
@@ -150,7 +176,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
         if (!res.ok) return
         const patch = (await res.json()) as PublicChannelLivePatch
         if (!cancelled) {
-          applyLivePatch(patch, 'poll')
+          applyLivePatch(patch, source)
         }
       } catch {
         /* ignore */
@@ -158,7 +184,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
         inflightLiveRef.current = false
         if (pendingLiveRef.current) {
           pendingLiveRef.current = false
-          void loadLive()
+          void loadLive(source)
         }
       }
     }
@@ -167,7 +193,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       clearPoll()
       if (cancelled || standbyRef.current) return
 
-      const ms = immediate ? 0 : pollIntervalMsRef.current
+      const ms = immediate ? 0 : effectivePollMs()
       if (!hasFullRef.current) {
         pollTimer = setTimeout(() => {
           void loadFull().then(() => scheduleNext())
@@ -208,20 +234,31 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
         .channel(boardOutputTopic(channelNumber))
         .on('broadcast', { event: BOARD_OUTPUT_BROADCAST_EVENT }, message => {
           const payload = readBroadcastPayload(message)
-          if (payload?.patch) applyLivePatch(payload.patch, 'broadcast')
-          else void loadLive().then(() => scheduleNext(true))
+          if (payload?.patch) {
+            applyLivePatch(payload.patch, 'broadcast')
+            scheduleNext()
+            return
+          }
+          void loadLive('broadcast').then(() => scheduleNext())
         })
         .subscribe(status => {
           if (cancelled) return
           if (status === 'SUBSCRIBED') {
+            realtimeConnectedRef.current = true
+            if (hasFullRef.current && activeRef.current) scheduleNext(true)
             if (debugEnabledRef.current) {
               setDebugInfo(prev => ({ ...prev, realtime: 'connected' }))
             }
             return
           }
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            realtimeConnectedRef.current = false
+            if (hasFullRef.current && activeRef.current) scheduleNext(true)
             if (debugEnabledRef.current) {
-              setDebugInfo(prev => ({ ...prev, realtime: 'error' }))
+              setDebugInfo(prev => ({
+                ...prev,
+                realtime: status === 'CLOSED' ? prev.realtime : 'error',
+              }))
             }
           }
         })
@@ -231,6 +268,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
 
     return () => {
       cancelled = true
+      realtimeConnectedRef.current = false
       clearPoll()
       pendingLiveRef.current = false
       if (supabaseChannel) {
