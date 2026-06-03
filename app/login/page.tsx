@@ -34,6 +34,8 @@ export default function LoginPage() {
   })
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [signedInEmail, setSignedInEmail] = useState<string | null>(null)
+  const [notOnTeam, setNotOnTeam] = useState(false)
   const inRecoveryRef = useRef(false)
 
   useEffect(() => {
@@ -44,12 +46,20 @@ export default function LoginPage() {
       inRecoveryRef.current = true
     }
     if (params.get('reason') === 'not-on-team') {
+      setNotOnTeam(true)
       setError('Your account is signed in but is not on the CSDtv team list. Contact your administrator to be invited.')
     }
     if (params.get('error') === 'auth') {
       setError('This link has expired or was already used. Request a new password reset email and open only the newest link.')
     }
   }, [])
+
+  useEffect(() => {
+    if (!notOnTeam) return
+    void supabase.auth.getUser().then(({ data: { user } }) => {
+      setSignedInEmail(user?.email ?? null)
+    })
+  }, [notOnTeam, supabase])
 
   useEffect(() => {
     inRecoveryRef.current = resetMode
@@ -62,13 +72,27 @@ export default function LoginPage() {
         setResetMode(true)
         return
       }
-      if (session && !inRecoveryRef.current) {
+      if (session && !inRecoveryRef.current && !notOnTeam) {
         stripResetFromUrl()
         router.push(getPostLoginPath())
       }
     })
     return () => subscription.unsubscribe()
-  }, [supabase, router])
+  }, [supabase, router, notOnTeam])
+
+  const handleSignOut = async () => {
+    setLoading(true)
+    setError('')
+    await supabase.auth.signOut()
+    setSignedInEmail(null)
+    setNotOnTeam(false)
+    setLoading(false)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('reason')
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+    }
+  }
 
   const handlePasswordLogin = async () => {
     setLoading(true)
@@ -210,6 +234,31 @@ export default function LoginPage() {
               />
             </div>
             {error && <div style={{ fontSize: '14px', color: '#e74c3c', marginBottom: '1rem' }}>{error}</div>}
+            {notOnTeam && signedInEmail && (
+              <div style={{ fontSize: '13px', color: '#8899bb', marginBottom: '1rem', lineHeight: 1.5 }}>
+                Signed in as <strong style={{ color: '#f0f4ff' }}>{signedInEmail}</strong>
+              </div>
+            )}
+            {notOnTeam && (
+              <button
+                onClick={() => void handleSignOut()}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: '0.5px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  fontSize: '14px',
+                  color: '#8899bb',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  marginBottom: '1rem',
+                }}
+              >
+                {loading ? 'Signing out…' : 'Sign out and try a different account'}
+              </button>
+            )}
             <button
               onClick={handlePasswordLogin}
               disabled={loading}
