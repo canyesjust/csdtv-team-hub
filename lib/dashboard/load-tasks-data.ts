@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchTaskAssignments, mergeAssigneeIds } from '@/lib/task-assignments'
 import { isStudentInternRole } from '@/lib/roles'
+import {
+  buildStudentInternTasksOrFilter,
+  loadStudentInternTaskAssignmentIds,
+} from '@/lib/dashboard/student-intern-tasks'
 
 const TASK_SELECT =
   '*, productions(id,title,production_number,request_type_label,start_datetime,status)'
@@ -142,21 +146,9 @@ export async function loadTasksDashboardData(
   let checklistRows: ChecklistRow[] = []
 
   if (isStu && uid) {
-    const { data: myAssignmentRows, error: assignmentQueryError } = await supabase
-      .from('task_assignments')
-      .select('task_id')
-      .eq('team_id', uid)
-    const assignedTaskIds = assignmentQueryError
-      ? []
-      : [...new Set((myAssignmentRows || []).map(r => r.task_id as string))]
-    const openFilter =
-      assignedTaskIds.length > 0
-        ? `assigned_to.eq.${uid},id.in.(${assignedTaskIds.join(',')})`
-        : `assigned_to.eq.${uid}`
-    const doneFilter =
-      assignedTaskIds.length > 0
-        ? `assigned_to.eq.${uid},id.in.(${assignedTaskIds.join(',')})`
-        : `assigned_to.eq.${uid}`
+    const assignedTaskIds = await loadStudentInternTaskAssignmentIds(supabase, uid)
+    const openFilter = buildStudentInternTasksOrFilter(uid, assignedTaskIds)
+    const doneFilter = openFilter
 
     const [tasksRes, completedRes, checklistRes, memRes] = await Promise.all([
       supabase
@@ -204,9 +196,24 @@ export async function loadTasksDashboardData(
       .select('id, name, role, avatar_color, email')
       .eq('id', uid)
       .maybeSingle()
-    teamList = selfRow
-      ? [(selfRow as TasksDashboardTeamMember)]
-      : [{ ...user, avatar_color: '', email: '' }]
+
+    const teamById = new Map<string, TasksDashboardTeamMember>()
+    if (selfRow) teamById.set(selfRow.id, selfRow as TasksDashboardTeamMember)
+    else teamById.set(uid, { ...user, avatar_color: '', email: '' })
+
+    if (pids.length > 0) {
+      const { data: crewRows } = await supabase
+        .from('production_members')
+        .select('team:team(id, name, role, avatar_color, email)')
+        .in('production_id', pids)
+      for (const row of crewRows || []) {
+        const tm = Array.isArray(row.team) ? row.team[0] : row.team
+        if (tm && typeof tm === 'object' && 'id' in tm) {
+          teamById.set(tm.id as string, tm as TasksDashboardTeamMember)
+        }
+      }
+    }
+    teamList = [...teamById.values()].sort((a, b) => a.name.localeCompare(b.name))
   } else {
     const [tRes, cRes, tmRes, pRes, checklistRes] = await Promise.all([
       supabase

@@ -764,7 +764,10 @@ export default function TasksPage() {
       recurring: null,
       recurring_interval: null, status: 'pending', created_by: currentUser.id,
     }).select('*').single()
-    if (error) { toast('Failed to create task', 'error'); return }
+    if (error) {
+      toast(error.message || 'Failed to create task', 'error')
+      return
+    }
     if (data) {
       const assignee_ids = await replaceTaskAssignees(
         supabase,

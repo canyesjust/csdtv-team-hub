@@ -3,7 +3,6 @@ import { loadTasksDashboardData } from '@/lib/dashboard/load-tasks-data'
 import { createAuthSupabaseClient, getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { loadTeamProfile } from '@/lib/server/impersonation'
-import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,13 +20,6 @@ export async function GET() {
   const profile = await loadTeamProfile(service, teamUser.id)
   if (!profile) {
     return NextResponse.json({ error: 'Team member not found' }, { status: 404 })
-  }
-
-  if (isStudentInternRole(profile.role)) {
-    return NextResponse.json({
-      redirect: STUDENT_INTERN_HOME_PATH,
-      user: { id: profile.id, name: profile.name, role: profile.role },
-    })
   }
 
   const supabase = await createAuthSupabaseClient()

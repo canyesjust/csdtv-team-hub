@@ -11,6 +11,10 @@ import { getSchoolName } from '@/lib/schools'
 import { uiStyles, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole } from '@/lib/roles'
 import { fetchEffectiveTeam } from '@/lib/effective-team-client'
+import {
+  buildStudentInternTasksOrFilter,
+  loadStudentInternTaskAssignmentIds,
+} from '@/lib/dashboard/student-intern-tasks'
 import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
 interface Task {
@@ -94,11 +98,14 @@ export default function StudentHomePage() {
     }
     setCurrentUser({ id: user.id, name: user.name, role: user.role })
 
+    const assignedTaskIds = await loadStudentInternTaskAssignmentIds(supabase, user.id)
+    const taskFilter = buildStudentInternTasksOrFilter(user.id, assignedTaskIds)
+
     const [tasksRes, membersRes] = await Promise.all([
       supabase
         .from('tasks')
         .select('*, productions(title)')
-        .eq('assigned_to', user.id)
+        .or(taskFilter)
         .neq('status', 'complete')
         .order('due_date', { ascending: true, nullsFirst: false })
         .limit(20),
@@ -291,7 +298,7 @@ export default function StudentHomePage() {
       </div>
 
       <p style={{ marginTop: '20px', fontSize: '13px', color: muted }}>
-        Use the sidebar for Home, Productions, Tasks, Library, and More (Onboarding, Students, Settings).
+        Use the sidebar for Home, Productions, Tasks, Team hours, Video library, and More (Equipment, Library, Onboarding, Settings).
       </p>
 
       <style>{`
