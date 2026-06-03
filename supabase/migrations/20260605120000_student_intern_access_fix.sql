@@ -67,7 +67,7 @@ USING (
   public.auth_team_role() IN ('Manager', 'Staff', 'Intern', 'Production Focus')
   OR team.active = true
   OR team.supabase_user_id = auth.uid()
-  OR team.id = (SELECT id FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1)
+  OR team.id = public.auth_team_id()
   OR (
     team.supabase_user_id IS NULL
     AND lower(trim(team.email)) = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
