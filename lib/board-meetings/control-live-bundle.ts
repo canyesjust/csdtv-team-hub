@@ -4,8 +4,10 @@ import {
   isVoteResultActive,
   listMotionsEnriched,
 } from '@/lib/board-meetings/motion-control'
-import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting-cache'
-import { normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
+import {
+  buildPublicLowerThirdPayload,
+  normalizeLowerThirdPosition,
+} from '@/lib/board-meetings/lower-third-control'
 import type { ControlBundle, MotionLifecycleState, ResultOverlayState } from '@/lib/board-meetings/types'
 import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
 import { isMotionDrafting, pickActiveMotions } from '@/lib/board-meetings/motion-active-pick'
@@ -90,23 +92,6 @@ function buildResultOverlay(
   }
 }
 
-function lowerThirdFromPeople(
-  personId: string | null | undefined,
-  people: Awaited<ReturnType<typeof getCachedBoardMemberPeople>>,
-) {
-  if (!personId) return null
-  const person = people.find(p => p.id === personId)
-  if (!person) return null
-  return {
-    person_id: person.id,
-    display_name: person.display_name,
-    primary_title: person.primary_title,
-    affiliation: person.affiliation,
-    officer_position: person.officer_position,
-    photo_url: null,
-  }
-}
-
 /**
  * Fast path for realtime / background sync — skips agenda, utilities, signed photo URLs.
  */
@@ -122,7 +107,6 @@ export async function buildControlLiveBundle(
     { data: liveEvents },
     { data: playlist },
     motions,
-    people,
   ] = await Promise.all([
     service.from('meeting_broadcast_state').select('*').eq('board_meeting_id', boardMeetingId).maybeSingle(),
     service
@@ -150,7 +134,6 @@ export async function buildControlLiveBundle(
       .eq('board_meeting_id', boardMeetingId)
       .maybeSingle(),
     listMotionsEnriched(service, boardMeetingId, { openOnly: true, voteCountsOnly: true }),
-    getCachedBoardMemberPeople(service),
   ])
 
   const current_documents = state?.current_agenda_item_id
@@ -171,7 +154,7 @@ export async function buildControlLiveBundle(
 
   const motion_lifecycle = buildMotionLifecycle(state, motions)
   const result_overlay = buildResultOverlay(state, motions)
-  const lowerThirdActive = lowerThirdFromPeople(state?.active_lower_third_person_id, people)
+  const lowerThirdActive = await buildPublicLowerThirdPayload(service, state?.active_lower_third_person_id)
 
   const broadcast_state = {
     ...(state || {}),

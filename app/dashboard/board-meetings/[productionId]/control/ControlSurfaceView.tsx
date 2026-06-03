@@ -165,6 +165,7 @@ export default function ControlSurfaceView({
 
           <LowerThirdPanel
             active={lower_third_active}
+            activePersonId={broadcast_state?.active_lower_third_person_id ?? null}
             people={bundle.lower_third_people || []}
             position={broadcast_state?.lower_third_position ?? 'left'}
             canControl={canControl}

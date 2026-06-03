@@ -19,6 +19,8 @@ type BroadcastState = Partial<LowerThirdStateFields> | null
 
 type CallbackProps = {
   active: { person_id: string; display_name: string; primary_title: string | null } | null
+  /** Fallback when live sync has not hydrated full person details yet. */
+  activePersonId?: string | null
   people: LowerThirdPerson[]
   position: LowerThirdPosition
   canControl: boolean
@@ -53,6 +55,7 @@ const POSITION_LABELS: Record<LowerThirdPosition, string> = {
 
 function LowerThirdPanelControlled({
   active,
+  activePersonId = null,
   people,
   position,
   canControl,
@@ -60,7 +63,7 @@ function LowerThirdPanelControlled({
   onPositionChange,
   onClear,
 }: CallbackProps) {
-  const activeId = active?.person_id ?? null
+  const activeId = active?.person_id ?? activePersonId ?? null
   const disabled = !canControl
   const prioritySlots = useMemo(() => boardMembersInOrder(people), [people])
   const priorityIds = useMemo(
@@ -72,6 +75,11 @@ function LowerThirdPanelControlled({
 
   const handleOtherSelect = (person: LowerThirdPerson) => {
     onSet(person)
+    setOtherOpen(false)
+  }
+
+  const handleClear = () => {
+    onClear()
     setOtherOpen(false)
   }
 
@@ -111,7 +119,7 @@ function LowerThirdPanelControlled({
           type="button"
           className="cs-lt-clear-btn"
           disabled={disabled || !activeId}
-          onClick={onClear}
+          onClick={handleClear}
         >
           Clear
         </button>
@@ -162,6 +170,7 @@ function LowerThirdPanelControlled({
           excludeIds={priorityIds}
           activeId={activeId}
           onSelect={handleOtherSelect}
+          onClear={handleClear}
           onClose={() => setOtherOpen(false)}
         />
       ) : null}
@@ -173,11 +182,13 @@ function OtherPersonModal({
   excludeIds,
   activeId,
   onSelect,
+  onClear,
   onClose,
 }: {
   excludeIds: Set<string>
   activeId: string | null
   onSelect: (person: LowerThirdPerson) => void
+  onClear: () => void
   onClose: () => void
 }) {
   const [search, setSearch] = useState('')
@@ -286,7 +297,7 @@ function OtherPersonModal({
                     key={p.id}
                     type="button"
                     className={`cs-modal-result${isActive ? ' cs-modal-result--active' : ''}`}
-                    onClick={() => onSelect(p)}
+                    onClick={() => (isActive ? onClear() : onSelect(p))}
                   >
                     <span className="cs-modal-result-name">{p.display_name}</span>
                     {(p.primary_title || p.officer_position) ? (
