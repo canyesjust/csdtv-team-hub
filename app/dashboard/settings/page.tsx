@@ -8,10 +8,19 @@ import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth-constants'
 import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
+import { PRODUCTION_FOCUS_ROLE } from '@/lib/roles'
 import SignatureAssetsPanel from './components/SignatureAssetsPanel'
 import BackupsPanel from './components/BackupsPanel'
 
-interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string; supabase_user_id: string | null }
+interface TeamMember {
+  id: string
+  name: string
+  email: string
+  role: string
+  avatar_color: string
+  supabase_user_id: string | null
+  dashboard_profile?: string | null
+}
 interface SchoolListRow {
   id: string
   code: string
@@ -83,6 +92,7 @@ export default function SettingsPage() {
   const [selectedColor, setSelectedColor] = useState('#e8a020')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('Staff')
+  const [inviteHubInterface, setInviteHubInterface] = useState<'default' | 'production_focus'>('default')
   const [inviteColor, setInviteColor] = useState('#5ba3e0')
   const [inviting, setInviting] = useState(false)
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -291,7 +301,16 @@ export default function SettingsPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/invite-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ email: inviteEmail, name, role: inviteRole, avatar_color: inviteColor }),
+        body: JSON.stringify({
+          email: inviteEmail,
+          name,
+          role: inviteRole,
+          avatar_color: inviteColor,
+          dashboard_profile:
+            inviteRole === PRODUCTION_FOCUS_ROLE || inviteHubInterface === 'production_focus'
+              ? 'production_focus'
+              : 'default',
+        }),
       })
       const result = await res.json()
 
@@ -330,6 +349,24 @@ export default function SettingsPage() {
       setInviteResult({ success: false, message: 'Failed to invite. Please try again.' })
       setInviting(false)
     }
+  }
+
+  const updateMemberHubInterface = async (
+    memberId: string,
+    profile: 'default' | 'production_focus',
+  ) => {
+    const { error } = await supabase
+      .from('team')
+      .update({ dashboard_profile: profile })
+      .eq('id', memberId)
+    if (error) {
+      toast(error.message || 'Could not update hub interface', 'error')
+      return
+    }
+    setTeam(prev =>
+      prev.map(m => (m.id === memberId ? { ...m, dashboard_profile: profile } : m)),
+    )
+    toast('Hub interface updated', 'success')
   }
 
   const deactivateMember = async (memberId: string, memberName: string) => {
@@ -1081,6 +1118,29 @@ export default function SettingsPage() {
                 </p>
               </div>
               <span style={{ fontSize: '14px', padding: '3px 10px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{member.role}</span>
+              <select
+                value={
+                  member.role === PRODUCTION_FOCUS_ROLE || member.dashboard_profile === 'production_focus'
+                    ? 'production_focus'
+                    : 'default'
+                }
+                onChange={e =>
+                  void updateMemberHubInterface(
+                    member.id,
+                    e.target.value as 'default' | 'production_focus',
+                  )
+                }
+                disabled={member.role === PRODUCTION_FOCUS_ROLE}
+                title={
+                  member.role === PRODUCTION_FOCUS_ROLE
+                    ? 'Production Focus role always uses the simplified hub'
+                    : 'Hub navigation scope for this member'
+                }
+                style={{ ...inputStyle, fontSize: '12px', padding: '6px 8px', maxWidth: '140px' }}
+              >
+                <option value="default">Full hub</option>
+                <option value="production_focus">Productions focus</option>
+              </select>
               {member.id !== currentUser?.id && (
                 <>
                   <button
@@ -1113,12 +1173,32 @@ export default function SettingsPage() {
             </p>
             <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
               <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="District email address" type="email" style={inputStyle} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} style={inputStyle}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                <select
+                  value={inviteRole}
+                  onChange={e => {
+                    const next = e.target.value
+                    setInviteRole(next)
+                    if (next === PRODUCTION_FOCUS_ROLE) setInviteHubInterface('production_focus')
+                  }}
+                  style={inputStyle}
+                >
                   <option value="Staff">Staff</option>
                   <option value="Manager">Manager</option>
                   <option value="Intern">Intern</option>
+                  <option value={PRODUCTION_FOCUS_ROLE}>Production Focus</option>
                   <option value="Student Intern">Student Intern</option>
+                </select>
+                <select
+                  value={inviteHubInterface}
+                  onChange={e =>
+                    setInviteHubInterface(e.target.value as 'default' | 'production_focus')
+                  }
+                  disabled={inviteRole === PRODUCTION_FOCUS_ROLE}
+                  style={inputStyle}
+                >
+                  <option value="default">Full hub</option>
+                  <option value="production_focus">Productions focus</option>
                 </select>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '8px 12px' }}>
                   <span style={{ fontSize: '14px', color: muted, flexShrink: 0 }}>Color:</span>

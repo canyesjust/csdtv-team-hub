@@ -12,7 +12,9 @@ import ImpersonationBanner from './ImpersonationBanner'
 import { ProductionDrawerProvider } from './ProductionDrawerProvider'
 import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
+import { hasProductionFocusDashboard, isDashboardPathAllowed } from '@/lib/dashboard-access'
 import {
+  buildProductionFocusDashboardNav,
   buildStaffDashboardNav,
   buildStudentInternDashboardNav,
   type DashboardNavItem,
@@ -58,6 +60,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [showMore, setShowMore] = useState(false)
   const [userName, setUserName] = useState('')
   const [userRole, setUserRole] = useState('')
+  const [userDashboardProfile, setUserDashboardProfile] = useState('default')
   const [userColor, setUserColor] = useState('#e8a020')
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
@@ -85,9 +88,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   const isStudentIntern = isStudentInternRole(userRole)
+  const isProductionFocus = hasProductionFocusDashboard(userRole, userDashboardProfile)
   const isViewAs = viewAs != null
   const navResolved = useMemo(() => {
-    const base = isStudentIntern ? buildStudentInternDashboardNav() : buildStaffDashboardNav(userRole)
+    const base = isStudentIntern
+      ? buildStudentInternDashboardNav()
+      : isProductionFocus
+        ? buildProductionFocusDashboardNav()
+        : buildStaffDashboardNav(userRole)
     if (!isViewAs) return base
     const stripSettings = (items: DashboardNavItem[]) =>
       items.filter(item => item.href !== '/dashboard/settings')
@@ -99,7 +107,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       bottomNav: base.bottomNav,
       moreItems: stripSettings(base.moreItems),
     }
-  }, [isStudentIntern, userRole, isViewAs])
+  }, [isStudentIntern, isProductionFocus, userRole, isViewAs])
+
+  useEffect(() => {
+    if (accessState !== 'ready') return
+    if (!isProductionFocus) return
+    if (isDashboardPathAllowed(pathname, userRole, userDashboardProfile)) return
+    router.replace('/dashboard')
+  }, [accessState, isProductionFocus, pathname, router, userRole, userDashboardProfile])
 
   const navItemsResolved: DashboardNavSection[] = navResolved.navItems
   const bottomNavResolved: DashboardNavItem[] = navResolved.bottomNav
@@ -134,9 +149,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         return
       }
 
-      const applyTeam = (row: { id: string; name: string; role: string; avatar_color: string | null }) => {
+      const applyTeam = (row: {
+        id: string
+        name: string
+        role: string
+        avatar_color: string | null
+        dashboard_profile?: string | null
+      }) => {
         setUserName(row.name)
         setUserRole(row.role)
+        setUserDashboardProfile(row.dashboard_profile ?? 'default')
         setUserColor(row.avatar_color || '#e8a020')
         setUserId(row.id)
         setAccessState('ready')
@@ -147,7 +169,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (sessionRes.ok) {
           const session = (await sessionRes.json()) as {
             active?: boolean
-            subject?: { id: string; name: string; role: string; avatar_color: string | null }
+            subject?: {
+              id: string
+              name: string
+              role: string
+              avatar_color: string | null
+              dashboard_profile?: string | null
+            }
             actor?: { name: string }
           }
           if (session.active && session.subject) {
@@ -174,7 +202,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       const emailNorm = email.trim().toLowerCase()
       const { data: teamByEmail, error: emailLookupErr } = await supabase
         .from('team')
-        .select('id, name, role, avatar_color, supabase_user_id')
+        .select('id, name, role, avatar_color, dashboard_profile, supabase_user_id')
         .eq('email', emailNorm)
         .maybeSingle()
 
@@ -201,7 +229,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       const { data: byUid, error: uidErr } = await supabase
         .from('team')
-        .select('id, name, role, avatar_color')
+        .select('id, name, role, avatar_color, dashboard_profile')
         .eq('supabase_user_id', user.id)
         .maybeSingle()
 

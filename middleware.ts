@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE } from './lib/roles'
+import { isDashboardPathAllowed } from './lib/dashboard-access'
 import { getActorTeamRow, getEffectiveTeamRow } from './lib/server/effective-team'
 
 export async function middleware(request: NextRequest) {
@@ -46,6 +47,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
     const role = teamAccess === 'pending-link' ? null : teamAccess.role
+    const dashboardProfile =
+      teamAccess === 'pending-link' ? null : teamAccess.dashboard_profile
 
     if (teamAccess !== 'pending-link') {
       const actorRow = await getActorTeamRow(supabase, user)
@@ -68,6 +71,15 @@ export async function middleware(request: NextRequest) {
     if (role === STUDENT_INTERN_ROLE && (pathname === '/dashboard' || pathname === '/dashboard/')) {
       const url = request.nextUrl.clone()
       url.pathname = STUDENT_INTERN_HOME_PATH
+      return NextResponse.redirect(url)
+    }
+
+    if (
+      role &&
+      !isDashboardPathAllowed(pathname, role, dashboardProfile)
+    ) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
   }

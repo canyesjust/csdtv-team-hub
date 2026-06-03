@@ -7,6 +7,7 @@ export type TeamProfile = {
   role: string
   email: string | null
   avatar_color: string | null
+  dashboard_profile: string
 }
 
 export type ImpersonationSession = {
@@ -40,7 +41,7 @@ export async function loadTeamProfile(
 ): Promise<TeamProfile | null> {
   const { data } = await service
     .from('team')
-    .select('id, name, role, email, avatar_color')
+    .select('id, name, role, email, avatar_color, dashboard_profile')
     .eq('id', teamId)
     .maybeSingle()
   if (!data) return null
@@ -50,6 +51,7 @@ export async function loadTeamProfile(
     role: data.role,
     email: data.email,
     avatar_color: data.avatar_color,
+    dashboard_profile: data.dashboard_profile ?? 'default',
   }
 }
 

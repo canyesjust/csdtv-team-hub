@@ -15,6 +15,7 @@ import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
+import { isProductionTabVisible } from '@/lib/dashboard-access'
 import { isStudentInternRole } from '@/lib/roles'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { hubRequestProductionComplete, hubRequestProductionInProgress } from '@/lib/production-status-requests'
@@ -56,7 +57,14 @@ interface ProductionMember {
   team: { id: string; name: string; role: string; avatar_color: string } | null
 }
 
-interface TeamMember { id: string; name: string; email: string; role: string; avatar_color: string }
+interface TeamMember {
+  id: string
+  name: string
+  email: string
+  role: string
+  avatar_color: string
+  dashboard_profile?: string | null
+}
 interface SchoolBrand {
   id: string
   code: string | null
@@ -368,15 +376,33 @@ export default function ProductionDetailPage() {
     [router, productionNum],
   )
 
+  const productionTabVisible = useCallback(
+    (tab: ProductionTab) =>
+      isProductionTabVisible(
+        tab,
+        isBoardMeetingProduction,
+        currentUser?.role,
+        currentUser?.dashboard_profile,
+      ),
+    [isBoardMeetingProduction, currentUser?.role, currentUser?.dashboard_profile],
+  )
+
   useEffect(() => {
     if (loading || !production) return
-    const urlTab = parseProductionTabFromUrl(searchParams.get('tab'), isBoardMeetingProduction)
+    let urlTab = parseProductionTabFromUrl(searchParams.get('tab'), isBoardMeetingProduction)
+    if (urlTab && !productionTabVisible(urlTab)) urlTab = null
     if (urlTab) {
       setActiveTab(urlTab)
       return
     }
-    if (checklist.length === 0) setActiveTab('info')
-  }, [loading, production, searchParams, checklist.length, isBoardMeetingProduction])
+    if (checklist.length === 0 && productionTabVisible('info')) setActiveTab('info')
+  }, [loading, production, searchParams, checklist.length, isBoardMeetingProduction, productionTabVisible])
+
+  useEffect(() => {
+    if (!currentUser) return
+    if (productionTabVisible(activeTab)) return
+    setActiveTab('checklist')
+  }, [currentUser, activeTab, productionTabVisible])
 
   const getTypeLabel = (prod: Production) => prod.request_type_label || prod.type || 'Unknown'
 
@@ -1617,17 +1643,17 @@ export default function ProductionDetailPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `0.5px solid ${border}`, marginBottom: '20px', overflowX: 'auto' as const, background: cardBg, borderRadius: '10px 10px 0 0', padding: '0 6px' }}>
-        {tabBtn('checklist', 'Checklist', checklist.length > 0 ? completedCount : undefined)}
-        {tabBtn('info', 'Production info')}
-        {tabBtn('team', 'Team', members.length)}
-        {tabBtn('links', 'Links', links.length)}
-        {tabBtn('activity', 'Activity')}
-        {tabBtn('comments', 'Comments')}
-        {tabBtn('videos', 'Videos', linkedVideos.length)}
-        {tabBtn('thumbnail', 'Thumbnail')}
-        {tabBtn('callsheet', 'Call sheet', callSheet ? 1 : 0)}
-        {tabBtn('studentcrew', 'Student Crew')}
-        {isBoardMeetingProduction && tabBtn('boardmeeting', 'Board Meeting')}
+        {productionTabVisible('checklist') && tabBtn('checklist', 'Checklist', checklist.length > 0 ? completedCount : undefined)}
+        {productionTabVisible('info') && tabBtn('info', 'Production info')}
+        {productionTabVisible('team') && tabBtn('team', 'Team', members.length)}
+        {productionTabVisible('links') && tabBtn('links', 'Links', links.length)}
+        {productionTabVisible('activity') && tabBtn('activity', 'Activity')}
+        {productionTabVisible('comments') && tabBtn('comments', 'Comments')}
+        {productionTabVisible('videos') && tabBtn('videos', 'Videos', linkedVideos.length)}
+        {productionTabVisible('thumbnail') && tabBtn('thumbnail', 'Thumbnail')}
+        {productionTabVisible('callsheet') && tabBtn('callsheet', 'Call sheet', callSheet ? 1 : 0)}
+        {productionTabVisible('studentcrew') && tabBtn('studentcrew', 'Student Crew')}
+        {productionTabVisible('boardmeeting') && isBoardMeetingProduction && tabBtn('boardmeeting', 'Board Meeting')}
       </div>
 
       {/* CHECKLIST TAB */}

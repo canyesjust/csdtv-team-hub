@@ -129,3 +129,26 @@ export function buildStudentInternDashboardNav(): {
     ],
   }
 }
+
+/** Reduced nav: dashboard home, tasks, and productions only. */
+export function buildProductionFocusDashboardNav(): {
+  navItems: DashboardNavSection[]
+  bottomNav: DashboardNavItem[]
+  moreItems: DashboardNavItem[]
+} {
+  const main: DashboardNavItem[] = [
+    { label: 'Home', href: '/dashboard', icon: 'home' },
+    { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
+    { label: 'Productions', href: '/dashboard/productions', icon: 'video' },
+  ]
+
+  return {
+    navItems: [{ section: 'Main', items: main }],
+    bottomNav: [
+      { label: 'Home', href: '/dashboard', icon: 'home' },
+      { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
+      { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
+    ],
+    moreItems: [],
+  }
+}

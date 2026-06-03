@@ -31,6 +31,7 @@ export async function GET() {
       name: session.subject.name,
       role: session.subject.role,
       avatar_color: session.subject.avatar_color,
+      dashboard_profile: session.subject.dashboard_profile,
     },
     startedAt: session.startedAt,
     expiresAt: session.expiresAt,

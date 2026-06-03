@@ -90,6 +90,10 @@ Deno.serve(async (req) => {
     const name = typeof body.name === "string" ? body.name.trim() : ""
     const role = typeof body.role === "string" ? body.role.trim() : ""
     const avatar_color = typeof body.avatar_color === "string" ? body.avatar_color : "#e8a020"
+    const dashboard_profile =
+      role === "Production Focus" || body.dashboard_profile === "production_focus"
+        ? "production_focus"
+        : "default"
 
     if (!email || !name || !role) {
       return json({ error: "Missing email, name, or role" }, 400)
@@ -125,7 +129,14 @@ Deno.serve(async (req) => {
     if (teamId) {
       const { error: teamUpdateErr } = await supabase
         .from("team")
-        .update({ supabase_user_id: authUserId, active: true, name, role, avatar_color })
+        .update({
+          supabase_user_id: authUserId,
+          active: true,
+          name,
+          role,
+          avatar_color,
+          dashboard_profile,
+        })
         .eq("id", teamId)
       if (teamUpdateErr) {
         return json({ error: `Team error: ${teamUpdateErr.message}` }, 400)
@@ -140,6 +151,7 @@ Deno.serve(async (req) => {
           avatar_color,
           supabase_user_id: authUserId,
           active: true,
+          dashboard_profile,
         })
         .select("id")
         .single()

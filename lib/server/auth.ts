@@ -91,18 +91,24 @@ export async function assertActorNotImpersonating(): Promise<{ ok: true } | { ok
 export async function getTeamRowForAuthUser(
   supabase: SupabaseClient,
   user: { id: string; email?: string | null },
-): Promise<{ id: string; role: string } | 'pending-link' | null> {
+): Promise<{ id: string; role: string; dashboard_profile: string } | 'pending-link' | null> {
   const { data: byUid } = await supabase
     .from('team')
-    .select('id, role')
+    .select('id, role, dashboard_profile')
     .eq('supabase_user_id', user.id)
     .maybeSingle()
-  if (byUid) return { id: byUid.id, role: byUid.role }
+  if (byUid) {
+    return {
+      id: byUid.id,
+      role: byUid.role,
+      dashboard_profile: byUid.dashboard_profile ?? 'default',
+    }
+  }
 
   if (!user.email) return null
   const { data: byEmail } = await supabase
     .from('team')
-    .select('id, role, supabase_user_id')
+    .select('id, role, dashboard_profile, supabase_user_id')
     .eq('email', user.email.trim().toLowerCase())
     .maybeSingle()
   if (byEmail && !byEmail.supabase_user_id) return 'pending-link'
