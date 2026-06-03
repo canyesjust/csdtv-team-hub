@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ControlAgendaItem } from '@/lib/board-meetings/types'
 
 type Props = {
@@ -28,13 +28,33 @@ export default function AgendaPanel({
   onPatchItem,
   onMoveItem,
 }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
   const sorted = useMemo(
     () => [...(items || [])].sort((a, b) => a.sort_order - b.sort_order),
     [items],
   )
 
+  const currentSortIndex = useMemo(
+    () => (currentItemId ? sorted.findIndex(i => i.id === currentItemId) : -1),
+    [sorted, currentItemId],
+  )
+
+  const followLiveOrder = !editMode && !brandingHold && currentSortIndex >= 0
+
+  const displayItems = useMemo(() => {
+    if (!followLiveOrder) return sorted
+    if (currentSortIndex <= 0) return sorted
+    return [...sorted.slice(currentSortIndex), ...sorted.slice(0, currentSortIndex)]
+  }, [sorted, followLiveOrder, currentSortIndex])
+
+  useEffect(() => {
+    if (!followLiveOrder) return
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [currentItemId, followLiveOrder])
+
   return (
-    <>
+    <div className="cs-agenda-scroll" ref={scrollRef}>
       <button
         type="button"
         disabled={disabled}
@@ -51,26 +71,31 @@ export default function AgendaPanel({
         </span>
       </button>
 
-      {sorted.map((it, idx) => {
+      {displayItems.map((it, idx) => {
+        const itemSortIndex = sorted.findIndex(i => i.id === it.id)
         const broadcastableRank = sorted.filter(i => i.is_broadcastable).findIndex(i => i.id === it.id)
+        const isDone =
+          followLiveOrder && itemSortIndex >= 0 && itemSortIndex < currentSortIndex
         return (
-        <AgendaRow
-          key={it.id}
-          item={it}
-          index={idx}
-          broadcastableRank={broadcastableRank}
-          broadcastableCount={sorted.filter(i => i.is_broadcastable).length}
-          total={sorted.length}
-          isCurrent={!brandingHold && it.id === currentItemId}
-          disabled={disabled}
-          editMode={editMode}
-          agendaEditBusy={agendaEditBusy}
-          onJump={onJump}
-          onPatchItem={onPatchItem}
-          onMoveItem={onMoveItem}
-        />
-      )})}
-    </>
+          <AgendaRow
+            key={it.id}
+            item={it}
+            index={idx}
+            broadcastableRank={broadcastableRank}
+            broadcastableCount={sorted.filter(i => i.is_broadcastable).length}
+            total={sorted.length}
+            isCurrent={!brandingHold && it.id === currentItemId}
+            isDone={isDone}
+            disabled={disabled}
+            editMode={editMode}
+            agendaEditBusy={agendaEditBusy}
+            onJump={onJump}
+            onPatchItem={onPatchItem}
+            onMoveItem={onMoveItem}
+          />
+        )
+      })}
+    </div>
   )
 }
 
@@ -81,6 +106,7 @@ function AgendaRow({
   broadcastableCount,
   total,
   isCurrent,
+  isDone = false,
   disabled,
   editMode,
   agendaEditBusy,
@@ -94,6 +120,7 @@ function AgendaRow({
   broadcastableCount: number
   total: number
   isCurrent: boolean
+  isDone?: boolean
   disabled?: boolean
   editMode: boolean
   agendaEditBusy: boolean
@@ -113,7 +140,7 @@ function AgendaRow({
         type="button"
         disabled={disabled}
         onClick={() => onJump(item.id)}
-        className={`cs-agenda-item${isCurrent ? ' cs-agenda-item-onair' : ''}`}
+        className={`cs-agenda-item${isCurrent ? ' cs-agenda-item-onair' : ''}${isDone ? ' cs-agenda-item-done' : ''}`}
       >
         <span className="cs-agenda-checkbox" aria-hidden="true" />
         <span className="cs-agenda-content">
