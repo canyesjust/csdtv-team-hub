@@ -1,9 +1,11 @@
 -- Student Intern RLS (Supabase / Postgres)
--- Run in the Supabase SQL editor after review. RESTRICTIVE policies AND with existing permissive policies,
--- so they tighten access for Student Intern without removing broad staff read (if you already have USING (true)).
+-- CANONICAL SOURCE: supabase/migrations/20260605160000_fix_production_members_rls_recursion.sql
+-- and supabase/migrations/20260605170000_rls_auth_helpers_consolidation.sql
+-- This file is a historical reference; do not apply blindly — use migrations instead.
+-- RESTRICTIVE policies AND with existing permissive policies.
 -- Requires Postgres 15+ (RESTRICTIVE policies).
 
--- ─── Helper: role for current auth user (bypasses RLS on team for this lookup only) ───
+-- ─── Helper: effective role (respects manager view-as via auth_team_id) ───
 CREATE OR REPLACE FUNCTION public.auth_team_role()
 RETURNS text
 LANGUAGE sql
@@ -11,7 +13,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT role::text FROM public.team WHERE supabase_user_id = auth.uid() LIMIT 1
+  SELECT role::text FROM public.team WHERE id = public.auth_team_id() LIMIT 1
 $$;
 
 REVOKE ALL ON FUNCTION public.auth_team_role() FROM PUBLIC;

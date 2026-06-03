@@ -82,3 +82,62 @@ $$;
 
 REVOKE ALL ON FUNCTION public.auth_team_role() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.auth_team_role() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.auth_team_role_is_hub_staff()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.auth_team_role() IN ('Manager', 'Staff', 'Intern', 'Production Focus');
+$$;
+
+REVOKE ALL ON FUNCTION public.auth_team_role_is_hub_staff() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.auth_team_role_is_hub_staff() TO authenticated;
+
+-- Effective team id (subject while view-as is active).
+CREATE OR REPLACE FUNCTION public.get_team_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.auth_team_id();
+$$;
+
+-- Effective role is Manager (false while viewing as a non-manager subject).
+CREATE OR REPLACE FUNCTION public.is_manager()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.auth_team_role() = 'Manager';
+$$;
+
+-- Real signed-in user is Manager (ignores view-as subject).
+CREATE OR REPLACE FUNCTION public.is_actor_manager()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.team
+    WHERE id = public.auth_actor_team_id()
+      AND role = 'Manager'
+      AND active IS NOT FALSE
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.get_team_id() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_team_id() TO authenticated;
+REVOKE ALL ON FUNCTION public.is_manager() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_manager() TO authenticated;
+REVOKE ALL ON FUNCTION public.is_actor_manager() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_actor_manager() TO authenticated;
