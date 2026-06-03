@@ -191,16 +191,16 @@ Deno.serve(async (req) => {
       <div style="font-family:system-ui,sans-serif;max-width:500px;margin:0 auto;color:#1a1f36">
         <div style="text-align:center;margin-bottom:24px">
           <h1 style="font-size:24px;margin:0 0 4px">Welcome to CSDtv Team Hub</h1>
-          <p style="color:#6b7280;margin:0">You've been invited to join the team</p>
+          <p style="color:#6b7280;margin:0">Team access for csdtvstaff.org</p>
         </div>
         <p>Hi ${firstName},</p>
         <p>You've been added to the CSDtv Team Hub as <strong>${role}</strong>. This is where we manage productions, tasks, schedules, equipment, and everything else.</p>
         <div style="text-align:center;margin:24px 0">
           <a href="${loginUrl}" style="display:inline-block;background:#1e6cb5;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;font-size:16px">
-            Sign in to CSDtv Team Hub
+            Open Team Hub
           </a>
         </div>
-        <p style="font-size:14px;color:#6b7280">This link will sign you in automatically. After your first login, you can use the magic link option on the login page — just enter your email and we'll send you a sign-in link.</p>
+        <p style="font-size:14px;color:#6b7280">This link opens the Team Hub for your account. After your first visit, you can sign in with your email and password, or request another link from the login page.</p>
         <p style="font-size:14px;color:#6b7280">Site: <a href="${siteBase()}" style="color:#1e6cb5">csdtvstaff.org</a></p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0" />
         <p style="font-size:12px;color:#9ca3af;margin:0">CSDtv Production Office · Canyon School District</p>
@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: "CSDtv <noreply@csdtvstaff.org>",
         to: email,
-        subject: "You're invited to CSDtv Team Hub",
+        subject: "Your CSDtv Team Hub access",
         html,
       }),
     })

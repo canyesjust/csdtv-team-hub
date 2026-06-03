@@ -62,7 +62,7 @@ export default function LoginPage() {
       void supabase.auth.signOut()
     }
     if (params.get('error') === 'auth') {
-      setError('This link has expired or was already used. Request a new password reset email and open only the newest link.')
+      setError('This link has expired or was already used. Request a new sign-in link from the login page and open only the newest message.')
     }
   }, [supabase])
 
@@ -124,7 +124,7 @@ export default function LoginPage() {
       options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${next}` },
     })
     if (error) setError(error.message)
-    else setMessage('Check your email for a login link.')
+    else setMessage('If that email is on the team list, we sent a sign-in link.')
     setLoading(false)
   }
 
@@ -288,12 +288,12 @@ export default function LoginPage() {
                   redirectTo: `${window.location.origin}/auth/callback?next=${resetNext}`,
                 })
                 if (error) setError(error.message)
-                else setMessage('Check your email for a password reset link.')
+                else setMessage('If that email is on the team list, we sent a sign-in link.')
                 setLoading(false)
               }}
               style={{ width: '100%', background: 'transparent', border: 'none', padding: '8px', fontSize: '13px', color: '#5ba3e0', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '0.5rem' }}
             >
-              Forgot password? Send reset link
+              Need sign-in help? Email me a link
             </button>
             {message && <div style={{ fontSize: '14px', color: '#2ecc71', marginBottom: '1rem' }}>{message}</div>}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
@@ -305,7 +305,7 @@ export default function LoginPage() {
               onClick={() => setMode('magic')}
               style={{ width: '100%', background: 'transparent', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '12px', fontSize: '14px', color: '#8899bb', cursor: 'pointer', fontFamily: 'inherit' }}
             >
-              Send me a magic link instead
+              Email me a sign-in link instead
             </button>
           </>
         ) : (
@@ -330,7 +330,7 @@ export default function LoginPage() {
               disabled={loading}
               style={{ width: '100%', background: '#1e6cb5', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '14px', fontWeight: 500, color: '#fff', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '1rem', opacity: loading ? 0.7 : 1 }}
             >
-              {loading ? 'Sending...' : 'Send magic link'}
+              {loading ? 'Sending...' : 'Email sign-in link'}
             </button>
             <button
               onClick={() => setMode('password')}
