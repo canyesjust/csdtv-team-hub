@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
+import BoardOutputDebugStrip from '@/app/board/components/BoardOutputDebugStrip'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
@@ -76,7 +77,7 @@ export default function BoardLiveView({
   channelNumber: number
   initialChannelName?: string
 }) {
-  const state = useBoardChannelState(channelNumber, { livePriority: true })
+  const { state, debugInfo } = useBoardChannelState(channelNumber, { livePriority: true })
   const [expandedPast, setExpandedPast] = useState(false)
 
   const meeting = state?.meeting
@@ -235,6 +236,7 @@ export default function BoardLiveView({
         />
       ) : null}
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+      {debugInfo ? <BoardOutputDebugStrip info={debugInfo} pollMs={state.poll_interval_ms} /> : null}
     </div>
   )
 }

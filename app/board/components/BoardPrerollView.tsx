@@ -22,7 +22,7 @@ export default function BoardPrerollView({
   channelNumber: number
   initialChannelName?: string
 }) {
-  const state = useBoardChannelState(channelNumber, { livePriority: true })
+  const { state, debugInfo } = useBoardChannelState(channelNumber, { livePriority: true })
   const [fadeKey, setFadeKey] = useState(0)
   const audioRef = useRef<HTMLAudioElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)

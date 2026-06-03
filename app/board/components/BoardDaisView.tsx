@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PublicAgendaItem } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
+import BoardOutputDebugStrip from '@/app/board/components/BoardOutputDebugStrip'
 import { useAgendaItemCache } from '@/app/board/hooks/useAgendaItemCache'
 import { useElementFullscreen } from '@/app/board/hooks/useElementFullscreen'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
@@ -48,7 +49,7 @@ export default function BoardDaisView({
   autoFullscreen?: boolean
 }) {
   const wantAutoFullscreen = autoFullscreen
-  const state = useBoardChannelState(channelNumber, { livePriority: true })
+  const { state, debugInfo } = useBoardChannelState(channelNumber, { livePriority: true })
   const seedItems = useMemo(
     () => (state?.current_item ? [state.current_item] : []),
     [state?.current_item],
@@ -88,6 +89,8 @@ export default function BoardDaisView({
     channelNumber,
     fullscreen,
     autoFsPrompt,
+    debugInfo,
+    pollMs: state?.poll_interval_ms,
     onDismissAutoFsPrompt: () => setAutoFsPrompt(false),
     onEnterFullscreen: async () => {
       const ok = await fullscreen.enter()
@@ -289,6 +292,8 @@ function DaisShell({
   children,
   fullscreen,
   autoFsPrompt,
+  debugInfo,
+  pollMs,
   onDismissAutoFsPrompt,
   onEnterFullscreen,
 }: {
@@ -296,6 +301,8 @@ function DaisShell({
   children: React.ReactNode
   fullscreen: ReturnType<typeof useElementFullscreen>
   autoFsPrompt: boolean
+  debugInfo: ReturnType<typeof useBoardChannelState>['debugInfo']
+  pollMs?: number
   onDismissAutoFsPrompt: () => void
   onEnterFullscreen: () => void | Promise<void>
 }) {
@@ -339,6 +346,7 @@ function DaisShell({
       ) : null}
 
       {children}
+      {debugInfo ? <BoardOutputDebugStrip info={debugInfo} pollMs={pollMs} /> : null}
     </div>
   )
 }

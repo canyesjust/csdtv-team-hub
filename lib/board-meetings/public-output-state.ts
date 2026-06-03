@@ -171,6 +171,14 @@ async function loadItemExtras(
   }
 }
 
+/** Presenters/documents for a single agenda item — used when pushing live patches over Realtime. */
+export async function loadAgendaItemExtras(
+  service: SupabaseClient,
+  itemId: string,
+): Promise<{ presenters: PublicAgendaItem['presenters']; documents: PublicAgendaItem['documents'] }> {
+  return loadItemExtras(service, itemId)
+}
+
 async function buildVoteResultOverlay(
   service: SupabaseClient,
   boardMeetingId: string,

@@ -79,8 +79,9 @@ export default function OutputChannelsTab() {
         Put the <strong style={{ color: text }}>same URL</strong> in each OBS browser source and leave it open between
         meetings. Use <strong style={{ color: text }}>Listening</strong> to wake outputs before a show (or assign the
         channel on the control surface — that turns listening on automatically). Once the agenda is locked (pre-show) or
-        you go live, outputs update in real time via Supabase and also poll about every 350&nbsp;ms as a fallback. Turn
-        listening off after the meeting to go quiet again.
+        you go live, outputs update in real time via Supabase (with 350&nbsp;ms polling as backup). Add{' '}
+        <code>?debug=output</code> to an output URL to verify Realtime is connected. Turn listening off after the
+        meeting to go quiet again.
       </p>
       <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}` }}>

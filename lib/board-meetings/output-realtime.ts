@@ -1,48 +1,147 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import {
+  buildPublicChannelLivePatch,
+  type PublicChannelLivePatch,
+} from '@/lib/board-meetings/public-output-live'
+import { loadAgendaItemExtras } from '@/lib/board-meetings/public-output-state'
 
 /** Broadcast event name — OBS / overlay / dais clients listen for this. */
 export const BOARD_OUTPUT_BROADCAST_EVENT = 'refresh'
+
+export type BoardOutputBroadcastPayload = {
+  ts: number
+  patch: PublicChannelLivePatch | null
+}
 
 export function boardOutputTopic(channelNumber: number): string {
   return `board-output:${channelNumber}`
 }
 
-export async function notifyBoardOutputChannel(channelNumber: number): Promise<void> {
-  const supabase = getServiceSupabaseClient()
-  if (!supabase) return
+async function resolveAssignedChannelNumbers(
+  service: SupabaseClient,
+  boardMeetingId: string,
+): Promise<number[]> {
+  const { data: rows, error } = await service
+    .from('channel_assignments')
+    .select('output_channel_id')
+    .eq('board_meeting_id', boardMeetingId)
+    .is('unassigned_at', null)
 
-  const topic = boardOutputTopic(channelNumber)
-  const channel = supabase.channel(topic)
-  try {
-    await channel.send({
-      type: 'broadcast',
-      event: BOARD_OUTPUT_BROADCAST_EVENT,
-      payload: { ts: Date.now() },
-    })
-  } finally {
-    await supabase.removeChannel(channel)
+  if (error || !rows?.length) return []
+
+  const ids = rows.map(r => r.output_channel_id).filter(Boolean)
+  if (!ids.length) return []
+
+  const { data: channels } = await service
+    .from('output_channels')
+    .select('channel_number')
+    .in('id', ids)
+
+  return (channels || [])
+    .map(c => c.channel_number)
+    .filter((n): n is number => typeof n === 'number' && n > 0)
+}
+
+async function enrichLivePatch(
+  service: SupabaseClient,
+  patch: PublicChannelLivePatch,
+): Promise<PublicChannelLivePatch> {
+  if (!patch.current_item?.id) return patch
+  const extras = await loadAgendaItemExtras(service, patch.current_item.id)
+  return {
+    ...patch,
+    current_item: { ...patch.current_item, ...extras },
   }
 }
 
-/** Ping every output channel assigned to this meeting (overlay, dais, preroll, etc.). */
+async function sendBoardOutputBroadcast(
+  channelNumber: number,
+  payload: BoardOutputBroadcastPayload,
+): Promise<boolean> {
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, '')
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!baseUrl || !key) return false
+
+  try {
+    const res = await fetch(`${baseUrl}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            topic: boardOutputTopic(channelNumber),
+            event: BOARD_OUTPUT_BROADCAST_EVENT,
+            payload,
+          },
+        ],
+      }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function sendBoardOutputBroadcastViaClient(
+  channelNumber: number,
+  payload: BoardOutputBroadcastPayload,
+): Promise<boolean> {
+  const supabase = getServiceSupabaseClient()
+  if (!supabase) return false
+
+  const topic = boardOutputTopic(channelNumber)
+  const channel = supabase.channel(topic)
+
+  return new Promise(resolve => {
+    const timeout = setTimeout(() => {
+      void supabase.removeChannel(channel)
+      resolve(false)
+    }, 3_000)
+
+    channel.subscribe(async status => {
+      if (status !== 'SUBSCRIBED') return
+      clearTimeout(timeout)
+      try {
+        const result = await channel.send({
+          type: 'broadcast',
+          event: BOARD_OUTPUT_BROADCAST_EVENT,
+          payload,
+        })
+        resolve(result === 'ok')
+      } catch {
+        resolve(false)
+      } finally {
+        void supabase.removeChannel(channel)
+      }
+    })
+  })
+}
+
+export async function notifyBoardOutputChannel(
+  service: SupabaseClient,
+  channelNumber: number,
+): Promise<void> {
+  const rawPatch = await buildPublicChannelLivePatch(service, channelNumber)
+  const patch = rawPatch ? await enrichLivePatch(service, rawPatch) : null
+  const payload: BoardOutputBroadcastPayload = { ts: Date.now(), patch }
+
+  const ok = await sendBoardOutputBroadcast(channelNumber, payload)
+  if (!ok) {
+    await sendBoardOutputBroadcastViaClient(channelNumber, payload)
+  }
+}
+
+/** Push fresh state to every output channel assigned to this meeting. */
 export async function notifyBoardOutputsForMeeting(
   service: SupabaseClient,
   boardMeetingId: string,
 ): Promise<void> {
-  const { data: rows } = await service
-    .from('channel_assignments')
-    .select('output_channel_id, output_channels(channel_number)')
-    .eq('board_meeting_id', boardMeetingId)
-    .is('unassigned_at', null)
-
-  const numbers = new Set<number>()
-  for (const row of rows || []) {
-    const ch = row.output_channels as { channel_number?: number } | null
-    if (ch?.channel_number != null && ch.channel_number > 0) {
-      numbers.add(ch.channel_number)
-    }
-  }
-
-  await Promise.all([...numbers].map(n => notifyBoardOutputChannel(n)))
+  const numbers = await resolveAssignedChannelNumbers(service, boardMeetingId)
+  if (!numbers.length) return
+  await Promise.all(numbers.map(n => notifyBoardOutputChannel(service, n)))
 }

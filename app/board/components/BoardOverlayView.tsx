@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
+import BoardOutputDebugStrip from '@/app/board/components/BoardOutputDebugStrip'
 import type { PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
@@ -82,7 +83,7 @@ export default function BoardOverlayView({
   channelNumber: number
   initialChannelName?: string
 }) {
-  const state = useBoardChannelState(channelNumber, { livePriority: true })
+  const { state, debugInfo } = useBoardChannelState(channelNumber, { livePriority: true })
 
   const stackAnchor: React.CSSProperties = {
     position: 'absolute',
@@ -217,6 +218,7 @@ export default function BoardOverlayView({
       {showLowerThird && lowerThird ? (
         <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
       ) : null}
+      {debugInfo ? <BoardOutputDebugStrip info={debugInfo} pollMs={state.poll_interval_ms} /> : null}
     </>
   )
 }
