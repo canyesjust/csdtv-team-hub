@@ -50,7 +50,11 @@ export async function POST(
     clearBoardMemberPeopleCache()
     await getAgendaItemsForControl(service, bm.id, true)
 
-    void notifyBoardOutputsForMeeting(service, bm.id).catch(() => {})
+    try {
+      await notifyBoardOutputsForMeeting(service, bm.id)
+    } catch {
+      /* output refresh is best-effort */
+    }
 
     return NextResponse.json({ success: true, people_sync: peopleSync, motions_sync: motionsSync })
   } catch (e) {

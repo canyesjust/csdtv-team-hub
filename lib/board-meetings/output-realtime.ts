@@ -107,12 +107,16 @@ async function sendBoardOutputBroadcast(
 export async function notifyBoardOutputChannel(
   service: SupabaseClient,
   channelNumber: number,
-): Promise<void> {
+): Promise<boolean> {
   const rawPatch = await buildPublicChannelLivePatch(service, channelNumber)
   const patch = rawPatch ? await enrichLivePatch(service, rawPatch) : null
   const payload: BoardOutputBroadcastPayload = { ts: Date.now(), patch }
 
-  await sendBoardOutputBroadcast(channelNumber, payload)
+  const ok = await sendBoardOutputBroadcast(channelNumber, payload)
+  if (ok) return true
+
+  // Fallback: nudge clients to pull /live if the full patch was too large to broadcast.
+  return sendBoardOutputBroadcast(channelNumber, { ts: Date.now(), patch: null })
 }
 
 /** Push fresh state to every output channel assigned to this meeting. */

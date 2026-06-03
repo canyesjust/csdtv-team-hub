@@ -29,7 +29,11 @@ async function runControlHandler(
 ): Promise<NextResponse> {
   const response = await handler(ctx)
   if (notifyOutputs && response.status >= 200 && response.status < 300) {
-    void notifyBoardOutputsForMeeting(service, boardMeetingId).catch(() => {})
+    try {
+      await notifyBoardOutputsForMeeting(service, boardMeetingId)
+    } catch {
+      /* output refresh is best-effort; don't fail the control action */
+    }
   }
   return response
 }

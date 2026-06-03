@@ -42,7 +42,11 @@ export async function withPlaylistContext(
 
   const response = await handler({ service, productionId, boardMeetingId: bm.id })
   if (notifyOutputs && response.status >= 200 && response.status < 300) {
-    void notifyBoardOutputsForMeeting(service, bm.id).catch(() => {})
+    try {
+      await notifyBoardOutputsForMeeting(service, bm.id)
+    } catch {
+      /* output refresh is best-effort; don't fail the playlist action */
+    }
   }
   return response
 }
