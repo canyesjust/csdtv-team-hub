@@ -60,6 +60,7 @@ export async function reopenMeeting(
     .from('board_meetings')
     .update({
       broadcast_status: 'prepared',
+      live_started_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', boardMeetingId)

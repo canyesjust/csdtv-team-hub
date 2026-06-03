@@ -62,9 +62,11 @@ export async function buildArchivePayload(service: SupabaseClient, productionNum
   const liveEvent = (events || []).find(e => LIVE_EVENT_TYPES.includes(e.event_type))
   const t0 = liveEvent
     ? new Date(liveEvent.occurred_at).getTime()
-    : bm.scheduled_public_start
-      ? new Date(bm.scheduled_public_start).getTime()
-      : null
+    : bm.live_started_at
+      ? new Date(bm.live_started_at).getTime()
+      : bm.scheduled_public_start
+        ? new Date(bm.scheduled_public_start).getTime()
+        : null
 
   const firstAdvanceByItem = new Map<string, number>()
   for (const ev of events || []) {

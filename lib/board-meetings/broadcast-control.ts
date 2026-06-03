@@ -37,12 +37,17 @@ export async function logMeetingEvent(
   operatorId: string,
   eventData?: Record<string, unknown>,
 ) {
-  void service.from('meeting_event_log').insert({
+  const row = {
     board_meeting_id: boardMeetingId,
     event_type: eventType,
     event_data: eventData ?? null,
     operator_id: operatorId,
-  })
+  }
+  let { error } = await service.from('meeting_event_log').insert(row)
+  if (error?.code === '23503') {
+    ;({ error } = await service.from('meeting_event_log').insert({ ...row, operator_id: null }))
+  }
+  if (error) throw new Error(`Failed to log meeting event (${eventType}): ${error.message}`)
 }
 
 export async function ensureBroadcastState(
@@ -224,9 +229,11 @@ export async function endPrerollAndStartMeeting(
   const first = items[0]?.id ?? null
   const current = state.current_agenda_item_id || first
 
+  const now = new Date().toISOString()
+
   await service
     .from('board_meetings')
-    .update({ broadcast_status: 'live', updated_at: new Date().toISOString() })
+    .update({ broadcast_status: 'live', live_started_at: now, updated_at: now })
     .eq('id', boardMeetingId)
 
   await stopPlaylistOnGoLive(service, boardMeetingId)
@@ -369,7 +376,7 @@ export async function advanceItem(
   if (!next) throw new Error(direction > 0 ? 'Already at last item' : 'Already at first item')
 
   await setCurrentItem(service, boardMeetingId, next.id, operatorId)
-  void logMeetingEvent(service, boardMeetingId, direction > 0 ? 'advance' : 'go_back', operatorId, {
+  await logMeetingEvent(service, boardMeetingId, direction > 0 ? 'advance' : 'go_back', operatorId, {
     agenda_item_id: next.id,
   })
   return next
@@ -390,8 +397,8 @@ export async function jumpToItem(
   if (!item) throw new Error('Agenda item not found')
   if (!item.is_broadcastable) throw new Error('Item is not broadcastable')
   await setCurrentItem(service, boardMeetingId, agendaItemId, operatorId)
-  void logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: agendaItemId })
-  void logMeetingEvent(service, boardMeetingId, 'jump_to', operatorId, { agenda_item_id: agendaItemId })
+  await logMeetingEvent(service, boardMeetingId, 'agenda_item_advanced', operatorId, { agenda_item_id: agendaItemId })
+  await logMeetingEvent(service, boardMeetingId, 'jump_to', operatorId, { agenda_item_id: agendaItemId })
 }
 
 export async function toggleOverlay(
