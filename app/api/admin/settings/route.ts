@@ -11,6 +11,18 @@ function normalizeOptionalHex(v: unknown): string | null {
   return h.toLowerCase()
 }
 
+function normalizeTeamEmail(raw: unknown): string {
+  const email = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
+  if (!email || !email.includes('@')) throw new Error('Enter a valid email address')
+  return email
+}
+
+function normalizeTeamName(raw: unknown): string {
+  const name = typeof raw === 'string' ? raw.trim() : ''
+  if (!name) throw new Error('Name is required')
+  return name
+}
+
 export async function POST(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -28,6 +40,72 @@ export async function POST(request: Request) {
       const { error } = await supabase.from('team').update({ active: false }).eq('id', memberId)
       if (error) return NextResponse.json({ error: error.message }, { status: 400 })
       return NextResponse.json({ success: true })
+    }
+
+    if (action === 'update_team_member') {
+      const { memberId, name: rawName, email: rawEmail } = payload || {}
+      if (!memberId) return NextResponse.json({ error: 'Missing team member id' }, { status: 400 })
+
+      let name: string
+      let email: string
+      try {
+        name = normalizeTeamName(rawName)
+        email = normalizeTeamEmail(rawEmail)
+      } catch (err) {
+        return NextResponse.json(
+          { error: err instanceof Error ? err.message : 'Invalid name or email' },
+          { status: 400 },
+        )
+      }
+
+      const { data: member, error: memberErr } = await supabase
+        .from('team')
+        .select('id, email, supabase_user_id')
+        .eq('id', memberId)
+        .maybeSingle()
+      if (memberErr) return NextResponse.json({ error: memberErr.message }, { status: 400 })
+      if (!member) return NextResponse.json({ error: 'Team member not found' }, { status: 404 })
+
+      const emailChanged = member.email.trim().toLowerCase() !== email
+
+      if (emailChanged) {
+        const { data: conflict } = await supabase
+          .from('team')
+          .select('id')
+          .eq('email', email)
+          .neq('id', memberId)
+          .maybeSingle()
+        if (conflict) {
+          return NextResponse.json(
+            { error: 'Another team member already uses that email' },
+            { status: 400 },
+          )
+        }
+      }
+
+      if (emailChanged && member.supabase_user_id) {
+        const { error: authErr } = await supabase.auth.admin.updateUserById(member.supabase_user_id, {
+          email,
+          email_confirm: true,
+        })
+        if (authErr) {
+          return NextResponse.json(
+            { error: authErr.message || 'Could not update sign-in email' },
+            { status: 400 },
+          )
+        }
+      }
+
+      const { error: teamErr } = await supabase
+        .from('team')
+        .update({ name, email })
+        .eq('id', memberId)
+      if (teamErr) return NextResponse.json({ error: teamErr.message }, { status: 400 })
+
+      return NextResponse.json({
+        success: true,
+        authEmailUpdated: emailChanged && !!member.supabase_user_id,
+      })
     }
 
     if (action === 'save_admin_email') {

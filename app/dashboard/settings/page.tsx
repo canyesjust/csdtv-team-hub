@@ -98,6 +98,8 @@ export default function SettingsPage() {
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState('')
   const [editingTeamMember, setEditingTeamMember] = useState<string | null>(null)
+  const [memberEditForm, setMemberEditForm] = useState({ name: '', email: '' })
+  const [savingTeamMemberId, setSavingTeamMemberId] = useState<string | null>(null)
   const [schools, setSchools] = useState<SchoolListRow[]>([])
   const [schoolSearch, setSchoolSearch] = useState('')
   const [newSchoolCode, setNewSchoolCode] = useState('')
@@ -369,6 +371,48 @@ export default function SettingsPage() {
     toast('Hub interface updated', 'success')
   }
 
+  const startEditMember = (member: TeamMember) => {
+    setEditingTeamMember(member.id)
+    setMemberEditForm({ name: member.name, email: member.email })
+  }
+
+  const cancelEditMember = () => {
+    setEditingTeamMember(null)
+    setMemberEditForm({ name: '', email: '' })
+  }
+
+  const saveMemberEdit = async (memberId: string) => {
+    if (!memberEditForm.name.trim() || !memberEditForm.email.trim()) {
+      toast('Name and email are required', 'error')
+      return
+    }
+    setSavingTeamMemberId(memberId)
+    try {
+      const result = await callAdminSettings('update_team_member', {
+        memberId,
+        name: memberEditForm.name.trim(),
+        email: memberEditForm.email.trim(),
+      })
+      setTeam(prev =>
+        prev.map(m =>
+          m.id === memberId
+            ? { ...m, name: memberEditForm.name.trim(), email: memberEditForm.email.trim().toLowerCase() }
+            : m,
+        ),
+      )
+      cancelEditMember()
+      const authNote =
+        result.authEmailUpdated
+          ? ' Sign-in email updated — they should use the new address for magic links.'
+          : ''
+      toast(`Team member updated.${authNote}`, 'success')
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Failed to update team member', 'error')
+    } finally {
+      setSavingTeamMemberId(null)
+    }
+  }
+
   const deactivateMember = async (memberId: string, memberName: string) => {
     if (!confirm(`Remove ${memberName} from the team?`)) return
     try {
@@ -378,6 +422,7 @@ export default function SettingsPage() {
       return
     }
     setTeam(prev => prev.filter(m => m.id !== memberId))
+    if (editingTeamMember === memberId) cancelEditMember()
     setSavedMsg(`${memberName} removed`)
     setTimeout(() => setSavedMsg(''), 2000)
   }
@@ -1072,11 +1117,12 @@ export default function SettingsPage() {
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'team' ? 'block' : 'none' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 8px' }}>Team</h2>
           <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px', lineHeight: 1.5 }}>
-            Use <strong style={{ fontWeight: 600, color: text }}>View as</strong> to see the dashboard with their role and data. Exit anytime from the yellow banner at the top.
+            Use <strong style={{ fontWeight: 600, color: text }}>View as</strong> to see the dashboard with their role and data. Use <strong style={{ fontWeight: 600, color: text }}>Edit</strong> to change name or email — if they&apos;ve logged in before, their sign-in email is updated too.
           </p>
 
           {team.map(member => (
-            <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: `0.5px solid ${border}` }}>
+            <div key={member.id} style={{ borderBottom: `0.5px solid ${border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', flexWrap: 'wrap' as const }}>
               <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: member.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
                 {member.name.slice(0, 2).toUpperCase()}
               </div>
@@ -1145,6 +1191,25 @@ export default function SettingsPage() {
                 <>
                   <button
                     type="button"
+                    onClick={() =>
+                      editingTeamMember === member.id ? cancelEditMember() : startEditMember(member)
+                    }
+                    style={{
+                      fontSize: '14px',
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      background: 'transparent',
+                      border: `0.5px solid ${border}`,
+                      color: text,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      minHeight: '36px',
+                    }}
+                  >
+                    {editingTeamMember === member.id ? 'Cancel edit' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void startViewAs(member)}
                     style={{
                       fontSize: '14px',
@@ -1162,6 +1227,80 @@ export default function SettingsPage() {
                   </button>
                   <button onClick={() => deactivateMember(member.id, member.name)} style={{ fontSize: '14px', padding: '5px 10px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>Remove</button>
                 </>
+              )}
+              </div>
+              {editingTeamMember === member.id && (
+                <div
+                  style={{
+                    margin: '0 0 12px 48px',
+                    padding: '14px',
+                    borderRadius: '10px',
+                    background: 'var(--surface-2)',
+                    border: `0.5px solid ${border}`,
+                    display: 'grid',
+                    gap: '10px',
+                    maxWidth: '420px',
+                  }}
+                >
+                  <label style={{ display: 'grid', gap: '4px' }}>
+                    <span style={{ fontSize: '12px', color: muted, fontWeight: 500 }}>Name</span>
+                    <input
+                      value={memberEditForm.name}
+                      onChange={e => setMemberEditForm(f => ({ ...f, name: e.target.value }))}
+                      style={inputStyle}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: '4px' }}>
+                    <span style={{ fontSize: '12px', color: muted, fontWeight: 500 }}>Email</span>
+                    <input
+                      type="email"
+                      value={memberEditForm.email}
+                      onChange={e => setMemberEditForm(f => ({ ...f, email: e.target.value }))}
+                      style={inputStyle}
+                    />
+                  </label>
+                  <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>
+                    {member.supabase_user_id
+                      ? 'Changing email updates their hub roster and Supabase sign-in (magic links will go to the new address).'
+                      : 'They have not logged in yet — use Send invite after saving if you want a fresh sign-in link.'}
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={savingTeamMemberId === member.id}
+                      onClick={() => void saveMemberEdit(member.id)}
+                      style={{
+                        fontSize: '14px',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        background: '#1e6cb5',
+                        color: '#fff',
+                        border: 'none',
+                        cursor: savingTeamMemberId === member.id ? 'wait' : 'pointer',
+                        fontFamily: 'inherit',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {savingTeamMemberId === member.id ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEditMember}
+                      style={{
+                        fontSize: '14px',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        background: 'transparent',
+                        border: `0.5px solid ${border}`,
+                        color: muted,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           ))}
