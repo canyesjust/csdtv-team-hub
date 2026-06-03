@@ -30,11 +30,13 @@ type ItemDraft = {
 type Props = {
   trackId: OnboardingTrackId
   syncing: boolean
+  reapplying?: boolean
   phases: OnboardingPhase[]
   categories: OnboardingCategory[]
   items: OnboardingTemplateItem[]
   articles: ArticleOption[]
   onSetTrack: (id: OnboardingTrackId) => void
+  onReapplyStudentTemplate?: () => Promise<void>
   onAddPhase: (label: string) => Promise<void>
   onUpdatePhaseLabel: (phase: OnboardingPhase, label: string) => Promise<void>
   onAddCategory: (label: string) => Promise<void>
@@ -56,11 +58,13 @@ const emptyDraft = (phaseId = '', categoryId = ''): ItemDraft => ({
 export default function OnboardingTemplateEditor({
   trackId,
   syncing,
+  reapplying = false,
   phases,
   categories,
   items,
   articles,
   onSetTrack,
+  onReapplyStudentTemplate,
   onAddPhase,
   onUpdatePhaseLabel,
   onAddCategory,
@@ -283,6 +287,25 @@ export default function OnboardingTemplateEditor({
         <span style={{ padding: '4px 10px', borderRadius: '999px', background: 'var(--surface-2)', border: `0.5px solid ${border}` }}>
           {activeItems.length} items
         </span>
+        {trackId === ONBOARDING_TRACK_STUDENT_INTERN && onReapplyStudentTemplate ? (
+          <button
+            type="button"
+            onClick={() => void onReapplyStudentTemplate()}
+            disabled={reapplying}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '999px',
+              background: 'var(--surface-2)',
+              border: `0.5px solid ${border}`,
+              color: 'var(--link)',
+              cursor: reapplying ? 'wait' : 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '13px',
+            }}
+          >
+            {reapplying ? 'Reloading…' : 'Reload default checklist'}
+          </button>
+        ) : null}
       </div>
 
       <div

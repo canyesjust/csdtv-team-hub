@@ -13,31 +13,15 @@ import {
   STUDENT_SEED_PHASES,
   type SeedItem,
 } from './legacy-seed'
+import { syncTemplateToOpenAssignments } from './sync-template'
 
-async function seedTrack(
+async function insertTemplateStructure(
   supabase: SupabaseClient,
   trackId: OnboardingTrackId,
-  trackName: string,
-  teamRole: string,
   phases: string[],
   categories: string[],
   items: SeedItem[],
 ) {
-  await supabase.from('onboarding_tracks').upsert({
-    id: trackId,
-    name: trackName,
-    team_role: teamRole,
-    active: true,
-  })
-
-  const { data: existingPhases } = await supabase
-    .from('onboarding_phases')
-    .select('id')
-    .eq('track_id', trackId)
-    .limit(1)
-
-  if (existingPhases?.length) return
-
   const phaseIds: Record<string, string> = {}
   for (let i = 0; i < phases.length; i++) {
     const { data, error } = await supabase
@@ -74,6 +58,76 @@ async function seedTrack(
 
   const { error } = await supabase.from('onboarding_template_items').insert(rows)
   if (error) throw new Error(error.message)
+}
+
+/** Retire current template rows and insert a fresh checklist for a track. */
+export async function replaceTrackTemplate(
+  supabase: SupabaseClient,
+  trackId: OnboardingTrackId,
+  phases: string[],
+  categories: string[],
+  items: SeedItem[],
+): Promise<{ error?: string }> {
+  try {
+    await supabase.from('onboarding_template_items').update({ active: false }).eq('track_id', trackId)
+    await supabase.from('onboarding_phases').update({ active: false }).eq('track_id', trackId)
+    await supabase.from('onboarding_categories').update({ active: false }).eq('track_id', trackId)
+    await insertTemplateStructure(supabase, trackId, phases, categories, items)
+    return {}
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Replace failed' }
+  }
+}
+
+async function seedTrack(
+  supabase: SupabaseClient,
+  trackId: OnboardingTrackId,
+  trackName: string,
+  teamRole: string,
+  phases: string[],
+  categories: string[],
+  items: SeedItem[],
+) {
+  await supabase.from('onboarding_tracks').upsert({
+    id: trackId,
+    name: trackName,
+    team_role: teamRole,
+    active: true,
+  })
+
+  const { data: existingPhases } = await supabase
+    .from('onboarding_phases')
+    .select('id')
+    .eq('track_id', trackId)
+    .eq('active', true)
+    .limit(1)
+
+  if (existingPhases?.length) return
+
+  await insertTemplateStructure(supabase, trackId, phases, categories, items)
+}
+
+/** Replace student intern checklist with the 2026 default and sync open assignments. */
+export async function replaceStudentInternOnboardingTemplate(
+  supabase: SupabaseClient,
+): Promise<{ error?: string }> {
+  await supabase.from('onboarding_tracks').upsert({
+    id: ONBOARDING_TRACK_STUDENT_INTERN,
+    name: 'Student intern',
+    team_role: 'Student Intern',
+    active: true,
+  })
+
+  const replaced = await replaceTrackTemplate(
+    supabase,
+    ONBOARDING_TRACK_STUDENT_INTERN,
+    [...STUDENT_SEED_PHASES],
+    [...STUDENT_SEED_CATEGORIES],
+    STUDENT_SEED_ITEMS,
+  )
+  if (replaced.error) return replaced
+
+  return syncTemplateToOpenAssignments(supabase, ONBOARDING_TRACK_STUDENT_INTERN)
 }
 
 /** Idempotent: seeds default tracks/phases/categories/items if phases table is empty per track. */

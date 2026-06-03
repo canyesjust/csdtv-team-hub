@@ -1,5 +1,11 @@
 /** Default phases and categories + checklist items migrated from the original hardcoded lists. */
 
+import {
+  STUDENT_INTERN_ONBOARDING_CATEGORIES,
+  STUDENT_INTERN_ONBOARDING_ITEMS,
+  STUDENT_INTERN_ONBOARDING_PHASES,
+} from './student-intern-seed'
+
 export type SeedItem = {
   phase: string
   category: string
@@ -59,18 +65,8 @@ export const INTERN_SEED_ITEMS: SeedItem[] = [
   { phase: 'Wrap-up', category: 'Wrap-up', title: 'Sign onboarding completion acknowledgment', description: 'Review and sign the onboarding completion form confirming you have finished all tasks.', required: true },
 ]
 
-export const STUDENT_SEED_PHASES = ['Getting started', 'On the job', 'Wrap-up']
+export const STUDENT_SEED_PHASES = [...STUDENT_INTERN_ONBOARDING_PHASES]
 
-export const STUDENT_SEED_CATEGORIES = ['Getting started', 'Equipment', 'Library', 'Productions', 'Wrap-up']
+export const STUDENT_SEED_CATEGORIES = [...STUDENT_INTERN_ONBOARDING_CATEGORIES]
 
-export const STUDENT_SEED_ITEMS: SeedItem[] = [
-  { phase: 'Getting started', category: 'Getting started', title: 'Log into the Team Hub', description: 'Sign in to csdtvstaff.org using your district email magic link.' },
-  { phase: 'Getting started', category: 'Getting started', title: 'Review assigned productions', description: 'Open Productions and confirm which shows you are listed on.' },
-  { phase: 'Getting started', category: 'Library', title: 'Read Equipment Checkout Policy in Library', description: 'Find and read the Equipment Checkout Policy article in the Team Hub Library.' },
-  { phase: 'Getting started', category: 'Equipment', title: 'Equipment room orientation', description: 'Walk the equipment room with a staff member; learn where items live and how checkout works.' },
-  { phase: 'Getting started', category: 'Productions', title: 'Shadow one production or classroom shoot', description: 'Attend as an observer; take notes on setup, roles, and safety.' },
-  { phase: 'Getting started', category: 'Getting started', title: 'Complete district digital safety training', description: 'Finish the required online digital safety course assigned by the district.' },
-  { phase: 'Getting started', category: 'Getting started', title: 'Check-in with your manager', description: 'Review expectations, hours, and questions about your assignments.' },
-  { phase: 'On the job', category: 'Productions', title: 'Assist with one assigned production task', description: 'Work on a concrete task your manager assigns (camera, grip, logging, etc.).' },
-  { phase: 'Wrap-up', category: 'Wrap-up', title: 'Student intern wrap-up', description: 'Review progress with your manager and confirm next steps.', required: true },
-]
+export const STUDENT_SEED_ITEMS: SeedItem[] = STUDENT_INTERN_ONBOARDING_ITEMS

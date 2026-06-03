@@ -31,6 +31,7 @@ function OnboardingAdminContent() {
 
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [reapplying, setReapplying] = useState(false)
   const [phases, setPhases] = useState<OnboardingPhase[]>([])
   const [categories, setCategories] = useState<OnboardingCategory[]>([])
   const [items, setItems] = useState<OnboardingTemplateItem[]>([])
@@ -167,6 +168,29 @@ function OnboardingAdminContent() {
     setItems((list) => list.filter((x) => x.id !== item.id))
   }
 
+  const reapplyStudentTemplate = async () => {
+    if (trackId !== ONBOARDING_TRACK_STUDENT_INTERN) return
+    if (
+      !confirm(
+        'Replace the student intern checklist with the latest default template? Existing custom edits will be retired. Active onboardings will get the new items.',
+      )
+    ) {
+      return
+    }
+    setReapplying(true)
+    try {
+      const res = await fetch('/api/admin/onboarding/reapply-student-template', { method: 'POST' })
+      const body = (await res.json()) as { error?: string }
+      if (!res.ok) {
+        alert(body.error || 'Failed to reload template')
+        return
+      }
+      await load()
+    } finally {
+      setReapplying(false)
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '50vh' }}>
@@ -179,11 +203,13 @@ function OnboardingAdminContent() {
     <OnboardingTemplateEditor
       trackId={trackId}
       syncing={syncing}
+      reapplying={reapplying}
       phases={phases}
       categories={categories}
       items={items}
       articles={articles}
       onSetTrack={setTrack}
+      onReapplyStudentTemplate={reapplyStudentTemplate}
       onAddPhase={addPhase}
       onUpdatePhaseLabel={updatePhaseLabel}
       onAddCategory={addCategory}
