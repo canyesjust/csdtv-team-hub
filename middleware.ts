@@ -42,9 +42,14 @@ export async function middleware(request: NextRequest) {
   if (user && requiresTeam) {
     const teamAccess = await getEffectiveTeamRow(supabase, user)
     if (teamAccess === null) {
+      await supabase.auth.signOut()
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('reason', 'not-on-team')
-      return NextResponse.redirect(loginUrl)
+      const redirectResponse = NextResponse.redirect(loginUrl)
+      response.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value)
+      })
+      return redirectResponse
     }
     const role = teamAccess === 'pending-link' ? null : teamAccess.role
     const dashboardProfile =

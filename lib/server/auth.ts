@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { getImpersonationSessionForActor } from '@/lib/server/impersonation'
+import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 export type TeamUser = {
   id: string
@@ -92,7 +93,10 @@ export async function getTeamRowForAuthUser(
   supabase: SupabaseClient,
   user: { id: string; email?: string | null },
 ): Promise<{ id: string; role: string; dashboard_profile: string } | 'pending-link' | null> {
-  const { data: byUid } = await supabase
+  // Service role avoids RLS gaps during the access gate (middleware).
+  const db = getServiceSupabaseClient() ?? supabase
+
+  const { data: byUid } = await db
     .from('team')
     .select('id, role, dashboard_profile')
     .eq('supabase_user_id', user.id)
@@ -106,10 +110,11 @@ export async function getTeamRowForAuthUser(
   }
 
   if (!user.email) return null
-  const { data: byEmail } = await supabase
+  const emailNorm = user.email.trim().toLowerCase()
+  const { data: byEmail } = await db
     .from('team')
     .select('id, role, dashboard_profile, supabase_user_id')
-    .eq('email', user.email.trim().toLowerCase())
+    .eq('email', emailNorm)
     .maybeSingle()
   if (byEmail && !byEmail.supabase_user_id) return 'pending-link'
   return null

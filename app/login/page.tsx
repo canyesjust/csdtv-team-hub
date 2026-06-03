@@ -19,6 +19,11 @@ function stripResetFromUrl() {
   window.history.replaceState({}, '', `${url.pathname}${url.search}`)
 }
 
+function isNotOnTeamReason(): boolean {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('reason') === 'not-on-team'
+}
+
 export default function LoginPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -27,7 +32,11 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'password' | 'magic'>('password')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() =>
+    isNotOnTeamReason()
+      ? 'Your account is signed in but is not on the CSDtv team list. Contact your administrator to be invited.'
+      : '',
+  )
   const [resetMode, setResetMode] = useState(() => {
     if (typeof window === 'undefined') return false
     return new URLSearchParams(window.location.search).get('reset') === 'true'
@@ -35,8 +44,9 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [signedInEmail, setSignedInEmail] = useState<string | null>(null)
-  const [notOnTeam, setNotOnTeam] = useState(false)
+  const [notOnTeam, setNotOnTeam] = useState(isNotOnTeamReason)
   const inRecoveryRef = useRef(false)
+  const notOnTeamRef = useRef(isNotOnTeamReason())
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -46,13 +56,15 @@ export default function LoginPage() {
       inRecoveryRef.current = true
     }
     if (params.get('reason') === 'not-on-team') {
+      notOnTeamRef.current = true
       setNotOnTeam(true)
       setError('Your account is signed in but is not on the CSDtv team list. Contact your administrator to be invited.')
+      void supabase.auth.signOut()
     }
     if (params.get('error') === 'auth') {
       setError('This link has expired or was already used. Request a new password reset email and open only the newest link.')
     }
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     if (!notOnTeam) return
@@ -72,19 +84,20 @@ export default function LoginPage() {
         setResetMode(true)
         return
       }
-      if (session && !inRecoveryRef.current && !notOnTeam) {
+      if (session && !inRecoveryRef.current && !notOnTeamRef.current) {
         stripResetFromUrl()
         router.push(getPostLoginPath())
       }
     })
     return () => subscription.unsubscribe()
-  }, [supabase, router, notOnTeam])
+  }, [supabase, router])
 
   const handleSignOut = async () => {
     setLoading(true)
     setError('')
     await supabase.auth.signOut()
     setSignedInEmail(null)
+    notOnTeamRef.current = false
     setNotOnTeam(false)
     setLoading(false)
     if (typeof window !== 'undefined') {
