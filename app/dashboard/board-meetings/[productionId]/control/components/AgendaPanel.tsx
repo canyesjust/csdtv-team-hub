@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { ControlAgendaItem } from '@/lib/board-meetings/types'
 
 type Props = {
@@ -28,7 +28,7 @@ export default function AgendaPanel({
   onPatchItem,
   onMoveItem,
 }: Props) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const currentRowRef = useRef<HTMLButtonElement | null>(null)
 
   const sorted = useMemo(
     () => [...(items || [])].sort((a, b) => a.sort_order - b.sort_order),
@@ -49,12 +49,14 @@ export default function AgendaPanel({
   }, [sorted, followLiveOrder, currentSortIndex])
 
   useEffect(() => {
-    if (!followLiveOrder) return
-    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    if (!followLiveOrder || !currentItemId) return
+    requestAnimationFrame(() => {
+      currentRowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    })
   }, [currentItemId, followLiveOrder])
 
   return (
-    <div className="cs-agenda-scroll" ref={scrollRef}>
+    <>
       <button
         type="button"
         disabled={disabled}
@@ -81,6 +83,7 @@ export default function AgendaPanel({
             key={it.id}
             item={it}
             index={idx}
+            rowRef={!brandingHold && it.id === currentItemId ? currentRowRef : undefined}
             broadcastableRank={broadcastableRank}
             broadcastableCount={sorted.filter(i => i.is_broadcastable).length}
             total={sorted.length}
@@ -95,13 +98,14 @@ export default function AgendaPanel({
           />
         )
       })}
-    </div>
+    </>
   )
 }
 
 function AgendaRow({
   item,
   index,
+  rowRef,
   broadcastableRank,
   broadcastableCount,
   total,
@@ -116,6 +120,7 @@ function AgendaRow({
 }: {
   item: ControlAgendaItem
   index: number
+  rowRef?: RefObject<HTMLButtonElement | null>
   broadcastableRank: number
   broadcastableCount: number
   total: number
@@ -138,6 +143,7 @@ function AgendaRow({
     return (
       <button
         type="button"
+        ref={rowRef}
         disabled={disabled}
         onClick={() => onJump(item.id)}
         className={`cs-agenda-item${isCurrent ? ' cs-agenda-item-onair' : ''}${isDone ? ' cs-agenda-item-done' : ''}`}
