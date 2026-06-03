@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
+import { getActiveQrRemainingSeconds, isQrActive, clearExpiredQrIfNeeded } from '@/lib/board-meetings/qr-control'
 import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
@@ -362,11 +362,15 @@ export async function buildPublicChannelState(
   }
 
   let active_qr: PublicActiveQr | null = null
-  if (bstate && isQrActive(bstate)) {
-    active_qr = {
-      url: bstate.active_qr_url!,
-      label: bstate.active_qr_label || 'Scan',
-      remaining_seconds: getActiveQrRemainingSeconds(bstate),
+  if (bstate?.active_qr_url) {
+    if (isQrActive(bstate)) {
+      active_qr = {
+        url: bstate.active_qr_url!,
+        label: bstate.active_qr_label || 'Scan',
+        remaining_seconds: getActiveQrRemainingSeconds(bstate),
+      }
+    } else {
+      await clearExpiredQrIfNeeded(service, bm.id, bstate)
     }
   }
 

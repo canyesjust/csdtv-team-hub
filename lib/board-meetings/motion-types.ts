@@ -73,7 +73,7 @@ export type PublicActiveMotion = {
   is_consent_block: boolean
   consent_block_label: string | null
   parent_motion_text: string | null
-  /** Live tally while status is voting (for overlay / dais). */
+  /** Reserved — public outputs show tallies only on pushed vote-result graphics. */
   tally?: VoteTally
 }
 export type PublicActiveVoteResult = {

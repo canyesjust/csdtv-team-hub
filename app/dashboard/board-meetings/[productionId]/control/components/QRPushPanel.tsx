@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { getActiveQrRemainingSeconds, isQrActive, type QrStateFields } from '@/lib/board-meetings/qr-control'
 import {
   BUILTIN_QR_PRESET_KEYS,
   templateUsesAgendaUrl,
@@ -86,23 +87,28 @@ export default function QRPushPanel({
   const [modalOpen, setModalOpen] = useState(false)
   const [remaining, setRemaining] = useState<number>(0)
 
-  const qrIsActive = !!(activeQR?.url)
+  const qrFields = useMemo((): QrStateFields | null => {
+    if (!activeQR?.url) return null
+    return {
+      active_qr_url: activeQR.url,
+      active_qr_label: activeQR.label,
+      active_qr_started_at: activeQR.startedAt,
+      active_qr_duration_seconds: activeQR.durationSeconds,
+    }
+  }, [activeQR?.url, activeQR?.label, activeQR?.startedAt, activeQR?.durationSeconds])
+
+  const qrIsActive = qrFields ? isQrActive(qrFields) : false
 
   useEffect(() => {
-    if (!qrIsActive || !activeQR?.startedAt || !activeQR?.durationSeconds) {
+    if (!qrFields || !qrIsActive) {
       setRemaining(0)
       return
     }
-    const startedMs = new Date(activeQR.startedAt).getTime()
-    const totalMs = activeQR.durationSeconds * 1000
-    const tick = () => {
-      const elapsed = Date.now() - startedMs
-      setRemaining(Math.max(0, Math.ceil((totalMs - elapsed) / 1000)))
-    }
+    const tick = () => setRemaining(getActiveQrRemainingSeconds(qrFields))
     tick()
     const id = setInterval(tick, 500)
     return () => clearInterval(id)
-  }, [qrIsActive, activeQR?.startedAt, activeQR?.durationSeconds])
+  }, [qrFields, qrIsActive])
 
   if (qrIsActive && activeQR) {
     return (

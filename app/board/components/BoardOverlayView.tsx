@@ -18,7 +18,8 @@ import {
   OVERLAY_TEXT_PRIMARY,
   OVERLAY_TEXT_SUBTLE,
 } from '@/app/board/overlay-graphics'
-import { OverlayMotionCard, OverlayVoteSidePanel } from '@/app/board/components/MotionFloorGraphics'
+import { OverlayMotionCard, OverlayVoteSidePanel, fitMotionText, motionTextFitStyle } from '@/app/board/components/MotionFloorGraphics'
+import { useActivePublicQr } from '@/app/board/hooks/useActivePublicQr'
 
 function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {
   return (
@@ -84,6 +85,7 @@ export default function BoardOverlayView({
   initialChannelName?: string
 }) {
   const { state, debugInfo } = useBoardChannelState(channelNumber, { livePriority: true })
+  const visibleQr = useActivePublicQr(state?.state?.active_qr ?? null)
 
   const stackAnchor: React.CSSProperties = {
     position: 'absolute',
@@ -124,7 +126,6 @@ export default function BoardOverlayView({
   const showBrandingHold = brandingHold && mode === 'normal' && !showVoteResult && !showMotion
   const timer = state.timer
   const showTimer = timer?.show_on_broadcast && (timer.remaining_seconds ?? 0) > 0
-  const qr = b?.active_qr
   const lowerThird = b?.active_lower_third
   const showLowerThird = !!lowerThird && mode !== 'technical_difficulties'
   if (mode === 'recess') {
@@ -133,7 +134,7 @@ export default function BoardOverlayView({
         <div style={stackAnchor}>
           <ModeBanner accent="#1e4a8a" title="Recess" message={b?.mode_message ?? null} />
         </div>
-        {qr && <QrOverlay url={qr.url} label={qr.label} />}
+        {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
         {showLowerThird && lowerThird ? (
           <LowerThirdBanner
             person={lowerThird}
@@ -151,7 +152,7 @@ export default function BoardOverlayView({
         <div style={stackAnchor}>
           <ModeBanner accent="#8b1a1a" title="Technical Difficulties" message={b?.mode_message ?? null} />
         </div>
-        {qr && <QrOverlay url={qr.url} label={qr.label} />}
+        {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
       </>
     )
   }
@@ -176,7 +177,7 @@ export default function BoardOverlayView({
           </div>
         </div>
         {showTimer && timer ? <TimerBadge timer={timer} /> : null}
-        {qr && <QrOverlay url={qr.url} label={qr.label} />}
+        {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
         {showLowerThird && lowerThird ? (
           <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
         ) : null}
@@ -214,7 +215,7 @@ export default function BoardOverlayView({
         </div>
       ) : null}
       {showTimer && timer ? <TimerBadge timer={timer} /> : null}
-      {qr && <QrOverlay url={qr.url} label={qr.label} />}
+      {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
       {showLowerThird && lowerThird ? (
         <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
       ) : null}
@@ -227,20 +228,21 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
   const passed = result.result === 'passed'
   const yeaNames = result.votes.filter(v => v.vote === 'yea').map(v => v.person_name)
   const nayNames = result.votes.filter(v => v.vote === 'nay').map(v => v.person_name)
+  const motionText = fitMotionText(result.motion_text)
   return (
     <div
       className="obs-overlay-graphic"
       style={overlayPanelStyle({
-        maxWidth: '480px',
+        maxWidth: 'min(480px, calc(100vw - 48px))',
+        overflow: 'hidden',
         padding: '14px 18px',
         borderRadius: '6px',
         color: OVERLAY_TEXT_PRIMARY,
         border: `2px solid ${passed ? '#22c55e' : '#ef4444'}`,
       })}
     >
-      <p style={{ margin: '0 0 6px', fontSize: '12px', lineHeight: 1.35, color: OVERLAY_TEXT_MUTED }}>
-        {result.motion_text.slice(0, 80)}
-        {result.motion_text.length > 80 ? '…' : ''}
+      <p style={{ ...motionTextFitStyle(motionText, 'overlay-result'), margin: '0 0 8px', color: OVERLAY_TEXT_MUTED }}>
+        {motionText}
       </p>
       <p style={{ margin: '0 0 4px', fontSize: '22px', fontWeight: 800, letterSpacing: '0.02em', color: passed ? '#4ade80' : '#f87171' }}>
         MOTION {passed ? 'PASSED' : 'FAILED'}

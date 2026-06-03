@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { resolveAgendaNavigation } from '@/lib/board-meetings/control-meeting-cache'
-import { getActiveQrRemainingSeconds, isQrActive } from '@/lib/board-meetings/qr-control'
+import { getActiveQrRemainingSeconds, isQrActive, clearExpiredQrIfNeeded } from '@/lib/board-meetings/qr-control'
 import { buildPublicMotionPayload, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import { buildPublicLowerThirdPayload, normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import {
@@ -222,11 +222,15 @@ export async function buildPublicChannelLivePatch(
   }
 
   let active_qr = null
-  if (bstate && isQrActive(bstate)) {
-    active_qr = {
-      url: bstate.active_qr_url!,
-      label: bstate.active_qr_label || 'Scan',
-      remaining_seconds: getActiveQrRemainingSeconds(bstate),
+  if (bstate?.active_qr_url) {
+    if (isQrActive(bstate)) {
+      active_qr = {
+        url: bstate.active_qr_url!,
+        label: bstate.active_qr_label || 'Scan',
+        remaining_seconds: getActiveQrRemainingSeconds(bstate),
+      }
+    } else {
+      await clearExpiredQrIfNeeded(service, bm.id, bstate)
     }
   }
 

@@ -8,6 +8,7 @@ import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
+import { fitMotionText, motionTextFitStyle } from '@/app/board/components/MotionFloorGraphics'
 
 function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
   const vr = state?.active_vote_result
@@ -19,7 +20,7 @@ function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
         <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: passed ? '#166534' : '#991b1b' }}>
           {passed ? 'Motion passed' : 'Motion failed'} · {vr.tally.yea}–{vr.tally.nay}
         </p>
-        <p style={{ margin: 0, fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{vr.motion_text}</p>
+        <p style={{ ...motionTextFitStyle(vr.motion_text, 'live-compact'), margin: 0, color: '#334155' }}>{vr.motion_text}</p>
       </div>
     )
   }
@@ -38,7 +39,9 @@ function MotionFloorBlock({ state }: { state: PublicChannelState['state'] }) {
           {label}
         </p>
         {motion.motion_text?.trim() ? (
-          <p style={{ margin: '0 0 6px', fontSize: '14px', color: '#334155', lineHeight: 1.4 }}>{motion.motion_text}</p>
+          <p style={{ ...motionTextFitStyle(fitMotionText(motion), 'live-compact'), margin: '0 0 6px', color: '#334155' }}>
+            {fitMotionText(motion)}
+          </p>
         ) : null}
         {hasMover && hasSeconder && (
           <p style={{ margin: 0, fontSize: '13px', color: '#78716c' }}>

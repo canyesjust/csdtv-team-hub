@@ -11,7 +11,7 @@ import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
-import { AgendaContextStrip, motionDisplayText } from '@/app/board/components/MotionFloorGraphics'
+import { AgendaContextStrip, fitMotionText, motionTextFitStyle } from '@/app/board/components/MotionFloorGraphics'
 import { CANYONS_LOGO_SRC } from '@/app/board/branding-assets'
 
 const C = {
@@ -407,7 +407,7 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
       <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent }}>
         {passed ? 'Motion passed' : 'Motion failed'} · {result.tally.yea}–{result.tally.nay}
       </p>
-      <p style={{ margin: 0, fontSize: '22px', lineHeight: 1.4, color: C.text, fontWeight: 500 }}>
+      <p style={{ ...motionTextFitStyle(result.motion_text, 'dais'), margin: 0, color: C.text }}>
         {result.motion_text}
       </p>
     </div>
@@ -418,8 +418,8 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
   const isVoting = motion.status === 'voting'
   const hasMover = !!motion.moved_by_name
   const hasSeconder = !!motion.seconded_by_name
-  const text = motionDisplayText(motion, hero ? 480 : 320)
-  const textStyle = hero ? motionTextHero : motionText
+  const text = fitMotionText(motion)
+  const textStyle = motionTextFitStyle(text, hero ? 'dais-hero' : 'dais')
 
   if (isVoting) {
     return (
@@ -431,14 +431,6 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
         hero={hero}
       >
         {text ? <p style={textStyle}>{text}</p> : null}
-        {motion.tally && (motion.tally.yea > 0 || motion.tally.nay > 0) ? (
-          <p style={voteTallyLine}>
-            <span style={{ color: C.green }}>Yea {motion.tally.yea}</span>
-            {' · '}
-            <span style={{ color: C.red }}>Nay {motion.tally.nay}</span>
-            {motion.tally.abstain > 0 ? ` · Abstain ${motion.tally.abstain}` : ''}
-          </p>
-        ) : null}
         {hasMover && hasSeconder && (
           <p style={motionMeta}>
             <span style={metaHighlight}>{motion.moved_by_name}</span>
@@ -901,27 +893,6 @@ const upNextTitle: React.CSSProperties = {
   overflow: 'hidden',
 }
 
-const motionText: React.CSSProperties = {
-  margin: '0 0 12px',
-  fontSize: 'clamp(20px, 2.2vw, 26px)',
-  lineHeight: 1.4,
-  color: C.text,
-  fontWeight: 500,
-}
-const motionTextHero: React.CSSProperties = {
-  margin: '0 0 14px',
-  fontSize: 'clamp(28px, 3.2vw, 40px)',
-  lineHeight: 1.28,
-  color: C.text,
-  fontWeight: 600,
-  letterSpacing: '-0.02em',
-}
-const voteTallyLine: React.CSSProperties = {
-  margin: '0 0 12px',
-  fontSize: '16px',
-  fontWeight: 600,
-  fontVariantNumeric: 'tabular-nums',
-}
 const formingText: React.CSSProperties = {
   margin: 0,
   fontSize: 'clamp(24px, 2.8vw, 32px)',

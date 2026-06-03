@@ -209,4 +209,24 @@ export async function dismissQr(service: SupabaseClient, boardMeetingId: string,
   await logMeetingEvent(service, boardMeetingId, 'qr_dismissed', operatorId)
 }
 
+/** Drop stale QR fields once the timer has elapsed (idempotent). */
+export async function clearExpiredQrIfNeeded(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  state: QrStateFields,
+): Promise<boolean> {
+  if (!state.active_qr_url || isQrActive(state)) return false
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_qr_url: null,
+      active_qr_label: null,
+      active_qr_started_at: null,
+      active_qr_duration_seconds: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('board_meeting_id', boardMeetingId)
+  return true
+}
+
 export { BUILTIN_KEYS, DEFAULT_QR_DURATION, getSiteBaseUrl }
