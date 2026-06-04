@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 type FeedImage = {
@@ -12,7 +12,35 @@ type FeedImage = {
 const REFRESH_MS = 5 * 60 * 1000
 const FADE_MS = 600
 
-export default function SignageSlideshowPage() {
+const screenStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: '#000',
+  overflow: 'hidden',
+  cursor: 'none',
+  margin: 0,
+}
+
+function EmptyMark() {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        bottom: '24px',
+        right: '28px',
+        color: 'rgba(255,255,255,0.25)',
+        fontSize: '14px',
+        fontFamily: 'system-ui, sans-serif',
+        letterSpacing: '0.08em',
+        userSelect: 'none',
+      }}
+    >
+      CSDtv
+    </div>
+  )
+}
+
+function SignageSlideshowInner() {
   const searchParams = useSearchParams()
   const seconds = useMemo(() => {
     const raw = parseInt(searchParams.get('seconds') ?? '10', 10)
@@ -58,16 +86,7 @@ export default function SignageSlideshowPage() {
   const current = images[index]
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: '#000',
-        overflow: 'hidden',
-        cursor: 'none',
-        margin: 0,
-      }}
-    >
+    <div style={screenStyle}>
       {current ? (
         <img
           key={current.id}
@@ -84,21 +103,22 @@ export default function SignageSlideshowPage() {
           }}
         />
       ) : (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '24px',
-            right: '28px',
-            color: 'rgba(255,255,255,0.25)',
-            fontSize: '14px',
-            fontFamily: 'system-ui, sans-serif',
-            letterSpacing: '0.08em',
-            userSelect: 'none',
-          }}
-        >
-          CSDtv
-        </div>
+        <EmptyMark />
       )}
     </div>
+  )
+}
+
+export default function SignageSlideshowPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={screenStyle}>
+          <EmptyMark />
+        </div>
+      }
+    >
+      <SignageSlideshowInner />
+    </Suspense>
   )
 }
