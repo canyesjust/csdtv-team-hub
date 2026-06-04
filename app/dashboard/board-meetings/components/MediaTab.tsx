@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import FilePickButton from '@/components/FilePickButton'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
 import type { MediaAssetRow } from '@/lib/board-meetings/playlist-types'
@@ -227,7 +228,21 @@ export default function MediaTab() {
             <select value={uploadType} onChange={e => setUploadType(e.target.value)} style={{ ...inputStyle, marginBottom: '12px' }}>
               {UPLOAD_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <input type="file" accept={uploadType === 'image' ? 'image/*' : uploadType === 'audio_bed' ? 'audio/*' : 'video/*'} onChange={e => { const f = e.target.files?.[0]; setUploadFile(f || null); if (f && !uploadName) setUploadName(f.name.replace(/\.[^.]+$/, '')) }} style={{ marginBottom: '12px', width: '100%' }} />
+            <label style={{ display: 'block', fontSize: '13px', color: muted, marginBottom: '6px' }}>File</label>
+            <div style={{ marginBottom: '12px' }}>
+              <FilePickButton
+              accept={uploadType === 'image' ? 'image/*' : uploadType === 'audio_bed' ? 'audio/*' : 'video/*'}
+              label="Choose file"
+              changeLabel="Change file"
+              variant="secondary"
+              fullWidth
+              showFileName
+              onChange={file => {
+                setUploadFile(file)
+                if (file && !uploadName) setUploadName(file.name.replace(/\.[^.]+$/, ''))
+              }}
+            />
+            </div>
             <input placeholder="Display name" value={uploadName} onChange={e => setUploadName(e.target.value)} style={{ ...inputStyle, marginBottom: '12px' }} />
             <input placeholder="Tags (comma-separated)" value={uploadTags} onChange={e => setUploadTags(e.target.value)} style={{ ...inputStyle, marginBottom: '16px' }} />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>

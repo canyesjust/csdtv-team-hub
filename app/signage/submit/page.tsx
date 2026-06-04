@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import FilePickButton from '@/components/FilePickButton'
 
 const colors = {
   bg: '#f8f9fc',
@@ -252,15 +253,16 @@ export default function SignageSubmitPage() {
                   style={{ ...inputStyle, resize: 'vertical' as const }}
                 />
               </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
+              <div style={{ display: 'grid', gap: '6px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: colors.text }}>Image *</span>
-                <input
-                  type="file"
+                <FilePickButton
                   accept="image/png,image/jpeg,image/webp"
-                  onChange={e => onImageChange(e.target.files?.[0] ?? null)}
-                  style={{ fontSize: '14px', color: colors.muted }}
+                  label="Choose image"
+                  changeLabel="Change image"
+                  fullWidth
+                  onChange={onImageChange}
                 />
-              </label>
+              </div>
               {previewUrl && (
                 <div>
                   <img

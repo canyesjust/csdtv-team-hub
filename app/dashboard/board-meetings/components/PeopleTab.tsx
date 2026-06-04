@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from '@/lib/theme'
+import FilePickButton from '@/components/FilePickButton'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
 import type { LowerThirdPerson } from '@/lib/board-meetings/types'
@@ -329,11 +330,15 @@ export default function PeopleTab() {
               </label>
               <div>
                 <label style={{ fontSize: '13px', color: muted, display: 'block', marginBottom: '6px' }}>Photo</label>
-                <input
-                  type="file"
+                <FilePickButton
                   accept="image/jpeg,image/png,image/webp"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f) }}
-                  style={{ fontSize: '13px', minHeight: '44px' }}
+                  label="Choose photo"
+                  changeLabel="Change photo"
+                  variant="secondary"
+                  disabled={uploading}
+                  onChange={file => {
+                    if (file) uploadPhoto(file)
+                  }}
                 />
                 {uploading && <p style={{ fontSize: '12px', color: muted, margin: '6px 0 0' }}>Uploading…</p>}
               </div>

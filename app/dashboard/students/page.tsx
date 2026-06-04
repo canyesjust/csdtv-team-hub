@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
+import FilePickButton from '@/components/FilePickButton'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 
@@ -554,13 +555,18 @@ export default function StudentsPage() {
 
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Upload .csv file</label>
-              <input type="file" accept=".csv,.tsv,.txt" onChange={async e => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                const txt = await file.text()
-                setCsvInput(txt)
-                setParsedRows(parseCSV(txt))
-              }} style={{ ...inputStyle, padding: '8px 14px' }} />
+              <FilePickButton
+                accept=".csv,.tsv,.txt"
+                label="Choose CSV file"
+                changeLabel="Choose another file"
+                variant="secondary"
+                onChange={async file => {
+                  if (!file) return
+                  const txt = await file.text()
+                  setCsvInput(txt)
+                  setParsedRows(parseCSV(txt))
+                }}
+              />
             </div>
 
             <div style={{ marginBottom: '12px' }}>

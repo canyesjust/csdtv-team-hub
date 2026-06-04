@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
+import FilePickButton from '@/components/FilePickButton'
 import {
   KB_IMPORT_CSV_TEMPLATE,
   KB_IMPORT_JSON_TEMPLATE,
@@ -48,7 +49,6 @@ export default function KnowledgeArticlesImportModal({
   const [input, setInput] = useState('')
   const [importing, setImporting] = useState(false)
   const [duplicateMode, setDuplicateMode] = useState<KbImportDuplicateMode>('skip')
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const parsed = useMemo((): KbImportRow[] => {
     if (!input.trim()) return []
@@ -267,31 +267,14 @@ export default function KnowledgeArticlesImportModal({
           >
             Download template
           </button>
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '8px',
-              border: `0.5px solid ${border}`,
-              background: 'transparent',
-              color: 'var(--link)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: '13px',
-            }}
-          >
-            Upload file
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
+          <FilePickButton
             accept=".csv,.json,text/csv,application/json"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
+            label="Upload file"
+            changeLabel="Change file"
+            variant="secondary"
+            showFileName={false}
+            onChange={file => {
               if (file) void handleFile(file)
-              e.target.value = ''
             }}
           />
         </div>

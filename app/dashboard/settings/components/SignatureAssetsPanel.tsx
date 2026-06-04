@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import FilePickButton from '@/components/FilePickButton'
 import { toast } from '@/lib/toast'
 import type { SigAssetId } from '@/lib/sig-assets'
 
@@ -170,13 +171,14 @@ export default function SignatureAssetsPanel({
                       : ''}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                    <input
-                      ref={el => {
+                    <FilePickButton
+                      inputRef={el => {
                         fileRefs.current[asset.id] = el
                       }}
-                      type="file"
                       accept="image/png,image/jpeg,image/webp,image/gif"
-                      style={{ fontSize: '12px', maxWidth: '100%' }}
+                      label="Choose image"
+                      changeLabel="Change image"
+                      onChange={() => {}}
                     />
                     <button
                       type="button"
