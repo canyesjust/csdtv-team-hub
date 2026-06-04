@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser, isManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { loadSigVersions } from '@/lib/server/sig-versions'
 import {
   SIG_ASSETS,
   SIG_ASSETS_UPDATED_KEY,
   SIG_ASSET_BY_ID,
   SIG_BUCKET,
-  parseSigVersions,
   sigAbsoluteUrl,
   sigPublicPath,
   validateSigUpload,
@@ -24,21 +24,12 @@ function siteBaseFromRequest(request: Request): string {
   return ''
 }
 
-async function loadVersions(service: NonNullable<ReturnType<typeof getServiceSupabaseClient>>) {
-  const { data } = await service
-    .from('app_settings')
-    .select('value')
-    .eq('key', SIG_ASSETS_UPDATED_KEY)
-    .maybeSingle()
-  return parseSigVersions(data?.value ?? null)
-}
-
 async function saveVersion(
   service: NonNullable<ReturnType<typeof getServiceSupabaseClient>>,
   filename: string,
   at: string,
 ) {
-  const versions = await loadVersions(service)
+  const versions = await loadSigVersions(service)
   versions[filename] = at
   await service.from('app_settings').upsert({
     key: SIG_ASSETS_UPDATED_KEY,
@@ -55,7 +46,7 @@ export async function GET(request: Request) {
   const service = getServiceSupabaseClient()
   if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
 
-  const versions = await loadVersions(service)
+  const versions = await loadSigVersions(service)
   const siteBase = siteBaseFromRequest(request)
 
   const assets = SIG_ASSETS.map(def => {
@@ -67,7 +58,7 @@ export async function GET(request: Request) {
       filename: def.filename,
       publicPath: sigPublicPath(def.filename),
       previewUrl: sigPublicPath(def.filename),
-      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename) : null,
+      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename, version) : null,
       updatedAt: version,
       source: version ? ('storage' as const) : ('bundled' as const),
     }
@@ -122,7 +113,7 @@ export async function POST(request: Request) {
       updatedAt,
       publicPath: sigPublicPath(def.filename),
       previewUrl: sigPublicPath(def.filename),
-      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename) : null,
+      absoluteUrl: siteBase ? sigAbsoluteUrl(siteBase, def.filename, updatedAt) : null,
       source: 'storage',
     },
   })

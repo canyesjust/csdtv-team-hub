@@ -77,7 +77,18 @@ export function sigPublicPath(filename: string): string {
   return `/sig/${filename}`
 }
 
-export function sigAbsoluteUrl(siteBase: string, filename: string): string {
+/** ETag for cache validation; changes whenever a manager re-uploads the file. */
+export function sigEtag(filename: string, version: string | null | undefined): string {
+  return `"${filename}:${version || 'bundled'}"`
+}
+
+export function sigAbsoluteUrl(
+  siteBase: string,
+  filename: string,
+  version?: string | null,
+): string {
   const base = siteBase.replace(/\/$/, '')
-  return `${base}${sigPublicPath(filename)}`
+  const path = sigPublicPath(filename)
+  if (!version) return `${base}${path}`
+  return `${base}${path}?v=${encodeURIComponent(version)}`
 }

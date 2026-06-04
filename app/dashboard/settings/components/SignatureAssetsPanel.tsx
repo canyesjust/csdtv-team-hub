@@ -109,9 +109,10 @@ export default function SignatureAssetsPanel({
         Email signature images
       </h2>
       <p style={{ fontSize: '13px', color: muted, margin: '0 0 14px', lineHeight: 1.5 }}>
-        Hosted at stable URLs under <code style={{ fontSize: '12px' }}>/sig/</code> for Outlook and
-        other signatures. Upload replaces the file at that same URL. If Outlook still shows an old
-        image, remove and re-insert the picture in your signature.
+        Images are hosted at <code style={{ fontSize: '12px' }}>/sig/</code> for Outlook signatures.
+        After uploading, use <strong>Copy URL</strong> — it includes a version parameter so email
+        clients fetch the new image. If an old image still appears in Outlook, remove the picture
+        from your signature and paste the updated URL.
       </p>
 
       {loading && assets.length === 0 ? (
