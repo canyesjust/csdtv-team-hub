@@ -23,6 +23,12 @@ const MORE_BASE: DashboardNavItem[] = [
   { label: 'Students', href: '/dashboard/students', icon: 'students' },
 ]
 
+const SIGNAGE: DashboardNavItem = {
+  label: 'Signage',
+  href: '/dashboard/signage-submissions',
+  icon: 'image',
+}
+
 export function isManagerRole(role: string | null | undefined): boolean {
   return role === 'Manager'
 }
@@ -49,6 +55,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
   const moreItems: DashboardNavItem[] = [
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
+    ...(manager ? [SIGNAGE] : []),
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
     { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
     { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
@@ -58,6 +65,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
   const sidebarMoreItems: DashboardNavItem[] = [
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
+    ...(manager ? [SIGNAGE] : []),
   ]
 
   return {
