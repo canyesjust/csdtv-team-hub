@@ -118,7 +118,7 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
   const shownProds = inProgressProds.slice(0, prodSlots)
   const hiddenProdCount = inProgressProds.length - shownProds.length
 
-  const chipFs = fit(20, 14)
+  const chipFs = fit(12, 10)
   const chip = (bg: string, color: string, bd: string): CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'center',
@@ -175,7 +175,7 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
           <span
             style={{
               flexShrink: 0,
-              fontSize: `${fit(19, 13)}px`,
+              fontSize: `${fit(14, 12)}px`,
               fontWeight: 800,
               color: dueBadge.color,
               background: dueBadge.bg,
@@ -210,15 +210,15 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexShrink: 0 }}>
         <div
           style={{
-            width: `${fit(50, 40)}px`,
-            height: `${fit(50, 40)}px`,
+            width: `${fit(28, 24)}px`,
+            height: `${fit(28, 24)}px`,
             borderRadius: '999px',
             background: member.avatar_color,
             color: '#0a0f1e',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: `${fit(19, 15)}px`,
+            fontSize: `${fit(11, 10)}px`,
             fontWeight: 800,
             flexShrink: 0,
           }}
@@ -273,7 +273,7 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
               justifyContent: 'center',
               border: '1px dashed rgba(255,255,255,0.12)',
               borderRadius: '6px',
-              minHeight: `${fit(56, 44)}px`,
+              minHeight: `${fit(40, 32)}px`,
             }}
           >
             <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: emptyMuted, fontWeight: 500 }}>
@@ -307,7 +307,7 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
                   <span
                     style={{
                       flexShrink: 0,
-                      fontSize: `${fit(19, 13)}px`,
+                      fontSize: `${fit(14, 12)}px`,
                       fontWeight: 800,
                       color: '#0a0f1e',
                       background: '#f0c060',
@@ -570,38 +570,39 @@ export default function TasksSignagePage() {
   const muted = '#8ea3c6'
   const emptyMuted = '#6b7894'
   const border = 'rgba(255,255,255,0.12)'
-  const baseScale = Math.max(0.88, Math.min(1.25, Math.min(viewport.w / 1920, viewport.h / 1080)))
-  const densityPenalty = Math.max(0, staffMaxTasks - 8) * 0.35
+  // Match production calendar signage scale (office closed: 18–24px in cells, 22px banner).
+  const baseScale = Math.max(0.9, Math.min(1, Math.min(viewport.w / 1920, viewport.h / 1080)))
+  const densityPenalty = Math.max(0, staffMaxTasks - 10) * 0.15
   const fit = (max: number, min: number, penalty = 0) => Math.max(min, Math.round(max * baseScale - penalty))
   const fs = {
-    title: fit(54, 42),
-    subtitle: fit(22, 17),
-    clock: fit(64, 42),
-    kpiLabel: fit(18, 14),
-    kpiValue: fit(70, 50),
-    bandLabel: fit(24, 18),
-    unassignedHeading: fit(32, 26),
-    unassignedMeta: fit(22, 17),
-    staffName: fit(44, 34),
-    staffStat: fit(30, 24),
-    taskLine: fit(32, 26, densityPenalty * 0.15),
-    railOverdue: fit(20, 16),
+    title: fit(26, 22),
+    subtitle: fit(14, 12),
+    clock: fit(32, 28),
+    kpiLabel: fit(15, 13),
+    kpiValue: fit(22, 18),
+    bandLabel: fit(14, 12),
+    unassignedHeading: fit(22, 18),
+    unassignedMeta: fit(15, 13),
+    staffName: fit(18, 16),
+    staffStat: fit(14, 12),
+    taskLine: fit(18, 16, densityPenalty),
+    railOverdue: fit(14, 12),
   }
-  const qrSize = Math.min(140, Math.round(120 * (viewport.w / 1920)))
+  const qrSize = Math.min(96, Math.round(88 * (viewport.w / 1920)))
 
   const maxTasksPerCard = useMemo(() => {
-    const mainH = viewport.h - fit(200, 170)
+    const mainH = viewport.h - fit(150, 130)
     const halfRow = mainH / 2
-    const linePx = fit(32, 26) * 1.35 + 8
-    return Math.max(6, Math.min(16, Math.floor((halfRow - 72) / linePx)))
+    const linePx = fit(18, 16) * 1.35 + 8
+    return Math.max(6, Math.min(20, Math.floor((halfRow - 56) / linePx)))
   }, [viewport.h, baseScale])
 
-  const railWidthPx = Math.max(300, Math.min(400, Math.round(viewport.w * 0.26)))
+  const railWidthPx = Math.max(260, Math.min(340, Math.round(viewport.w * 0.22)))
 
   const railVisibleCount = useMemo(() => {
-    const available = Math.max(160, viewport.h - fit(200, 170))
-    const perRow = fit(52, 42)
-    return Math.max(6, Math.floor(available / perRow))
+    const available = Math.max(160, viewport.h - fit(150, 130))
+    const perRow = fit(28, 24)
+    return Math.max(8, Math.floor(available / perRow))
   }, [viewport.h, baseScale])
 
   const railShown = unassignedTasks.slice(0, railVisibleCount)
@@ -630,10 +631,10 @@ export default function TasksSignagePage() {
       }}
     >
       {loadError && (
-        <div style={{ marginBottom: '10px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(18, 13)}px`, fontWeight: 600, flexShrink: 0 }}>
+        <div style={{ marginBottom: '10px', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.12)', color: '#fecaca', fontSize: `${fit(15, 13)}px`, fontWeight: 600, flexShrink: 0 }}>
           <div>{loadError.message}</div>
           {loadError.hint && (
-            <div style={{ marginTop: '6px', fontSize: `${fit(15, 11)}px`, fontWeight: 500, opacity: 0.95 }}>
+            <div style={{ marginTop: '6px', fontSize: `${fit(14, 12)}px`, fontWeight: 500, opacity: 0.95 }}>
               {loadError.hint}
             </div>
           )}
@@ -651,7 +652,7 @@ export default function TasksSignagePage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexShrink: 0 }}>
           {taskIntakeQrDataUrl && taskIntakeUrl && (
             <div style={{ textAlign: 'center' as const, flexShrink: 0 }}>
-              <p style={{ margin: 0, fontSize: `${fit(16, 11)}px`, color: muted, fontWeight: 700, letterSpacing: '0.04em' }}>Submit a task</p>
+              <p style={{ margin: 0, fontSize: `${fit(14, 12)}px`, color: muted, fontWeight: 700, letterSpacing: '0.04em' }}>Submit a task</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={taskIntakeQrDataUrl}
