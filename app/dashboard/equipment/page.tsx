@@ -616,14 +616,14 @@ export default function EquipmentPage() {
             )}
             <div>
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Site</label>
-              <select value={addForm.site} onChange={e => setAddForm(f => ({ ...f, site: e.target.value }))}
+              <select value={addForm.site} onChange={e => setAddForm(f => ({ ...f, site: normalizeEquipmentSite(e.target.value) }))}
                 style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }}>
                 {EQUIPMENT_SITE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Condition</label>
-              <select value={addForm.condition} onChange={e => setAddForm(f => ({ ...f, condition: e.target.value }))}
+              <select value={addForm.condition} onChange={e => setAddForm(f => ({ ...f, condition: normalizeEquipmentCondition(e.target.value) }))}
                 style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }}>
                 {EQUIPMENT_CONDITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
@@ -700,13 +700,13 @@ export default function EquipmentPage() {
             </div>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Site</label>
-              <select value={powerForm.site} onChange={e => setPowerForm(f => ({ ...f, site: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
+              <select value={powerForm.site} onChange={e => setPowerForm(f => ({ ...f, site: normalizeEquipmentSite(e.target.value) }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
                 {EQUIPMENT_SITE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Condition</label>
-              <select value={powerForm.condition} onChange={e => setPowerForm(f => ({ ...f, condition: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
+              <select value={powerForm.condition} onChange={e => setPowerForm(f => ({ ...f, condition: normalizeEquipmentCondition(e.target.value) }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
                 {EQUIPMENT_CONDITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
