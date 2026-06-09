@@ -6,8 +6,18 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
-import { canAddOrEditEquipment } from '@/lib/equipment-access'
+import { canAddOrEditEquipment, canManageEquipmentKits } from '@/lib/equipment-access'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
+import {
+  DEFAULT_EQUIPMENT_CONDITION,
+  DEFAULT_EQUIPMENT_SITE,
+  EQUIPMENT_CONDITION_OPTIONS,
+  EQUIPMENT_SITE_OPTIONS,
+  formatEquipmentCondition,
+  formatEquipmentSite,
+  normalizeEquipmentCondition,
+  normalizeEquipmentSite,
+} from '@/lib/equipment-fields'
 import {
   formatPowerSpecShort,
   getNextPowerCableAssetTag,
@@ -41,8 +51,6 @@ type Activity = { id: string; action: string; detail: string | null; created_at:
 type KitInfo = { id: string; name: string }
 
 const STATUSES = ['available', 'checked_out', 'maintenance', 'retired']
-const SITES = ['Office', 'Van', 'Trailer', 'Other']
-const CONDITIONS = ['Good', 'Fair', 'Needs Repair', 'Damaged', 'Broken']
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   available: { bg: 'rgba(34,197,94,0.12)', color: '#22c55e' },
   checked_out: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
@@ -89,8 +97,8 @@ export default function EquipmentDetailPage() {
     power_output_polarity: 'na' as PowerPolarityDb,
     power_barrel_size: '',
     notes: '',
-    condition: 'Good',
-    site: 'Office',
+    condition: DEFAULT_EQUIPMENT_CONDITION,
+    site: DEFAULT_EQUIPMENT_SITE,
   })
   const [showCheckout, setShowCheckout] = useState(false)
   const [borrowerName, setBorrowerName] = useState('')
@@ -113,7 +121,7 @@ export default function EquipmentDetailPage() {
     const { data: eqData } = await supabase.from('equipment').select('*').eq('asset_tag', tag).single()
     if (!eqData) { setLoading(false); return }
     setItem(eqData)
-    setEditForm({ name: eqData.name, brand: eqData.brand || '', model: eqData.model || '', serial_number: eqData.serial_number || '', status: eqData.status, site: eqData.site, condition: eqData.condition, notes: eqData.notes || '' })
+    setEditForm({ name: eqData.name, brand: eqData.brand || '', model: eqData.model || '', serial_number: eqData.serial_number || '', status: eqData.status, site: normalizeEquipmentSite(eqData.site), condition: normalizeEquipmentCondition(eqData.condition), notes: eqData.notes || '' })
     const isPc = isPowerCableRow(eqData as Equipment)
     let powerKids: Equipment[] = []
     let parent: Equipment | null = null
@@ -144,6 +152,7 @@ export default function EquipmentDetailPage() {
   const getCatName = (id: string | null) => id ? categories.find(c => c.id === id)?.name || '' : ''
   const topCategories = categories.filter(c => !c.parent_id)
   const canEdit = canAddOrEditEquipment(userRole)
+  const canLoan = canManageEquipmentKits(userRole)
   const itemIsPower = item ? isPowerCableRow(item) : false
 
   const unlinkPowerCable = async (cableId: string) => {
@@ -194,8 +203,8 @@ export default function EquipmentDetailPage() {
           power_barrel_size: powerForm.power_barrel_size.trim() || null,
           brand: powerForm.power_brand.trim() || null,
           model: null,
-          site: powerForm.site,
-          condition: powerForm.condition,
+          site: normalizeEquipmentSite(powerForm.site),
+          condition: normalizeEquipmentCondition(powerForm.condition),
           status: 'available',
           notes: powerForm.notes.trim() || null,
           photo_url: `/images/equipment/${nextTag}.png`,
@@ -226,8 +235,8 @@ export default function EquipmentDetailPage() {
         power_output_polarity: 'na',
         power_barrel_size: '',
         notes: '',
-        condition: 'Good',
-        site: 'Office',
+        condition: DEFAULT_EQUIPMENT_CONDITION,
+        site: DEFAULT_EQUIPMENT_SITE,
       })
       setShowPowerAdd(false)
       toast('Power cable added', 'success')
@@ -242,8 +251,8 @@ export default function EquipmentDetailPage() {
     setSaving(true)
     await supabase.from('equipment').update({
       name: editForm.name, brand: editForm.brand || null, model: editForm.model || null,
-      serial_number: editForm.serial_number || null, status: editForm.status, site: editForm.site,
-      condition: editForm.condition, notes: editForm.notes || null, updated_at: new Date().toISOString(),
+      serial_number: editForm.serial_number || null, status: editForm.status, site: normalizeEquipmentSite(editForm.site),
+      condition: normalizeEquipmentCondition(editForm.condition), notes: editForm.notes || null, updated_at: new Date().toISOString(),
     }).eq('id', item.id)
     if (editForm.status !== item.status) {
       await supabase.from('equipment_activity').insert({ equipment_id: item.id, action: 'status_changed', detail: `${item.status} to ${editForm.status}`, user_id: userId })
@@ -331,8 +340,8 @@ export default function EquipmentDetailPage() {
           </div>
           <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: muted, flexWrap: 'wrap' as const }}>
             {getCatName(item.category_id) && <span>{getCatName(item.category_id)}{getCatName(item.subcategory_id) ? ` / ${getCatName(item.subcategory_id)}` : ''}</span>}
-            <span>{item.site}</span>
-            <span>{item.condition}</span>
+            <span>{formatEquipmentSite(item.site)}</span>
+            <span>{formatEquipmentCondition(item.condition)}</span>
             {item.serial_number && <span>SN: {item.serial_number}</span>}
           </div>
           {kits.length > 0 && (
@@ -349,16 +358,20 @@ export default function EquipmentDetailPage() {
                 By {activeLoan.checked_out_by_user?.name || 'Unknown'} on {new Date(activeLoan.checked_out_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 {activeLoan.due_date && ` | Due ${new Date(activeLoan.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
               </p>
+              {canLoan && (
               <button onClick={() => handleCheckin(activeLoan)} style={{ marginTop: '10px', fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#22c55e', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Check in</button>
+              )}
             </div>
           )}
           <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
-            {item.status === 'available' && !itemIsPower && (
+            {canLoan && item.status === 'available' && !itemIsPower && (
               <button onClick={() => setShowCheckout(true)} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Check out</button>
             )}
+            {canEdit && (
             <button onClick={() => setEditing(!editing)} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: cardBg, color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
               {editing ? 'Cancel' : 'Edit'}
             </button>
+            )}
           </div>
         </div>
       </div>
@@ -388,8 +401,8 @@ export default function EquipmentDetailPage() {
             <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Model</p><input value={editForm.model} onChange={e => setEditForm(f => ({ ...f, model: e.target.value }))} style={inputStyle} /></div>
             <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Serial number</p><input value={editForm.serial_number} onChange={e => setEditForm(f => ({ ...f, serial_number: e.target.value }))} style={inputStyle} /></div>
             <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Status</p><select value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))} style={inputStyle}>{STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></div>
-            <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Site</p><select value={editForm.site} onChange={e => setEditForm(f => ({ ...f, site: e.target.value }))} style={inputStyle}>{SITES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-            <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Condition</p><select value={editForm.condition} onChange={e => setEditForm(f => ({ ...f, condition: e.target.value }))} style={inputStyle}>{CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+            <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Site</p><select value={editForm.site} onChange={e => setEditForm(f => ({ ...f, site: e.target.value }))} style={inputStyle}>{EQUIPMENT_SITE_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
+            <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Condition</p><select value={editForm.condition} onChange={e => setEditForm(f => ({ ...f, condition: e.target.value }))} style={inputStyle}>{EQUIPMENT_CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
           </div>
           <div style={{ marginBottom: '12px' }}><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Notes</p><textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Equipment notes..." style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const }} /></div>
           <button onClick={saveEdit} disabled={saving} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : 'Save changes'}</button>
@@ -419,8 +432,8 @@ export default function EquipmentDetailPage() {
                 ['Serial', item.serial_number],
                 ['Category', getCatName(item.category_id)],
                 ['Subcategory', getCatName(item.subcategory_id)],
-                ['Site', item.site],
-                ['Condition', item.condition],
+                ['Site', formatEquipmentSite(item.site)],
+                ['Condition', formatEquipmentCondition(item.condition)],
                 ['Status', item.status.replace('_', ' ')],
                 ['Added', new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })],
                 ...(itemIsPower

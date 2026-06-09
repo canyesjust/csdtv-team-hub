@@ -7,7 +7,16 @@ import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
-import { canAddOrEditEquipment } from '@/lib/equipment-access'
+import { canAddOrEditEquipment, canDeleteEquipment, canManageEquipmentKits } from '@/lib/equipment-access'
+import {
+  DEFAULT_EQUIPMENT_CONDITION,
+  DEFAULT_EQUIPMENT_SITE,
+  EQUIPMENT_CONDITION_OPTIONS,
+  EQUIPMENT_SITE_OPTIONS,
+  formatEquipmentSite,
+  normalizeEquipmentCondition,
+  normalizeEquipmentSite,
+} from '@/lib/equipment-fields'
 import {
   formatPowerSpecShort,
   getNextPowerCableAssetTag,
@@ -121,8 +130,8 @@ export default function EquipmentPage() {
     power_output_polarity: 'na' as PowerPolarityDb,
     power_barrel_size: '',
     notes: '',
-    condition: 'Good',
-    site: 'Office',
+    condition: DEFAULT_EQUIPMENT_CONDITION,
+    site: DEFAULT_EQUIPMENT_SITE,
   })
 
   // Kit form
@@ -138,7 +147,7 @@ export default function EquipmentPage() {
 
   // Add item form
   const [showAddForm, setShowAddForm] = useState(false)
-  const [addForm, setAddForm] = useState({ asset_tag: '', name: '', brand: '', model: '', serial_number: '', category_id: '', subcategory_id: '', site: 'Office', condition: 'Good', notes: '' })
+  const [addForm, setAddForm] = useState({ asset_tag: '', name: '', brand: '', model: '', serial_number: '', category_id: '', subcategory_id: '', site: DEFAULT_EQUIPMENT_SITE, condition: DEFAULT_EQUIPMENT_CONDITION, notes: '' })
   const [addSaving, setAddSaving] = useState(false)
 
   const loadData = useCallback(async () => {
@@ -176,8 +185,8 @@ export default function EquipmentPage() {
       serial_number: addForm.serial_number || null,
       category_id: addForm.category_id || null,
       subcategory_id: addForm.subcategory_id || null,
-      site: addForm.site,
-      condition: addForm.condition,
+      site: normalizeEquipmentSite(addForm.site),
+      condition: normalizeEquipmentCondition(addForm.condition),
       status: 'available',
       notes: addForm.notes || null,
       photo_url: `/images/equipment/${tag}.png`,
@@ -187,7 +196,7 @@ export default function EquipmentPage() {
       await supabase.from('equipment_activity').insert({ equipment_id: data.id, action: 'created', detail: `Added ${addForm.name} (${tag})`, user_id: user.id })
       setEquipment(prev => [...prev, data].sort((a, b) => a.asset_tag.localeCompare(b.asset_tag)))
     }
-    setAddForm({ asset_tag: '', name: '', brand: '', model: '', serial_number: '', category_id: '', subcategory_id: '', site: 'Office', condition: 'Good', notes: '' })
+    setAddForm({ asset_tag: '', name: '', brand: '', model: '', serial_number: '', category_id: '', subcategory_id: '', site: DEFAULT_EQUIPMENT_SITE, condition: DEFAULT_EQUIPMENT_CONDITION, notes: '' })
     setShowAddForm(false)
     setAddSaving(false)
   }
@@ -210,7 +219,8 @@ export default function EquipmentPage() {
   }
 
   const canAddEquipment = canAddOrEditEquipment(user?.role)
-  const isManager = user?.role === 'Manager'
+  const canManageKits = canManageEquipmentKits(user?.role)
+  const canDeleteRows = canDeleteEquipment(user?.role)
 
   const filtered = useMemo(() => {
     const rows = equipment.filter(e => {
@@ -315,7 +325,7 @@ export default function EquipmentPage() {
 
   const handleClearOrphanCheckoutStatus = useCallback(
     async (eq: Equipment) => {
-      if (!user || !isManager) return
+      if (!user || !canDeleteRows) return
       if (
         !confirm(
           `${eq.asset_tag} is marked checked out but has no open loan record. Mark it available? (Use only if the item was returned or the record was wrong.)`,
@@ -340,7 +350,7 @@ export default function EquipmentPage() {
       toast('Item marked available')
       loadData()
     },
-    [user, isManager, supabase, loadData],
+    [user, canDeleteRows, supabase, loadData],
   )
 
   const handleCreateKit = useCallback(async () => {
@@ -402,8 +412,8 @@ export default function EquipmentPage() {
           power_barrel_size: powerForm.power_barrel_size.trim() || null,
           brand: powerForm.power_brand.trim() || null,
           model: null,
-          site: powerForm.site,
-          condition: powerForm.condition,
+          site: normalizeEquipmentSite(powerForm.site),
+          condition: normalizeEquipmentCondition(powerForm.condition),
           status: 'available',
           notes: powerForm.notes.trim() || null,
           photo_url: `/images/equipment/${tag}.png`,
@@ -435,8 +445,8 @@ export default function EquipmentPage() {
         power_output_polarity: 'na',
         power_barrel_size: '',
         notes: '',
-        condition: 'Good',
-        site: 'Office',
+        condition: DEFAULT_EQUIPMENT_CONDITION,
+        site: DEFAULT_EQUIPMENT_SITE,
       })
       setShowPowerForm(false)
       toast('Power cable created', 'success')
@@ -608,21 +618,14 @@ export default function EquipmentPage() {
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Site</label>
               <select value={addForm.site} onChange={e => setAddForm(f => ({ ...f, site: e.target.value }))}
                 style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }}>
-                <option value="Office">Office</option>
-                <option value="Van">Van</option>
-                <option value="Trailer">Trailer</option>
-                <option value="Other">Other</option>
+                {EQUIPMENT_SITE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>Condition</label>
               <select value={addForm.condition} onChange={e => setAddForm(f => ({ ...f, condition: e.target.value }))}
                 style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' as const }}>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-                <option value="Needs Repair">Needs Repair</option>
-                <option value="Damaged">Damaged</option>
-                <option value="Broken">Broken</option>
+                {EQUIPMENT_CONDITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>
@@ -698,20 +701,13 @@ export default function EquipmentPage() {
             <div>
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Site</label>
               <select value={powerForm.site} onChange={e => setPowerForm(f => ({ ...f, site: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
-                <option value="Office">Office</option>
-                <option value="Van">Van</option>
-                <option value="Trailer">Trailer</option>
-                <option value="Other">Other</option>
+                {EQUIPMENT_SITE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
               <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px' }}>Condition</label>
               <select value={powerForm.condition} onChange={e => setPowerForm(f => ({ ...f, condition: e.target.value }))} style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit' }}>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-                <option value="Needs Repair">Needs Repair</option>
-                <option value="Damaged">Damaged</option>
-                <option value="Broken">Broken</option>
+                {EQUIPMENT_CONDITION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>
@@ -794,9 +790,7 @@ export default function EquipmentPage() {
             </select>
             <select value={filterSite} onChange={e => setFilterSite(e.target.value)} style={{ ...inputStyle, maxWidth: '160px', flex: '0 1 160px' }}>
               <option value="">All Sites</option>
-              <option value="District Office">District Office</option>
-              <option value="Trailer">Trailer</option>
-              <option value="Van">Van</option>
+              {EQUIPMENT_SITE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
 
@@ -872,7 +866,7 @@ export default function EquipmentPage() {
                   <span>
                     <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: sc.bg, color: sc.text }}>{e.status.replace('_', ' ')}</span>
                   </span>
-                  <span style={{ color: muted, fontSize: '12px' }}>{e.site}</span>
+                  <span style={{ color: muted, fontSize: '12px' }}>{formatEquipmentSite(e.site)}</span>
                   <span>
                     {e.status === 'available' && (
                       <button onClick={ev => { ev.stopPropagation(); setCheckoutItem(e) }} style={{ background: '#1e6cb5', border: 'none', borderRadius: '8px', color: '#fff', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Loan</button>
@@ -889,7 +883,7 @@ export default function EquipmentPage() {
       {/* Kits Tab */}
       {tab === 'kits' && (
         <div>
-          {isManager && (
+          {canManageKits && (
             <div style={{ marginBottom: '16px' }}>
               {!showKitForm ? (
                 <button onClick={() => setShowKitForm(true)} style={{ background: '#1e6cb5', border: 'none', borderRadius: '10px', color: '#fff', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px' }}>+ New Kit</button>
@@ -920,7 +914,7 @@ export default function EquipmentPage() {
                 <div key={kit.id} style={{ background: cardBg, borderRadius: '14px', padding: '20px', border: `1px solid ${border}`, cursor: 'pointer' }} onClick={() => router.push(`/dashboard/equipment/kits/${kit.id}`)}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                     <div style={{ fontSize: '16px', fontWeight: 600, color: text }}>{kit.name}</div>
-                    {isManager && (
+                    {canDeleteRows && (
                       <button onClick={ev => { ev.stopPropagation(); handleDeleteKit(kit.id) }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '13px', fontFamily: 'inherit' }}>Delete</button>
                     )}
                   </div>
@@ -1065,7 +1059,7 @@ export default function EquipmentPage() {
                   >
                     Open item
                   </button>
-                  {isManager && (
+                  {canDeleteRows && (
                     <button
                       type="button"
                       onClick={() => handleClearOrphanCheckoutStatus(eq)}

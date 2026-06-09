@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
+import { canManageEquipmentKits } from '@/lib/equipment-access'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 
 type Equipment = {
@@ -71,7 +72,7 @@ export default function KitDetailPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const isManager = user?.role === 'Manager'
+  const canManage = canManageEquipmentKits(user?.role)
   const existingIds = items.map(i => i.equipment_id)
   const availableToAdd = allEquipment.filter(e => {
     if (existingIds.includes(e.id)) return false
@@ -173,13 +174,13 @@ export default function KitDetailPage() {
           <p style={{ fontSize: '13px', color: muted, margin: '4px 0 0' }}>{items.length} item{items.length !== 1 ? 's' : ''}</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {items.length > 0 && allAvailable && isManager && (
+          {items.length > 0 && allAvailable && canManage && (
             <button onClick={() => setShowCheckout(true)} style={{
               background: '#1e6cb5', border: 'none', borderRadius: '10px', color: '#fff',
               padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px',
             }}>Check Out Kit</button>
           )}
-          {isManager && (
+          {canManage && (
             <button onClick={() => setShowAdd(!showAdd)} style={{
               background: 'none', border: `1px solid ${border}`, borderRadius: '10px', color: muted,
               padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px',
@@ -222,7 +223,7 @@ export default function KitDetailPage() {
       <div style={{ background: cardBg, borderRadius: '14px', border: `1px solid ${border}`, overflow: 'hidden' }}>
         {items.length === 0 && (
           <div style={{ padding: '40px', textAlign: 'center' as const, color: muted, fontSize: '14px' }}>
-            No items in this kit yet. {isManager ? 'Click "+ Add Items" to get started.' : ''}
+            No items in this kit yet. {canManage ? 'Click "+ Add Items" to get started.' : ''}
           </div>
         )}
         {items.map((ki, i) => {
@@ -240,7 +241,7 @@ export default function KitDetailPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: sc.bg, color: sc.text }}>{eq.status.replace('_', ' ')}</span>
-                {isManager && (
+                {canManage && (
                   <button onClick={ev => { ev.stopPropagation(); handleRemoveItem(ki.id, ki.equipment_id) }} style={{
                     background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit',
                   }}>Remove</button>

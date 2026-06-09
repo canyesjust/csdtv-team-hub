@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getAuthenticatedTeamUser, isManagerRole } from '@/lib/server/auth'
+import { canCheckoutEquipment } from '@/lib/equipment-access'
+import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 
 export async function POST(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!canCheckoutEquipment(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { equipmentId, borrowerName, borrowerInfo, dueDate } = await request.json()
   if (!equipmentId || !borrowerName) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
