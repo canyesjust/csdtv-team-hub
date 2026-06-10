@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isSignageAnnouncementIcon, normalizeSignageAnnouncementIcon } from '@/lib/signage/announcement-icons'
 import { requireManagerApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
@@ -8,9 +9,13 @@ export async function POST(request: NextRequest) {
   if ('error' in auth) return auth.error
   const { service } = auth
   const body = await request.json()
+  const icon = typeof body.icon === 'string' && isSignageAnnouncementIcon(body.icon)
+    ? body.icon
+    : normalizeSignageAnnouncementIcon(null)
   const { data, error } = await service.from('signage_announcements').insert({
     title: body.title,
     subtitle: body.subtitle || null,
+    icon,
     all_screens: body.all_screens ?? (
       !(body.target_area_ids?.length) && !(body.target_screen_ids?.length)
     ),
@@ -44,6 +49,12 @@ export async function PATCH(request: NextRequest) {
   if (typeof body.priority === 'number') patch.priority = body.priority
   if (typeof body.in_ticker === 'boolean') patch.in_ticker = body.in_ticker
   if (typeof body.active === 'boolean') patch.active = body.active
+  if (typeof body.icon === 'string') {
+    if (!isSignageAnnouncementIcon(body.icon)) {
+      return NextResponse.json({ error: 'Invalid icon.' }, { status: 400 })
+    }
+    patch.icon = body.icon
+  }
 
   const { data, error } = await service.from('signage_announcements').update(patch).eq('id', body.id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

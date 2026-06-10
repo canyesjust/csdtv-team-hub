@@ -5,9 +5,11 @@ import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import SignageTargetingPicker, {
+  SignageAnnouncementIconPicker,
   SignageDeleteButton,
-  SignageEditButton,
+  SignageListHint,
   SignagePageShell,
+  SignageRowEditButton,
   deleteSignageItem,
   formatSignageDate,
   useSignageAdminStyles,
@@ -15,11 +17,17 @@ import SignageTargetingPicker, {
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import SignageDateInput from '@/components/SignageDateInput'
+import {
+  announcementIconEmoji,
+  announcementScopeLabel,
+  type SignageAnnouncementIconId,
+} from '@/lib/signage/announcement-icons'
 
 type AnnouncementRow = {
   id: string
   title: string
   subtitle: string | null
+  icon: string
   start_date: string
   end_date: string
   priority: number
@@ -33,6 +41,7 @@ type AnnouncementRow = {
 const emptyForm = {
   title: '',
   subtitle: '',
+  icon: 'bell' as SignageAnnouncementIconId,
   start_date: '',
   end_date: '',
   priority: 0,
@@ -55,19 +64,19 @@ export default function SignageAnnouncementsPage() {
   const [form, setForm] = useState(emptyForm)
   const [targeting, setTargeting] = useState<TargetingValue>(emptyTargeting)
   const [editId, setEditId] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(true)
+  const [showForm, setShowForm] = useState(false)
 
   const resetForm = () => {
     setForm(emptyForm)
     setTargeting(emptyTargeting)
     setEditId(null)
-    setShowForm(true)
+    setShowForm(false)
   }
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('signage_announcements')
-      .select('id, title, subtitle, start_date, end_date, priority, in_ticker, active, all_screens, target_area_ids, target_screen_ids')
+      .select('id, title, subtitle, icon, start_date, end_date, priority, in_ticker, active, all_screens, target_area_ids, target_screen_ids')
       .order('start_date', { ascending: false })
     if (error) {
       toast(error.message, 'error')
@@ -86,6 +95,7 @@ export default function SignageAnnouncementsPage() {
     setForm({
       title: row.title,
       subtitle: row.subtitle || '',
+      icon: (row.icon || 'bell') as SignageAnnouncementIconId,
       start_date: row.start_date?.slice(0, 10) ?? '',
       end_date: row.end_date?.slice(0, 10) ?? '',
       priority: row.priority,
@@ -107,6 +117,7 @@ export default function SignageAnnouncementsPage() {
     const payload = {
       title: form.title,
       subtitle: form.subtitle,
+      icon: form.icon,
       start_date: form.start_date,
       end_date: form.end_date,
       priority,
@@ -127,25 +138,43 @@ export default function SignageAnnouncementsPage() {
     void load()
   }
 
+  const areaNameById = useMemo(() => new Map(areas.map(a => [a.id, a.name])), [areas])
+  const screenNameById = useMemo(() => new Map(screens.map(sc => [sc.id, sc.name])), [screens])
+
+  const targetingLabel = (row: AnnouncementRow) => {
+    const label = announcementScopeLabel(row, areaNameById, screenNameById)
+    return label ?? 'All screens'
+  }
+
   return (
     <SignagePageShell title="Announcements">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ ...s.h3, margin: 0 }}>{editId ? 'Edit announcement' : 'New announcement'}</h3>
-        {!showForm && (
-          <button type="button" onClick={() => { resetForm(); setShowForm(true) }} style={s.btnPrimary}>+ New</button>
-        )}
+        <h3 style={{ ...s.h3, margin: 0 }}>Announcements</h3>
+        <button
+          type="button"
+          onClick={() => { resetForm(); setShowForm(v => !v) }}
+          style={s.btn}
+        >
+          + Add announcement
+        </button>
       </div>
 
       {showForm && (
         <div style={{ ...s.card, marginBottom: 24, maxWidth: 560 }}>
+          <h3 style={s.h3}>{editId ? 'Edit announcement' : 'Add announcement'}</h3>
           <div style={{ marginBottom: 12 }}>
             <p style={s.lbl}>Title</p>
             <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={s.input} />
           </div>
           <div style={{ marginBottom: 12 }}>
             <p style={s.lbl}>Subtitle</p>
-            <input value={form.subtitle} onChange={e => setForm(f => ({ ...f, subtitle: e.target.value }))} style={s.input} />
+            <input value={form.subtitle} onChange={e => setForm(f => ({ ...f, subtitle: e.target.value }))} style={s.input} placeholder="e.g. Today 2:00 PM" />
           </div>
+          <SignageAnnouncementIconPicker
+            value={form.icon}
+            onChange={icon => setForm(f => ({ ...f, icon }))}
+            lbl={s.lbl}
+          />
           <SignageTargetingPicker areas={areas} screens={screens} value={targeting} onChange={setTargeting} lbl={s.lbl} />
           <div style={{ ...s.row, marginBottom: 14, marginTop: 6 }}>
             <div style={{ flex: 1, minWidth: 130 }}>
@@ -169,7 +198,18 @@ export default function SignageAnnouncementsPage() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <button type="button" onClick={resetForm} style={s.btn}>Cancel</button>
-            <button type="button" onClick={() => void save()} style={s.btnPrimary}>{editId ? 'Update' : 'Publish'}</button>
+            {editId && (
+              <SignageDeleteButton
+                confirmMessage={`Delete announcement "${form.title}"?`}
+                onConfirm={async () => {
+                  if (await deleteSignageItem('/api/signage/announcements', editId)) {
+                    resetForm()
+                    void load()
+                  }
+                }}
+              />
+            )}
+            <button type="button" onClick={() => void save()} style={s.btnPrimary}>{editId ? 'Save' : 'Publish'}</button>
           </div>
         </div>
       )}
@@ -177,30 +217,26 @@ export default function SignageAnnouncementsPage() {
       {loading ? (
         <div style={{ color: s.muted, padding: 16 }}>Loading…</div>
       ) : (
-        rows.map(row => (
-          <div key={row.id} style={{ ...s.cardCompact, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 600, color: s.text, fontSize: 14 }}>{row.title}{!row.active && <span style={{ color: s.muted, fontWeight: 400 }}> (inactive)</span>}</div>
-              {row.subtitle && <div style={{ fontSize: 13, color: s.muted, marginTop: 2 }}>{row.subtitle}</div>}
-              <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
-                {formatSignageDate(row.start_date)} – {formatSignageDate(row.end_date)}
-                {row.priority >= PIN_PRIORITY ? ' · pinned' : ''}
+        <>
+          <SignageListHint color={s.muted}>Click a title to edit.</SignageListHint>
+          {rows.map(row => (
+            <div key={row.id} style={{ ...s.cardCompact, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <SignageRowEditButton onClick={() => startEdit(row)} textColor={s.text} fontWeight={600}>
+                  <span aria-hidden style={{ marginRight: 6 }}>{announcementIconEmoji(row.icon)}</span>
+                  {row.title}{!row.active && <span style={{ color: s.muted, fontWeight: 400 }}> (inactive)</span>}
+                </SignageRowEditButton>
+                {row.subtitle && <div style={{ fontSize: 13, color: s.muted, marginTop: 2 }}>{row.subtitle}</div>}
+                <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
+                  {formatSignageDate(row.start_date)} – {formatSignageDate(row.end_date)}
+                  {' · '}{targetingLabel(row)}
+                  {row.priority >= PIN_PRIORITY ? ' · pinned' : ''}
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-              <SignageEditButton onClick={() => startEdit(row)} />
-              <SignageDeleteButton
-                confirmMessage={`Delete announcement "${row.title}"?`}
-                onConfirm={async () => {
-                  if (await deleteSignageItem('/api/signage/announcements', row.id)) {
-                    if (editId === row.id) resetForm()
-                    void load()
-                  }
-                }}
-              />
-            </div>
-          </div>
-        ))
+          ))}
+          {!rows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No announcements yet.</div>}
+        </>
       )}
     </SignagePageShell>
   )

@@ -4,7 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
-import { SignageDeleteButton, SignageEditButton, SignagePageShell, deleteSignageItem, useSignageTheme } from '../components/SignageAdmin'
+import {
+  SignageDeleteButton,
+  SignageListHint,
+  SignagePageShell,
+  SignageRowEditButton,
+  deleteSignageItem,
+  useSignageAdminStyles,
+} from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 
 const DIRECTIONS = ['left', 'right', 'up', 'down', 'straight'] as const
@@ -15,18 +22,19 @@ const emptyForm = { area_id: '', destination: '', direction: 'right', sort_order
 
 export default function SignageWayfindingPage() {
   const { theme } = useTheme()
-  const { text, muted, border, cardBg, inputBg } = useSignageTheme(theme)
+  const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
   const { areas } = useSignage()
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState<WayfindingRow[]>([])
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState<string | null>(null)
-  const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: 10, padding: '8px 12px', fontSize: 14, color: text, fontFamily: 'inherit' }
+  const [showForm, setShowForm] = useState(false)
 
   const resetForm = () => {
     setForm(emptyForm)
     setEditId(null)
+    setShowForm(false)
   }
 
   const load = useCallback(async () => {
@@ -45,6 +53,7 @@ export default function SignageWayfindingPage() {
       direction: row.direction,
       sort_order: row.sort_order,
     })
+    setShowForm(true)
   }
 
   const save = async () => {
@@ -65,47 +74,104 @@ export default function SignageWayfindingPage() {
 
   return (
     <SignagePageShell title="Wayfinding">
-      <p style={{ fontSize: 13, color: muted, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 720 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ ...s.h3, margin: 0 }}>Wayfinding</h3>
+        <button
+          type="button"
+          onClick={() => { resetForm(); setShowForm(v => !v) }}
+          style={s.btn}
+        >
+          + Add entry
+        </button>
+      </div>
+
+      <p style={{ fontSize: 13, color: s.muted, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 720 }}>
         Add destinations and arrow directions for each area (e.g. “Culinary Arts → right”). Entries appear on every screen assigned to that area — below announcements on Zoned screens, or as the main directory on Wayfinding layout screens.
       </p>
-      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 16, marginBottom: 20 }}>
-        <h3 style={{ margin: '0 0 12px', color: text }}>{editId ? 'Edit wayfinding entry' : 'Add wayfinding entry'}</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={form.area_id} onChange={e => setForm(f => ({ ...f, area_id: e.target.value }))} style={inputStyle}>
-            <option value="">Select area</option>
-            {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <input placeholder="Destination" value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} style={inputStyle} />
-          <select value={form.direction} onChange={e => setForm(f => ({ ...f, direction: e.target.value }))} style={inputStyle}>
-            {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <input type="number" placeholder="Sort order" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} style={{ ...inputStyle, width: 100 }} />
-          <button type="button" onClick={() => void save()} style={{ padding: '8px 16px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>{editId ? 'Update' : 'Add'}</button>
-          {editId && (
-            <button type="button" onClick={resetForm} style={{ padding: '8px 16px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-          )}
-        </div>
-      </div>
-      {loading ? (
-        <div style={{ color: muted, padding: 16 }}>Loading…</div>
-      ) : (
-        entries.map(e => (
-          <div key={e.id} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 12, padding: 14, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: text }}>{areaName(e.area_id)} — {e.destination} ({e.direction}) · order {e.sort_order}</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <SignageEditButton onClick={() => startEdit(e)} />
+
+      {showForm && (
+        <div style={{ ...s.card, marginBottom: 20 }}>
+          <h3 style={s.h3}>{editId ? 'Edit wayfinding entry' : 'Add wayfinding entry'}</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            <div>
+              <p style={s.lbl}>Area</p>
+              <select value={form.area_id} onChange={e => setForm(f => ({ ...f, area_id: e.target.value }))} style={s.input}>
+                <option value="">Select area</option>
+                {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <p style={s.lbl}>Destination</p>
+              <input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} style={s.input} />
+            </div>
+            <div>
+              <p style={s.lbl}>Direction</p>
+              <select value={form.direction} onChange={e => setForm(f => ({ ...f, direction: e.target.value }))} style={s.input}>
+                {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div>
+              <p style={s.lbl}>Sort order</p>
+              <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} style={s.input} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <button type="button" onClick={resetForm} style={s.btn}>Cancel</button>
+            {editId && (
               <SignageDeleteButton
-                confirmMessage={`Remove wayfinding entry "${e.destination}"?`}
+                confirmMessage={`Remove wayfinding entry "${form.destination}"?`}
                 onConfirm={async () => {
-                  if (await deleteSignageItem('/api/signage/wayfinding', e.id)) {
-                    if (editId === e.id) resetForm()
+                  if (await deleteSignageItem('/api/signage/wayfinding', editId)) {
+                    resetForm()
                     void load()
                   }
                 }}
               />
-            </div>
+            )}
+            <button type="button" onClick={() => void save()} style={s.btnPrimary}>Save</button>
           </div>
-        ))
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ color: s.muted, padding: 16 }}>Loading…</div>
+      ) : (
+        <>
+          <SignageListHint color={s.muted}>Click a destination to edit.</SignageListHint>
+          <div style={s.cardCompact}>
+            <table style={s.tbl}>
+              <colgroup>
+                <col style={{ width: '32%' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '12%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={s.th}>Destination</th>
+                  <th style={s.th}>Area</th>
+                  <th style={s.th}>Direction</th>
+                  <th style={s.th}>Sort</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map(e => (
+                  <tr key={e.id}>
+                    <td style={s.td}>
+                      <SignageRowEditButton onClick={() => startEdit(e)} textColor={s.text}>
+                        {e.destination}
+                      </SignageRowEditButton>
+                    </td>
+                    <td style={s.tdMuted}>{areaName(e.area_id)}</td>
+                    <td style={s.tdMuted}>{e.direction}</td>
+                    <td style={s.tdMuted}>{e.sort_order}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!entries.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No wayfinding entries yet.</div>}
+          </div>
+        </>
       )}
     </SignagePageShell>
   )

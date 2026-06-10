@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
 import { signageMediaPublicUrl } from './constants'
 import { signageLiveMatchesScreen } from './live-targeting'
 import { normalizeSignageStreamUrl } from './stream-url'
@@ -92,28 +93,22 @@ export async function buildScreenFeed(
 
   const { data: areaRows } = await service.from('signage_areas').select('id, name')
   const areaNameById = new Map((areaRows ?? []).map(a => [a.id, a.name]))
+  const { data: screenRows } = await service.from('signage_screens').select('id, name')
+  const screenNameById = new Map((screenRows ?? []).map(sc => [sc.id, sc.name]))
 
   const announcements = (annRes.data ?? [])
     .filter(row => isInDateRange(row.start_date, row.end_date, today))
     .filter(row => signageTargetMatches(row, target))
     .sort((a, b) => b.priority - a.priority)
-    .map(row => {
-      let scopeLabel = area?.name ?? 'Local'
-      if (row.all_screens) scopeLabel = 'All'
-      else if (row.target_area_ids?.length === 1) {
-        scopeLabel = areaNameById.get(row.target_area_ids[0]) ?? scopeLabel
-      } else if ((row.target_area_ids?.length ?? 0) > 1) {
-        scopeLabel = 'Multi'
-      }
-      return {
-        id: row.id,
-        title: row.title,
-        subtitle: row.subtitle,
-        in_ticker: row.in_ticker,
-        scope_label: scopeLabel,
-        all_screens: row.all_screens,
-      }
-    })
+    .map(row => ({
+      id: row.id,
+      title: row.title,
+      subtitle: row.subtitle,
+      in_ticker: row.in_ticker,
+      icon: normalizeSignageAnnouncementIcon(row.icon),
+      scope_label: announcementScopeLabel(row, areaNameById, screenNameById),
+      all_screens: row.all_screens,
+    }))
 
   const tickerItems: TickerItem[] = announcements
     .filter(a => a.in_ticker)

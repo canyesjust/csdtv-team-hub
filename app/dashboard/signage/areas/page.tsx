@@ -4,21 +4,30 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
-import { SignageDeleteButton, SignagePageShell, deleteSignageItem, useSignageTheme } from '../components/SignageAdmin'
+import {
+  SignageDeleteButton,
+  SignageListHint,
+  SignagePageShell,
+  SignageRowEditButton,
+  deleteSignageItem,
+  useSignageAdminStyles,
+} from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 
 type Area = { id: string; name: string; slug: string; building: string | null; floor: number | null; sort_order: number }
 
+const empty = { name: '', slug: '', building: '', floor: '', sort_order: 0 }
+
 export default function SignageAreasPage() {
   const { theme } = useTheme()
-  const { text, border, cardBg, inputBg } = useSignageTheme(theme)
+  const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
   const { refreshCatalog } = useSignage()
   const [loading, setLoading] = useState(true)
   const [areas, setAreas] = useState<Area[]>([])
-  const [form, setForm] = useState({ name: '', slug: '', building: '', floor: '', sort_order: 0 })
+  const [form, setForm] = useState(empty)
   const [editId, setEditId] = useState<string | null>(null)
-  const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: 10, padding: '8px 12px', fontSize: 14, color: text, fontFamily: 'inherit' }
+  const [showForm, setShowForm] = useState(false)
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('signage_areas').select('*').order('sort_order')
@@ -28,48 +37,150 @@ export default function SignageAreasPage() {
 
   useEffect(() => { void load() }, [load])
 
-  const save = async () => {
-    const body = { name: form.name, slug: form.slug, building: form.building || null, floor: form.floor ? parseInt(form.floor, 10) : null, sort_order: form.sort_order }
-    const res = await fetch('/api/signage/areas', { method: editId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editId ? { id: editId, ...body } : body) })
-    if (!res.ok) { toast('Save failed', 'error'); return }
-    toast('Saved', 'success')
-    setForm({ name: '', slug: '', building: '', floor: '', sort_order: 0 })
+  const resetForm = () => {
+    setForm(empty)
     setEditId(null)
+    setShowForm(false)
+  }
+
+  const startEdit = (area: Area) => {
+    setEditId(area.id)
+    setForm({
+      name: area.name,
+      slug: area.slug,
+      building: area.building || '',
+      floor: area.floor != null ? String(area.floor) : '',
+      sort_order: area.sort_order,
+    })
+    setShowForm(true)
+  }
+
+  const save = async () => {
+    if (!form.name.trim() || !form.slug.trim()) {
+      toast('Name and slug are required', 'error')
+      return
+    }
+    const body = {
+      name: form.name.trim(),
+      slug: form.slug.trim(),
+      building: form.building || null,
+      floor: form.floor ? parseInt(form.floor, 10) : null,
+      sort_order: form.sort_order,
+    }
+    const res = await fetch('/api/signage/areas', {
+      method: editId ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editId ? { id: editId, ...body } : body),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Save failed', 'error'); return }
+    toast('Saved', 'success')
+    resetForm()
     await Promise.all([load(), refreshCatalog()])
   }
 
   return (
     <SignagePageShell title="Areas">
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        <input placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} />
-        <input placeholder="Slug" value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} style={inputStyle} />
-        <input placeholder="Building" value={form.building} onChange={e => setForm(f => ({ ...f, building: e.target.value }))} style={inputStyle} />
-        <input placeholder="Floor" value={form.floor} onChange={e => setForm(f => ({ ...f, floor: e.target.value }))} style={{ ...inputStyle, width: 80 }} />
-        <button type="button" onClick={() => void save()} style={{ padding: '8px 16px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>{editId ? 'Update' : 'Add'}</button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ ...s.h3, margin: 0 }}>Areas</h3>
+        <button
+          type="button"
+          onClick={() => { resetForm(); setShowForm(v => !v) }}
+          style={s.btn}
+        >
+          + Add area
+        </button>
       </div>
-      {loading ? (
-        <div style={{ color: '#6b7280', padding: 16 }}>Loading areas…</div>
-      ) : (
-        areas.map(a => (
-          <div key={a.id} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 12, padding: 14, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <span>{a.name} ({a.slug}) — {a.building || '—'} floor {a.floor ?? '—'}</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button type="button" onClick={() => { setEditId(a.id); setForm({ name: a.name, slug: a.slug, building: a.building || '', floor: a.floor != null ? String(a.floor) : '', sort_order: a.sort_order }) }} style={{ border: 'none', background: 'transparent', color: '#1e6cb5', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
+
+      <p style={{ fontSize: 13, color: s.muted, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 720 }}>
+        Areas group screens and wayfinding entries (e.g. Main Hall, Culinary Arts). Assign an area on the Screens page so directory entries appear on those displays.
+      </p>
+
+      {showForm && (
+        <div style={{ ...s.card, marginBottom: 20 }}>
+          <h3 style={s.h3}>{editId ? 'Edit area' : 'Add area'}</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            <div>
+              <p style={s.lbl}>Name</p>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={s.input} />
+            </div>
+            <div>
+              <p style={s.lbl}>Slug</p>
+              <input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} style={s.input} />
+            </div>
+            <div>
+              <p style={s.lbl}>Building</p>
+              <input value={form.building} onChange={e => setForm(f => ({ ...f, building: e.target.value }))} style={s.input} />
+            </div>
+            <div>
+              <p style={s.lbl}>Floor</p>
+              <input type="number" value={form.floor} onChange={e => setForm(f => ({ ...f, floor: e.target.value }))} style={s.input} />
+            </div>
+            <div>
+              <p style={s.lbl}>Sort order</p>
+              <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))} style={s.input} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <button type="button" onClick={resetForm} style={s.btn}>Cancel</button>
+            {editId && (
               <SignageDeleteButton
-                confirmMessage={`Delete area "${a.name}"? Screens in this area will lose their area link.`}
+                confirmMessage={`Delete area "${form.name}"? Screens in this area will lose their area link.`}
                 onConfirm={async () => {
-                  if (await deleteSignageItem('/api/signage/areas', a.id)) {
-                    if (editId === a.id) {
-                      setEditId(null)
-                      setForm({ name: '', slug: '', building: '', floor: '', sort_order: 0 })
-                    }
+                  if (await deleteSignageItem('/api/signage/areas', editId)) {
+                    resetForm()
                     await Promise.all([load(), refreshCatalog()])
                   }
                 }}
               />
-            </div>
+            )}
+            <button type="button" onClick={() => void save()} style={s.btnPrimary}>Save</button>
           </div>
-        ))
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ color: s.muted, padding: 16 }}>Loading areas…</div>
+      ) : (
+        <>
+          <SignageListHint color={s.muted} />
+          <div style={s.cardCompact}>
+            <table style={s.tbl}>
+              <colgroup>
+                <col style={{ width: '28%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '12%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={s.th}>Name</th>
+                  <th style={s.th}>Slug</th>
+                  <th style={s.th}>Building</th>
+                  <th style={s.th}>Floor</th>
+                  <th style={s.th}>Sort</th>
+                </tr>
+              </thead>
+              <tbody>
+                {areas.map(a => (
+                  <tr key={a.id}>
+                    <td style={s.td}>
+                      <SignageRowEditButton onClick={() => startEdit(a)} textColor={s.text}>
+                        {a.name}
+                      </SignageRowEditButton>
+                    </td>
+                    <td style={s.tdMuted}>{a.slug}</td>
+                    <td style={s.tdMuted}>{a.building || '—'}</td>
+                    <td style={s.tdMuted}>{a.floor ?? '—'}</td>
+                    <td style={s.tdMuted}>{a.sort_order}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!areas.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No areas yet.</div>}
+          </div>
+        </>
       )}
     </SignagePageShell>
   )

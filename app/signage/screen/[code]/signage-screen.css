@@ -527,7 +527,99 @@
   flex: 1;
   padding: 14px 16px;
   min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cic-wayfind-dir-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+}
+
+.cic-wayfind-welcome {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(150, 183, 200, 0.25);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--accent);
+}
+
+.cic-wayfind-welcome.portrait {
+  margin-top: 10px;
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+.cic-wayfind-welcome b {
+  color: var(--white);
+  font-weight: 500;
+}
+
+.cic-wayfind-welcome .cic-confetti-icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.cic-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.cic-dir-arrow-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(22, 40, 68, 0.85);
+  border: 2px solid var(--accent);
+  color: var(--white);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  flex: none;
+  box-shadow: 0 0 0 1px rgba(150, 183, 200, 0.15);
+}
+
+.cic-dir.prominent {
+  line-height: 1.35;
+}
+
+.cic-dir.prominent .cic-dir-label {
+  font-weight: 500;
+  color: var(--white);
+}
+
+.cic-body-wayfind {
+  min-height: 0;
+}
+
+.cic-wayfind-media-wrap {
+  flex: 0 1 42%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px 12px 0;
+  background: var(--navy);
+}
+
+.cic-media16.wayfind-media {
+  height: auto;
+  width: 100%;
+  max-height: 100%;
+  aspect-ratio: 16 / 9;
+  flex: none;
 }
 
 .cic-portrait-section {
@@ -588,7 +680,7 @@
   --cic-media-title: 3.333vmax; /* ~64px @ 1920 */
   --cic-ann-title: 1.458vmax; /* ~28px @ 1920 */
   --cic-ann-sub: 1.042vmax;   /* ~20px @ 1920 */
-  --cic-dir-title: 1.458vmax; /* ~28px @ 1920 — wayfinding destinations */
+  --cic-dir-title: 2.083vmax; /* ~40px @ 1920 — wayfinding destinations */
   --cic-ticker-h: 5.93vh;     /* ~64px @ 1080 */
   --cic-ticker-text: 1.458vmax; /* ~28px @ 1920 */
   --cic-label: 0.833vmax;     /* ~16px @ 1920 — rail section headers */
@@ -777,9 +869,62 @@
   font-size: var(--cic-ann-sub);
 }
 
-/* Wayfinding — directory column */
+/* Wayfinding — directory column + smaller media */
+.cic-screen.layout-wayfinding:not(.portrait) .cic-body-wayfind {
+  gap: 0;
+}
+
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir {
-  padding: var(--cic-pad-lg) var(--cic-pad-lg);
+  flex: 1 1 58%;
+  max-width: 62%;
+  padding: var(--cic-pad-lg) calc(var(--cic-pad-lg) + 0.2vmax);
+  border-right: 1px solid rgba(150, 183, 200, 0.18);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir-title {
+  font-size: var(--cic-label);
+  letter-spacing: 0.052vmax;
+  margin-bottom: 1.042vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir.prominent {
+  font-size: 2.083vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-row {
+  gap: 0.833vmax;
+  margin-bottom: 0.938vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-arrow-badge {
+  width: 2.5vmax;
+  height: 2.5vmax;
+  border-radius: 0.521vmax;
+  border-width: 0.156vmax;
+  font-size: 1.458vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-welcome {
+  margin-top: 1.042vmax;
+  padding: 0.833vmax 0 0;
+  border-top-width: 0.052vmax;
+  font-size: var(--cic-body);
+  gap: 0.521vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-welcome .cic-confetti-icon {
+  font-size: var(--cic-body);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-media-wrap {
+  flex: 0 1 40%;
+  padding: var(--cic-pad) var(--cic-pad-lg) var(--cic-pad) 0;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-media16.wayfind-media {
+  max-height: 78%;
+  width: auto;
+  max-width: 100%;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir .cic-railhd {
@@ -950,6 +1095,34 @@
 .cic-screen.portrait.layout-wayfinding .cic-dir.compact .cic-dir-arrow {
   font-size: 1.042vmax;
   width: 1.042vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir.prominent {
+  font-size: 1.667vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir-row {
+  gap: 0.729vmax;
+  margin-bottom: 0.833vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir-arrow-badge {
+  width: 2.083vmax;
+  height: 2.083vmax;
+  border-radius: 0.417vmax;
+  border-width: 0.13vmax;
+  font-size: 1.25vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-wayfind-welcome {
+  font-size: var(--cic-body);
+  gap: 0.417vmax;
+  margin-top: 0.833vmax;
+  padding-top: 0.729vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-wayfind-welcome .cic-confetti-icon {
+  font-size: var(--cic-body);
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-dir:not(.compact) {

@@ -4,7 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
-import { SignageDeleteButton, SignageEditButton, SignagePageShell, deleteSignageItem, useSignageTheme } from '../components/SignageAdmin'
+import {
+  SignageDeleteButton,
+  SignageListHint,
+  SignagePageShell,
+  SignageRowEditButton,
+  deleteSignageItem,
+  useSignageAdminStyles,
+} from '../components/SignageAdmin'
 import SignageDateInput from '@/components/SignageDateInput'
 
 type VisitorRow = { id: string; name: string; note: string | null; visit_date: string; active: boolean }
@@ -13,17 +20,18 @@ const emptyForm = { name: '', note: '', visit_date: '', active: true }
 
 export default function SignageVisitorsPage() {
   const { theme } = useTheme()
-  const { text, muted, border, cardBg, inputBg, dark } = useSignageTheme(theme)
+  const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<VisitorRow[]>([])
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState<string | null>(null)
-  const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: 10, padding: '8px 12px', fontSize: 14, color: text, fontFamily: 'inherit' }
+  const [showForm, setShowForm] = useState(false)
 
   const resetForm = () => {
     setForm(emptyForm)
     setEditId(null)
+    setShowForm(false)
   }
 
   const load = useCallback(async () => {
@@ -45,6 +53,7 @@ export default function SignageVisitorsPage() {
       visit_date: row.visit_date?.slice(0, 10) ?? '',
       active: row.active,
     })
+    setShowForm(true)
   }
 
   const save = async () => {
@@ -63,41 +72,95 @@ export default function SignageVisitorsPage() {
 
   return (
     <SignagePageShell title="Visiting today">
-      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 16, marginBottom: 20, maxWidth: 640 }}>
-        <h3 style={{ margin: '0 0 12px', color: text }}>{editId ? 'Edit visitor' : 'Add visitor'}</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input placeholder="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} />
-          <input placeholder="Note" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} style={inputStyle} />
-          <SignageDateInput value={form.visit_date} defaultToToday colorScheme={dark ? 'dark' : 'light'} onChange={v => setForm(f => ({ ...f, visit_date: v }))} style={inputStyle} />
-          <label style={{ fontSize: 14, display: 'flex', gap: 6, alignItems: 'center', color: text }}>
-            <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} /> Active
-          </label>
-          <button type="button" onClick={() => void save()} style={{ padding: '8px 16px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>{editId ? 'Update' : 'Add'}</button>
-          {editId && (
-            <button type="button" onClick={resetForm} style={{ padding: '8px 16px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-          )}
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ ...s.h3, margin: 0 }}>Visitors</h3>
+        <button
+          type="button"
+          onClick={() => { resetForm(); setShowForm(v => !v) }}
+          style={s.btn}
+        >
+          + Add visitor
+        </button>
       </div>
-      {loading ? (
-        <div style={{ color: muted, padding: 16 }}>Loading…</div>
-      ) : (
-        rows.map(r => (
-          <div key={r.id} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 12, padding: 14, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: text }}>{r.visit_date?.slice(0, 10)}: {r.name}{r.note ? ` — ${r.note}` : ''}{!r.active && <span style={{ color: muted }}> (inactive)</span>}</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <SignageEditButton onClick={() => startEdit(r)} />
+
+      {showForm && (
+        <div style={{ ...s.card, marginBottom: 20, maxWidth: 640 }}>
+          <h3 style={s.h3}>{editId ? 'Edit visitor' : 'Add visitor'}</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            <div>
+              <p style={s.lbl}>Name</p>
+              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={s.input} />
+            </div>
+            <div>
+              <p style={s.lbl}>Note</p>
+              <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} style={s.input} />
+            </div>
+            <div>
+              <p style={s.lbl}>Visit date</p>
+              <SignageDateInput value={form.visit_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setForm(f => ({ ...f, visit_date: v }))} style={s.input} />
+            </div>
+          </div>
+          <label style={{ fontSize: 13, display: 'flex', gap: 7, alignItems: 'center', color: s.text, marginTop: 12 }}>
+            <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />
+            Active
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+            <button type="button" onClick={resetForm} style={s.btn}>Cancel</button>
+            {editId && (
               <SignageDeleteButton
-                confirmMessage={`Remove visitor entry for "${r.name}"?`}
+                confirmMessage={`Remove visitor entry for "${form.name}"?`}
                 onConfirm={async () => {
-                  if (await deleteSignageItem('/api/signage/visitors', r.id)) {
-                    if (editId === r.id) resetForm()
+                  if (await deleteSignageItem('/api/signage/visitors', editId)) {
+                    resetForm()
                     void load()
                   }
                 }}
               />
-            </div>
+            )}
+            <button type="button" onClick={() => void save()} style={s.btnPrimary}>Save</button>
           </div>
-        ))
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ color: s.muted, padding: 16 }}>Loading…</div>
+      ) : (
+        <>
+          <SignageListHint color={s.muted} />
+          <div style={s.cardCompact}>
+            <table style={s.tbl}>
+              <colgroup>
+                <col style={{ width: '28%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '44%' }} />
+                <col style={{ width: '12%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={s.th}>Name</th>
+                  <th style={s.th}>Visit date</th>
+                  <th style={s.th}>Note</th>
+                  <th style={s.th}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.id}>
+                    <td style={s.td}>
+                      <SignageRowEditButton onClick={() => startEdit(r)} textColor={s.text}>
+                        {r.name}
+                      </SignageRowEditButton>
+                    </td>
+                    <td style={s.tdMuted}>{r.visit_date?.slice(0, 10)}</td>
+                    <td style={s.tdMuted}>{r.note || '—'}</td>
+                    <td style={s.tdMuted}>{r.active ? 'Active' : 'Inactive'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!rows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No visitors yet.</div>}
+          </div>
+        </>
       )}
     </SignagePageShell>
   )

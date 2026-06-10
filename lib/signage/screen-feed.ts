@@ -14,7 +14,8 @@ export type ScreenFeedAnnouncement = {
   title: string
   subtitle: string | null
   in_ticker: boolean
-  scope_label: string
+  icon: string
+  scope_label: string | null
   all_screens: boolean
 }
 

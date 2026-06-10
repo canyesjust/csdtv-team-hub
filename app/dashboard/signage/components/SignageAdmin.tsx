@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { SIGNAGE_ANNOUNCEMENT_ICONS, type SignageAnnouncementIconId } from '@/lib/signage/announcement-icons'
 import { usePathname } from 'next/navigation'
 import { useState, type ReactNode } from 'react'
 import { useTheme } from '@/lib/theme'
@@ -259,6 +260,36 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
   )
 }
 
+type AnnouncementIconPickerProps = {
+  value: SignageAnnouncementIconId
+  onChange: (value: SignageAnnouncementIconId) => void
+  lbl?: React.CSSProperties
+}
+
+export function SignageAnnouncementIconPicker({ value, onChange, lbl }: AnnouncementIconPickerProps) {
+  const { theme } = useTheme()
+  const s = useSignageAdminStyles(theme)
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {lbl && <p style={lbl}>Icon</p>}
+      <div>
+        {SIGNAGE_ANNOUNCEMENT_ICONS.map(icon => (
+          <button
+            key={icon.id}
+            type="button"
+            title={icon.label}
+            onClick={() => onChange(icon.id)}
+            style={s.chip(value === icon.id)}
+          >
+            <span aria-hidden>{icon.emoji}</span> {icon.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function SignageSubnav({ active, isManager }: { active: string; isManager: boolean }) {
   const { theme } = useTheme()
   const { text, border } = useSignageTheme(theme)
@@ -382,6 +413,48 @@ const editBtnStyle: React.CSSProperties = {
   fontFamily: 'inherit',
   fontSize: 13,
   fontWeight: 600,
+}
+
+export function SignageListHint({ color, children = 'Click a name to edit.' }: { color: string; children?: ReactNode }) {
+  return (
+    <p style={{ fontSize: 12, color, margin: '0 0 10px' }}>
+      {children}
+    </p>
+  )
+}
+
+/** Primary label in a list/table row — opens the edit form (matches Screens page). */
+export function SignageRowEditButton({
+  onClick,
+  children,
+  textColor,
+  fontWeight,
+}: {
+  onClick: () => void
+  children: ReactNode
+  textColor: string
+  fontWeight?: number | string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Edit"
+      style={{
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        color: textColor,
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+        fontSize: 'inherit',
+        textAlign: 'left',
+        fontWeight: fontWeight ?? 'inherit',
+      }}
+    >
+      {children}
+    </button>
+  )
 }
 
 export function SignageEditButton({ label = 'Edit', onClick }: { label?: string; onClick: () => void }) {

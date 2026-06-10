@@ -3,11 +3,12 @@
 import Hls from 'hls.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
+import { announcementIconEmoji } from '@/lib/signage/announcement-icons'
 import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import './signage-screen.css'
 
 type FeedMedia = { id: string; type: 'image' | 'video'; title: string | null; url: string; full_screen: boolean }
-type FeedAnnouncement = { id: string; title: string; subtitle: string | null; in_ticker: boolean; scope_label: string; all_screens: boolean }
+type FeedAnnouncement = { id: string; title: string; subtitle: string | null; in_ticker: boolean; icon: string; scope_label: string | null; all_screens: boolean }
 type FeedWayfinding = { id: string; destination: string; direction: string }
 type FeedVisitor = { id: string; name: string; note: string | null }
 
@@ -35,12 +36,12 @@ const REFRESH_MS = 5_000
 const FADE_MS = 450
 const HEADING_ROTATE_MS = 3_500
 
-function BellIcon() {
-  return <span className="cic-ann-icon" aria-hidden>🔔</span>
-}
-
 function ConfettiIcon() {
   return <span className="cic-confetti-icon" aria-hidden>✦</span>
+}
+
+function AnnouncementIcon({ icon }: { icon: string }) {
+  return <span className="cic-ann-icon" aria-hidden>{announcementIconEmoji(icon)}</span>
 }
 
 function ScreenLogo({ portrait }: { portrait?: boolean }) {
@@ -113,11 +114,11 @@ function TickerBar({ items, portrait }: { items: string[]; portrait?: boolean })
 function AnnouncementRow({ ann }: { ann: FeedAnnouncement }) {
   return (
     <div className="cic-ann">
-      <BellIcon />
+      <AnnouncementIcon icon={ann.icon} />
       <div>
         <div className="cic-anntop">
           {ann.title}
-          <span className={`cic-spill${ann.all_screens ? ' all' : ''}`}>{ann.scope_label}</span>
+          {ann.scope_label && <span className="cic-spill">{ann.scope_label}</span>}
         </div>
         {ann.subtitle && <div className="cic-annsub">{ann.subtitle}</div>}
       </div>
@@ -156,26 +157,41 @@ function WayfindingDirectory({
   entries,
   portrait,
   compact,
+  prominent,
 }: {
   entries: FeedWayfinding[]
   portrait?: boolean
   compact?: boolean
+  prominent?: boolean
 }) {
   const className = [
     'cic-dir',
     portrait ? 'portrait' : '',
     compact ? 'compact' : '',
+    prominent ? 'prominent' : '',
   ].filter(Boolean).join(' ')
 
   return (
     <div className={className}>
       {entries.map(w => (
-        <div key={w.id}>
-          <span className="cic-dir-arrow">{WAYFINDING_ARROWS[w.direction as WayfindingDirection] || '→'}</span>
-          {w.destination}
+        <div key={w.id} className={prominent ? 'cic-dir-row' : undefined}>
+          <span className={prominent ? 'cic-dir-arrow-badge' : 'cic-dir-arrow'}>
+            {WAYFINDING_ARROWS[w.direction as WayfindingDirection] || '→'}
+          </span>
+          <span className={prominent ? 'cic-dir-label' : undefined}>{w.destination}</span>
         </div>
       ))}
       {!entries.length && <div className="cic-empty-muted">Directory coming soon</div>}
+    </div>
+  )
+}
+
+function WayfindingVisitorWelcome({ visitor, portrait }: { visitor: FeedVisitor; portrait?: boolean }) {
+  const suffix = visitor.note ? ` — ${visitor.note}` : ' — thanks for visiting today'
+  return (
+    <div className={`cic-wayfind-welcome${portrait ? ' portrait' : ''}`}>
+      <ConfettiIcon />
+      <span>Welcome, <b>{visitor.name}</b>{suffix}</span>
     </div>
   )
 }
@@ -188,6 +204,7 @@ function MediaCarousel({
   onAdvance,
   fill,
   portrait,
+  wayfindMedia,
 }: {
   media: FeedMedia[]
   index: number
@@ -196,6 +213,7 @@ function MediaCarousel({
   onAdvance: () => void
   fill?: boolean
   portrait?: boolean
+  wayfindMedia?: boolean
 }) {
   const item = media[index]
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -226,6 +244,7 @@ function MediaCarousel({
     'cic-media16',
     fill ? 'fill' : '',
     portrait && !fill ? 'portrait-top' : '',
+    wayfindMedia ? 'wayfind-media' : '',
   ].filter(Boolean).join(' ')
 
   return (
@@ -440,21 +459,18 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
     }, FADE_MS)
   }, [feed.media.length])
 
-  const headings = useMemo(() => {
+  const wayfindingHeadings = useMemo(() => {
     const list: string[] = []
     if (feed.screen.heading) list.push(feed.screen.heading)
     list.push('Find your way around the Innovation Center')
-    for (const v of feed.visitors) {
-      list.push(v.note ? `Welcome ${v.name} — ${v.note}` : `Welcome ${v.name}`)
-    }
-    return list.length ? list : ['Find your way around the Innovation Center']
-  }, [feed])
+    return list
+  }, [feed.screen.heading])
 
   useEffect(() => {
     if (feed.screen.layout !== 'wayfinding') return
-    const t = setInterval(() => setHeadingIndex(i => (i + 1) % headings.length), HEADING_ROTATE_MS)
+    const t = setInterval(() => setHeadingIndex(i => (i + 1) % wayfindingHeadings.length), HEADING_ROTATE_MS)
     return () => clearInterval(t)
-  }, [feed.screen.layout, headings.length])
+  }, [feed.screen.layout, wayfindingHeadings.length])
 
   const portrait = feed.screen.orientation === 'portrait'
   const layout = feed.screen.layout ?? 'zoned'
@@ -579,25 +595,31 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
       {layout === 'wayfinding' && showZones && !portrait && (
         <>
           <ScreenHeader
-            brandTitle={headings[headingIndex % headings.length]}
+            brandTitle={wayfindingHeadings[headingIndex % wayfindingHeadings.length]}
             brandSub="Find your way"
             weatherIcon={feed.weather.icon}
             tempF={feed.weather.tempF}
             clock={clock}
-            wayfindingHeading={headings[headingIndex % headings.length]}
+            wayfindingHeading={wayfindingHeadings[headingIndex % wayfindingHeadings.length]}
           />
-          <div className="cic-body">
+          <div className="cic-body cic-body-wayfind">
             <div className="cic-wayfind-dir">
-              <div className="cic-railhd" style={{ marginBottom: 8 }}>Directory</div>
-              <WayfindingDirectory entries={feed.wayfinding} />
+              <div className="cic-railhd cic-wayfind-dir-title">Directory</div>
+              <div className="cic-wayfind-dir-scroll">
+                <WayfindingDirectory entries={feed.wayfinding} prominent />
+              </div>
+              {visitor && <WayfindingVisitorWelcome visitor={visitor} />}
             </div>
-            <MediaCarousel
-              media={feed.media}
-              index={mediaIndex}
-              visible={mediaVisible}
-              imageSeconds={imageSeconds}
-              onAdvance={advanceMedia}
-            />
+            <div className="cic-wayfind-media-wrap">
+              <MediaCarousel
+                media={feed.media}
+                index={mediaIndex}
+                visible={mediaVisible}
+                imageSeconds={imageSeconds}
+                onAdvance={advanceMedia}
+                wayfindMedia
+              />
+            </div>
           </div>
           <TickerBar items={feed.ticker} />
         </>
@@ -608,14 +630,13 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         <>
           <ScreenHeader
             portrait
-            brandTitle={headings[headingIndex % headings.length]}
+            brandTitle={wayfindingHeadings[headingIndex % wayfindingHeadings.length]}
             brandSub="Find your way"
             weatherIcon={feed.weather.icon}
             tempF={feed.weather.tempF}
             clock={clock}
-            wayfindingHeading={headings[headingIndex % headings.length]}
+            wayfindingHeading={wayfindingHeadings[headingIndex % wayfindingHeadings.length]}
           />
-          {visitor && <WelcomeStrip visitor={visitor} portrait />}
           <MediaCarousel
             media={feed.media}
             index={mediaIndex}
@@ -624,9 +645,10 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             onAdvance={advanceMedia}
             portrait
           />
-          <div className="cic-portrait-section">
+          <div className="cic-portrait-section cic-wayfind-portrait-dir">
             <div className="cic-railhd tight">Directory</div>
-            <WayfindingDirectory entries={feed.wayfinding} portrait />
+            <WayfindingDirectory entries={feed.wayfinding} portrait prominent />
+            {visitor && <WayfindingVisitorWelcome visitor={visitor} portrait />}
           </div>
           <div className="cic-portrait-ann">
             <div className="cic-railhd">Announcements</div>

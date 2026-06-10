@@ -6,7 +6,9 @@ import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import {
   SignageDeleteButton,
+  SignageListHint,
   SignagePageShell,
+  SignageRowEditButton,
   deleteSignageItem,
   layoutLabel,
   orientationLabel,
@@ -197,7 +199,9 @@ export default function SignageScreensPage() {
       {loading ? (
         <div style={{ color: s.muted, padding: 16 }}>Loading screens…</div>
       ) : (
-        <div style={s.cardCompact}>
+        <>
+          <SignageListHint color={s.muted} />
+          <div style={s.cardCompact}>
           <table style={s.tbl}>
             <colgroup>
               <col style={{ width: '20%' }} />
@@ -221,9 +225,9 @@ export default function SignageScreensPage() {
               {screens.map(sc => (
                 <tr key={sc.id}>
                   <td style={s.td}>
-                    <button type="button" onClick={() => startEdit(sc)} style={{ background: 'none', border: 'none', padding: 0, color: s.text, cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', textAlign: 'left' }}>
+                    <SignageRowEditButton onClick={() => startEdit(sc)} textColor={s.text}>
                       {sc.name}{!sc.active && <span style={{ color: s.muted }}> (inactive)</span>}
-                    </button>
+                    </SignageRowEditButton>
                   </td>
                   <td style={s.tdMuted}>{areaName(sc.area_id)}</td>
                   <td style={s.tdMuted}>{orientationLabel(sc.orientation)}</td>
@@ -238,7 +242,8 @@ export default function SignageScreensPage() {
             </tbody>
           </table>
           {!screens.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No screens yet.</div>}
-        </div>
+          </div>
+        </>
       )}
 
     </SignagePageShell>
