@@ -203,3 +203,23 @@ export function SignageDeleteButton({ label = 'Delete', confirmMessage, onConfir
     </button>
   )
 }
+
+const editBtnStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  borderRadius: 8,
+  border: 'none',
+  background: 'transparent',
+  color: '#1e6cb5',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: 13,
+  fontWeight: 600,
+}
+
+export function SignageEditButton({ label = 'Edit', onClick }: { label?: string; onClick: () => void }) {
+  return (
+    <button type="button" style={editBtnStyle} onClick={onClick}>
+      {label}
+    </button>
+  )
+}

@@ -53,6 +53,7 @@ export async function PATCH(
   if (typeof body.start_date === 'string') patch.start_date = body.start_date
   if (typeof body.end_date === 'string') patch.end_date = body.end_date
   if (typeof body.priority === 'number') patch.priority = body.priority
+  else if (typeof body.priority === 'string' && body.priority.trim()) patch.priority = parseInt(body.priority, 10) || 0
   if (typeof body.full_screen === 'boolean') patch.full_screen = body.full_screen
   if (typeof body.title === 'string') patch.title = body.title
   if (body.reject_reason === null || typeof body.reject_reason === 'string') {

@@ -47,7 +47,7 @@ export default function SignageContentPage() {
   const [rows, setRows] = useState<ContentRow[]>([])
   const [counts, setCounts] = useState(EMPTY_COUNTS)
   const [tabLoading, setTabLoading] = useState(true)
-  const [edits, setEdits] = useState<Record<string, TargetingValue & { start_date: string; end_date: string; priority: number }>>({})
+  const [edits, setEdits] = useState<Record<string, TargetingValue & { start_date: string; end_date: string; priority: number; title: string; full_screen: boolean }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -92,9 +92,26 @@ export default function SignageContentPage() {
     all_screens: row.all_screens,
     target_area_ids: row.target_area_ids ?? [],
     target_screen_ids: row.target_screen_ids ?? [],
-    start_date: row.start_date,
-    end_date: row.end_date,
+    start_date: row.start_date?.slice(0, 10) ?? '',
+    end_date: row.end_date?.slice(0, 10) ?? '',
     priority: row.priority,
+    title: row.title ?? '',
+    full_screen: row.full_screen,
+  }
+
+  const saveEdit = async (row: ContentRow, extra?: Record<string, unknown>) => {
+    const e = getEdit(row)
+    await patchContent(row.id, {
+      title: e.title,
+      full_screen: e.full_screen,
+      all_screens: e.all_screens,
+      target_area_ids: e.target_area_ids,
+      target_screen_ids: e.target_screen_ids,
+      start_date: e.start_date,
+      end_date: e.end_date,
+      priority: e.priority,
+      ...extra,
+    })
   }
 
   const patchContent = async (id: string, body: Record<string, unknown>) => {
@@ -114,7 +131,17 @@ export default function SignageContentPage() {
       !e.all_screens && e.target_area_ids.length === 0 && e.target_screen_ids.length === 0
         ? { ...e, all_screens: true }
         : e
-    await patchContent(row.id, { status: 'approved', ...targeting })
+    await patchContent(row.id, {
+      status: 'approved',
+      title: targeting.title,
+      full_screen: targeting.full_screen,
+      all_screens: targeting.all_screens,
+      target_area_ids: targeting.target_area_ids,
+      target_screen_ids: targeting.target_screen_ids,
+      start_date: targeting.start_date,
+      end_date: targeting.end_date,
+      priority: targeting.priority,
+    })
   }
 
   const reject = async (row: ContentRow) => {
@@ -199,17 +226,22 @@ export default function SignageContentPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={preview} alt="" loading="lazy" decoding="async" style={{ width: '100%', borderRadius: 8, background: dark ? '#e8edf4' : '#f0f2f5', objectFit: 'contain', aspectRatio: '16/9' }} />
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 17, color: text }}>{row.title || row.type}</div>
+                  <input
+                    value={e.title}
+                    onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, title: ev.target.value } }))}
+                    placeholder="Title"
+                    style={{ ...inputStyle, marginBottom: 8, fontWeight: 600, fontSize: 17 }}
+                  />
                   {row.submitter_name && <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{row.submitter_name} · {row.submitter_email}</div>}
                   {row.requested_note && <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>Request: {row.requested_note}</div>}
-                  {tab === 'pending' && (
+                  {(tab === 'pending' || tab === 'approved' || tab === 'rejected') && (
                     <>
                       <div style={{ marginTop: 12 }}>
                         <SignageTargetingPicker
                           areas={areas}
                           screens={screens}
                           value={e}
-                          onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...v, start_date: e.start_date, end_date: e.end_date, priority: e.priority } }))}
+                          onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, ...v } }))}
                           dark={dark}
                           border={border}
                           text={text}
@@ -221,10 +253,25 @@ export default function SignageContentPage() {
                         <SignageDateInput value={e.end_date} colorScheme={dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={inputStyle} min={e.start_date || undefined} />
                         <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={inputStyle} />
                       </div>
-                      <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                        <button type="button" disabled={busy === row.id} onClick={() => void approve(row)} style={{ padding: '8px 16px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Approve</button>
-                        <button type="button" onClick={() => { setRejectId(row.id); setRejectReason('') }} style={{ padding: '8px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Reject</button>
-                      </div>
+                      <label style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 14, color: text }}>
+                        <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
+                        Full-screen takeover
+                      </label>
+                      {tab === 'pending' && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                          <button type="button" disabled={busy === row.id} onClick={() => void approve(row)} style={{ padding: '8px 16px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Approve</button>
+                          <button type="button" onClick={() => { setRejectId(row.id); setRejectReason('') }} style={{ padding: '8px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Reject</button>
+                        </div>
+                      )}
+                      {tab === 'approved' && (
+                        <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={{ marginTop: 14, padding: '8px 16px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Save changes</button>
+                      )}
+                      {tab === 'rejected' && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                          <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={{ padding: '8px 16px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Save changes</button>
+                          <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row, { status: 'approved', reject_reason: null })} style={{ padding: '8px 16px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Re-approve</button>
+                        </div>
+                      )}
                       {rejectId === row.id && (
                         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                           <input value={rejectReason} onChange={ev => setRejectReason(ev.target.value)} placeholder="Reject reason" style={{ ...inputStyle, flex: 1 }} />

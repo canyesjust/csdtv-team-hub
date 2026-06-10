@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
 import { CIC_PALETTE, WAYFINDING_ARROWS, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
 
 type FeedMedia = { id: string; type: 'image' | 'video'; title: string | null; url: string; full_screen: boolean }
@@ -188,16 +187,14 @@ function LiveTakeover({ hlsUrl, label }: { hlsUrl: string; label: string | null 
   )
 }
 
-export default function ScreenClient() {
-  const params = useParams()
-  const searchParams = useSearchParams()
-  const code = String(params.code ?? '')
-  const imageSeconds = useMemo(() => {
-    const raw = parseInt(searchParams.get('seconds') ?? '10', 10)
-    return Number.isNaN(raw) ? 10 : Math.min(120, Math.max(3, raw))
-  }, [searchParams])
+type ScreenClientProps = {
+  code: string
+  initialFeed: ScreenFeed
+  imageSeconds: number
+}
 
-  const [feed, setFeed] = useState<ScreenFeed | null>(null)
+export default function ScreenClient({ code, initialFeed, imageSeconds }: ScreenClientProps) {
+  const [feed, setFeed] = useState<ScreenFeed>(initialFeed)
   const [mediaIndex, setMediaIndex] = useState(0)
   const [mediaVisible, setMediaVisible] = useState(true)
   const [now, setNow] = useState(new Date())
@@ -216,9 +213,16 @@ export default function ScreenClient() {
   }, [code])
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/signage-sw.js').catch(() => {})
-    }
+    setFeed(initialFeed)
+  }, [initialFeed])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/signage-sw.js').catch(() => {})
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -242,7 +246,6 @@ export default function ScreenClient() {
   }, [feed?.media.length])
 
   const headings = useMemo(() => {
-    if (!feed) return ['Find your way']
     const list: string[] = []
     if (feed.screen.heading) list.push(feed.screen.heading)
     list.push('Find your way around the Innovation Center')
@@ -258,22 +261,14 @@ export default function ScreenClient() {
     return () => clearInterval(t)
   }, [feed?.screen.layout, headings.length])
 
-  const portrait = feed?.screen.orientation === 'portrait'
-  const layout = feed?.screen.layout ?? 'zoned'
-  const currentMedia = feed?.media[mediaIndex]
+  const portrait = feed.screen.orientation === 'portrait'
+  const layout = feed.screen.layout ?? 'zoned'
+  const currentMedia = feed.media[mediaIndex]
   const takeoverContent = currentMedia?.full_screen
-  const showZones = !takeoverContent && !feed?.live.live
+  const showZones = !takeoverContent && !feed.live.live
 
   const clock = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  const areaLabel = feed?.screen.area?.name || feed?.screen.name
-
-  if (!feed) {
-    return (
-      <div style={{ minHeight: '100vh', background: CIC_PALETTE.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', color: CIC_PALETTE.accent, fontFamily: 'system-ui, sans-serif' }}>
-        Loading…
-      </div>
-    )
-  }
+  const areaLabel = feed.screen.area?.name || feed.screen.name
 
   return (
     <div style={{
