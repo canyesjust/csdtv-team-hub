@@ -159,16 +159,17 @@ function AnnouncementsRail({
   compactDirectory?: boolean
 }) {
   return (
-    <div className="cic-rail">
-      <div className="cic-railhd">Announcements</div>
-      {announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
-      {!announcements.length && <div className="cic-empty-muted">{emptyLabel}</div>}
+    <div className="cic-railcol">
+      <div className="cic-rail cic-rail-ann">
+        <div className="cic-railhd">Announcements</div>
+        {announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
+        {!announcements.length && <div className="cic-empty-muted">{emptyLabel}</div>}
+      </div>
       {wayfinding && wayfinding.length > 0 && (
-        <>
-          <div className="cic-rail-divider" />
+        <div className="cic-rail cic-rail-dir">
           <div className="cic-railhd">Directory</div>
           <WayfindingDirectory entries={wayfinding} compact={compactDirectory} />
-        </>
+        </div>
       )}
     </div>
   )
@@ -649,7 +650,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
 
       {/* 1. Zoned landscape */}
       {layout === 'zoned' && showZones && !portrait && (
-        <>
+        <div className="cic-zoned-stage">
           <ScreenHeader
             brandTitle={areaLabel}
             brandSub={centerSub}
@@ -672,7 +673,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             />
           </div>
           <TickerBar items={feed.ticker} />
-        </>
+        </div>
       )}
 
       {/* 3. Portrait (zoned stack) */}
