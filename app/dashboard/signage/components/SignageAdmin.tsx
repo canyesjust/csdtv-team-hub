@@ -8,6 +8,7 @@ import { useTheme } from '@/lib/theme'
 import { confirmDialog } from '@/lib/confirm'
 import { useSignage } from './SignageProvider'
 import { toast } from '@/lib/toast'
+import SignageFloorMap from './SignageFloorMap'
 
 export type SignageArea = { id: string; name: string; slug: string }
 export type SignageScreen = { id: string; code: string; name: string; area_id: string | null }
@@ -196,6 +197,7 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const [showScreens, setShowScreens] = useState(value.target_screen_ids.length > 0)
+  const [view, setView] = useState<'list' | 'map'>('list')
 
   const toggleAll = () => {
     onChange({ all_screens: !value.all_screens, target_area_ids: [], target_screen_ids: [] })
@@ -219,43 +221,53 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
   return (
     <div>
       {lbl && <p style={lbl}>Show on</p>}
-      <div>
-        <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
-          {value.all_screens ? '✓ ' : ''}All screens
-        </button>
-        {!value.all_screens && areas.map(a => (
-          <button
-            key={a.id}
-            type="button"
-            onClick={() => toggleArea(a.id)}
-            style={s.chip(value.target_area_ids.includes(a.id))}
-          >
-            {value.target_area_ids.includes(a.id) ? '✓ ' : ''}{a.name}
-          </button>
-        ))}
-        {!value.all_screens && (
-          <button
-            type="button"
-            onClick={() => setShowScreens(v => !v)}
-            style={s.chip(showScreens || value.target_screen_ids.length > 0)}
-          >
-            {showScreens ? '− ' : '+ '}Specific screen
-          </button>
-        )}
+      <div style={{ display: 'inline-flex', gap: 4, padding: 3, borderRadius: 9, background: s.segBg, marginBottom: 10 }}>
+        <button type="button" onClick={() => setView('list')} style={s.seg(view === 'list')}>List</button>
+        <button type="button" onClick={() => setView('map')} style={s.seg(view === 'map')}>Map</button>
       </div>
-      {!value.all_screens && showScreens && (
-        <div style={{ marginTop: 4, maxHeight: 140, overflowY: 'auto' }}>
-          {screens.map(sc => (
-            <button
-              key={sc.id}
-              type="button"
-              onClick={() => toggleScreen(sc.id)}
-              style={s.chip(value.target_screen_ids.includes(sc.id))}
-            >
-              {value.target_screen_ids.includes(sc.id) ? '✓ ' : ''}{sc.name} ({sc.code})
+      {view === 'map' ? (
+        <SignageFloorMap mode="select" value={value} onChange={onChange} />
+      ) : (
+        <>
+          <div>
+            <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
+              {value.all_screens ? '✓ ' : ''}All screens
             </button>
-          ))}
-        </div>
+            {!value.all_screens && areas.map(a => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => toggleArea(a.id)}
+                style={s.chip(value.target_area_ids.includes(a.id))}
+              >
+                {value.target_area_ids.includes(a.id) ? '✓ ' : ''}{a.name}
+              </button>
+            ))}
+            {!value.all_screens && (
+              <button
+                type="button"
+                onClick={() => setShowScreens(v => !v)}
+                style={s.chip(showScreens || value.target_screen_ids.length > 0)}
+              >
+                {showScreens ? '− ' : '+ '}Specific screen
+              </button>
+            )}
+          </div>
+          {!value.all_screens && showScreens && (
+            <div style={{ marginTop: 4, maxHeight: 140, overflowY: 'auto' }}>
+              {screens.map(sc => (
+                <button
+                  key={sc.id}
+                  type="button"
+                  onClick={() => toggleScreen(sc.id)}
+                  style={s.chip(value.target_screen_ids.includes(sc.id))}
+                >
+                  {value.target_screen_ids.includes(sc.id) ? '✓ ' : ''}{sc.name} ({sc.code})
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
