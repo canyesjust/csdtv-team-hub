@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
 import { announcementIconEmoji } from '@/lib/signage/announcement-icons'
 import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
+import SignageBackground from '@/app/signage/_components/SignageBackground'
 import './signage-screen.css'
 
 type FeedMedia = {
@@ -584,13 +585,18 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   if (offline) {
     return (
       <div className={screenClass}>
-        <OfflineFallback centerName={feed.screen.center_name} />
+        <SignageBackground />
+        <div className="cic-screen-content">
+          <OfflineFallback centerName={feed.screen.center_name} />
+        </div>
       </div>
     )
   }
 
   return (
     <div className={screenClass}>
+      <SignageBackground />
+      <div className="cic-screen-content">
       {feed.live.live && (
         <LiveTakeover
           hlsUrl={feed.live.hls_url}
@@ -767,6 +773,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
           fill
         />
       )}
+      </div>
     </div>
   )
 }

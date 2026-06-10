@@ -220,3 +220,42 @@ a {
 .csdtv-sidebar-nav.csdtv-scroll--active::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
+
+/* === Signage drifting glow background === */
+.sig-glow {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.sig-glow__blob {
+  position: absolute;
+  width: 46%;
+  height: 80%;
+  border-radius: 50%;
+  will-change: transform;
+}
+.sig-glow__b1 {
+  left: -8%;
+  top: -20%;
+  background: radial-gradient(circle, rgba(150, 183, 200, 0.55), transparent 68%);
+}
+.sig-glow__b2 {
+  right: -10%;
+  top: 10%;
+  background: radial-gradient(circle, rgba(120, 150, 180, 0.45), transparent 68%);
+}
+.sig-glow__b3 {
+  left: 30%;
+  bottom: -30%;
+  background: radial-gradient(circle, rgba(150, 183, 200, 0.35), transparent 68%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sig-glow__b1 { animation: sig-drift-1 26s ease-in-out infinite; }
+  .sig-glow__b2 { animation: sig-drift-2 32s ease-in-out infinite; }
+  .sig-glow__b3 { animation: sig-drift-3 38s ease-in-out infinite; }
+}
+@keyframes sig-drift-1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(12%, 8%); } }
+@keyframes sig-drift-2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10%, 10%); } }
+@keyframes sig-drift-3 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(8%, -8%); } }
