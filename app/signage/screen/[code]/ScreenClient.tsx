@@ -1,14 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CIC_PALETTE, WAYFINDING_ARROWS, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
+import { WAYFINDING_ARROWS, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
+import './signage-screen.css'
 
 type FeedMedia = { id: string; type: 'image' | 'video'; title: string | null; url: string; full_screen: boolean }
-type FeedAnnouncement = { id: string; title: string; subtitle: string | null; in_ticker: boolean }
+type FeedAnnouncement = { id: string; title: string; subtitle: string | null; in_ticker: boolean; scope_label: string; all_screens: boolean }
 type FeedWayfinding = { id: string; destination: string; direction: string }
 type FeedVisitor = { id: string; name: string; note: string | null }
 
-type ScreenFeed = {
+export type ScreenFeed = {
   screen: {
     name: string
     code: string
@@ -25,53 +26,135 @@ type ScreenFeed = {
   visitors: FeedVisitor[]
   live: { live: true; hls_url: string; label: string | null } | { live: false }
   weather: { tempF: number | null; condition: string; icon: string }
+  offline?: boolean
 }
 
 const REFRESH_MS = 60_000
-const FADE_MS = 500
+const FADE_MS = 450
+const HEADING_ROTATE_MS = 3_500
 
-function CicLogo({ size = 48 }: { size?: number }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src="/cic-logo.svg"
-      alt=""
-      width={size}
-      height={size}
-      style={{ display: 'block' }}
-      onError={e => {
-        e.currentTarget.style.display = 'none'
-      }}
-    />
-  )
+function BellIcon() {
+  return <span className="cic-ann-icon" aria-hidden>🔔</span>
 }
 
-function TickerBar({ items }: { items: string[] }) {
-  const text = items.length ? items.join('   •   ') : 'Canyons Innovation Center'
+function ConfettiIcon() {
+  return <span style={{ fontSize: 15, color: 'var(--accent)', flex: 'none' }} aria-hidden>✦</span>
+}
+
+function ScreenLogo({ portrait }: { portrait?: boolean }) {
   return (
-    <div style={{
-      background: CIC_PALETTE.panel,
-      color: CIC_PALETTE.offWhite,
-      padding: '10px 0',
-      overflow: 'hidden',
-      borderTop: `1px solid ${CIC_PALETTE.accent}`,
-      flexShrink: 0,
-    }}>
-      <div className="cic-ticker-track" style={{ whiteSpace: 'nowrap', display: 'inline-block', animation: 'cic-ticker 40s linear infinite', fontSize: '18px', paddingLeft: '100%' }}>
-        {text}
-      </div>
-      <style>{`@keyframes cic-ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }`}</style>
+    <div className={`cic-logo${portrait ? ' portrait' : ''}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/cic-logo.svg" alt="" onError={e => { e.currentTarget.style.display = 'none' }} />
     </div>
   )
 }
 
-function MediaBox({
+function ScreenHeader({
+  portrait,
+  brandTitle,
+  brandSub,
+  weatherIcon,
+  tempF,
+  clock,
+  wayfindingHeading,
+}: {
+  portrait?: boolean
+  brandTitle: string
+  brandSub: string
+  weatherIcon: string
+  tempF: number | null
+  clock: string
+  wayfindingHeading?: string | null
+}) {
+  return (
+    <div className={`cic-tvhead${portrait ? ' portrait' : ''}`}>
+      <div className={`cic-head-left${portrait ? ' portrait' : ''}`}>
+        <ScreenLogo portrait={portrait} />
+        <div>
+          <div className={`cic-brand${portrait ? ' portrait' : ''}`}>{wayfindingHeading ?? brandTitle}</div>
+          <div className={`cic-brandsub${portrait ? ' portrait' : ''}`}>{wayfindingHeading ? 'Find your way' : brandSub}</div>
+        </div>
+      </div>
+      <div className="cic-head-right">
+        <div className={`cic-wx${portrait ? ' portrait' : ''}`}>
+          <span aria-hidden>{weatherIcon}</span>
+          {tempF != null && <span>{tempF}&deg;</span>}
+        </div>
+        {!portrait && <div className="cic-clk">{clock}</div>}
+      </div>
+    </div>
+  )
+}
+
+function WelcomeStrip({ visitor, portrait }: { visitor: FeedVisitor; portrait?: boolean }) {
+  const suffix = visitor.note ? ` — ${visitor.note}` : ' — thanks for visiting today'
+  return (
+    <div className={`cic-welcome${portrait ? ' portrait' : ''}`}>
+      <ConfettiIcon />
+      <span>Welcome, <b>{visitor.name}</b>{suffix}</span>
+    </div>
+  )
+}
+
+function TickerBar({ items, portrait }: { items: string[]; portrait?: boolean }) {
+  const text = items.length
+    ? items.join('   •   ')
+    : 'Canyons Innovation Center'
+  return (
+    <div className={`cic-ticker${portrait ? ' portrait' : ''}`}>
+      <div className="cic-tickin">{text}</div>
+    </div>
+  )
+}
+
+function AnnouncementRow({ ann }: { ann: FeedAnnouncement }) {
+  return (
+    <div className="cic-ann">
+      <BellIcon />
+      <div>
+        <div className="cic-anntop">
+          {ann.title}
+          <span className={`cic-spill${ann.all_screens ? ' all' : ''}`}>{ann.scope_label}</span>
+        </div>
+        {ann.subtitle && <div className="cic-annsub">{ann.subtitle}</div>}
+      </div>
+    </div>
+  )
+}
+
+function AnnouncementsRail({ announcements, emptyLabel = 'No announcements' }: { announcements: FeedAnnouncement[]; emptyLabel?: string }) {
+  return (
+    <div className="cic-rail">
+      <div className="cic-railhd">Announcements</div>
+      {announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
+      {!announcements.length && <div className="cic-empty-muted">{emptyLabel}</div>}
+    </div>
+  )
+}
+
+function WayfindingDirectory({ entries, portrait }: { entries: FeedWayfinding[]; portrait?: boolean }) {
+  return (
+    <div className={`cic-dir${portrait ? ' portrait' : ''}`}>
+      {entries.map(w => (
+        <div key={w.id}>
+          <span className="cic-dir-arrow">{WAYFINDING_ARROWS[w.direction as WayfindingDirection] || '→'}</span>
+          {w.destination}
+        </div>
+      ))}
+      {!entries.length && <div className="cic-empty-muted">Directory coming soon</div>}
+    </div>
+  )
+}
+
+function MediaCarousel({
   media,
   index,
   visible,
   imageSeconds,
   onAdvance,
   fill,
+  portrait,
 }: {
   media: FeedMedia[]
   index: number
@@ -79,6 +162,7 @@ function MediaBox({
   imageSeconds: number
   onAdvance: () => void
   fill?: boolean
+  portrait?: boolean
 }) {
   const item = media[index]
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -96,39 +180,28 @@ function MediaBox({
     void v.play().catch(() => {})
   }, [item])
 
-  if (!item) {
-    return (
-      <div style={{
-        background: CIC_PALETTE.black,
-        flex: fill ? 1 : undefined,
-        width: fill ? '100%' : undefined,
-        aspectRatio: fill ? undefined : '16 / 9',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: CIC_PALETTE.accent,
-        fontSize: '20px',
-      }}>
-        No media scheduled
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (!media.length) return
+    const next = media[(index + 1) % media.length]
+    if (next?.type === 'image') {
+      const img = new Image()
+      img.src = next.url
+    }
+  }, [media, index])
+
+  const className = [
+    'cic-media16',
+    fill ? 'fill' : '',
+    portrait && !fill ? 'portrait-top' : '',
+  ].filter(Boolean).join(' ')
 
   return (
-    <div style={{
-      position: 'relative',
-      flex: fill ? 1 : undefined,
-      width: fill ? '100%' : undefined,
-      aspectRatio: fill ? undefined : '16 / 9',
-      background: CIC_PALETTE.black,
-      overflow: 'hidden',
-      opacity: visible ? 1 : 0,
-      transition: `opacity ${FADE_MS}ms ease`,
-    }}>
-      {item.type === 'image' ? (
+    <div className={className}>
+      {item?.type === 'image' && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.url} alt={item.title || ''} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-      ) : (
+        <img src={item.url} alt={item.title || ''} className={visible ? '' : 'hidden'} />
+      )}
+      {item?.type === 'video' && (
         <video
           ref={videoRef}
           src={item.url}
@@ -136,8 +209,20 @@ function MediaBox({
           playsInline
           autoPlay
           onEnded={onAdvance}
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          className={visible ? '' : 'hidden'}
         />
+      )}
+      {!item && (
+        <div className="cic-media-overlay">
+          <div className="cic-msub">No media scheduled</div>
+        </div>
+      )}
+      {media.length > 1 && (
+        <div className="cic-dots">
+          {media.map((m, i) => (
+            <span key={m.id} className={`cic-dot${i === index ? ' on' : ''}`} />
+          ))}
+        </div>
       )}
     </div>
   )
@@ -176,13 +261,26 @@ function LiveTakeover({ hlsUrl, label }: { hlsUrl: string; label: string | null 
   }, [hlsUrl])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: CIC_PALETTE.black, zIndex: 100 }}>
-      <video ref={videoRef} muted playsInline autoPlay style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-      {label && (
-        <div style={{ position: 'absolute', bottom: 24, left: 24, background: 'rgba(22,40,68,0.85)', color: CIC_PALETTE.offWhite, padding: '8px 16px', borderRadius: 8, fontSize: 18 }}>
-          LIVE — {label}
-        </div>
-      )}
+    <div className="cic-fill live-bg" style={{ position: 'fixed', inset: 0, zIndex: 100 }}>
+      <video ref={videoRef} muted playsInline autoPlay className="cic-live-video" />
+      <div className="cic-live-badge"><span className="cic-live-dot" />live</div>
+      <div className="cic-capbar">
+        {label ? `${label} · ` : ''}Streaming live · reverts when the stream ends
+      </div>
+    </div>
+  )
+}
+
+function OfflineFallback({ centerName }: { centerName: string }) {
+  return (
+    <div className="cic-fill offline-bg">
+      <div className="cic-offline-logo">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/cic-logo.svg" alt="" style={{ width: 26, height: 26 }} onError={e => { e.currentTarget.style.display = 'none' }} />
+      </div>
+      <div className="cic-offline-title">Display will resume shortly</div>
+      <div className="cic-msub" style={{ marginTop: 6 }}>Reconnecting…</div>
+      <div className="cic-offline-foot">{centerName} · cached screen</div>
     </div>
   )
 }
@@ -199,22 +297,26 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const [mediaVisible, setMediaVisible] = useState(true)
   const [now, setNow] = useState(new Date())
   const [headingIndex, setHeadingIndex] = useState(0)
+  const [offline, setOffline] = useState(Boolean(initialFeed.offline))
 
   const loadFeed = useCallback(async () => {
     try {
       const res = await fetch(`/api/signage/screen/${encodeURIComponent(code)}/feed`, { cache: 'no-store' })
       if (!res.ok) return
       const data = (await res.json()) as ScreenFeed
+      if (data.offline) {
+        setOffline(true)
+        return
+      }
+      setOffline(false)
       setFeed(data)
       setMediaIndex(i => (data.media.length ? Math.min(i, data.media.length - 1) : 0))
     } catch {
-      /* keep cached feed via SW */
+      /* keep last feed */
     }
   }, [code])
 
-  useEffect(() => {
-    setFeed(initialFeed)
-  }, [initialFeed])
+  useEffect(() => { setFeed(initialFeed) }, [initialFeed])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -237,13 +339,13 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   }, [])
 
   const advanceMedia = useCallback(() => {
-    if (!feed?.media.length) return
+    if (!feed.media.length) return
     setMediaVisible(false)
     setTimeout(() => {
-      setMediaIndex(i => (i + 1) % (feed?.media.length || 1))
+      setMediaIndex(i => (i + 1) % feed.media.length)
       setMediaVisible(true)
     }, FADE_MS)
-  }, [feed?.media.length])
+  }, [feed.media.length])
 
   const headings = useMemo(() => {
     const list: string[] = []
@@ -252,133 +354,191 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
     for (const v of feed.visitors) {
       list.push(v.note ? `Welcome ${v.name} — ${v.note}` : `Welcome ${v.name}`)
     }
-    return list.length ? list : ['Find your way']
+    return list.length ? list : ['Find your way around the Innovation Center']
   }, [feed])
 
   useEffect(() => {
-    if (feed?.screen.layout !== 'wayfinding') return
-    const t = setInterval(() => setHeadingIndex(i => (i + 1) % headings.length), 8000)
+    if (feed.screen.layout !== 'wayfinding') return
+    const t = setInterval(() => setHeadingIndex(i => (i + 1) % headings.length), HEADING_ROTATE_MS)
     return () => clearInterval(t)
-  }, [feed?.screen.layout, headings.length])
+  }, [feed.screen.layout, headings.length])
 
   const portrait = feed.screen.orientation === 'portrait'
   const layout = feed.screen.layout ?? 'zoned'
   const currentMedia = feed.media[mediaIndex]
   const takeoverContent = currentMedia?.full_screen
   const showZones = !takeoverContent && !feed.live.live
-
+  const visitor = feed.visitors[0]
   const clock = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   const areaLabel = feed.screen.area?.name || feed.screen.name
+  const centerSub = feed.screen.center_name === 'Canyons Innovation Center'
+    ? 'Innovation Center'
+    : feed.screen.center_name
+
+  if (offline) {
+    return (
+      <div className={`cic-screen${portrait ? ' portrait' : ''}`}>
+        <OfflineFallback centerName={feed.screen.center_name} />
+      </div>
+    )
+  }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      height: '100vh',
-      background: CIC_PALETTE.navy,
-      color: CIC_PALETTE.offWhite,
-      fontFamily: 'system-ui, sans-serif',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-      cursor: 'none',
-    }}>
+    <div className={`cic-screen${portrait ? ' portrait' : ''}`}>
       {feed.live.live && <LiveTakeover hlsUrl={feed.live.hls_url} label={feed.live.label} />}
 
+      {/* 2. Full-bleed landscape */}
       {layout === 'full_bleed' && showZones && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 2, background: 'rgba(30,54,73,0.9)', padding: '6px 14px', borderRadius: 8, fontSize: 14, color: CIC_PALETTE.accent }}>
-            {areaLabel}
-          </div>
-          {feed.visitors[0] && (
-            <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 2, background: 'rgba(30,54,73,0.9)', padding: '6px 14px', borderRadius: 8, fontSize: 14 }}>
-              Welcome {feed.visitors[0].name}
-            </div>
-          )}
-          <MediaBox media={feed.media} index={mediaIndex} visible={mediaVisible} imageSeconds={imageSeconds} onAdvance={advanceMedia} fill />
-          <TickerBar items={feed.ticker} />
-        </div>
-      )}
-
-      {layout === 'zoned' && showZones && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: portrait ? 'column' : 'row', minHeight: 0 }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', background: CIC_PALETTE.panel, flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <CicLogo size={40} />
-                <div>
-                  <div style={{ fontSize: 14, color: CIC_PALETTE.accent }}>{feed.screen.center_name}</div>
-                  <div style={{ fontSize: 20, fontWeight: 600 }}>{areaLabel}</div>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: 16 }}>
-                <div>{feed.weather.icon} {feed.weather.tempF != null ? `${feed.weather.tempF}°F` : ''} {feed.weather.condition}</div>
-                <div style={{ fontSize: 22, fontWeight: 600 }}>{clock}</div>
-              </div>
-            </header>
-            {feed.visitors[0] && (
-              <div style={{ background: CIC_PALETTE.accent, color: CIC_PALETTE.navy, textAlign: 'center', padding: '8px 16px', fontWeight: 600, fontSize: 16, flexShrink: 0 }}>
-                Welcome {feed.visitors[0].name}{feed.visitors[0].note ? ` — ${feed.visitors[0].note}` : ''}
-              </div>
+        <>
+          <div className="cic-fill">
+            <MediaCarousel
+              media={feed.media}
+              index={mediaIndex}
+              visible={mediaVisible}
+              imageSeconds={imageSeconds}
+              onAdvance={advanceMedia}
+              fill
+            />
+            <div className="cic-locchip">{areaLabel}</div>
+            {visitor && (
+              <div className="cic-welchip"><ConfettiIcon /> Welcome {visitor.name}</div>
             )}
-            <div style={{ flex: 1, padding: portrait ? 12 : 24, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0 }}>
-              <div style={{ width: '100%', maxWidth: portrait ? '100%' : 'min(100%, calc((100vh - 200px) * 16 / 9))' }}>
-                <MediaBox media={feed.media} index={mediaIndex} visible={mediaVisible} imageSeconds={imageSeconds} onAdvance={advanceMedia} />
-              </div>
-            </div>
-            <TickerBar items={feed.ticker} />
           </div>
-          {!portrait && (
-            <aside style={{ width: 320, background: CIC_PALETTE.panel, padding: 20, overflowY: 'auto', flexShrink: 0, borderLeft: `1px solid ${CIC_PALETTE.gray}` }}>
-              <div style={{ fontSize: 14, color: CIC_PALETTE.accent, marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Announcements</div>
-              {feed.announcements.map(a => (
-                <div key={a.id} style={{ marginBottom: 16 }}>
-                  <div style={{ fontWeight: 600, fontSize: 17 }}>{a.title}</div>
-                  {a.subtitle && <div style={{ fontSize: 14, color: CIC_PALETTE.accent, marginTop: 4 }}>{a.subtitle}</div>}
-                </div>
-              ))}
-              {!feed.announcements.length && <div style={{ color: CIC_PALETTE.gray, fontSize: 14 }}>No announcements</div>}
-            </aside>
-          )}
-          {portrait && feed.announcements.length > 0 && (
-            <div style={{ background: CIC_PALETTE.panel, padding: 16, flexShrink: 0 }}>
-              {feed.announcements.slice(0, 3).map(a => (
-                <div key={a.id} style={{ marginBottom: 8, fontSize: 15 }}><strong>{a.title}</strong>{a.subtitle ? ` — ${a.subtitle}` : ''}</div>
-              ))}
-            </div>
-          )}
-        </div>
+          <TickerBar items={feed.ticker} portrait={portrait} />
+        </>
       )}
 
-      {layout === 'wayfinding' && showZones && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <header style={{ padding: '20px 24px', background: CIC_PALETTE.panel, textAlign: 'center', flexShrink: 0 }}>
-            <CicLogo size={36} />
-            <div style={{ fontSize: 26, fontWeight: 700, marginTop: 8, minHeight: 34 }}>{headings[headingIndex % headings.length]}</div>
-          </header>
-          <div style={{ flex: 1, display: 'flex', flexDirection: portrait ? 'column' : 'row', minHeight: 0, padding: 16, gap: 16 }}>
-            <div style={{ flex: portrait ? undefined : 1, width: portrait ? '100%' : undefined }}>
-              <MediaBox media={feed.media} index={mediaIndex} visible={mediaVisible} imageSeconds={imageSeconds} onAdvance={advanceMedia} />
-            </div>
-            <div style={{ flex: portrait ? 1 : '0 0 340px', background: CIC_PALETTE.panel, borderRadius: 12, padding: 20, overflowY: 'auto' }}>
-              {feed.wayfinding.map(w => (
-                <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, fontSize: 20 }}>
-                  <span style={{ fontSize: 28, width: 36, textAlign: 'center', color: CIC_PALETTE.accent }}>
-                    {WAYFINDING_ARROWS[w.direction as WayfindingDirection] || '→'}
-                  </span>
-                  <span>{w.destination}</span>
-                </div>
-              ))}
-              {!feed.wayfinding.length && <div style={{ color: CIC_PALETTE.gray }}>Directory coming soon</div>}
-            </div>
+      {/* 1. Zoned landscape */}
+      {layout === 'zoned' && showZones && !portrait && (
+        <>
+          <ScreenHeader
+            brandTitle={areaLabel}
+            brandSub={centerSub}
+            weatherIcon={feed.weather.icon}
+            tempF={feed.weather.tempF}
+            clock={clock}
+          />
+          {visitor && <WelcomeStrip visitor={visitor} />}
+          <div className="cic-body">
+            <MediaCarousel
+              media={feed.media}
+              index={mediaIndex}
+              visible={mediaVisible}
+              imageSeconds={imageSeconds}
+              onAdvance={advanceMedia}
+            />
+            <AnnouncementsRail announcements={feed.announcements} />
           </div>
           <TickerBar items={feed.ticker} />
-        </div>
+        </>
       )}
 
-      {takeoverContent && showZones === false && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <MediaBox media={feed.media} index={mediaIndex} visible={mediaVisible} imageSeconds={imageSeconds} onAdvance={advanceMedia} fill />
-        </div>
+      {/* 3. Portrait (zoned stack) */}
+      {layout === 'zoned' && showZones && portrait && (
+        <>
+          <ScreenHeader
+            portrait
+            brandTitle={feed.screen.name}
+            brandSub={centerSub}
+            weatherIcon={feed.weather.icon}
+            tempF={feed.weather.tempF}
+            clock={clock}
+          />
+          {visitor && <WelcomeStrip visitor={visitor} portrait />}
+          <MediaCarousel
+            media={feed.media}
+            index={mediaIndex}
+            visible={mediaVisible}
+            imageSeconds={imageSeconds}
+            onAdvance={advanceMedia}
+            portrait
+          />
+          {feed.wayfinding.length > 0 && (
+            <div className="cic-portrait-section">
+              <div className="cic-railhd tight">Directory</div>
+              <WayfindingDirectory entries={feed.wayfinding} portrait />
+            </div>
+          )}
+          <div className="cic-portrait-ann">
+            <div className="cic-railhd">Announcements</div>
+            {feed.announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
+            {!feed.announcements.length && <div className="cic-empty-muted">No announcements</div>}
+          </div>
+          <TickerBar items={feed.ticker} portrait />
+        </>
+      )}
+
+      {/* 4. Wayfinding landscape */}
+      {layout === 'wayfinding' && showZones && !portrait && (
+        <>
+          <ScreenHeader
+            brandTitle={headings[headingIndex % headings.length]}
+            brandSub="Find your way"
+            weatherIcon={feed.weather.icon}
+            tempF={feed.weather.tempF}
+            clock={clock}
+            wayfindingHeading={headings[headingIndex % headings.length]}
+          />
+          <div className="cic-body">
+            <div className="cic-wayfind-dir">
+              <div className="cic-railhd" style={{ marginBottom: 8 }}>Directory</div>
+              <WayfindingDirectory entries={feed.wayfinding} />
+            </div>
+            <MediaCarousel
+              media={feed.media}
+              index={mediaIndex}
+              visible={mediaVisible}
+              imageSeconds={imageSeconds}
+              onAdvance={advanceMedia}
+            />
+          </div>
+          <TickerBar items={feed.ticker} />
+        </>
+      )}
+
+      {/* Wayfinding portrait */}
+      {layout === 'wayfinding' && showZones && portrait && (
+        <>
+          <ScreenHeader
+            portrait
+            brandTitle={headings[headingIndex % headings.length]}
+            brandSub="Find your way"
+            weatherIcon={feed.weather.icon}
+            tempF={feed.weather.tempF}
+            clock={clock}
+            wayfindingHeading={headings[headingIndex % headings.length]}
+          />
+          {visitor && <WelcomeStrip visitor={visitor} portrait />}
+          <MediaCarousel
+            media={feed.media}
+            index={mediaIndex}
+            visible={mediaVisible}
+            imageSeconds={imageSeconds}
+            onAdvance={advanceMedia}
+            portrait
+          />
+          <div className="cic-portrait-section">
+            <div className="cic-railhd tight">Directory</div>
+            <WayfindingDirectory entries={feed.wayfinding} portrait />
+          </div>
+          <div className="cic-portrait-ann">
+            <div className="cic-railhd">Announcements</div>
+            {feed.announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
+          </div>
+          <TickerBar items={feed.ticker} portrait />
+        </>
+      )}
+
+      {/* Full-screen content takeover */}
+      {takeoverContent && !feed.live.live && (
+        <MediaCarousel
+          media={feed.media}
+          index={mediaIndex}
+          visible={mediaVisible}
+          imageSeconds={imageSeconds}
+          onAdvance={advanceMedia}
+          fill
+        />
       )}
     </div>
   )

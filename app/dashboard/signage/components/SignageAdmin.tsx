@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTheme } from '@/lib/theme'
 import { useSignage } from './SignageProvider'
 import { toast } from '@/lib/toast'
@@ -16,76 +16,244 @@ export type TargetingValue = {
   target_screen_ids: string[]
 }
 
-type Props = {
+/** Hub dashboard admin styles — ports reference sections 7–10. */
+export function useSignageAdminStyles(theme: string) {
+  const base = useSignageTheme(theme)
+  const { dark, text, muted, border, cardBg, inputBg } = base
+  const info = dark ? '#7eb8e8' : '#185fa5'
+  const infoBg = dark ? 'rgba(30, 108, 181, 0.18)' : '#e6f1fb'
+  const infoBorder = dark ? 'rgba(126, 184, 232, 0.35)' : '#b5d4f4'
+  const inputBorder = dark ? border : '#d3d6dd'
+  const segBg = dark ? '#13203a' : '#eef0f3'
+
+  return {
+    ...base,
+    info,
+    infoBg,
+    infoBorder,
+    inputBorder,
+    segBg,
+    lbl: { fontSize: 12, color: muted, margin: '0 0 5px' } satisfies React.CSSProperties,
+    input: {
+      height: 34,
+      border: `1px solid ${inputBorder}`,
+      borderRadius: 8,
+      background: inputBg,
+      color: text,
+      padding: '0 10px',
+      fontSize: 13,
+      width: '100%',
+      boxSizing: 'border-box',
+      fontFamily: 'inherit',
+    } satisfies React.CSSProperties,
+    textarea: {
+      border: `1px solid ${inputBorder}`,
+      borderRadius: 8,
+      background: inputBg,
+      color: text,
+      padding: '8px 10px',
+      fontSize: 13,
+      width: '100%',
+      boxSizing: 'border-box',
+      fontFamily: 'inherit',
+      resize: 'vertical' as const,
+    },
+    btn: {
+      fontSize: 13,
+      padding: '7px 13px',
+      borderRadius: 8,
+      border: `1px solid ${inputBorder}`,
+      background: dark ? 'transparent' : '#fff',
+      color: text,
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    } satisfies React.CSSProperties,
+    btnPrimary: {
+      fontSize: 13,
+      padding: '7px 13px',
+      borderRadius: 8,
+      border: `1px solid ${info}`,
+      background: dark ? 'transparent' : '#fff',
+      color: info,
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+      fontWeight: 500,
+    } satisfies React.CSSProperties,
+    btnSmall: {
+      padding: '2px 8px',
+      fontSize: 11,
+      borderRadius: 8,
+      border: `1px solid ${inputBorder}`,
+      background: dark ? 'transparent' : '#fff',
+      color: text,
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    } satisfies React.CSSProperties,
+    card: {
+      background: cardBg,
+      border: `1px solid ${border}`,
+      borderRadius: 12,
+      padding: '16px 18px',
+    } satisfies React.CSSProperties,
+    cardCompact: {
+      background: cardBg,
+      border: `1px solid ${border}`,
+      borderRadius: 12,
+      padding: '8px 12px',
+    } satisfies React.CSSProperties,
+    h3: { fontSize: 16, fontWeight: 600, margin: '0 0 12px', color: text } satisfies React.CSSProperties,
+    seg: (active: boolean): React.CSSProperties => ({
+      fontSize: 13,
+      padding: '5px 12px',
+      borderRadius: 8,
+      color: active ? text : muted,
+      background: active ? segBg : 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    }),
+    chip: (active: boolean): React.CSSProperties => ({
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      fontSize: 12.5,
+      padding: '5px 11px',
+      borderRadius: 8,
+      margin: '0 6px 6px 0',
+      border: `1px solid ${active ? infoBorder : inputBorder}`,
+      color: active ? info : muted,
+      background: active ? infoBg : (dark ? 'transparent' : '#fff'),
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+    }),
+    thumb: {
+      background: dark ? '#13203a' : '#eef0f3',
+      borderRadius: 8,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: muted,
+      flex: 'none',
+    } satisfies React.CSSProperties,
+    row: {
+      display: 'flex',
+      gap: 14,
+      flexWrap: 'wrap',
+    } satisfies React.CSSProperties,
+    drop: {
+      border: `1px dashed ${dark ? border : '#c4c8d0'}`,
+      borderRadius: 8,
+      padding: 18,
+      textAlign: 'center',
+      color: muted,
+      fontSize: 13,
+      cursor: 'pointer',
+    } satisfies React.CSSProperties,
+    tbl: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      tableLayout: 'fixed',
+    } satisfies React.CSSProperties,
+    th: {
+      textAlign: 'left',
+      padding: 7,
+      fontSize: 11,
+      color: muted,
+      fontWeight: 500,
+    } satisfies React.CSSProperties,
+    td: {
+      padding: '9px 7px',
+      fontSize: 12.5,
+      borderTop: `1px solid ${border}`,
+      color: text,
+    } satisfies React.CSSProperties,
+    tdMuted: {
+      padding: '9px 7px',
+      fontSize: 12.5,
+      borderTop: `1px solid ${border}`,
+      color: muted,
+    } satisfies React.CSSProperties,
+    divider: {
+      borderTop: `1px solid ${border}`,
+      marginTop: 14,
+      paddingTop: 14,
+    } satisfies React.CSSProperties,
+  }
+}
+
+type TargetingProps = {
   areas: SignageArea[]
   screens: SignageScreen[]
   value: TargetingValue
   onChange: (value: TargetingValue) => void
-  dark: boolean
-  border: string
-  text: string
-  muted: string
+  lbl?: React.CSSProperties
 }
 
-export default function SignageTargetingPicker({ areas, screens, value, onChange, dark, border, text, muted }: Props) {
-  const chip = (active: boolean): React.CSSProperties => ({
-    padding: '6px 12px',
-    borderRadius: 20,
-    border: `1px solid ${active ? '#96b7c8' : border}`,
-    background: active ? (dark ? '#1e3649' : '#e8f0f4') : 'transparent',
-    color: text,
-    fontSize: 13,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  })
+export default function SignageTargetingPicker({ areas, screens, value, onChange, lbl }: TargetingProps) {
+  const { theme } = useTheme()
+  const s = useSignageAdminStyles(theme)
+  const [showScreens, setShowScreens] = useState(value.target_screen_ids.length > 0)
+
+  const toggleAll = () => {
+    onChange({ all_screens: !value.all_screens, target_area_ids: [], target_screen_ids: [] })
+    setShowScreens(false)
+  }
 
   const toggleArea = (id: string) => {
     const set = new Set(value.target_area_ids)
     if (set.has(id)) set.delete(id)
     else set.add(id)
-    onChange({ ...value, all_screens: false, target_area_ids: [...set] })
+    onChange({ all_screens: false, target_area_ids: [...set], target_screen_ids: value.target_screen_ids })
   }
 
   const toggleScreen = (id: string) => {
     const set = new Set(value.target_screen_ids)
     if (set.has(id)) set.delete(id)
     else set.add(id)
-    onChange({ ...value, all_screens: false, target_screen_ids: [...set] })
+    onChange({ all_screens: false, target_area_ids: value.target_area_ids, target_screen_ids: [...set] })
   }
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: text, cursor: 'pointer' }}>
-        <input
-          type="checkbox"
-          checked={value.all_screens}
-          onChange={e => onChange({
-            all_screens: e.target.checked,
-            target_area_ids: e.target.checked ? [] : value.target_area_ids,
-            target_screen_ids: e.target.checked ? [] : value.target_screen_ids,
-          })}
-        />
-        All screens
-      </label>
-      {!value.all_screens && (
-        <>
-          <div>
-            <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Areas</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {areas.map(a => (
-                <button key={a.id} type="button" onClick={() => toggleArea(a.id)} style={chip(value.target_area_ids.includes(a.id))}>{a.name}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Specific screens</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxHeight: 160, overflowY: 'auto' }}>
-              {screens.map(s => (
-                <button key={s.id} type="button" onClick={() => toggleScreen(s.id)} style={chip(value.target_screen_ids.includes(s.id))}>{s.name} ({s.code})</button>
-              ))}
-            </div>
-          </div>
-        </>
+    <div>
+      {lbl && <p style={lbl}>Show on</p>}
+      <div>
+        <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
+          {value.all_screens ? '✓ ' : ''}All screens
+        </button>
+        {!value.all_screens && areas.map(a => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => toggleArea(a.id)}
+            style={s.chip(value.target_area_ids.includes(a.id))}
+          >
+            {value.target_area_ids.includes(a.id) ? '✓ ' : ''}{a.name}
+          </button>
+        ))}
+        {!value.all_screens && (
+          <button
+            type="button"
+            onClick={() => setShowScreens(v => !v)}
+            style={s.chip(showScreens || value.target_screen_ids.length > 0)}
+          >
+            {showScreens ? '− ' : '+ '}Specific screen
+          </button>
+        )}
+      </div>
+      {!value.all_screens && showScreens && (
+        <div style={{ marginTop: 4, maxHeight: 140, overflowY: 'auto' }}>
+          {screens.map(sc => (
+            <button
+              key={sc.id}
+              type="button"
+              onClick={() => toggleScreen(sc.id)}
+              style={s.chip(value.target_screen_ids.includes(sc.id))}
+            >
+              {value.target_screen_ids.includes(sc.id) ? '✓ ' : ''}{sc.name} ({sc.code})
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -222,4 +390,22 @@ export function SignageEditButton({ label = 'Edit', onClick }: { label?: string;
       {label}
     </button>
   )
+}
+
+export function formatSignageDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = iso.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  const [y, m, day] = d.split('-').map(Number)
+  return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+export function layoutLabel(layout: string): string {
+  if (layout === 'full_bleed') return 'Full bleed'
+  if (layout === 'wayfinding') return 'Wayfinding'
+  return 'Zoned'
+}
+
+export function orientationLabel(orientation: string): string {
+  return orientation === 'portrait' ? 'Portrait' : 'Landscape'
 }

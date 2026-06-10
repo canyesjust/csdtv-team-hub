@@ -1,18 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
 
 const colors = {
   bg: '#f8f9fc',
   cardBg: '#ffffff',
   border: 'rgba(0,0,0,0.08)',
+  line: '#d3d6dd',
   text: '#1a1f36',
   muted: '#6b7280',
-  primary: '#162844',
-  accent: '#1e3649',
-  danger: '#ef4444',
+  info: '#185fa5',
+  inputBg: '#fff',
 }
 
 const emptyForm = {
@@ -36,6 +35,7 @@ export default function CicSignageSubmitPage() {
   const [submitError, setSubmitError] = useState('')
   const [success, setSuccess] = useState(false)
   const previewRevoke = useRef<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => () => {
     if (previewRevoke.current) URL.revokeObjectURL(previewRevoke.current)
@@ -108,120 +108,185 @@ export default function CicSignageSubmitPage() {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    background: '#f8f9fc',
-    border: `0.5px solid ${colors.border}`,
-    borderRadius: '10px',
-    padding: '10px 14px',
-    fontSize: '15px',
+  const openTerms = () => {
+    const err = validateForm()
+    if (err) { setSubmitError(err); return }
+    setSubmitError('')
+    setTermSchool(false)
+    setTermDistrict(false)
+    setShowTerms(true)
+  }
+
+  const lbl: React.CSSProperties = { fontSize: 12, color: colors.muted, margin: '0 0 5px' }
+  const input: React.CSSProperties = {
+    height: 34,
+    border: `1px solid ${colors.line}`,
+    borderRadius: 8,
+    background: colors.inputBg,
     color: colors.text,
-    fontFamily: 'inherit',
-    outline: 'none',
+    padding: '0 10px',
+    fontSize: 13,
+    width: '100%',
     boxSizing: 'border-box',
+    fontFamily: 'inherit',
+  }
+  const btnPrimary: React.CSSProperties = {
+    fontSize: 13,
+    padding: '7px 13px',
+    borderRadius: 8,
+    border: `1px solid ${colors.info}`,
+    background: '#fff',
+    color: colors.info,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontWeight: 500,
   }
 
   return (
     <div style={{ minHeight: '100vh', background: colors.bg, padding: '24px 16px', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 600, color: colors.text, margin: '0 0 8px' }}>Canyons Innovation Center</h1>
-          <p style={{ fontSize: '15px', color: colors.muted, margin: 0 }}>Digital signage submission</p>
-        </div>
-
+      <div style={{ maxWidth: 560, margin: '0 auto' }}>
         {success ? (
-          <div style={{ background: colors.cardBg, border: `0.5px solid ${colors.border}`, borderRadius: '16px', padding: '28px 24px', textAlign: 'center' }}>
-            <p style={{ fontSize: '17px', color: colors.text, margin: 0, lineHeight: 1.5 }}>
+          <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: '28px 24px', textAlign: 'center' }}>
+            <p style={{ fontSize: 16, color: colors.text, margin: 0, lineHeight: 1.5 }}>
               Thanks! Your submission is in the review queue. You&apos;ll get an email when it&apos;s been reviewed.
             </p>
           </div>
         ) : (
-          <div style={{ background: colors.cardBg, border: `0.5px solid ${colors.border}`, borderRadius: '16px', padding: '24px' }}>
-            <ul style={{ margin: '0 0 20px', paddingLeft: '20px', color: colors.muted, fontSize: '15px', lineHeight: 1.6 }}>
-              <li>Best size: 1920 × 1080 landscape (JPG, PNG, or WebP, up to 10 MB)</li>
-              <li>Images are fit on black — no cropping</li>
-              <li>Optional short MP4 video (up to 25 MB)</li>
-              <li>Describe where and when you&apos;d like it shown — an approver sets final placement</li>
-            </ul>
+          <>
+            <h1 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 4px', color: colors.text }}>Submit to Innovation Center signage</h1>
+            <p style={{ fontSize: 13, color: colors.muted, margin: '0 0 14px', lineHeight: 1.6 }}>
+              Every image is reviewed before it goes live. Best size 1920 × 1080 landscape. JPG, PNG, or WebP up to 10 MB.
+              Optional short MP4 video up to 25 MB.
+            </p>
 
-            <div style={{ display: 'grid', gap: '14px' }}>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>Name *</span>
-                <input value={form.submitter_name} onChange={e => setForm(f => ({ ...f, submitter_name: e.target.value }))} style={inputStyle} />
-              </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>Email *</span>
-                <input type="email" value={form.submitter_email} onChange={e => setForm(f => ({ ...f, submitter_email: e.target.value }))} style={inputStyle} />
-              </label>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>Title</span>
-                <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={inputStyle} />
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <label style={{ display: 'grid', gap: '6px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600 }}>Show from *</span>
-                  <SignageDateInput value={form.start_date} defaultToToday onChange={v => setForm(f => ({ ...f, start_date: v }))} style={inputStyle} />
-                </label>
-                <label style={{ display: 'grid', gap: '6px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600 }}>Show until *</span>
-                  <SignageDateInput value={form.end_date} onChange={v => setForm(f => ({ ...f, end_date: v }))} style={inputStyle} min={form.start_date || undefined} />
-                </label>
+            <div style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <p style={lbl}>Your name</p>
+                  <input value={form.submitter_name} onChange={e => setForm(f => ({ ...f, submitter_name: e.target.value }))} style={input} />
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <p style={lbl}>Email</p>
+                  <input type="email" value={form.submitter_email} onChange={e => setForm(f => ({ ...f, submitter_email: e.target.value }))} style={input} />
+                </div>
               </div>
-              <label style={{ display: 'grid', gap: '6px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600 }}>Where / when note</span>
-                <textarea value={form.requested_note} onChange={e => setForm(f => ({ ...f, requested_note: e.target.value }))} rows={3} style={{ ...inputStyle, resize: 'vertical' as const }} placeholder="e.g. Culinary hallway, during open house week" />
-              </label>
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: 6 }}>Image</span>
-                <FilePickButton accept="image/png,image/jpeg,image/webp" label="Choose image" changeLabel="Change image" fullWidth onChange={onImageChange} />
+
+              <div style={{ marginBottom: 12 }}>
+                <p style={lbl}>Title or caption</p>
+                <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} style={input} />
               </div>
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 600, display: 'block', marginBottom: 6 }}>Or video (MP4)</span>
-                <FilePickButton accept="video/mp4" label="Choose video" changeLabel="Change video" fullWidth onChange={onVideoChange} />
+
+              <div style={{ marginBottom: 12 }}>
+                <p style={lbl}>Image</p>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click() }}
+                  style={{
+                    border: `1px dashed #c4c8d0`,
+                    borderRadius: 8,
+                    padding: 18,
+                    textAlign: 'center',
+                    color: colors.muted,
+                    fontSize: 13,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={previewUrl} alt="Preview" style={{ maxWidth: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 8 }} />
+                  ) : videoFile ? (
+                    <span>Video: {videoFile.name}</span>
+                  ) : (
+                    <>
+                      <span style={{ display: 'block', fontSize: 20, marginBottom: 4 }}>↑</span>
+                      Drop an image or browse
+                    </>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,video/mp4"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    const file = e.target.files?.[0] ?? null
+                    if (file?.type.startsWith('video/') || file?.name.toLowerCase().endsWith('.mp4')) onVideoChange(file)
+                    else onImageChange(file)
+                  }}
+                />
               </div>
-              {previewUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewUrl} alt="Preview" style={{ width: '100%', maxHeight: 240, objectFit: 'contain', background: '#000', borderRadius: 10 }} />
+
+              <div style={{ marginBottom: 12 }}>
+                <p style={lbl}>Where / when note</p>
+                <textarea
+                  value={form.requested_note}
+                  onChange={e => setForm(f => ({ ...f, requested_note: e.target.value }))}
+                  rows={2}
+                  style={{ ...input, height: 'auto', padding: '8px 10px', resize: 'vertical' }}
+                  placeholder="e.g. Culinary hallway, during open house week"
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 14 }}>
+                <div style={{ flex: 1, minWidth: 130 }}>
+                  <p style={lbl}>Show from</p>
+                  <SignageDateInput value={form.start_date} defaultToToday onChange={v => setForm(f => ({ ...f, start_date: v }))} style={input} />
+                </div>
+                <div style={{ flex: 1, minWidth: 130 }}>
+                  <p style={lbl}>Show until</p>
+                  <SignageDateInput value={form.end_date} onChange={v => setForm(f => ({ ...f, end_date: v }))} style={input} min={form.start_date || undefined} />
+                </div>
+              </div>
+
+              {submitError && !showTerms && (
+                <p style={{ fontSize: 13, color: '#ef4444', margin: '0 0 12px' }}>{submitError}</p>
               )}
-              {videoFile && <p style={{ fontSize: 14, color: colors.muted, margin: 0 }}>Video: {videoFile.name}</p>}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={openTerms} disabled={submitting} style={btnPrimary}>
+                  I agree and submit
+                </button>
+              </div>
             </div>
-
-            {submitError && <p style={{ fontSize: 14, color: colors.danger, marginTop: 16 }}>{submitError}</p>}
-
-            <button
-              type="button"
-              onClick={() => {
-                const err = validateForm()
-                if (err) { setSubmitError(err); return }
-                setSubmitError('')
-                setTermSchool(false)
-                setTermDistrict(false)
-                setShowTerms(true)
-              }}
-              disabled={submitting}
-              style={{ width: '100%', marginTop: 20, minHeight: 44, background: colors.primary, color: '#fff', border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              Submit
-            </button>
-          </div>
+          </>
         )}
       </div>
 
       {showTerms && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
-          <div role="dialog" aria-modal="true" style={{ background: colors.cardBg, borderRadius: 16, padding: 24, maxWidth: 440, width: '100%' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, margin: '0 0 12px' }}>Before you submit</h2>
-            <label style={{ display: 'flex', gap: 10, marginBottom: 12, fontSize: 15, cursor: 'pointer' }}>
-              <input type="checkbox" checked={termSchool} onChange={e => setTermSchool(e.target.checked)} />
-              <span>This content is appropriate for a school and district audience.</span>
+          <div role="dialog" aria-modal="true" aria-labelledby="terms-title" style={{ background: colors.cardBg, borderRadius: 12, padding: '20px 22px', maxWidth: 440, width: '100%', border: `1px solid ${colors.border}` }}>
+            <h2 id="terms-title" style={{ fontSize: 16, fontWeight: 600, margin: '0 0 12px', color: colors.text }}>Before you submit</h2>
+            <label style={{ display: 'flex', gap: 7, marginBottom: 8, fontSize: 13, cursor: 'pointer', color: colors.text, alignItems: 'flex-start' }}>
+              <input type="checkbox" checked={termSchool} onChange={e => setTermSchool(e.target.checked)} style={{ marginTop: 2 }} />
+              <span>This image is appropriate for a school and district audience.</span>
             </label>
-            <label style={{ display: 'flex', gap: 10, marginBottom: 20, fontSize: 15, cursor: 'pointer' }}>
-              <input type="checkbox" checked={termDistrict} onChange={e => setTermDistrict(e.target.checked)} />
-              <span>This content is applicable to Canyons School District.</span>
+            <label style={{ display: 'flex', gap: 7, marginBottom: 16, fontSize: 13, cursor: 'pointer', color: colors.text, alignItems: 'flex-start' }}>
+              <input type="checkbox" checked={termDistrict} onChange={e => setTermDistrict(e.target.checked)} style={{ marginTop: 2 }} />
+              <span>This content is applicable to the Canyons School District.</span>
             </label>
+            {submitError && <p style={{ fontSize: 13, color: '#ef4444', margin: '0 0 12px' }}>{submitError}</p>}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setShowTerms(false)} style={{ minHeight: 44, padding: '0 18px', borderRadius: 10, border: `0.5px solid ${colors.border}`, background: 'transparent', fontFamily: 'inherit', cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={() => void submit()} disabled={submitting || !termSchool || !termDistrict} style={{ minHeight: 44, padding: '0 18px', borderRadius: 10, border: 'none', background: termSchool && termDistrict ? colors.primary : '#cbd5e1', color: '#fff', fontFamily: 'inherit', fontWeight: 600, cursor: termSchool && termDistrict ? 'pointer' : 'not-allowed' }}>{submitting ? 'Submitting…' : 'I Agree & Submit'}</button>
+              <button
+                type="button"
+                onClick={() => setShowTerms(false)}
+                style={{ fontSize: 13, padding: '7px 13px', borderRadius: 8, border: `1px solid ${colors.line}`, background: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={submitting || !termSchool || !termDistrict}
+                style={{
+                  ...btnPrimary,
+                  opacity: termSchool && termDistrict ? 1 : 0.5,
+                  cursor: termSchool && termDistrict ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {submitting ? 'Submitting…' : 'I agree and submit'}
+              </button>
             </div>
           </div>
         </div>

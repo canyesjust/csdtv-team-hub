@@ -51,7 +51,7 @@ export default function SignageLivePage() {
             </label>
             <input placeholder="HLS URL (m3u8)" value={form.hls_url} onChange={e => setForm(f => ({ ...f, hls_url: e.target.value }))} style={{ ...inputStyle, marginBottom: 10 }} />
             <input placeholder="Label" value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} style={{ ...inputStyle, marginBottom: 12 }} />
-            <SignageTargetingPicker areas={areas} screens={screens} value={targeting} onChange={v => { setTargeting(v); setForm(f => ({ ...f, all_screens: v.all_screens })) }} dark={dark} border={border} text={text} muted={muted} />
+            <SignageTargetingPicker areas={areas} screens={screens} value={targeting} onChange={v => { setTargeting(v); setForm(f => ({ ...f, all_screens: v.all_screens })) }} />
             <p style={{ fontSize: 13, color: muted, margin: '12px 0' }}>Broadcast control can also PATCH /api/signage/live on go-live.</p>
             <button type="button" onClick={() => void save()} style={{ padding: '10px 18px', background: form.is_live ? '#ef4444' : '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>
               {form.is_live ? 'Apply live takeover' : 'Clear live / save'}

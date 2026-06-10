@@ -1,0 +1,498 @@
+/* CIC signage screen styles — port of signage-screens-reference.html (TV sections only) */
+
+.cic-screen {
+  --navy: #162844;
+  --panel: #1e3649;
+  --gray: #585555;
+  --accent: #96b7c8;
+  --white: #fefefe;
+  --muted: #7e9cb0;
+  --bezel: #0c1626;
+  --live: #c0392b;
+
+  position: fixed;
+  inset: 0;
+  background: var(--navy);
+  color: var(--white);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: none;
+}
+
+.cic-screen.portrait {
+  /* 9:16 logical frame; full viewport on portrait displays */
+}
+
+.cic-tvhead {
+  background: var(--navy);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(150, 183, 200, 0.25);
+  flex-shrink: 0;
+}
+
+.cic-tvhead.portrait {
+  padding: 8px 10px;
+}
+
+.cic-head-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.cic-head-left.portrait {
+  gap: 8px;
+}
+
+.cic-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+}
+
+.cic-logo.portrait {
+  width: 28px;
+  height: 28px;
+}
+
+.cic-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cic-brand {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.cic-brand.portrait {
+  font-size: 12px;
+}
+
+.cic-brandsub {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.cic-brandsub.portrait {
+  font-size: 10px;
+}
+
+.cic-head-right {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex-shrink: 0;
+}
+
+.cic-wx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.cic-wx.portrait {
+  font-size: 12px;
+}
+
+.cic-clk {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.cic-welcome {
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid rgba(150, 183, 200, 0.2);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.cic-welcome.portrait {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.cic-welcome b {
+  font-weight: 500;
+}
+
+.cic-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.cic-body.portrait-stack {
+  flex-direction: column;
+}
+
+.cic-media16 {
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--panel);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+}
+
+.cic-media16.portrait-top {
+  width: 100%;
+  height: auto;
+  flex: none;
+}
+
+.cic-media16.fill {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.cic-media16 img,
+.cic-media16 video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 1;
+  transition: opacity 450ms ease;
+}
+
+.cic-media16 img.hidden,
+.cic-media16 video.hidden {
+  opacity: 0;
+}
+
+.cic-media-overlay {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.cic-kicker {
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.cic-kicker.portrait {
+  font-size: 9px;
+}
+
+.cic-mtitle {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 4px 0;
+}
+
+.cic-mtitle.portrait {
+  font-size: 15px;
+  margin-top: 3px;
+}
+
+.cic-msub {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.cic-dots {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+.cic-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(254, 254, 254, 0.3);
+}
+
+.cic-dot.on {
+  background: var(--accent);
+}
+
+.cic-rail {
+  flex: 1;
+  min-width: 0;
+  background: var(--navy);
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+
+.cic-railhd {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 9px;
+}
+
+.cic-railhd.tight {
+  margin-bottom: 6px;
+}
+
+.cic-ann {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+
+.cic-ann-icon {
+  font-size: 13px;
+  color: var(--accent);
+  margin-top: 1px;
+  flex: none;
+  line-height: 1;
+}
+
+.cic-anntop {
+  font-size: 11.5px;
+  line-height: 1.2;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cic-annsub {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.cic-spill {
+  font-size: 8.5px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: rgba(150, 183, 200, 0.5);
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+.cic-spill.all {
+  background: rgba(150, 183, 200, 0.22);
+  color: var(--accent);
+}
+
+.cic-ticker {
+  background: var(--accent);
+  height: 26px;
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cic-ticker.portrait {
+  height: 22px;
+}
+
+.cic-tickin {
+  display: inline-block;
+  padding-left: 100%;
+  animation: cic-tk 18s linear infinite;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--navy);
+}
+
+.cic-ticker.portrait .cic-tickin {
+  font-size: 11px;
+}
+
+@keyframes cic-tk {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+.cic-locchip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(22, 40, 68, 0.9);
+  border-left: 4px solid var(--accent);
+  padding: 7px 12px;
+  border-radius: 0 6px 6px 0;
+  font-size: 15px;
+  font-weight: 500;
+  z-index: 2;
+}
+
+.cic-welchip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(22, 40, 68, 0.9);
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--accent);
+  z-index: 2;
+}
+
+.cic-fill {
+  flex: 1;
+  position: relative;
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.cic-fill.live-bg {
+  background: var(--bezel);
+}
+
+.cic-fill.offline-bg {
+  background: var(--navy);
+  flex-direction: column;
+}
+
+.cic-dir {
+  font-size: 14px;
+  line-height: 2.1;
+}
+
+.cic-dir.portrait {
+  font-size: 13px;
+  line-height: 1.95;
+}
+
+.cic-dir-arrow {
+  display: inline-block;
+  font-size: 16px;
+  color: var(--accent);
+  vertical-align: -3px;
+  margin-right: 6px;
+  width: 16px;
+  text-align: center;
+}
+
+.cic-live-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: var(--live);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 11px;
+  border-radius: 20px;
+  z-index: 2;
+  text-transform: lowercase;
+}
+
+.cic-live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--white);
+  vertical-align: 1px;
+  margin-right: 5px;
+}
+
+.cic-capbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(12, 22, 38, 0.85);
+  padding: 8px 14px;
+  font-size: 11.5px;
+  color: var(--accent);
+  z-index: 2;
+}
+
+.cic-wayfind-dir {
+  flex: 1;
+  padding: 14px 16px;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.cic-portrait-section {
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(150, 183, 200, 0.2);
+}
+
+.cic-portrait-ann {
+  padding: 9px 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cic-offline-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.cic-offline-title {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.cic-offline-foot {
+  font-size: 10.5px;
+  color: var(--gray);
+  margin-top: 18px;
+}
+
+.cic-live-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cic-empty-muted {
+  font-size: 12px;
+  color: var(--muted);
+}

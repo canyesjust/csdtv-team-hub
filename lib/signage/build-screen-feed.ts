@@ -3,25 +3,13 @@ import { signageMediaPublicUrl } from './constants'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
+import {
+  normalizeSignageLayout,
+  normalizeSignageOrientation,
+  type ScreenFeed,
+} from './screen-feed'
 
-export type ScreenFeedPayload = {
-  screen: {
-    name: string
-    code: string
-    orientation: string
-    layout: string
-    heading: string | null
-    area: { name: string; slug: string; building: string | null; floor: number | null } | null
-    center_name: string
-  }
-  media: Array<{ id: string; type: 'image' | 'video'; title: string | null; url: string; full_screen: boolean }>
-  announcements: Array<{ id: string; title: string; subtitle: string | null; in_ticker: boolean }>
-  ticker: string[]
-  wayfinding: Array<{ id: string; destination: string; direction: string }>
-  visitors: Array<{ id: string; name: string; note: string | null }>
-  live: { live: true; hls_url: string; label: string | null } | { live: false }
-  weather: SignageWeather
-}
+export type { ScreenFeed as ScreenFeedPayload }
 
 const WEATHER_TIMEOUT_MS = 1800
 
@@ -100,16 +88,30 @@ export async function buildScreenFeed(
       full_screen: row.full_screen,
     }))
 
+  const { data: areaRows } = await service.from('signage_areas').select('id, name')
+  const areaNameById = new Map((areaRows ?? []).map(a => [a.id, a.name]))
+
   const announcements = (annRes.data ?? [])
     .filter(row => isInDateRange(row.start_date, row.end_date, today))
     .filter(row => signageTargetMatches(row, target))
     .sort((a, b) => b.priority - a.priority)
-    .map(row => ({
-      id: row.id,
-      title: row.title,
-      subtitle: row.subtitle,
-      in_ticker: row.in_ticker,
-    }))
+    .map(row => {
+      let scopeLabel = area?.name ?? 'Local'
+      if (row.all_screens) scopeLabel = 'All'
+      else if (row.target_area_ids?.length === 1) {
+        scopeLabel = areaNameById.get(row.target_area_ids[0]) ?? scopeLabel
+      } else if ((row.target_area_ids?.length ?? 0) > 1) {
+        scopeLabel = 'Multi'
+      }
+      return {
+        id: row.id,
+        title: row.title,
+        subtitle: row.subtitle,
+        in_ticker: row.in_ticker,
+        scope_label: scopeLabel,
+        all_screens: row.all_screens,
+      }
+    })
 
   const tickerItems: TickerItem[] = announcements
     .filter(a => a.in_ticker)
@@ -154,7 +156,7 @@ export async function buildScreenFeed(
     direction: w.direction,
   }))
 
-  let live: ScreenFeedPayload['live'] = { live: false }
+  let live: ScreenFeed['live'] = { live: false }
   const liveRow = liveRes.data
   if (
     liveRow?.is_live &&
@@ -170,8 +172,8 @@ export async function buildScreenFeed(
       screen: {
         name: screen.name,
         code: screen.code,
-        orientation: screen.orientation,
-        layout: screen.layout,
+        orientation: normalizeSignageOrientation(screen.orientation),
+        layout: normalizeSignageLayout(screen.layout),
         heading: screen.wayfinding_heading,
         area: area ? { name: area.name, slug: area.slug, building: area.building, floor: area.floor } : null,
         center_name: settings?.center_name ?? 'Canyons Innovation Center',

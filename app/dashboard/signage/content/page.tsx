@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
-import SignageTargetingPicker, { SignagePageShell, useSignageTheme, type TargetingValue } from '../components/SignageAdmin'
+import SignageTargetingPicker, {
+  SignagePageShell,
+  formatSignageDate,
+  useSignageAdminStyles,
+  type TargetingValue,
+} from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import { signageMediaPublicUrl } from '@/lib/signage/constants'
 import FilePickButton from '@/components/FilePickButton'
@@ -28,18 +33,26 @@ type ContentRow = {
   target_screen_ids: string[]
   full_screen: boolean
   reject_reason: string | null
+  created_at?: string
 }
 
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, full_screen, reject_reason'
+  'id, type, title, media_path, thumb_path, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, full_screen, reject_reason, created_at'
 
 const EMPTY_COUNTS: Record<Tab, number> = { pending: 0, approved: 0, rejected: 0 }
 
+const TAB_LABELS: Record<Tab, string> = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' }
+
+function mediaFileName(path: string): string {
+  const parts = path.split('/')
+  return parts[parts.length - 1] || 'Media'
+}
+
 export default function SignageContentPage() {
   const { theme } = useTheme()
-  const { text, muted, border, cardBg, inputBg, dark } = useSignageTheme(theme)
+  const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
   const { isManager, areas, screens } = useSignage()
 
@@ -47,6 +60,7 @@ export default function SignageContentPage() {
   const [rows, setRows] = useState<ContentRow[]>([])
   const [counts, setCounts] = useState(EMPTY_COUNTS)
   const [tabLoading, setTabLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [edits, setEdits] = useState<Record<string, TargetingValue & { start_date: string; end_date: string; priority: number; title: string; full_screen: boolean }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -56,16 +70,12 @@ export default function SignageContentPage() {
   const [addTargeting, setAddTargeting] = useState<TargetingValue>({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
   const [addDates, setAddDates] = useState({ title: '', start_date: '', end_date: '', priority: 0 })
 
-  const inputStyle: React.CSSProperties = {
-    background: inputBg, border: `0.5px solid ${border}`, borderRadius: 10, padding: '8px 12px', fontSize: 14, color: text, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box',
-  }
-
   const loadCounts = useCallback(async () => {
     const { data } = await supabase.from('signage_content').select('status')
     const next = { ...EMPTY_COUNTS }
     for (const row of data ?? []) {
-      const s = row.status as Tab
-      if (s in next) next[s] += 1
+      const st = row.status as Tab
+      if (st in next) next[st] += 1
     }
     setCounts(next)
   }, [supabase])
@@ -77,7 +87,9 @@ export default function SignageContentPage() {
       .select(CONTENT_COLUMNS)
       .eq('status', activeTab)
       .order('created_at', { ascending: false })
-    setRows((data as ContentRow[]) || [])
+    const list = (data as ContentRow[]) || []
+    setRows(list)
+    setExpandedId(list[0]?.id ?? null)
     setTabLoading(false)
   }, [supabase])
 
@@ -182,117 +194,209 @@ export default function SignageContentPage() {
     void refreshAll()
   }
 
+  const submitterLine = (row: ContentRow) => {
+    const parts: string[] = []
+    if (row.submitter_name) parts.push(row.submitter_name)
+    if (row.submitter_email) parts.push(row.submitter_email)
+    if (row.created_at) parts.push(`submitted ${formatSignageDate(row.created_at)}`)
+    return parts.join(' · ')
+  }
+
+  const requestLine = (row: ContentRow) => {
+    const parts: string[] = []
+    if (row.start_date && row.end_date) {
+      parts.push(`Requested ${formatSignageDate(row.start_date)}–${formatSignageDate(row.end_date)}`)
+    }
+    if (row.requested_note) parts.push(row.requested_note)
+    return parts.join(' · ')
+  }
+
   return (
     <SignagePageShell title="Content">
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {(['pending', 'approved', 'rejected'] as Tab[]).map(t => (
-          <button key={t} type="button" onClick={() => setTab(t)} style={{ padding: '8px 16px', borderRadius: 10, border: `1px solid ${border}`, background: tab === t ? '#162844' : cardBg, color: tab === t ? '#fff' : text, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize' }}>
-            {t} ({counts[t]})
+          <button key={t} type="button" onClick={() => setTab(t)} style={s.seg(tab === t)}>
+            {TAB_LABELS[t]} <b style={{ fontWeight: 600 }}>{counts[t]}</b>
           </button>
         ))}
         {isManager && (
-          <button type="button" onClick={() => setShowAdd(v => !v)} style={{ marginLeft: 'auto', padding: '8px 16px', borderRadius: 10, border: 'none', background: '#1e6cb5', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button type="button" onClick={() => setShowAdd(v => !v)} style={{ ...s.btnPrimary, marginLeft: 'auto' }}>
             {showAdd ? 'Cancel add' : '+ Add content'}
           </button>
         )}
       </div>
 
       {showAdd && isManager && (
-        <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 12px', color: text }}>Direct upload (approved)</h3>
-          <div style={{ display: 'grid', gap: 12, maxWidth: 520 }}>
-            <input placeholder="Title" value={addDates.title} onChange={e => setAddDates(d => ({ ...d, title: e.target.value }))} style={inputStyle} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', gap: 8 }}>
-              <SignageDateInput value={addDates.start_date} defaultToToday colorScheme={dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, start_date: v }))} style={inputStyle} />
-              <SignageDateInput value={addDates.end_date} colorScheme={dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, end_date: v }))} style={inputStyle} min={addDates.start_date || undefined} />
-              <input type="number" value={addDates.priority} onChange={e => setAddDates(d => ({ ...d, priority: parseInt(e.target.value, 10) || 0 }))} style={inputStyle} placeholder="Priority" />
+        <div style={{ ...s.card, marginBottom: 20 }}>
+          <h3 style={s.h3}>Direct upload (approved)</h3>
+          <div style={{ display: 'grid', gap: 12, maxWidth: 560 }}>
+            <div>
+              <p style={s.lbl}>Title</p>
+              <input value={addDates.title} onChange={e => setAddDates(d => ({ ...d, title: e.target.value }))} style={s.input} />
             </div>
-            <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} dark={dark} border={border} text={text} muted={muted} />
+            <div style={s.row}>
+              <div style={{ flex: 1, minWidth: 130 }}>
+                <p style={s.lbl}>Start date</p>
+                <SignageDateInput value={addDates.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, start_date: v }))} style={s.input} />
+              </div>
+              <div style={{ flex: 1, minWidth: 130 }}>
+                <p style={s.lbl}>End date</p>
+                <SignageDateInput value={addDates.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, end_date: v }))} style={s.input} min={addDates.start_date || undefined} />
+              </div>
+              <div style={{ width: 90 }}>
+                <p style={s.lbl}>Priority</p>
+                <input type="number" value={addDates.priority} onChange={e => setAddDates(d => ({ ...d, priority: parseInt(e.target.value, 10) || 0 }))} style={s.input} />
+              </div>
+            </div>
+            <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} lbl={s.lbl} />
             <FilePickButton accept="image/png,image/jpeg,image/webp,video/mp4" label="Choose file" changeLabel="Change file" onChange={setAddFile} />
-            <button type="button" disabled={busy === 'add'} onClick={() => void addDirect()} style={{ padding: '10px 18px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', width: 'fit-content' }}>Upload & publish</button>
+            <button type="button" disabled={busy === 'add'} onClick={() => void addDirect()} style={s.btnPrimary}>Upload & publish</button>
           </div>
         </div>
       )}
 
       {tabLoading ? (
-        <div style={{ color: muted, padding: 24, textAlign: 'center' }}>Loading…</div>
+        <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>Loading…</div>
       ) : (
-        <div style={{ display: 'grid', gap: 16 }}>
+        <div style={{ display: 'grid', gap: 12 }}>
           {rows.map(row => {
             const e = getEdit(row)
+            const expanded = expandedId === row.id
             const preview = row.thumb_path ? signageMediaPublicUrl(row.thumb_path) : signageMediaPublicUrl(row.media_path)
+            const fileName = mediaFileName(row.media_path)
+
+            if (!expanded) {
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  onClick={() => setExpandedId(row.id)}
+                  style={{
+                    ...s.card,
+                    marginTop: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 14,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  <div style={{ ...s.thumb, width: 64, height: 40 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: s.text }}>{e.title || fileName}</div>
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{submitterLine(row)}</div>
+                  </div>
+                  <span style={{ fontSize: 18, color: '#9aa0ab' }}>▾</span>
+                </button>
+              )
+            }
+
             return (
-              <div key={row.id} style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, display: 'grid', gridTemplateColumns: 'minmax(120px, 200px) 1fr', gap: 20 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="" loading="lazy" decoding="async" style={{ width: '100%', borderRadius: 8, background: dark ? '#e8edf4' : '#f0f2f5', objectFit: 'contain', aspectRatio: '16/9' }} />
-                <div>
-                  <input
-                    value={e.title}
-                    onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, title: ev.target.value } }))}
-                    placeholder="Title"
-                    style={{ ...inputStyle, marginBottom: 8, fontWeight: 600, fontSize: 17 }}
-                  />
-                  {row.submitter_name && <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>{row.submitter_name} · {row.submitter_email}</div>}
-                  {row.requested_note && <div style={{ fontSize: 13, color: muted, marginTop: 4 }}>Request: {row.requested_note}</div>}
-                  {(tab === 'pending' || tab === 'approved' || tab === 'rejected') && (
-                    <>
-                      <div style={{ marginTop: 12 }}>
-                        <SignageTargetingPicker
-                          areas={areas}
-                          screens={screens}
-                          value={e}
-                          onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, ...v } }))}
-                          dark={dark}
-                          border={border}
-                          text={text}
-                          muted={muted}
-                        />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', gap: 8, marginTop: 12, maxWidth: 400 }}>
-                        <SignageDateInput value={e.start_date} defaultToToday colorScheme={dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, start_date: v } }))} style={inputStyle} />
-                        <SignageDateInput value={e.end_date} colorScheme={dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={inputStyle} min={e.start_date || undefined} />
-                        <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={inputStyle} />
-                      </div>
-                      <label style={{ display: 'flex', gap: 8, marginTop: 10, fontSize: 14, color: text }}>
-                        <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
-                        Full-screen takeover
-                      </label>
-                      {tab === 'pending' && (
-                        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                          <button type="button" disabled={busy === row.id} onClick={() => void approve(row)} style={{ padding: '8px 16px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Approve</button>
-                          <button type="button" onClick={() => { setRejectId(row.id); setRejectReason('') }} style={{ padding: '8px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Reject</button>
-                        </div>
-                      )}
-                      {tab === 'approved' && (
-                        <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={{ marginTop: 14, padding: '8px 16px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Save changes</button>
-                      )}
-                      {tab === 'rejected' && (
-                        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                          <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={{ padding: '8px 16px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Save changes</button>
-                          <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row, { status: 'approved', reject_reason: null })} style={{ padding: '8px 16px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Re-approve</button>
-                        </div>
-                      )}
-                      {rejectId === row.id && (
-                        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                          <input value={rejectReason} onChange={ev => setRejectReason(ev.target.value)} placeholder="Reject reason" style={{ ...inputStyle, flex: 1 }} />
-                          <button type="button" onClick={() => void reject(row)} style={{ padding: '8px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Confirm reject</button>
-                        </div>
-                      )}
-                    </>
+              <div key={row.id} style={s.card}>
+                <div style={{ display: 'flex', gap: 14 }}>
+                  <div style={{ ...s.thumb, width: 150, height: 84, overflow: 'hidden', padding: 0 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input
+                      value={e.title}
+                      onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, title: ev.target.value } }))}
+                      placeholder="Title"
+                      style={{ ...s.input, fontWeight: 500, fontSize: 15, marginBottom: 4 }}
+                    />
+                    {submitterLine(row) && (
+                      <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{submitterLine(row)}</div>
+                    )}
+                    {requestLine(row) && (
+                      <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{requestLine(row)}</div>
+                    )}
+                  </div>
+                  {rows.length > 1 && (
+                    <button type="button" onClick={() => setExpandedId(null)} style={{ ...s.btn, alignSelf: 'flex-start', padding: '4px 8px' }} aria-label="Collapse">
+                      ▴
+                    </button>
                   )}
-                  {row.reject_reason && tab === 'rejected' && <div style={{ marginTop: 8, color: '#ef4444', fontSize: 13 }}>{row.reject_reason}</div>}
+                </div>
+
+                <div style={s.divider}>
+                  <SignageTargetingPicker
+                    areas={areas}
+                    screens={screens}
+                    value={e}
+                    onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, ...v } }))}
+                    lbl={s.lbl}
+                  />
+                  <div style={{ ...s.row, marginTop: 12 }}>
+                    <div style={{ flex: 1, minWidth: 130 }}>
+                      <p style={s.lbl}>Start date</p>
+                      <SignageDateInput value={e.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, start_date: v } }))} style={s.input} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 130 }}>
+                      <p style={s.lbl}>End date</p>
+                      <SignageDateInput value={e.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={s.input} min={e.start_date || undefined} />
+                    </div>
+                    <div style={{ width: 90 }}>
+                      <p style={s.lbl}>Priority</p>
+                      <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={s.input} />
+                    </div>
+                  </div>
+                  <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
+                    <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
+                    Full-screen takeover
+                  </label>
+
+                  {tab === 'pending' && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                      <button type="button" onClick={() => { setRejectId(row.id); setRejectReason('') }} style={s.btn}>Reject</button>
+                      <button type="button" disabled={busy === row.id} onClick={() => void approve(row)} style={s.btnPrimary}>✓ Approve</button>
+                    </div>
+                  )}
+                  {tab === 'approved' && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                      <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={s.btnPrimary}>Save changes</button>
+                    </div>
+                  )}
+                  {tab === 'rejected' && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                      <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={s.btn}>Save changes</button>
+                      <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row, { status: 'approved', reject_reason: null })} style={s.btnPrimary}>Re-approve</button>
+                    </div>
+                  )}
+
+                  {rejectId === row.id && (
+                    <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                      <input value={rejectReason} onChange={ev => setRejectReason(ev.target.value)} placeholder="Reject reason" style={{ ...s.input, flex: 1 }} />
+                      <button type="button" onClick={() => void reject(row)} style={s.btn}>Confirm reject</button>
+                    </div>
+                  )}
+
+                  {row.reject_reason && tab === 'rejected' && (
+                    <div style={{ marginTop: 8, color: '#ef4444', fontSize: 13 }}>{row.reject_reason}</div>
+                  )}
+
                   {isManager && tab !== 'pending' && (
-                    <button type="button" onClick={async () => {
-                      if (!confirm('Delete this content?')) return
-                      await fetch(`/api/signage/content/${row.id}`, { method: 'DELETE' })
-                      void refreshAll()
-                    }} style={{ marginTop: 12, padding: '6px 12px', background: 'transparent', border: `1px solid ${border}`, borderRadius: 8, color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm('Delete this content?')) return
+                        await fetch(`/api/signage/content/${row.id}`, { method: 'DELETE' })
+                        void refreshAll()
+                      }}
+                      style={{ ...s.btn, marginTop: 12, color: '#ef4444', borderColor: '#ef4444' }}
+                    >
+                      Delete
+                    </button>
                   )}
                 </div>
               </div>
             )
           })}
-          {!rows.length && <div style={{ color: muted, padding: 24, textAlign: 'center' }}>No {tab} items.</div>}
+          {!rows.length && <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>No {tab} items.</div>}
         </div>
       )}
     </SignagePageShell>

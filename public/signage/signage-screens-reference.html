@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CIC Signage Visual Reference</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<style>
+:root{
+  --navy:#162844; --panel:#1e3649; --gray:#585555; --accent:#96b7c8; --white:#fefefe; --muted:#7e9cb0;
+  --ink:#1a1f36; --inkmute:#6b7280; --line:rgba(0,0,0,.10); --card:#ffffff; --info:#185fa5; --infobg:#e6f1fb;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#f4f5f7;color:var(--ink);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.5}
+.wrap{max-width:880px;margin:0 auto;padding:32px 20px 80px}
+h1{font-size:24px;font-weight:600;margin:0 0 6px}
+.lede{color:var(--inkmute);margin:0 0 28px}
+h2{font-size:18px;font-weight:600;margin:38px 0 4px;padding-top:18px;border-top:1px solid var(--line)}
+.note{color:var(--inkmute);font-size:14px;margin:0 0 16px}
+.stage{background:#e9ebef;border-radius:14px;padding:22px;display:flex;justify-content:center}
+
+/* ---- TV SCREENS (navy palette) ---- */
+.tv{position:relative;background:var(--navy);border:8px solid #0c1626;border-radius:12px;overflow:hidden;color:var(--white);display:flex;flex-direction:column}
+.tv.land{width:640px;aspect-ratio:16/9}
+.tv.port{width:300px;aspect-ratio:9/16}
+.tvhead{background:var(--navy);display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(150,183,200,.25)}
+.logo{width:32px;height:32px;border-radius:7px;background:var(--white);display:flex;align-items:center;justify-content:center;flex:none}
+.brand{font-size:14px;font-weight:500;line-height:1.1}
+.brandsub{font-size:11px;color:var(--accent)}
+.wx{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--accent)}
+.clk{font-size:15px;font-weight:500}
+.welcome{background:var(--panel);display:flex;align-items:center;gap:8px;padding:6px 14px;border-bottom:1px solid rgba(150,183,200,.2);font-size:13px}
+.body{flex:1;display:flex;min-height:0}
+.media16{height:100%;aspect-ratio:16/9;background:var(--panel);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none}
+.kicker{font-size:10px;color:var(--accent);letter-spacing:1px;text-transform:uppercase}
+.mtitle{font-size:20px;font-weight:500;margin:4px 0}
+.msub{font-size:12px;color:var(--accent)}
+.dots{position:absolute;bottom:9px;display:flex;gap:6px}
+.dot{width:6px;height:6px;border-radius:50%;background:rgba(254,254,254,.3)}
+.dot.on{background:var(--accent)}
+.rail{flex:1;min-width:0;background:var(--navy);padding:10px 12px}
+.railhd{font-size:9.5px;font-weight:500;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin-bottom:9px}
+.ann{display:flex;gap:7px;margin-bottom:9px}
+.ann i{font-size:13px;color:var(--accent);margin-top:1px}
+.anntop{font-size:11.5px;line-height:1.2;display:flex;gap:6px;align-items:center}
+.annsub{font-size:10px;color:var(--muted)}
+.spill{font-size:8.5px;font-weight:500;padding:1px 6px;border-radius:9px;background:rgba(150,183,200,.5);color:var(--navy)}
+.spill.all{background:rgba(150,183,200,.22);color:var(--accent)}
+.ticker{background:var(--accent);height:26px;overflow:hidden;white-space:nowrap;display:flex;align-items:center}
+.tickin{display:inline-block;padding-left:100%;animation:tk 18s linear infinite;font-size:12px;font-weight:500;color:var(--navy)}
+@keyframes tk{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+.locchip{position:absolute;top:14px;left:14px;background:rgba(22,40,68,.9);border-left:4px solid var(--accent);padding:7px 12px;border-radius:0 6px 6px 0;font-size:15px;font-weight:500}
+.welchip{position:absolute;top:14px;right:14px;background:rgba(22,40,68,.9);padding:5px 11px;border-radius:6px;font-size:11px;color:var(--accent)}
+.fill{flex:1;position:relative;background:var(--panel);display:flex;align-items:center;justify-content:center}
+.dir{font-size:14px;line-height:2.1}
+.dir i{font-size:16px;color:var(--accent);vertical-align:-3px;margin-right:6px}
+.live{position:absolute;top:14px;left:14px;background:#c0392b;font-size:12px;font-weight:500;padding:3px 11px;border-radius:20px}
+.capbar{position:absolute;bottom:0;left:0;right:0;background:rgba(12,22,38,.85);padding:8px 14px;font-size:11.5px;color:var(--accent)}
+
+/* ---- ADMIN (light theme = Hub dashboard) ---- */
+.adm{width:680px;max-width:100%;background:#fbfbfc;border-radius:12px;padding:18px}
+.card2{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.h3{font-size:16px;font-weight:600;margin:0 0 12px}
+.lbl{font-size:12px;color:var(--inkmute);margin:0 0 5px}
+.in{height:34px;border:1px solid #d3d6dd;border-radius:8px;background:#fff;color:var(--ink);padding:0 10px;font-size:13px;width:100%}
+.btn{font-size:13px;padding:7px 13px;border-radius:8px;border:1px solid #d3d6dd;background:#fff;color:var(--ink);cursor:pointer}
+.btn.primary{border-color:var(--info);color:var(--info)}
+.chip2{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;padding:5px 11px;border-radius:8px;margin:0 6px 6px 0;border:1px solid #d3d6dd;color:var(--inkmute);background:#fff}
+.chip2.on{background:var(--infobg);color:var(--info);border-color:#b5d4f4}
+.thumb{background:#eef0f3;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#9aa0ab}
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl th{text-align:left;padding:7px;font-size:11px;color:#9aa0ab;font-weight:500}
+.tbl td{padding:9px 7px;font-size:12.5px;border-top:1px solid var(--line)}
+.row{display:flex;gap:14px;flex-wrap:wrap}
+.seg{font-size:13px;padding:5px 12px;border-radius:8px;color:var(--inkmute)}
+.seg.on{background:#eef0f3;color:var(--ink)}
+.drop{border:1px dashed #c4c8d0;border-radius:8px;padding:18px;text-align:center;color:#9aa0ab;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Canyons Innovation Center signage — visual reference</h1>
+  <p class="lede">This is the look Cursor should match. Screen layouts use the navy palette and render full-screen in AbleSign. Admin pages use the Hub light or dark theme. Port this markup into the React components: keep the structure, palette, spacing, and font sizes, and swap the placeholder content for live data. See signage-design-spec.md for tokens and Cursor prompts.</p>
+
+  <h2>1. Zoned screen (landscape)</h2>
+  <p class="note">Header, a center-wide welcome strip, a 16:9 media box, an announcements rail, and a ticker. Used for office and department screens.</p>
+  <div class="stage">
+    <div class="tv land">
+      <div class="tvhead">
+        <div style="display:flex;align-items:center;gap:9px"><div class="logo"><i class="ti ti-bulb" style="font-size:18px;color:var(--navy)"></i></div><div><div class="brand">Culinary Arts</div><div class="brandsub">Innovation Center</div></div></div>
+        <div style="display:flex;align-items:center;gap:13px"><div class="wx"><i class="ti ti-sun" style="font-size:16px"></i>72&deg;</div><div class="clk">9:41 AM</div></div>
+      </div>
+      <div class="welcome"><i class="ti ti-confetti" style="font-size:15px;color:var(--accent)"></i><span>Welcome, <b style="font-weight:500">Hillcrest High</b> &mdash; thanks for visiting today</span></div>
+      <div class="body">
+        <div class="media16">
+          <div class="kicker">Culinary Arts presents</div>
+          <div class="mtitle">Student Bistro Night</div>
+          <div class="msub">Thursday 6:00 PM &middot; Reserve at the front desk</div>
+          <div class="dots"><span class="dot on"></span><span class="dot"></span><span class="dot"></span></div>
+        </div>
+        <div class="rail">
+          <div class="railhd">Announcements</div>
+          <div class="ann"><i class="ti ti-bell"></i><div><div class="anntop">Knife skills demo <span class="spill">Culinary</span></div><div class="annsub">Today 2:00 PM</div></div></div>
+          <div class="ann"><i class="ti ti-bell"></i><div><div class="anntop">Bistro Night sign-ups <span class="spill">Culinary</span></div><div class="annsub">Open now</div></div></div>
+          <div class="ann"><i class="ti ti-bell"></i><div><div class="anntop">All-school assembly <span class="spill all">All</span></div><div class="annsub">Friday 1:00 PM</div></div></div>
+        </div>
+      </div>
+      <div class="ticker"><div class="tickin">Student Bistro Night Thursday 6 PM &nbsp;&bull;&nbsp; Welcome Hillcrest High &nbsp;&bull;&nbsp; All-school assembly Friday 1:00 PM &nbsp;&bull;&nbsp; Tours hourly from the front desk</div></div>
+    </div>
+  </div>
+
+  <h2>2. Full-bleed screen (landscape)</h2>
+  <p class="note">Media fills the whole 16:9. A location chip, a small center-wide welcome chip, and a ticker overlay. Used for most hallway screens.</p>
+  <div class="stage">
+    <div class="tv land">
+      <div class="fill">
+        <div style="text-align:center"><div class="kicker">Now showing</div><div class="mtitle">Student Bistro Night</div><div class="msub">Full-bleed image or video loop</div></div>
+        <div class="locchip">Culinary Wing</div>
+        <div class="welchip"><i class="ti ti-confetti" style="font-size:12px;vertical-align:-2px"></i> Welcome Hillcrest High</div>
+      </div>
+      <div class="ticker"><div class="tickin">Student Bistro Night Thursday 6 PM &nbsp;&bull;&nbsp; Student showcase this week &nbsp;&bull;&nbsp; Tours hourly from the front desk</div></div>
+    </div>
+  </div>
+
+  <h2>3. Portrait entrance screen</h2>
+  <p class="note">Same zones restacked vertically. The 16:9 media sits near the top at full width. Welcome, directory, announcements, ticker below.</p>
+  <div class="stage">
+    <div class="tv port">
+      <div class="tvhead" style="padding:8px 10px">
+        <div style="display:flex;align-items:center;gap:8px"><div class="logo" style="width:28px;height:28px"><i class="ti ti-bulb" style="font-size:16px;color:var(--navy)"></i></div><div><div class="brand" style="font-size:12px">Main Entrance</div><div class="brandsub" style="font-size:10px">Innovation Center</div></div></div>
+        <div class="wx" style="font-size:12px">72&deg;</div>
+      </div>
+      <div class="welcome" style="padding:5px 10px;font-size:12px"><i class="ti ti-confetti" style="font-size:13px;color:var(--accent)"></i><span>Welcome, Hillcrest High</span></div>
+      <div style="width:100%;aspect-ratio:16/9;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none">
+        <div class="kicker" style="font-size:9px">Culinary Arts presents</div><div style="font-size:15px;font-weight:500;margin-top:3px">Student Bistro Night</div>
+      </div>
+      <div style="padding:11px 12px;border-bottom:1px solid rgba(150,183,200,.2)">
+        <div class="railhd" style="margin-bottom:6px">Directory</div>
+        <div class="dir" style="font-size:13px;line-height:1.95">
+          <div><i class="ti ti-arrow-right"></i> Culinary Arts</div>
+          <div><i class="ti ti-arrow-right"></i> Cosmetology</div>
+          <div><i class="ti ti-arrow-up"></i> Health Sciences</div>
+          <div><i class="ti ti-arrow-left"></i> Auditorium</div>
+        </div>
+      </div>
+      <div style="padding:9px 12px;flex:1">
+        <div class="railhd">Announcements</div>
+        <div class="ann"><i class="ti ti-bell"></i><div><div class="anntop">Maker Lab open house</div><div class="annsub">Today 3:00 PM</div></div></div>
+      </div>
+      <div class="ticker" style="height:22px"><div class="tickin" style="font-size:11px">Welcome Hillcrest High &nbsp;&bull;&nbsp; Student Bistro Night Thursday 6 PM &nbsp;&bull;&nbsp; Tours hourly</div></div>
+    </div>
+  </div>
+
+  <h2>4. Wayfinding screen (landscape)</h2>
+  <p class="note">A rotating heading (not a fixed "you are at"), a per-area directory with arrows, and a 16:9 media area for flyers and images. Ticker below.</p>
+  <div class="stage">
+    <div class="tv land">
+      <div class="tvhead">
+        <div style="display:flex;align-items:center;gap:9px"><div class="logo"><i class="ti ti-bulb" style="font-size:18px;color:var(--navy)"></i></div><div><div class="brand">Welcome to the Innovation Center</div><div class="brandsub">Find your way</div></div></div>
+        <div style="display:flex;align-items:center;gap:13px"><div class="wx"><i class="ti ti-sun" style="font-size:16px"></i>72&deg;</div><div class="clk">9:41 AM</div></div>
+      </div>
+      <div class="body">
+        <div style="flex:1;padding:14px 16px"><div class="railhd" style="margin-bottom:8px">Directory</div>
+          <div class="dir">
+            <div><i class="ti ti-arrow-right"></i> Culinary Arts</div>
+            <div><i class="ti ti-arrow-right"></i> Cosmetology</div>
+            <div><i class="ti ti-arrow-up"></i> Health Sciences</div>
+            <div><i class="ti ti-arrow-left"></i> Auditorium</div>
+          </div>
+        </div>
+        <div style="height:100%;aspect-ratio:16/9;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none">
+          <i class="ti ti-photo" style="font-size:26px;color:var(--accent)"></i><div class="msub" style="margin-top:6px">Flyer or image (16:9)</div>
+        </div>
+      </div>
+      <div class="ticker"><div class="tickin">Welcome to the Canyons Innovation Center &nbsp;&bull;&nbsp; Visiting today: Hillcrest High &nbsp;&bull;&nbsp; Demo Day Thursday in the Main Hall</div></div>
+    </div>
+  </div>
+
+  <h2>5. Live takeover</h2>
+  <p class="note">When a stream is live and the screen accepts it, the zones hide and the HLS feed fills the screen. Reverts when the stream ends.</p>
+  <div class="stage">
+    <div class="tv land">
+      <div class="fill" style="background:#0c1626">
+        <div class="live"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;vertical-align:1px;margin-right:5px"></span>live</div>
+        <div style="text-align:center"><i class="ti ti-player-play" style="font-size:34px;color:var(--accent)"></i><div style="font-size:14px;font-weight:500;margin-top:8px">Innovation Center Showcase &mdash; Live</div><div class="msub" style="margin-top:2px">Full-screen takeover on accepting screens</div></div>
+        <div class="capbar">Streaming via Cablecast &middot; reverts when the stream ends</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>6. Offline fallback</h2>
+  <p class="note">Served from the service worker cache only when nothing else is cached. Keeps a dropped connection from blanking the screen.</p>
+  <div class="stage">
+    <div class="tv land">
+      <div class="fill" style="background:var(--navy);flex-direction:column">
+        <div class="logo" style="width:48px;height:48px;border-radius:10px;margin-bottom:14px"><i class="ti ti-bulb" style="font-size:26px;color:var(--navy)"></i></div>
+        <div style="font-size:17px;font-weight:500">Display will resume shortly</div>
+        <div class="msub" style="margin-top:6px"><i class="ti ti-refresh" style="font-size:13px;vertical-align:-2px"></i> Reconnecting&hellip;</div>
+        <div style="font-size:10.5px;color:var(--gray);margin-top:18px">Canyons Innovation Center &middot; cached screen</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>7. Admin — approval queue</h2>
+  <p class="note">The approver opens a pending submission, picks any mix of areas and screens under "show on," sets dates, and approves or rejects. Hub light theme.</p>
+  <div class="stage">
+    <div class="adm">
+      <div style="display:flex;gap:8px;margin-bottom:14px"><span class="seg on">Pending <b style="font-weight:600">2</b></span><span class="seg">Approved 14</span><span class="seg">Rejected 3</span></div>
+      <div class="card2">
+        <div style="display:flex;gap:14px">
+          <div class="thumb" style="width:150px;height:84px;flex:none"><i class="ti ti-photo" style="font-size:22px"></i><span style="font-size:11px;margin-top:3px">Flyer.jpg</span></div>
+          <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:500">Student Bistro Night</div>
+            <div style="font-size:12px;color:var(--inkmute);margin-top:2px">Maria Lopez &middot; mlopez@canyonsdistrict.org &middot; submitted Jun 4</div>
+            <div style="font-size:12px;color:var(--inkmute);margin-top:2px">Requested Jun 10&ndash;14 &middot; suggested for Culinary and nearby halls</div></div>
+        </div>
+        <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:14px">
+          <p class="lbl">Show on</p>
+          <div><span class="chip2">All screens</span><span class="chip2 on"><i class="ti ti-check" style="font-size:13px"></i> Culinary Arts</span><span class="chip2 on"><i class="ti ti-check" style="font-size:13px"></i> Culinary Wing Hall</span><span class="chip2">Health Sciences</span><span class="chip2">Cosmetology</span><span class="chip2"><i class="ti ti-plus" style="font-size:13px"></i> specific screen</span></div>
+          <div class="row" style="margin-top:12px">
+            <div style="flex:1;min-width:130px"><p class="lbl">Start date</p><input class="in" type="date" value="2026-06-10"></div>
+            <div style="flex:1;min-width:130px"><p class="lbl">End date</p><input class="in" type="date" value="2026-06-14"></div>
+            <div style="width:90px"><p class="lbl">Priority</p><input class="in" type="number" value="0"></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px"><button class="btn">Reject</button><button class="btn primary"><i class="ti ti-check" style="font-size:14px;vertical-align:-2px"></i> Approve</button></div>
+        </div>
+      </div>
+      <div class="card2" style="margin-top:12px;display:flex;align-items:center;gap:14px"><div class="thumb" style="width:64px;height:40px;flex:none"><i class="ti ti-photo" style="font-size:18px"></i></div><div style="flex:1"><div style="font-size:14px;font-weight:500">Robotics open house</div><div style="font-size:12px;color:var(--inkmute)">Devon Pratt &middot; submitted Jun 5</div></div><i class="ti ti-chevron-down" style="font-size:18px;color:#9aa0ab"></i></div>
+    </div>
+  </div>
+
+  <h2>8. Admin — screens list</h2>
+  <p class="note">Register each TV and copy its URL into AbleSign.</p>
+  <div class="stage">
+    <div class="adm">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div class="h3" style="margin:0">Screens</div><button class="btn"><i class="ti ti-plus" style="font-size:14px;vertical-align:-2px"></i> Add screen</button></div>
+      <div class="card2" style="padding:8px 12px">
+        <table class="tbl">
+          <colgroup><col style="width:20%"><col style="width:16%"><col style="width:14%"><col style="width:14%"><col style="width:11%"><col style="width:25%"></colgroup>
+          <thead><tr><th>Name</th><th>Area</th><th>Orientation</th><th>Layout</th><th>Takeover</th><th>URL</th></tr></thead>
+          <tbody>
+            <tr><td>Culinary Arts 1</td><td style="color:var(--inkmute)">Culinary Arts</td><td style="color:var(--inkmute)">Landscape</td><td style="color:var(--inkmute)">Zoned</td><td style="color:var(--inkmute)">Yes</td><td style="font-size:12px"><span style="color:#9aa0ab">/signage/screen/culinary-1</span> <button class="btn" style="padding:2px 8px;font-size:11px"><i class="ti ti-copy" style="font-size:12px"></i></button></td></tr>
+            <tr><td>Culinary Wing Hall</td><td style="color:var(--inkmute)">Culinary Arts</td><td style="color:var(--inkmute)">Landscape</td><td style="color:var(--inkmute)">Full bleed</td><td style="color:var(--inkmute)">No</td><td style="font-size:12px"><span style="color:#9aa0ab">/signage/screen/culinary-hall</span> <button class="btn" style="padding:2px 8px;font-size:11px"><i class="ti ti-copy" style="font-size:12px"></i></button></td></tr>
+            <tr><td>Main Entrance</td><td style="color:var(--inkmute)">Entrance</td><td style="color:var(--inkmute)">Portrait</td><td style="color:var(--inkmute)">Wayfinding</td><td style="color:var(--inkmute)">No</td><td style="font-size:12px"><span style="color:#9aa0ab">/signage/screen/entrance-1</span> <button class="btn" style="padding:2px 8px;font-size:11px"><i class="ti ti-copy" style="font-size:12px"></i></button></td></tr>
+            <tr><td>Auditorium Lobby</td><td style="color:var(--inkmute)">Auditorium</td><td style="color:var(--inkmute)">Landscape</td><td style="color:var(--inkmute)">Full bleed</td><td style="color:var(--inkmute)">Yes</td><td style="font-size:12px"><span style="color:#9aa0ab">/signage/screen/aud-lobby</span> <button class="btn" style="padding:2px 8px;font-size:11px"><i class="ti ti-copy" style="font-size:12px"></i></button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <h2>9. Admin — new announcement</h2>
+  <p class="note">Same multi-select targeting as content. Date range, show in ticker, pin to top.</p>
+  <div class="stage">
+    <div class="adm">
+      <div class="h3">New announcement</div>
+      <div class="card2">
+        <div style="margin-bottom:12px"><p class="lbl">Title</p><input class="in" value="Maker Lab open house"></div>
+        <div style="margin-bottom:12px"><p class="lbl">Subtitle</p><input class="in" value="Today 3:00 PM"></div>
+        <p class="lbl">Show on</p><div style="margin-bottom:12px"><span class="chip2 on"><i class="ti ti-check" style="font-size:13px"></i> All screens</span><span class="chip2">Culinary Arts</span><span class="chip2">Engineering</span><span class="chip2"><i class="ti ti-plus" style="font-size:13px"></i> specific screen</span></div>
+        <div class="row" style="margin-bottom:14px"><div style="flex:1;min-width:130px"><p class="lbl">Start date</p><input class="in" type="date" value="2026-06-09"></div><div style="flex:1;min-width:130px"><p class="lbl">End date</p><input class="in" type="date" value="2026-06-12"></div></div>
+        <div style="display:flex;gap:18px;margin-bottom:16px"><label style="font-size:13px;display:flex;align-items:center;gap:7px"><input type="checkbox" checked> Show in ticker</label><label style="font-size:13px;display:flex;align-items:center;gap:7px"><input type="checkbox"> Pin to top</label></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px"><button class="btn">Cancel</button><button class="btn primary">Publish</button></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>10. Public submission form</h2>
+  <p class="note">The public link anyone uses. Terms shown inline here; in production they appear as a popup that blocks submit until both are checked.</p>
+  <div class="stage">
+    <div class="adm">
+      <div class="h3" style="margin-bottom:4px">Submit to Innovation Center signage</div>
+      <p style="font-size:13px;color:var(--inkmute);margin:0 0 14px;line-height:1.6">Every image is reviewed before it goes live. Best size 1920 x 1080 landscape. JPG, PNG, or WebP up to 10 MB.</p>
+      <div class="card2">
+        <div class="row" style="margin-bottom:12px"><div style="flex:1;min-width:160px"><p class="lbl">Your name</p><input class="in"></div><div style="flex:1;min-width:160px"><p class="lbl">Email</p><input class="in" type="email"></div></div>
+        <div style="margin-bottom:12px"><p class="lbl">Title or caption</p><input class="in"></div>
+        <div style="margin-bottom:12px"><p class="lbl">Image</p><div class="drop"><i class="ti ti-upload" style="font-size:20px;display:block;margin-bottom:4px"></i>Drop an image or browse</div></div>
+        <div class="row" style="margin-bottom:14px"><div style="flex:1;min-width:130px"><p class="lbl">Show from</p><input class="in" type="date"></div><div style="flex:1;min-width:130px"><p class="lbl">Show until</p><input class="in" type="date"></div></div>
+        <div style="background:#eef0f3;border-radius:8px;padding:12px 14px;margin-bottom:14px"><p style="font-size:12px;color:var(--inkmute);margin:0 0 8px">Before you submit (shown as a popup)</p>
+          <label style="font-size:13px;display:flex;align-items:center;gap:7px;margin-bottom:6px"><input type="checkbox"> This image is appropriate for a school and district audience</label>
+          <label style="font-size:13px;display:flex;align-items:center;gap:7px"><input type="checkbox"> This content is applicable to the Canyons School District</label></div>
+        <div style="display:flex;justify-content:flex-end"><button class="btn primary">I agree and submit</button></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
