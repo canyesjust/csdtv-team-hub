@@ -43,3 +43,4 @@ csdtv-handoff.zip
 
 # cursor deploy scratch files
 .cursor-*
+.next.old/

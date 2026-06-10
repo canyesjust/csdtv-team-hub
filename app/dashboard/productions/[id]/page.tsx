@@ -3,8 +3,6 @@
 import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase'
 import { confirmDialog } from '@/lib/confirm'
-import { formatDate, formatMonthDay } from '@/lib/format-date'
-import AsyncButton from '../../components/AsyncButton'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -13,11 +11,19 @@ import Loader from '../../components/Loader'
 import CommentsSection from '../../components/CommentsSection'
 import StudentCrewTab from '../../components/StudentCrewTab'
 import BoardMeetingTab from './components/BoardMeetingTab'
+import ChecklistTab from './components/ChecklistTab'
+import InfoTab from './components/InfoTab'
+import TeamTab from './components/TeamTab'
+import LinksTab from './components/LinksTab'
+import ActivityTab from './components/ActivityTab'
+import VideosTab from './components/VideosTab'
+import ThumbnailTab from './components/ThumbnailTab'
+import CallsheetTab from './components/CallsheetTab'
+import type { PTabCtx } from './components/production-tab-ctx'
 import { toast } from '@/lib/toast'
 import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
-import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { isProductionTabVisible } from '@/lib/dashboard-access'
 import { isStudentInternRole } from '@/lib/roles'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
@@ -25,7 +31,7 @@ import { hubRequestProductionComplete, hubRequestProductionInProgress } from '@/
 import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker, schoolCodesMatch } from '@/lib/thumbnail-school-brand'
 import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 
-interface Production {
+export interface Production {
   id: string; production_number: number; title: string
   type: string | null; request_type_label: string | null; request_type_number: number | null
   internal_type_label: string | null; status: string | null; status_code: number | null
@@ -49,18 +55,18 @@ interface Production {
   youtube_link_email_click_count: number | null
 }
 
-interface ChecklistItem {
+export interface ChecklistItem {
   id: string; title: string; completed: boolean
   completed_at: string | null; assigned_to: string | null; sort_order: number
   kb_article_id: string | null
 }
 
-interface ProductionMember {
+export interface ProductionMember {
   id: string; user_id: string
   team: { id: string; name: string; role: string; avatar_color: string } | null
 }
 
-interface TeamMember {
+export interface TeamMember {
   id: string
   name: string
   email: string
@@ -68,7 +74,7 @@ interface TeamMember {
   avatar_color: string
   dashboard_profile?: string | null
 }
-interface SchoolBrand {
+export interface SchoolBrand {
   id: string
   code: string | null
   name: string
@@ -87,17 +93,17 @@ interface SchoolBrand {
   active?: boolean | null
 }
 
-interface ProductionLink { id: string; title: string; url: string; created_at: string }
+export interface ProductionLink { id: string; title: string; url: string; created_at: string }
 
-interface KBArticle { id: string; title: string; category: string }
+export interface KBArticle { id: string; title: string; category: string }
 
-interface ActivityItem {
+export interface ActivityItem {
   id: string; action: string; detail: string | null; created_at: string
   user_id: string
   team?: { name: string } | null
 }
 
-interface CameraPackageRow {
+export interface CameraPackageRow {
   option_id: number
   label: string
   cost: number
@@ -172,6 +178,10 @@ const PRODUCTION_TABS = [
 
 type ProductionTab = (typeof PRODUCTION_TABS)[number]
 
+export type LinkedVideo = { id: string; title: string; video_type: string; status: string; date_published: string | null; youtube_url: string | null; youtube_id: string | null; youtube_views: number | null; youtube_likes: number | null; youtube_duration: string | null; youtube_thumbnail: string | null }
+export type LinkedTask = { id: string; title: string; status: string; priority: string; assigned_to: string | null; due_date: string | null }
+export type ProdLite = { id: string; production_number: number; title: string }
+
 function parseProductionTabFromUrl(
   raw: string | null,
   isBoardMeeting: boolean,
@@ -200,8 +210,8 @@ export default function ProductionDetailPage() {
   const [links, setLinks] = useState<ProductionLink[]>([])
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [kbArticles, setKbArticles] = useState<KBArticle[]>([])
-  const [linkedVideos, setLinkedVideos] = useState<{ id: string; title: string; video_type: string; status: string; date_published: string | null; youtube_url: string | null; youtube_id: string | null; youtube_views: number | null; youtube_likes: number | null; youtube_duration: string | null; youtube_thumbnail: string | null }[]>([])
-  const [linkedTasks, setLinkedTasks] = useState<{ id: string; title: string; status: string; priority: string; assigned_to: string | null; due_date: string | null }[]>([])
+  const [linkedVideos, setLinkedVideos] = useState<LinkedVideo[]>([])
+  const [linkedTasks, setLinkedTasks] = useState<LinkedTask[]>([])
   const [callSheet, setCallSheet] = useState<any>(null)
   const [generatingSheet, setGeneratingSheet] = useState(false)
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
@@ -243,7 +253,7 @@ export default function ProductionDetailPage() {
   const [clearingCompleteRequested, setClearingCompleteRequested] = useState(false)
   const [showCopySetup, setShowCopySetup] = useState(false)
   const [copyTargetId, setCopyTargetId] = useState('')
-  const [allProductions, setAllProductions] = useState<{ id: string; production_number: number; title: string }[]>([])
+  const [allProductions, setAllProductions] = useState<ProdLite[]>([])
   const [emailTemplate, setEmailTemplate] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
@@ -1531,6 +1541,171 @@ export default function ProductionDetailPage() {
   const typeLabel = getTypeLabel(production)
   const nonMembers = allTeam.filter(m => !members.find(pm => pm.user_id === m.id))
 
+  const ctx: PTabCtx = {
+      THUMB_EVENT_TYPES,
+      THUMB_MASCOT_MODES,
+      THUMB_TONES,
+      activity,
+      addKBLink,
+      addLink,
+      addMember,
+      addingMember,
+      allProductions,
+      allTeam,
+      assignSuccess,
+      border,
+      brandTone,
+      buildThumbnailPreviewDoc,
+      callSheet,
+      cameraOptionIdFromProduction,
+      cameraPackages,
+      cardBg,
+      checklist,
+      clearThumbnailDraft,
+      completedCount,
+      copySetupTo,
+      copyTargetId,
+      copyThumbPrompt,
+      createTaskForProduction,
+      currentUser,
+      dangerTone,
+      dark,
+      delivCount,
+      delivNotes,
+      downloadThumbnailPng,
+      downloadThumbnailSvg,
+      effectiveProdStatus,
+      emailCallSheet,
+      externalCostUsd,
+      fetchingYt,
+      formatDateTime,
+      formatOutsourcedUsd,
+      formatRawCreatedOn,
+      generateCallSheet,
+      generatingSheet,
+      getTypeLabel,
+      infoTone,
+      initChecklist,
+      inputBg,
+      inputStyle,
+      isOnBehalf,
+      kbArticles,
+      linkYoutubeVideo,
+      linkedTasks,
+      linkedVideos,
+      links,
+      loadData,
+      massAssign,
+      memberToAdd,
+      members,
+      missingThumbFields,
+      moveItem,
+      muted,
+      newLinkTitle,
+      newLinkUrl,
+      newTaskAssignee,
+      newTaskDue,
+      newTaskHideFromSignage,
+      newTaskPriority,
+      newTaskPurchaseLink,
+      newTaskPurchaseRequest,
+      newTaskTitle,
+      nonMembers,
+      notesSaved,
+      organizerEmail,
+      organizerName,
+      persistExternalCostFromInput,
+      printCallSheet,
+      production,
+      progress,
+      recomputeOneEstimatedCost,
+      recomputingEstCost,
+      refreshYoutubeStats,
+      removeMember,
+      saveTeamNotes,
+      saveVideosProduced,
+      savingDeliv,
+      savingExternalCost,
+      savingNotes,
+      schools,
+      selectedKB,
+      selectedMember,
+      setAddingMember,
+      setChecklist,
+      setCopyTargetId,
+      setDelivCount,
+      setDelivNotes,
+      setExternalCostUsd,
+      setLinkedVideos,
+      setMemberToAdd,
+      setNewLinkTitle,
+      setNewLinkUrl,
+      setNewTaskAssignee,
+      setNewTaskDue,
+      setNewTaskHideFromSignage,
+      setNewTaskPriority,
+      setNewTaskPurchaseLink,
+      setNewTaskPurchaseRequest,
+      setNewTaskTitle,
+      setSelectedKB,
+      setSelectedMember,
+      setShowCopySetup,
+      setShowCreateTask,
+      setShowKBLink,
+      setShowLinkForm,
+      setTeamNotes,
+      setThumbConceptAnchor,
+      setThumbDate,
+      setThumbDetail,
+      setThumbEventDescription,
+      setThumbEventName,
+      setThumbEventType,
+      setThumbLogistics,
+      setThumbMascotMode,
+      setThumbPrompt,
+      setThumbSchoolCode,
+      setThumbSchoolOverride,
+      setThumbSvgInput,
+      setThumbTime,
+      setThumbTone,
+      setYoutubeUrl,
+      showCopySetup,
+      showCreateTask,
+      showKBLink,
+      showLinkForm,
+      showSubmitterCard,
+      submitterEmail,
+      submitterName,
+      successTone,
+      supabase,
+      teamNotes,
+      text,
+      thumbConceptAnchor,
+      thumbCopied,
+      thumbDate,
+      thumbDetail,
+      thumbDraftRestored,
+      thumbDraftSavedAt,
+      thumbEventDescription,
+      thumbEventName,
+      thumbEventType,
+      thumbLogistics,
+      thumbMascotMode,
+      thumbPrompt,
+      thumbSanitizedSvg,
+      thumbSchoolCode,
+      thumbSchoolOverride,
+      thumbSvgError,
+      thumbSvgInput,
+      thumbTime,
+      thumbTone,
+      toggleItem,
+      typeLabel,
+      uuid,
+      warningTone,
+      youtubeUrl,
+  }
+
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
 
@@ -1660,716 +1835,17 @@ export default function ProductionDetailPage() {
       </div>
 
       {/* CHECKLIST TAB */}
-      {activeTab === 'checklist' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' as const }}>
-            <button onClick={async () => {
-              if (!production || !uuid) return
-              const typeLabel = production.request_type_label || production.type
-              if (!typeLabel) { toast('No production type set'); return }
-              // Find the most recent completed production of same type
-              const { data: lastProd } = await supabase.from('productions').select('id, production_number, title').eq('request_type_label', typeLabel).neq('id', uuid).order('start_datetime', { ascending: false }).limit(1).single()
-              if (!lastProd) { toast(`No previous ${typeLabel} production found`, 'error'); return }
-              if (!(await confirmDialog({ message: `Apply checklist and team from #${lastProd.production_number} ${lastProd.title}?`, confirmLabel: 'Apply' }))) return
-              const [clRes, tmRes] = await Promise.all([
-                supabase.from('checklist_items').select('title, sort_order').eq('production_id', lastProd.id).order('sort_order'),
-                supabase.from('production_members').select('user_id').eq('production_id', lastProd.id),
-              ])
-              if (clRes.data && clRes.data.length > 0) {
-                await supabase.from('checklist_items').insert(clRes.data.map((c: any, i: number) => ({ production_id: uuid, title: c.title, completed: false, sort_order: i })))
-              }
-              if (tmRes.data && tmRes.data.length > 0) {
-                await supabase.from('production_members').insert(tmRes.data.map((m: any) => ({ production_id: uuid, user_id: m.user_id })))
-              }
-              loadData()
-            }} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px' }}>
-              Apply last {production.request_type_label?.split('(')[0]?.trim() || 'type'} setup
-            </button>
-            <button onClick={() => setShowCopySetup(!showCopySetup)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px' }}>
-              Copy setup to...
-            </button>
-            <button
-              onClick={() => {
-                setShowCreateTask(prev => {
-                  const next = !prev
-                  if (next) setNewTaskAssignee(a => a || currentUser?.id || '')
-                  return next
-                })
-              }}
-              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px' }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Create task for this production
-            </button>
-          </div>
-
-          {showCopySetup && (
-            <div style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
-              <p style={{ fontSize: '13px', color: muted, margin: '0 0 8px' }}>Copy checklist ({checklist.length} items) and team ({members.length} members) to another production:</p>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <select value={copyTargetId} onChange={e => setCopyTargetId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
-                  <option value="">Select a production...</option>
-                  {allProductions.map(p => <option key={p.id} value={p.id}>#{p.production_number} {p.title}</option>)}
-                </select>
-                <button onClick={copySetupTo} disabled={!copyTargetId} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: copyTargetId ? '#1e6cb5' : 'var(--surface-2)', color: copyTargetId ? '#fff' : muted, border: 'none', cursor: copyTargetId ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Copy</button>
-              </div>
-            </div>
-          )}
-
-          {showCreateTask && (
-            <div style={{ background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', border: `0.5px solid ${border}`, borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
-              <input value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} placeholder="Task title" style={{ ...inputStyle, marginBottom: '8px' }} />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', marginBottom: '10px' }}>
-                <select value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)} style={inputStyle}>
-                  <option value="">Unassigned</option>
-                  {allTeam.map(m => <option key={m.id} value={m.id}>{m.name.split(' ')[0]}</option>)}
-                </select>
-                <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)} style={inputStyle}>
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                  <option value="day of">Day of</option>
-                </select>
-                <input type="date" value={newTaskDue} onChange={e => setNewTaskDue(e.target.value)} style={inputStyle} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: newTaskPurchaseRequest ? '8px' : '10px' }}>
-                <input
-                  type="checkbox"
-                  id="prod_task_purchase_request"
-                  checked={newTaskPurchaseRequest}
-                  onChange={e => { setNewTaskPurchaseRequest(e.target.checked); if (!e.target.checked) setNewTaskPurchaseLink('') }}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }}
-                />
-                <label htmlFor="prod_task_purchase_request" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Purchase request</label>
-              </div>
-              {newTaskPurchaseRequest && (
-                <input
-                  value={newTaskPurchaseLink}
-                  onChange={e => setNewTaskPurchaseLink(e.target.value)}
-                  placeholder="Purchase link (optional)"
-                  style={{ ...inputStyle, marginBottom: '10px' }}
-                />
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                <input
-                  type="checkbox"
-                  id="prod_task_hide_signage"
-                  checked={newTaskHideFromSignage}
-                  onChange={e => setNewTaskHideFromSignage(e.target.checked)}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: 'var(--brand-primary)' }}
-                />
-                <label htmlFor="prod_task_hide_signage" style={{ fontSize: '13px', color: muted, cursor: 'pointer' }}>Hide from task signage</label>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={createTaskForProduction}
-                  disabled={!newTaskTitle}
-                  style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: newTaskTitle ? '#1e6cb5' : 'var(--surface-2)', color: newTaskTitle ? '#fff' : muted, border: 'none', cursor: newTaskTitle ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
-                >
-                  Create task
-                </button>
-                <button
-                  onClick={() => setShowCreateTask(false)}
-                  style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {checklist.length === 0 ? (
-            <div style={{ textAlign: 'center' as const, padding: '40px 20px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}` }}>
-              <p style={{ color: muted, fontSize: '14px', marginBottom: '12px' }}>No checklist yet</p>
-              <button
-                onClick={initChecklist}
-                style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
-              >
-                Load {typeLabel} template
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                <div style={{ flex: 1, height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
-                </div>
-                <span style={{ fontSize: '12px', color: muted, flexShrink: 0 }}>{completedCount} of {checklist.length}</span>
-              </div>
-
-              {/* Mass assign */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 14px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', color: muted, flexShrink: 0 }}>Assign all to:</span>
-                <div style={{ display: 'flex', gap: '6px', flex: 1, flexWrap: 'wrap' }}>
-                  {allTeam.map(member => (
-                    <button
-                      key={member.id}
-                      onClick={() => setSelectedMember(selectedMember === member.id ? null : member.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', border: `0.5px solid ${selectedMember === member.id ? '#22c55e' : border}`, background: selectedMember === member.id ? 'rgba(34,197,94,0.1)' : 'transparent', color: selectedMember === member.id ? '#22c55e' : muted, fontFamily: 'inherit' }}
-                    >
-                      <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: member.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 700, color: '#0a0f1e' }}>
-                        {member.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      {member.name.split(' ')[0]}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={massAssign}
-                  disabled={!selectedMember}
-                  style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: selectedMember ? '#1e6cb5' : 'var(--surface-2)', color: selectedMember ? '#fff' : muted, cursor: selectedMember ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}
-                >
-                  {assignSuccess ? '✓ Assigned' : 'Assign all'}
-                </button>
-              </div>
-
-              <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden' }}>
-                {checklist.map((item, i) => {
-                  const assignee = allTeam.find(m => m.id === item.assigned_to)
-                  return (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, padding: '12px 16px', borderBottom: i < checklist.length - 1 ? `0.5px solid ${border}` : 'none', background: item.completed ? (dark ? 'rgba(34,197,94,0.04)' : 'rgba(34,197,94,0.03)') : 'transparent' }}>
-                      <button
-                        onClick={() => toggleItem(item)}
-                        style={{ width: '18px', height: '18px', borderRadius: '4px', flexShrink: 0, border: `1.5px solid ${item.completed ? '#22c55e' : border}`, background: item.completed ? '#22c55e' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        {item.completed && (
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        )}
-                      </button>
-                      <span style={{ flex: '1 1 260px', minWidth: 0, fontSize: '13px', color: item.completed ? muted : text, textDecoration: item.completed ? 'line-through' : 'none' }}>
-                        {item.title}
-                        {item.kb_article_id && (() => {
-                          const kb = kbArticles.find(a => a.id === item.kb_article_id)
-                          return kb ? <Link href="/dashboard/library?tab=articles" style={{ fontSize: '11px', color: '#5ba3e0', marginLeft: '6px', textDecoration: 'none' }}>📖 {kb.title}</Link> : null
-                        })()}
-                      </span>
-                      <select value={item.kb_article_id || ''} onChange={e => {
-                        const val = e.target.value || null
-                        supabase.from('checklist_items').update({ kb_article_id: val }).eq('id', item.id)
-                        setChecklist(prev => prev.map(c => c.id === item.id ? { ...c, kb_article_id: val } : c))
-                      }} style={{ fontSize: '11px', padding: '3px 6px', borderRadius: '6px', border: `0.5px solid ${border}`, background: inputBg, color: item.kb_article_id ? infoTone : muted, cursor: 'pointer', fontFamily: 'inherit', maxWidth: '60px', opacity: 0.8 }} title="Link KB article">
-                        <option value="">📖</option>
-                        {kbArticles.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
-                      </select>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flexShrink: 0 }}>
-                        <button onClick={() => moveItem(i, 'up')} disabled={i === 0} style={{ background: 'none', border: 'none', cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? 'transparent' : muted, fontSize: '10px', padding: '0 4px', lineHeight: 1, opacity: 0.5 }}>▲</button>
-                        <button onClick={() => moveItem(i, 'down')} disabled={i === checklist.length - 1} style={{ background: 'none', border: 'none', cursor: i === checklist.length - 1 ? 'default' : 'pointer', color: i === checklist.length - 1 ? 'transparent' : muted, fontSize: '10px', padding: '0 4px', lineHeight: 1, opacity: 0.5 }}>▼</button>
-                      </div>
-                      <select
-                        value={item.assigned_to || ''}
-                        onChange={e => {
-                          supabase.from('checklist_items').update({ assigned_to: e.target.value || null }).eq('id', item.id)
-                          setChecklist(prev => prev.map(c => c.id === item.id ? { ...c, assigned_to: e.target.value || null } : c))
-                        }}
-                        style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '6px', border: `0.5px solid ${border}`, background: inputBg, color: item.assigned_to ? text : muted, cursor: 'pointer', fontFamily: 'inherit', maxWidth: '130px' }}
-                      >
-                        <option value="">Unassigned</option>
-                        {allTeam.map(m => <option key={m.id} value={m.id}>{m.name.split(' ')[0]}</option>)}
-                      </select>
-                      {assignee && (
-                        <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: assignee.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
-                          {assignee.name.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <button
-                onClick={async () => {
-                  const t = prompt('New step:')
-                  if (!t || !uuid) return
-                  const { data } = await supabase.from('checklist_items').insert({ production_id: uuid, title: t, sort_order: checklist.length, completed: false }).select('*').single()
-                  if (data) setChecklist(prev => [...prev, data])
-                }}
-                style={{ marginTop: '10px', fontSize: '12px', color: muted, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 0' }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                Add step
-              </button>
-            </div>
-          )}
-
-          {/* Linked tasks */}
-          {linkedTasks.length > 0 && (
-            <div style={{ marginTop: '16px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px' }}>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 10px' }}>Tasks ({linkedTasks.length})</p>
-              {linkedTasks.map((task, i) => {
-                const assignee = allTeam.find(m => m.id === task.assigned_to)
-                const statusColors: Record<string, string> = { pending: '#94a3b8', 'in progress': '#f59e0b', 'in review': '#a855f7', complete: '#22c55e' }
-                const sc = statusColors[task.status] || '#94a3b8'
-                return (
-                  <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: i < linkedTasks.length - 1 ? `0.5px solid ${border}` : 'none' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: sc, flexShrink: 0 }} />
-                    <Link href="/dashboard/tasks" style={{ flex: 1, fontSize: '14px', color: text, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</Link>
-                    <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: `${sc}20`, color: sc }}>{task.status}</span>
-                    {task.due_date && <span style={{ fontSize: '11px', color: muted }}>{formatMonthDay(task.due_date)}</span>}
-                    {assignee && (
-                      <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: assignee.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>{assignee.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'checklist' && <ChecklistTab c={ctx} />}
       {/* INFO TAB */}
-      {activeTab === 'info' && (
-        <div>
-          {/* Timeline */}
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 14px' }}>Production timeline</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0', position: 'relative' as const }}>
-              {(() => {
-                const steps = [
-                  { label: 'Requested', date: null, done: true },
-                  { label: 'Approved', date: null, done: (effectiveProdStatus || '') !== 'Idea/Request' },
-                  { label: 'Scheduled', date: production.start_datetime, done: !!production.start_datetime },
-                  { label: 'Complete Requested', date: activity.find(a => a.action === 'requested_complete' || a.action === 'marked_complete')?.created_at || null, done: effectiveProdStatus === 'Complete Requested' || effectiveProdStatus === 'Complete' || activity.some(a => a.action === 'requested_complete' || a.action === 'marked_complete') },
-                  { label: 'Complete', date: activity.find(a => a.action === 'marked_complete')?.created_at || null, done: effectiveProdStatus === 'Complete' },
-                ]
-                return steps.map((step, i) => (
-                  <div key={step.label} style={{ flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', position: 'relative' as const }}>
-                    {i > 0 && <div style={{ position: 'absolute' as const, top: '10px', right: '50%', width: '100%', height: '2px', background: step.done ? successTone : border, zIndex: 0 }} />}
-                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: step.done ? successTone : 'var(--surface-2)', border: step.done ? 'none' : `2px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1, position: 'relative' as const }}>
-                      {step.done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-                    </div>
-                    <p style={{ fontSize: '11px', fontWeight: 600, color: step.done ? text : muted, margin: '6px 0 0', textAlign: 'center' as const }}>{step.label}</p>
-                    {step.date && <p style={{ fontSize: '10px', color: muted, margin: '2px 0 0' }}>{new Date(step.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>}
-                  </div>
-                ))
-              })()}
-            </div>
-            {production.synced_at && production.start_datetime && (
-              <p style={{ fontSize: '12px', color: muted, margin: '12px 0 0', textAlign: 'center' as const }}>
-                {Math.round((new Date(production.start_datetime).getTime() - new Date(production.synced_at).getTime()) / (1000 * 60 * 60 * 24))} days from request to shoot
-                {effectiveProdStatus === 'Complete' || activity.some(a => a.action === 'marked_complete') ? ` · ${Math.round((new Date(activity.find(a => a.action === 'marked_complete')?.created_at || Date.now()).getTime() - new Date(production.synced_at).getTime()) / (1000 * 60 * 60 * 24))} days total turnaround` : ''}
-              </p>
-            )}
-          </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 6px' }}>
-              {isOnBehalf ? 'Organizer (request made on behalf)' : 'Organizer'}
-            </h3>
-            {isOnBehalf && (
-              <p style={{ margin: '0 0 10px', fontSize: '11px', color: muted }}>
-                This request was submitted by a staff member on behalf of the organizer.
-              </p>
-            )}
-            {([[
-              'Name',
-              organizerName,
-            ], [
-              'Email',
-              organizerEmail,
-            ], [
-              'School',
-              getSchoolName(production.submitter_building_code) ||
-              getSchoolName(production.filming_location) ||
-              getSchoolName(production.school_department),
-            ], [
-              'Year',
-              production.school_year,
-            ], [
-              'Focus',
-              production.focus_area,
-            ]] as [string, string | null][]).map(([l, v]) => v ? (
-              <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
-                <span style={{ color: muted, minWidth: '60px', flexShrink: 0 }}>{l}</span>
-                <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
-              </div>
-            ) : null)}
-          </div>
-          {showSubmitterCard && (
-            <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-              <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Submitted by</h3>
-              {([['Name', submitterName], ['Email', submitterEmail], ['Username', production.submitter_username], ['Building', getSchoolName(production.submitter_building_code) || production.submitter_building_code], ['Employee #', production.submitter_employee_number]] as [string, string | null][]).map(([l, v]) => v ? (
-                <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
-                  <span style={{ color: muted, minWidth: '80px', flexShrink: 0 }}>{l}</span>
-                  <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
-                </div>
-              ) : null)}
-            </div>
-          )}
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Schedule & location</h3>
-            {([['Start', formatDateTime(production.start_datetime)], ['Start label', production.start_datetime_label], ['End', formatDateTime(production.end_datetime)], ['End label', production.end_datetime_label], ['Location', getSchoolName(production.filming_location) || production.filming_location || getSchoolName(production.school_department)], ['Location detail', production.filming_location_details], ['Venue', production.event_location]] as [string, string | null][]).map(([l, v]) => v ? (
-              <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
-                <span style={{ color: muted, minWidth: '60px', flexShrink: 0 }}>{l}</span>
-                <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
-              </div>
-            ) : null)}
-          </div>
-          {(() => {
-            const hasStored = production.estimated_external_cost != null
-            const displayAmount = hasStored
-              ? Number(production.estimated_external_cost)
-              : getDefaultExternalCostForType(production.request_type_label)
-            const camId = cameraOptionIdFromProduction(production.camera_options)
-            const camPkg = camId !== null ? cameraPackages.find(p => p.option_id === camId) : undefined
-            const subtitle = hasStored
-              ? (camPkg
-                ? `Based on the ${camPkg.label} camera package`
-                : 'Stored outsourced cost (no matching camera package row)')
-              : `Based on production type default (${production.request_type_label || 'Unknown'})`
-            return (
-              <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
-                  <div style={{ flex: 1, minWidth: '200px' }}>
-                    <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 8px' }}>Estimated outsourced cost</h3>
-                    <p style={{ fontSize: '26px', fontWeight: 800, color: '#22c55e', margin: '0 0 6px', lineHeight: 1.2 }}>{formatOutsourcedUsd(displayAmount)}</p>
-                    <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>{subtitle}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void recomputeOneEstimatedCost()}
-                    disabled={recomputingEstCost}
-                    style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: 'transparent', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)', cursor: recomputingEstCost ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0, alignSelf: 'flex-start' }}
-                  >
-                    {recomputingEstCost ? 'Recomputing…' : 'Recompute'}
-                  </button>
-                </div>
-              </div>
-            )
-          })()}
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Source metadata</h3>
-            {([
-              ['Status code', production.status_code ? String(production.status_code) : null],
-              ['Created on', formatRawCreatedOn(production.created_on)],
-              ['On behalf', production.is_on_behalf === null ? null : (production.is_on_behalf ? 'Yes' : 'No')],
-              ['Approved email sent', production.sent_approved_email === null ? null : (production.sent_approved_email ? 'Yes' : 'No')],
-              ['Focus code', production.focus_area_code],
-              ['Submitter user ID', production.submitter_user_id ? String(production.submitter_user_id) : null],
-              ['Submitter site ID', production.submitter_site_user_id],
-            ] as [string, string | null][]).map(([l, v]) => v ? (
-              <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
-                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>{l}</span>
-                <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
-              </div>
-            ) : null)}
-            {production.video_addons_array && production.video_addons_array.length > 0 && (
-              <div style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
-                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>Video addons</span>
-                <span style={{ color: text }}>{production.video_addons_array.join(', ')}</span>
-              </div>
-            )}
-            {production.audio_options_array && production.audio_options_array.length > 0 && (
-              <div style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
-                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>Audio options</span>
-                <span style={{ color: text }}>{production.audio_options_array.join(', ')}</span>
-              </div>
-            )}
-            {production.production_staff && production.production_staff.length > 0 && (
-              <div style={{ display: 'flex', gap: '10px', padding: '6px 0', fontSize: '13px' }}>
-                <span style={{ color: muted, minWidth: '120px', flexShrink: 0 }}>Production staff</span>
-                <span style={{ color: text }}>{production.production_staff.length} from source system</span>
-              </div>
-            )}
-          </div>
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Organizer YouTube link</h3>
-            <div style={{ fontSize: '13px', color: text, lineHeight: 1.5 }}>
-              <p style={{ margin: '0 0 6px' }}>
-                <span style={{ color: muted }}>Send logged: </span>
-                {production.youtube_link_email_sent_at
-                  ? new Date(production.youtube_link_email_sent_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-                  : 'Not yet'}
-              </p>
-              <p style={{ margin: 0 }}>
-                <span style={{ color: muted }}>Tracked opens: </span>
-                {production.youtube_link_email_click_count ?? 0}
-                {production.youtube_link_email_first_click_at && (
-                  <span style={{ color: muted }}>{' '}· first {new Date(production.youtube_link_email_first_click_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-                )}
-              </p>
-              <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0' }}>Tracked opens use the redirect URL built from the production’s synced livestream/video link (district sync), not Team Hub or YouTube API data.</p>
-            </div>
-          </div>
-          {production.additional_notes && (
-            <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
-              <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Organizer notes</h3>
-              <p style={{ fontSize: '13px', color: text, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' as const }}>{production.additional_notes}</p>
-            </div>
-          )}
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Team notes</h3>
-            <p style={{ fontSize: '11px', color: muted, margin: '0 0 8px' }}>Internal notes — only visible to CSDtv staff</p>
-            <textarea
-              value={teamNotes}
-              onChange={e => setTeamNotes(e.target.value)}
-              placeholder="Add internal notes about this production..."
-              style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' as const, lineHeight: 1.5, marginBottom: '8px' }}
-            />
-            <button onClick={saveTeamNotes} disabled={savingNotes} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: notesSaved ? successTone : brandTone, color: '#fff', border: 'none', cursor: savingNotes ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500, transition: 'background 0.2s' }}>
-              {notesSaved ? '✓ Saved!' : savingNotes ? 'Saving...' : 'Save notes'}
-            </button>
-          </div>
-
-          {/* Estimated external cost (Reports → Cost savings) */}
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', gridColumn: '1 / -1' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 6px' }}>Estimated external cost</h3>
-            <p style={{ fontSize: '11px', color: muted, margin: '0 0 10px', lineHeight: 1.45 }}>
-              Used on <strong>Reports → Cost savings</strong> for this production. If you leave this blank, Reports use the default for request type{' '}
-              <strong>{getTypeLabel(production)}</strong>:{' '}
-              <strong style={{ color: text }}>${getDefaultExternalCostForType(production.request_type_label).toLocaleString()}</strong>.
-            </p>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' as const }}>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Override (USD)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={externalCostUsd}
-                  onChange={e => setExternalCostUsd(e.target.value)}
-                  placeholder={`Default ${getDefaultExternalCostForType(production.request_type_label)}`}
-                  style={{ ...inputStyle, width: '140px', padding: '7px 10px' }}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => void persistExternalCostFromInput(externalCostUsd)}
-                disabled={savingExternalCost}
-                style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: brandTone, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}
-              >
-                {savingExternalCost ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={() => void persistExternalCostFromInput('')}
-                disabled={savingExternalCost}
-                style={{ fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                Clear override
-              </button>
-            </div>
-          </div>
-
-          {/* Videos Produced */}
-          <div style={{ marginTop: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Videos Produced</h3>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' as const, marginBottom: '8px' }}>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Count</label>
-                <input type="number" value={delivCount} onChange={e => setDelivCount(parseInt(e.target.value) || 0)} min={0} style={{ ...inputStyle, width: '80px', padding: '7px 10px' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Notes</label>
-                <input value={delivNotes} onChange={e => setDelivNotes(e.target.value)} placeholder="e.g. 50 slideshows + 1 highlight reel" style={{ ...inputStyle, padding: '7px 10px' }} />
-              </div>
-              <button onClick={saveVideosProduced} disabled={savingDeliv} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: brandTone, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
-                {savingDeliv ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-
-          {/* Link YouTube Video */}
-          <div style={{ marginTop: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Link YouTube Video</h3>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
-              <input value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)} placeholder="Paste YouTube URL..." style={{ ...inputStyle, flex: 1, padding: '7px 10px' }} onKeyDown={e => e.key === 'Enter' && linkYoutubeVideo()} />
-              <button onClick={linkYoutubeVideo} disabled={fetchingYt || !youtubeUrl} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: youtubeUrl ? dangerTone : 'var(--surface-2)', color: youtubeUrl ? '#fff' : muted, border: 'none', cursor: youtubeUrl ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>
-                {fetchingYt ? 'Fetching...' : '▶ Link'}
-              </button>
-            </div>
-            <p style={{ fontSize: '11px', color: muted, margin: '6px 0 0' }}>Creates a Video Library entry with title, views, likes, and thumbnail from YouTube</p>
-          </div>
-        </div>
-        </div>
-      )}
+      {activeTab === 'info' && <InfoTab c={ctx} />}
       {/* TEAM TAB */}
-      {activeTab === 'team' && (
-        <div>
-          <div style={{ ...uiStyles.card, padding: '12px 14px', marginBottom: '12px' }}>
-            <p style={{ margin: 0, fontSize: '13px', color: muted }}>
-              Team assigned: <span style={{ color: text, fontWeight: 600 }}>{members.length}</span>
-              {nonMembers.length > 0 ? (
-                <> · Available to add: <span style={{ color: text, fontWeight: 600 }}>{nonMembers.length}</span></>
-              ) : null}
-            </p>
-          </div>
-          {members.length === 0 ? (
-            <div style={{ ...uiStyles.card, padding: '14px', marginBottom: '12px' }}>
-              <p style={{ color: muted, fontSize: '13px', margin: 0 }}>No team members assigned to this production yet.</p>
-            </div>
-          ) : (
-            <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden', marginBottom: '14px' }}>
-              {members.map((m, i) => m.team && (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: i < members.length - 1 ? `0.5px solid ${border}` : 'none' }}>
-                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: m.team.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
-                    {m.team.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0 }}>{m.team.name}</p>
-                    <p style={{ fontSize: '12px', color: muted, margin: 0, textTransform: 'capitalize' as const }}>{m.team.role}</p>
-                  </div>
-                  <button
-                    onClick={() => m.team && removeMember(m.user_id, m.team.name)}
-                    style={{ fontSize: '12px', padding: '5px 12px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px' }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {addingMember ? (
-            <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-              <p style={{ fontSize: '13px', fontWeight: 500, color: text, margin: '0 0 10px' }}>Add team member</p>
-              <select value={memberToAdd} onChange={e => setMemberToAdd(e.target.value)} style={{ ...inputStyle, marginBottom: '10px' }}>
-                <option value="">Select a team member...</option>
-                {nonMembers.map(m => <option key={m.id} value={m.id}>{m.name} — {m.role}</option>)}
-              </select>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={addMember}
-                  disabled={!memberToAdd}
-                  style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: memberToAdd ? 'var(--brand-primary)' : 'var(--surface-2)', color: memberToAdd ? '#fff' : muted, border: 'none', cursor: memberToAdd ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
-                >
-                  Add
-                </button>
-                <button
-                  onClick={() => { setAddingMember(false); setMemberToAdd('') }}
-                  style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : nonMembers.length > 0 ? (
-            <button
-              onClick={() => setAddingMember(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: infoTone, background: 'none', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', padding: '8px 14px', fontFamily: 'inherit', minHeight: '40px' }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Add team member
-            </button>
-          ) : (
-            <p style={{ color: muted, fontSize: '13px' }}>All team members are already on this production</p>
-          )}
-        </div>
-      )}
+      {activeTab === 'team' && <TeamTab c={ctx} />}
 
       {/* LINKS TAB */}
-      {activeTab === 'links' && (
-        <div>
-          {links.length === 0 && !showLinkForm && (
-            <p style={{ color: muted, fontSize: '13px', marginBottom: '12px' }}>No links added yet</p>
-          )}
-          {links.map(link => (
-            <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', marginBottom: '8px' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2">
-                <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
-                <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-              </svg>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <a href={link.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', color: infoTone, textDecoration: 'none', fontWeight: 500 }}>{link.title}</a>
-                <p style={{ fontSize: '11px', color: muted, margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{link.url}</p>
-              </div>
-            </div>
-          ))}
-
-          {showLinkForm ? (
-            <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '10px' }}>
-              <input value={newLinkTitle} onChange={e => setNewLinkTitle(e.target.value)} placeholder="Link title" style={{ ...inputStyle, marginBottom: '8px' }} />
-              <input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} placeholder="URL" style={{ ...inputStyle, marginBottom: '10px' }} />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={addLink} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: brandTone, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Add link</button>
-                <button onClick={() => setShowLinkForm(false)} style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setShowLinkForm(true)}
-                style={{ fontSize: '13px', color: infoTone, background: 'none', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontFamily: 'inherit', minHeight: '40px' }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-                Add link
-              </button>
-              {kbArticles.length > 0 && (
-                showKBLink ? (
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <select value={selectedKB} onChange={e => setSelectedKB(e.target.value)} style={{ ...inputStyle, width: 'auto', minWidth: '200px' }}>
-                      <option value="">Select KB article...</option>
-                      {kbArticles.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}
-                    </select>
-                    <button
-                      onClick={addKBLink}
-                      disabled={!selectedKB}
-                      style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: selectedKB ? brandTone : 'var(--surface-2)', color: selectedKB ? '#fff' : muted, border: 'none', cursor: selectedKB ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '40px' }}
-                    >
-                      Link
-                    </button>
-                    <button
-                      onClick={() => setShowKBLink(false)}
-                      style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '40px' }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowKBLink(true)}
-                    style={{ fontSize: '13px', color: '#9b85e0', background: 'none', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', fontFamily: 'inherit', minHeight: '40px' }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>
-                    </svg>
-                    Link KB article
-                  </button>
-                )
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'links' && <LinksTab c={ctx} />}
 
       {/* ACTIVITY TAB */}
-      {activeTab === 'activity' && (
-        <div>
-          {activity.length === 0 ? (
-            <p style={{ color: muted, fontSize: '13px' }}>No activity yet</p>
-          ) : (
-            <div>
-              {activity.map((item, i) => (
-                <div key={item.id} style={{ display: 'flex', gap: '12px', padding: '10px 0', borderBottom: i < activity.length - 1 ? `0.5px solid ${border}` : 'none' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                    </svg>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '13px', color: text, margin: '0 0 2px' }}>
-                      <span style={{ fontWeight: 500 }}>{allTeam.find(t => t.id === item.user_id)?.name || item.team?.name || 'System'}</span> {item.action.replace(/_/g, ' ').toLowerCase()}
-                    </p>
-                    {item.detail && <p style={{ fontSize: '12px', color: muted, margin: 0 }}>{item.detail}</p>}
-                    <p style={{ fontSize: '11px', color: muted, margin: '3px 0 0' }}>
-                      {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'activity' && <ActivityTab c={ctx} />}
 
       {/* COMMENTS TAB */}
       {activeTab === 'comments' && uuid && currentUser && (
@@ -2379,321 +1855,13 @@ export default function ProductionDetailPage() {
       )}
 
       {/* VIDEOS TAB */}
-      {activeTab === 'videos' && (
-        <div>
-          {linkedVideos.length > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '13px', color: muted }}>{linkedVideos.length} video{linkedVideos.length !== 1 ? 's' : ''} linked{linkedVideos.some(v => v.youtube_views) ? ` · ${linkedVideos.reduce((s, v) => s + (v.youtube_views || 0), 0).toLocaleString()} total views` : ''}</span>
-              <AsyncButton onClick={async () => {
-                if (!(await confirmDialog({ message: `Unlink all ${linkedVideos.length} videos from this production?`, tone: 'danger', confirmLabel: 'Unlink' }))) return
-                for (const v of linkedVideos) await supabase.from('videos').update({ production_id: null }).eq('id', v.id)
-                setLinkedVideos([])
-                toast(`Unlinked ${linkedVideos.length} videos`, 'success')
-              }} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-                Unlink all
-              </AsyncButton>
-            </div>
-          )}
-          {linkedVideos.length === 0 ? (
-            <div style={{ textAlign: 'center' as const, padding: '30px 20px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px' }}>
-              <p style={{ fontSize: '14px', color: muted, margin: '0 0 8px' }}>No videos linked to this production</p>
-              <p style={{ fontSize: '13px', color: muted, margin: '0 0 12px' }}>Use the "Link YouTube Video" section in the Info tab to add one</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
-              {linkedVideos.map(v => (
-                <div key={v.id} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', gap: '14px', padding: '14px' }}>
-                    {v.youtube_thumbnail && (
-                      <a href={v.youtube_url || `https://youtube.com/watch?v=${v.youtube_id}`} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0 }}>
-                        <img src={v.youtube_thumbnail} alt="" style={{ width: '160px', height: '90px', objectFit: 'cover' as const, borderRadius: '8px' }} />
-                      </a>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
-                      <p style={{ fontSize: '12px', color: muted, margin: '0 0 8px' }}>{v.video_type} · {v.status}{v.date_published ? ` · ${formatDate(v.date_published)}` : ''}</p>
-                      {(v.youtube_views !== null || v.youtube_likes !== null || v.youtube_duration) && (
-                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                          {v.youtube_views !== null && <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>👁 {v.youtube_views.toLocaleString()} views</span>}
-                          {v.youtube_likes !== null && <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>👍 {v.youtube_likes.toLocaleString()}</span>}
-                          {v.youtube_duration && <span style={{ fontSize: '13px', color: muted }}>⏱ {v.youtube_duration}</span>}
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                        {v.youtube_url && <a href={v.youtube_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#ef4444', textDecoration: 'none', fontWeight: 500 }}>▶ Watch on YouTube</a>}
-                        {v.youtube_id && <button onClick={() => refreshYoutubeStats(v.id, v.youtube_id!)} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>🔄 Refresh stats</button>}
-                        <Link href={`/dashboard/videos/${v.id}`} style={{ fontSize: '12px', color: muted, textDecoration: 'none' }}>Open in library →</Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'videos' && <VideosTab c={ctx} />}
 
       {/* THUMBNAIL TAB */}
-      {activeTab === 'thumbnail' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Thumbnail prompt inputs</h3>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '8px' }}>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>School</label>
-                <select
-                  value={thumbSchoolCode}
-                  onChange={e => {
-                    const v = e.target.value
-                    setThumbSchoolCode(v)
-                    if (v === 'district') {
-                      setThumbSchoolOverride('Canyons School District')
-                      return
-                    }
-                    const s = schools.find(x => x.id === v)
-                    if (s?.name) setThumbSchoolOverride(s.name)
-                  }}
-                  style={inputStyle}
-                >
-                  <option value="district">Other / District</option>
-                  {schools.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Event name</label>
-                <input value={thumbEventName} onChange={e => setThumbEventName(e.target.value)} placeholder="Instrumental Concert" style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Date</label>
-                <input type="date" value={thumbDate} onChange={e => setThumbDate(e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Time</label>
-                <input value={thumbTime} onChange={e => setThumbTime(e.target.value)} placeholder="6:00 PM" style={inputStyle} />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '8px' }}>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>School override</label>
-                <input value={thumbSchoolOverride} onChange={e => setThumbSchoolOverride(e.target.value)} placeholder="Mount Jordan Middle School" style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Additional detail</label>
-                <input value={thumbDetail} onChange={e => setThumbDetail(e.target.value)} placeholder="Band & Orchestra" style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Event type</label>
-                <select value={thumbEventType} onChange={e => setThumbEventType(e.target.value as (typeof THUMB_EVENT_TYPES)[number])} style={inputStyle}>
-                  {THUMB_EVENT_TYPES.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Tone</label>
-                <select value={thumbTone} onChange={e => setThumbTone(e.target.value as (typeof THUMB_TONES)[number])} style={inputStyle}>
-                  {THUMB_TONES.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Mascot mode</label>
-                <select value={thumbMascotMode} onChange={e => setThumbMascotMode(e.target.value as (typeof THUMB_MASCOT_MODES)[number])} style={inputStyle}>
-                  {THUMB_MASCOT_MODES.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Event description</label>
-              <textarea value={thumbEventDescription} onChange={e => setThumbEventDescription(e.target.value)} rows={3} placeholder="Briefly describe who/what should be represented in the art direction." style={{ ...inputStyle, minHeight: '78px', resize: 'vertical' as const }} />
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Logistics</label>
-              <textarea value={thumbLogistics} onChange={e => setThumbLogistics(e.target.value)} rows={2} placeholder="Date/time cues, venue context, lower-third constraints, etc." style={{ ...inputStyle, minHeight: '66px', resize: 'vertical' as const }} />
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Concept anchor</label>
-              <textarea value={thumbConceptAnchor} onChange={e => setThumbConceptAnchor(e.target.value)} rows={2} placeholder="A single layout and composition direction to ground the design." style={{ ...inputStyle, minHeight: '66px', resize: 'vertical' as const }} />
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <label style={{ fontSize: '11px', color: muted, display: 'block' }}>Generated prompt (editable)</label>
-                <button onClick={copyThumbPrompt} disabled={missingThumbFields.length > 0} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: missingThumbFields.length > 0 ? inputBg : (thumbCopied ? successTone : brandTone), color: missingThumbFields.length > 0 ? muted : '#fff', border: 'none', cursor: missingThumbFields.length > 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>{thumbCopied ? 'Copied' : 'Copy'}</button>
-              </div>
-              {missingThumbFields.length > 0 && (
-                <p style={{ margin: '0 0 6px', fontSize: '11px', color: warningTone }}>Required: {missingThumbFields.join(', ')}</p>
-              )}
-              <textarea value={thumbPrompt} onChange={e => setThumbPrompt(e.target.value)} rows={16} style={{ ...inputStyle, minHeight: '280px', resize: 'vertical' as const, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px', lineHeight: 1.4 }} />
-            </div>
-
-            <div style={{ padding: '10px 12px', background: inputBg, borderRadius: '10px', border: `0.5px solid ${border}` }}>
-              <p style={{ fontSize: '11px', color: muted, margin: 0 }}>
-                Tip: Event Name and School are required to copy. Keep concept anchor concise for stronger consistency.
-              </p>
-              <p style={{ fontSize: '11px', color: muted, margin: '6px 0 0' }}>
-                Drafts auto-save on this device for 30 days{thumbDraftSavedAt ? ` · last saved ${new Date(thumbDraftSavedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}.
-              </p>
-              {thumbDraftRestored && (
-                <p style={{ fontSize: '11px', color: infoTone, margin: '6px 0 0' }}>
-                  Restored saved thumbnail draft for this production.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>SVG preview & download</h3>
-            <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '4px' }}>Paste Claude SVG output</label>
-            <textarea value={thumbSvgInput} onChange={e => setThumbSvgInput(e.target.value)} rows={8} placeholder="<svg ...>...</svg>" style={{ ...inputStyle, minHeight: '180px', resize: 'vertical' as const, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px' }} />
-            {thumbSvgError && <p style={{ margin: '6px 0 0', color: dangerTone, fontSize: '12px' }}>{thumbSvgError}</p>}
-
-            <div style={{ marginTop: '10px', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', aspectRatio: '16 / 9', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {thumbSanitizedSvg ? (
-                <iframe title="Thumbnail SVG preview" sandbox="" srcDoc={buildThumbnailPreviewDoc(thumbSanitizedSvg)} style={{ width: '100%', height: '100%', border: 'none' }} />
-              ) : (
-                <p style={{ fontSize: '12px', color: muted, margin: 0 }}>Paste SVG to preview</p>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px', gap: '8px', flexWrap: 'wrap' as const }}>
-              <button
-                onClick={downloadThumbnailSvg}
-                disabled={!thumbSanitizedSvg || missingThumbFields.length > 0}
-                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: (!thumbSanitizedSvg || missingThumbFields.length > 0) ? muted : text, border: `0.5px solid ${(!thumbSanitizedSvg || missingThumbFields.length > 0) ? border : infoTone}`, cursor: (!thumbSanitizedSvg || missingThumbFields.length > 0) ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-              >
-                Save SVG
-              </button>
-              <button
-                onClick={downloadThumbnailPng}
-                disabled={!thumbSanitizedSvg || missingThumbFields.length > 0}
-                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: (thumbSanitizedSvg && missingThumbFields.length === 0) ? brandTone : inputBg, color: (thumbSanitizedSvg && missingThumbFields.length === 0) ? '#fff' : muted, border: 'none', cursor: (thumbSanitizedSvg && missingThumbFields.length === 0) ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
-              >
-                Download PNG
-              </button>
-              <button
-                onClick={clearThumbnailDraft}
-                style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                Clear Saved Draft
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === 'thumbnail' && <ThumbnailTab c={ctx} />}
 
       {/* CALL SHEET TAB */}
-      {activeTab === 'callsheet' && (
-        <div>
-          {!callSheet ? (
-            <div style={{ textAlign: 'center' as const, padding: '40px 20px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}` }}>
-              <p style={{ fontSize: '16px', fontWeight: 600, color: text, margin: '0 0 6px' }}>No call sheet yet</p>
-              <p style={{ fontSize: '14px', color: muted, margin: '0 0 16px' }}>Generate one from this production's details using AI</p>
-              <button onClick={generateCallSheet} disabled={generatingSheet} style={{ fontSize: '14px', padding: '12px 24px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: generatingSheet ? 0.7 : 1 }}>
-                {generatingSheet ? 'Generating...' : '✨ Generate call sheet'}
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
-                <button onClick={printCallSheet} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit' }}>🖨 Print</button>
-                <button onClick={emailCallSheet} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', fontFamily: 'inherit' }}>📧 Email to crew</button>
-                <button onClick={generateCallSheet} disabled={generatingSheet} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>{generatingSheet ? 'Regenerating...' : '🔄 Regenerate'}</button>
-              </div>
-              <div id="call-sheet-print">
-                <div className="cs-header" style={{ borderBottom: `3px solid ${text}`, paddingBottom: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between' }}>
-                  <div>
-                    <div className="cs-title" style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase' as const, color: muted, marginBottom: '4px' }}>CSDtv Call Sheet</div>
-                    <div className="cs-name" style={{ fontSize: '20px', fontWeight: 700, color: text }}>{production?.title}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' as const }}>
-                    <div className="cs-date" style={{ fontSize: '20px', fontWeight: 500, color: '#c0392b' }}>{production?.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase() : 'TBD'}</div>
-                    <div className="cs-day" style={{ fontSize: '11px', color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px' }}>{production?.start_datetime ? new Date(production.start_datetime).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric' }) : ''}</div>
-                  </div>
-                </div>
-                <div className="cs-bar" style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: '4px', marginBottom: '16px', fontSize: '12px' }}>
-                  {[{ l: 'Status', v: production?.status || 'Scheduled' }, { l: 'Type', v: production?.request_type_label || 'Production' }, { l: 'School', v: getSchoolName(production?.school_department) || production?.school_department || '' }].map((item, i) => (
-                    <div key={i} style={{ flex: 1, padding: '8px 12px', borderRight: i < 2 ? `1px solid ${border}` : 'none', background: cardBg }}>
-                      <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.8px', color: muted, marginBottom: '2px' }}>{item.l}</div>
-                      <div style={{ fontWeight: 600, color: text }}>{item.v}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
-                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Timeline</div>
-                    {(callSheet.schedule || []).map((s: any, i: number) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px', borderTop: i > 0 ? `1px dotted ${border}` : 'none' }}>
-                        <span style={{ color: muted, fontWeight: 500 }}>{s.time}</span>
-                        <span style={{ fontWeight: 600, color: text, textAlign: 'right' as const }}>{s.activity}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
-                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Equipment</div>
-                    {(callSheet.equipment || []).map((e: any, i: number) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0', fontSize: '13px' }}>
-                        <input type="checkbox" checked={e.checked} readOnly style={{ width: '14px', height: '14px' }} />
-                        <span style={{ color: text }}>{e.item}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
-                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Location</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px' }}>
-                      <span style={{ color: muted, fontWeight: 500 }}>Venue</span>
-                      <span style={{ fontWeight: 600, color: text }}>{getSchoolName(production?.filming_location) || getSchoolName(production?.school_department) || production?.filming_location || 'TBD'}</span>
-                    </div>
-                    {callSheet.content?.production_snapshot?.school_address && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px', borderTop: `1px dotted ${border}` }}>
-                        <span style={{ color: muted, fontWeight: 500 }}>Address</span>
-                        <a href={`https://maps.google.com/?q=${encodeURIComponent(callSheet.content.production_snapshot.school_address)}`} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 500, color: '#5ba3e0', textDecoration: 'none', textAlign: 'right' as const, maxWidth: '60%' }}>{callSheet.content.production_snapshot.school_address} 📍</a>
-                      </div>
-                    )}
-                    {callSheet.parking_access && <div style={{ fontSize: '13px', color: muted, marginTop: '8px', padding: '6px 8px', background: cardBg, borderRadius: '4px' }}>🅿️ {callSheet.parking_access}</div>}
-                  </div>
-                  <div style={{ border: `1px solid ${border}`, borderRadius: '4px', padding: '12px 14px' }}>
-                    <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1.2px', color: muted, marginBottom: '8px', paddingBottom: '6px', borderBottom: `1px solid ${cardBg}` }}>Crew</div>
-                    {(callSheet.crew || []).map((c: any, i: number) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '13px', borderTop: i > 0 ? `1px dotted ${border}` : 'none' }}>
-                        <span style={{ color: muted, fontWeight: 500 }}>{c.role}</span>
-                        <span style={{ fontWeight: 600, color: c.name ? text : muted, fontStyle: c.name ? 'normal' : 'italic' }}>{c.name || 'Unassigned'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {(callSheet.producer_notes || []).length > 0 && (
-                  <div style={{ background: dark ? 'rgba(30,58,95,0.2)' : '#eff6ff', borderLeft: '3px solid #1e3a5f', padding: '12px 14px', borderRadius: '0 4px 4px 0', marginBottom: '14px' }}>
-                    <h3 style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '1px', color: '#1e3a5f', marginBottom: '6px' }}>Producer Notes</h3>
-                    <ul style={{ listStyle: 'none', padding: 0 }}>
-                      {callSheet.producer_notes.map((n: string, i: number) => (
-                        <li key={i} style={{ fontSize: '13px', padding: '3px 0', paddingLeft: '16px', position: 'relative' as const, lineHeight: 1.45 }}>
-                          <span style={{ position: 'absolute' as const, left: 0, color: '#1e3a5f', fontWeight: 700 }}>—</span>
-                          {n}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '14px', borderTop: `2px solid ${text}`, fontSize: '12px' }}>
-                  <div><strong>Organizer:</strong> {production?.organizer_name || 'N/A'}<br /><span style={{ color: muted }}>{production?.organizer_email || ''}</span></div>
-                  <div style={{ textAlign: 'right' as const }}><strong>CSDtv</strong><br /><span style={{ color: muted }}>{currentUser?.name || 'Justin Andersen'}</span></div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {activeTab === 'callsheet' && <CallsheetTab c={ctx} />}
 
       {/* STUDENT CREW TAB */}
       {activeTab === 'studentcrew' && uuid && production && (
