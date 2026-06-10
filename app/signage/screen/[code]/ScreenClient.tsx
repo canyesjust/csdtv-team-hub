@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { WAYFINDING_ARROWS, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
+import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
 import './signage-screen.css'
 
 type FeedMedia = { id: string; type: 'image' | 'video'; title: string | null; url: string; full_screen: boolean }
@@ -29,7 +29,7 @@ export type ScreenFeed = {
   offline?: boolean
 }
 
-const REFRESH_MS = 60_000
+const REFRESH_MS = 30_000
 const FADE_MS = 450
 const HEADING_ROTATE_MS = 3_500
 
@@ -38,7 +38,7 @@ function BellIcon() {
 }
 
 function ConfettiIcon() {
-  return <span style={{ fontSize: 15, color: 'var(--accent)', flex: 'none' }} aria-hidden>✦</span>
+  return <span className="cic-confetti-icon" aria-hidden>✦</span>
 }
 
 function ScreenLogo({ portrait }: { portrait?: boolean }) {
@@ -294,14 +294,22 @@ type ScreenClientProps = {
 export default function ScreenClient({ code, initialFeed, imageSeconds }: ScreenClientProps) {
   const [feed, setFeed] = useState<ScreenFeed>(initialFeed)
   const [mediaIndex, setMediaIndex] = useState(0)
+  const mediaIndexRef = useRef(0)
   const [mediaVisible, setMediaVisible] = useState(true)
   const [now, setNow] = useState(new Date())
   const [headingIndex, setHeadingIndex] = useState(0)
   const [offline, setOffline] = useState(Boolean(initialFeed.offline))
 
+  useEffect(() => {
+    mediaIndexRef.current = mediaIndex
+  }, [mediaIndex])
+
   const loadFeed = useCallback(async () => {
     try {
-      const res = await fetch(`/api/signage/screen/${encodeURIComponent(code)}/feed`, { cache: 'no-store' })
+      const res = await fetch(
+        `/api/signage/screen/${encodeURIComponent(code)}/feed?t=${Date.now()}`,
+        { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } },
+      )
       if (!res.ok) return
       const data = (await res.json()) as ScreenFeed
       if (data.offline) {
@@ -309,10 +317,20 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         return
       }
       setOffline(false)
-      setFeed(data)
-      setMediaIndex(i => (data.media.length ? Math.min(i, data.media.length - 1) : 0))
+      setFeed(prev => {
+        const prevId = prev.media[mediaIndexRef.current]?.id
+        if (!data.media.length) {
+          setMediaIndex(0)
+        } else if (prevId) {
+          const match = data.media.findIndex(m => m.id === prevId)
+          setMediaIndex(match >= 0 ? match : 0)
+        } else {
+          setMediaIndex(0)
+        }
+        return data
+      })
     } catch {
-      /* keep last feed */
+      /* keep last feed when offline */
     }
   }, [code])
 
@@ -369,7 +387,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const takeoverContent = currentMedia?.full_screen
   const showZones = !takeoverContent && !feed.live.live
   const visitor = feed.visitors[0]
-  const clock = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const clock = formatSignageClock(now)
   const areaLabel = feed.screen.area?.name || feed.screen.name
   const centerSub = feed.screen.center_name === 'Canyons Innovation Center'
     ? 'Innovation Center'
@@ -377,14 +395,14 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
 
   if (offline) {
     return (
-      <div className={`cic-screen${portrait ? ' portrait' : ''}`}>
+      <div className={`cic-screen${portrait ? ' portrait' : ''}${layout === 'zoned' && !portrait ? ' layout-zoned' : ''}`}>
         <OfflineFallback centerName={feed.screen.center_name} />
       </div>
     )
   }
 
   return (
-    <div className={`cic-screen${portrait ? ' portrait' : ''}`}>
+    <div className={`cic-screen${portrait ? ' portrait' : ''}${layout === 'zoned' && !portrait ? ' layout-zoned' : ''}`}>
       {feed.live.live && <LiveTakeover hlsUrl={feed.live.hls_url} label={feed.live.label} />}
 
       {/* 2. Full-bleed landscape */}

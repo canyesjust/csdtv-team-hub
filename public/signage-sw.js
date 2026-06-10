@@ -1,6 +1,5 @@
-/* CIC signage PWA — cache shell + latest feed; offline fallback when empty */
-const CACHE = 'cic-signage-v1'
-const FEED_CACHE = 'cic-signage-feed-v1'
+/* CIC signage PWA — offline page shell only; feed always fetched live from the network */
+const CACHE = 'cic-signage-v2'
 const OFFLINE_FALLBACK = '/signage/offline-fallback.json'
 
 self.addEventListener('install', (event) => {
@@ -10,13 +9,21 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(
+    caches.keys().then((names) =>
+      Promise.all(
+        names
+          .filter((name) => name.startsWith('cic-signage') && name !== CACHE)
+          .map((name) => caches.delete(name)),
+      ),
+    ).then(() => self.clients.claim()),
+  )
 })
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
+  // Feed must never be cached by the service worker — stale slides persist after deletes.
   if (url.pathname.includes('/api/signage/screen/') && url.pathname.endsWith('/feed')) {
-    event.respondWith(handleFeed(event.request))
     return
   }
   if (event.request.mode === 'navigate' && url.pathname.startsWith('/signage/screen/')) {
@@ -27,27 +34,3 @@ self.addEventListener('fetch', (event) => {
     )
   }
 })
-
-async function handleFeed(request) {
-  const cache = await caches.open(FEED_CACHE)
-  try {
-    const res = await fetch(request)
-    if (res.ok) {
-      cache.put(request, res.clone())
-      return res
-    }
-  } catch {
-    /* offline */
-  }
-  const cached = await cache.match(request)
-  if (cached) return cached
-  const fallback = await caches.open(CACHE).then((c) => c.match(OFFLINE_FALLBACK))
-  if (fallback) {
-    return new Response(fallback.body, {
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-  return new Response(JSON.stringify({ offline: true, media: [], ticker: ['Display will resume shortly'] }), {
-    headers: { 'Content-Type': 'application/json' },
-  })
-}

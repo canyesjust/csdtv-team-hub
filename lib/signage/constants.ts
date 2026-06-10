@@ -19,6 +19,15 @@ export function signageTodayDateString(now = new Date()): string {
   return now.toLocaleDateString('en-CA', { timeZone: SIGNAGE_TIMEZONE })
 }
 
+/** Wall clock for CIC screens — always Mountain Time, not the TV device timezone. */
+export function formatSignageClock(now = new Date()): string {
+  return now.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: SIGNAGE_TIMEZONE,
+  })
+}
+
 export const CIC_REVIEW_URL = 'https://www.csdtvstaff.org/dashboard/signage/content'
 export const CIC_SUBMIT_URL = 'https://www.csdtvstaff.org/signage/submit'
 
