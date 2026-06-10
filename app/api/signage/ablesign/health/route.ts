@@ -1,3 +1,8 @@
+/**
+ * Refresh AbleSign online status for linked Hub screens.
+ * Scheduled via Supabase pg_cron (see db/ablesign_health_cron.sql), not Vercel Cron —
+ * Hobby plan blocks deployments when vercel.json defines crons.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { AbleSignApiError, listAllScreens } from '@/lib/server/ablesign'
 import { deriveAbleSignOnline, writeAbleSignLog } from '@/lib/signage/ablesign-helpers'

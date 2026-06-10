@@ -2,11 +2,5 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
-  "installCommand": "npm install",
-  "crons": [
-    {
-      "path": "/api/signage/ablesign/health",
-      "schedule": "*/12 * * * *"
-    }
-  ]
+  "installCommand": "npm install"
 }
