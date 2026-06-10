@@ -48,7 +48,7 @@ export default function SignageSettingsPage() {
   }
 
   return (
-    <SignagePageShell title="Settings">
+    <SignagePageShell title="Settings" subtitle="Center name, weather, ticker & defaults">
       <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, marginBottom: 24, maxWidth: 520 }}>
         <h3 style={{ margin: '0 0 12px' }}>Center</h3>
         {loading ? (

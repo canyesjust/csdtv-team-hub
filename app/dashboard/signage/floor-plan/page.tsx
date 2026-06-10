@@ -71,7 +71,7 @@ export default function SignageFloorPlanPage() {
   }
 
   return (
-    <SignagePageShell title="Floor plan">
+    <SignagePageShell title="Floor plan" subtitle="Place screens on the building map">
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 16 }}>
         <button type="button" onClick={() => void refreshHealth()} style={s.btnPrimary} disabled={refreshing}>
           {refreshing ? 'Refreshing…' : 'Refresh online status'}

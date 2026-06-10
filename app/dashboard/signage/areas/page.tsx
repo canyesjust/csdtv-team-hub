@@ -22,7 +22,7 @@ export default function SignageAreasPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { refreshCatalog, activeSiteId } = useSignage()
+  const { refreshCatalog, activeSiteId, screens } = useSignage()
   const [loading, setLoading] = useState(true)
   const [areas, setAreas] = useState<Area[]>([])
   const [form, setForm] = useState(empty)
@@ -80,21 +80,16 @@ export default function SignageAreasPage() {
   }
 
   return (
-    <SignagePageShell title="Areas">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ ...s.h3, margin: 0 }}>Areas</h3>
+    <SignagePageShell title="Areas" subtitle="Group screens & wayfinding entries by space">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14 }}>
         <button
           type="button"
           onClick={() => { resetForm(); setShowForm(v => !v) }}
-          style={s.btn}
+          style={s.btnPrimary}
         >
-          + Add area
+          {showForm ? 'Cancel' : '+ Add area'}
         </button>
       </div>
-
-      <p style={{ fontSize: 13, color: s.muted, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 720 }}>
-        Areas group screens and wayfinding entries (e.g. Main Hall, Culinary Arts). Assign an area on the Screens page so directory entries appear on those displays.
-      </p>
 
       {showForm && (
         <div style={{ ...s.card, marginBottom: 20 }}>
@@ -143,43 +138,26 @@ export default function SignageAreasPage() {
         <div style={{ color: s.muted, padding: 16 }}>Loading areas…</div>
       ) : (
         <>
-          <SignageListHint color={s.muted} />
-          <div style={s.cardCompact}>
-            <table style={s.tbl}>
-              <colgroup>
-                <col style={{ width: '28%' }} />
-                <col style={{ width: '18%' }} />
-                <col style={{ width: '22%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '12%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th style={s.th}>Name</th>
-                  <th style={s.th}>Slug</th>
-                  <th style={s.th}>Building</th>
-                  <th style={s.th}>Floor</th>
-                  <th style={s.th}>Sort</th>
-                </tr>
-              </thead>
-              <tbody>
-                {areas.map(a => (
-                  <tr key={a.id}>
-                    <td style={s.td}>
-                      <SignageRowEditButton onClick={() => startEdit(a)} textColor={s.text}>
-                        {a.name}
-                      </SignageRowEditButton>
-                    </td>
-                    <td style={s.tdMuted}>{a.slug}</td>
-                    <td style={s.tdMuted}>{a.building || '—'}</td>
-                    <td style={s.tdMuted}>{a.floor ?? '—'}</td>
-                    <td style={s.tdMuted}>{a.sort_order}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!areas.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No areas yet.</div>}
-          </div>
+          <SignageListHint color={s.muted}>Click an area to edit.</SignageListHint>
+          {areas.map(a => {
+            const count = screens.filter(sc => sc.area_id === a.id).length
+            const meta = [
+              `${count} screen${count === 1 ? '' : 's'}`,
+              a.building || null,
+              a.floor != null ? `Floor ${a.floor}` : null,
+            ].filter(Boolean).join(' · ')
+            return (
+              <div key={a.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <SignageRowEditButton onClick={() => startEdit(a)} textColor={s.text} fontWeight={600}>
+                    {a.name}
+                  </SignageRowEditButton>
+                  <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>{meta}</div>
+                </div>
+              </div>
+            )
+          })}
+          {!areas.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No areas yet.</div>}
         </>
       )}
     </SignagePageShell>

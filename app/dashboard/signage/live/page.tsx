@@ -86,7 +86,7 @@ export default function SignageLivePage() {
   }
 
   return (
-    <SignagePageShell title="Live stream">
+    <SignagePageShell title="Live view" subtitle="Take over the screens with a live stream">
       <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, maxWidth: 560 }}>
         {loading ? (
           <div style={{ color: muted, padding: 8 }}>Loading live state…</div>

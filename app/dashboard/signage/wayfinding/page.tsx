@@ -71,23 +71,19 @@ export default function SignageWayfindingPage() {
   }
 
   const areaName = (id: string) => areas.find(a => a.id === id)?.name || id
+  const DIRECTION_ARROW: Record<string, string> = { left: '←', right: '→', up: '↑', down: '↓', straight: '⬆' }
 
   return (
-    <SignagePageShell title="Wayfinding">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ ...s.h3, margin: 0 }}>Wayfinding</h3>
+    <SignagePageShell title="Wayfinding" subtitle="Directory entries & arrows for each area">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14 }}>
         <button
           type="button"
           onClick={() => { resetForm(); setShowForm(v => !v) }}
-          style={s.btn}
+          style={s.btnPrimary}
         >
-          + Add entry
+          {showForm ? 'Cancel' : '+ Add entry'}
         </button>
       </div>
-
-      <p style={{ fontSize: 13, color: s.muted, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 720 }}>
-        Add destinations and arrow directions for each area (e.g. “Culinary Arts → right”). Entries appear on every screen assigned to that area — below announcements on Zoned screens, or as the main directory on Wayfinding layout screens.
-      </p>
 
       {showForm && (
         <div style={{ ...s.card, marginBottom: 20 }}>
@@ -138,39 +134,20 @@ export default function SignageWayfindingPage() {
       ) : (
         <>
           <SignageListHint color={s.muted}>Click a destination to edit.</SignageListHint>
-          <div style={s.cardCompact}>
-            <table style={s.tbl}>
-              <colgroup>
-                <col style={{ width: '32%' }} />
-                <col style={{ width: '22%' }} />
-                <col style={{ width: '18%' }} />
-                <col style={{ width: '12%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th style={s.th}>Destination</th>
-                  <th style={s.th}>Area</th>
-                  <th style={s.th}>Direction</th>
-                  <th style={s.th}>Sort</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map(e => (
-                  <tr key={e.id}>
-                    <td style={s.td}>
-                      <SignageRowEditButton onClick={() => startEdit(e)} textColor={s.text}>
-                        {e.destination}
-                      </SignageRowEditButton>
-                    </td>
-                    <td style={s.tdMuted}>{areaName(e.area_id)}</td>
-                    <td style={s.tdMuted}>{e.direction}</td>
-                    <td style={s.tdMuted}>{e.sort_order}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!entries.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No wayfinding entries yet.</div>}
-          </div>
+          {entries.map(e => (
+            <div key={e.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: s.infoBg, color: s.info, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }} aria-hidden>
+                {DIRECTION_ARROW[e.direction] ?? '→'}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <SignageRowEditButton onClick={() => startEdit(e)} textColor={s.text} fontWeight={600}>
+                  {e.destination}
+                </SignageRowEditButton>
+                <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>{areaName(e.area_id)} · {e.direction}</div>
+              </div>
+            </div>
+          ))}
+          {!entries.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No wayfinding entries yet.</div>}
         </>
       )}
     </SignagePageShell>

@@ -117,19 +117,16 @@ export default function SignageScreensPage() {
   const linkedScreenIds = screens.filter(sc => sc.ablesign_screen_id).map(sc => sc.id)
 
   return (
-    <SignagePageShell title="Screens">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-        <h3 style={{ ...s.h3, margin: 0 }}>Screens</h3>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <AbleSignSyncAllButton screenIds={linkedScreenIds} onDone={() => void loadScreens()} />
-          <button
-            type="button"
-            onClick={() => { resetForm(); setShowForm(v => !v) }}
-            style={s.btn}
-          >
-            + Add screen
-          </button>
-        </div>
+    <SignagePageShell title="Screens" subtitle="The physical displays around the building">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+        <AbleSignSyncAllButton screenIds={linkedScreenIds} onDone={() => void loadScreens()} />
+        <button
+          type="button"
+          onClick={() => { resetForm(); setShowForm(v => !v) }}
+          style={s.btnPrimary}
+        >
+          {showForm ? 'Cancel' : '+ Add screen'}
+        </button>
       </div>
 
       <div style={{ ...s.card, marginBottom: 16, padding: '12px 14px', background: s.infoBg, borderColor: s.infoBorder }}>
@@ -256,66 +253,35 @@ export default function SignageScreensPage() {
         <div style={{ color: s.muted, padding: 16 }}>Loading screens…</div>
       ) : (
         <>
-          <SignageListHint color={s.muted} />
-          <div style={s.cardCompact}>
-          <table style={s.tbl}>
-            <colgroup>
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '24%' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={s.th}>Name</th>
-                <th style={s.th}>Area</th>
-                <th style={s.th}>Orientation</th>
-                <th style={s.th}>Layout</th>
-                <th style={s.th}>AbleSign</th>
-                <th style={s.th}>Takeover</th>
-                <th style={s.th}>URL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {screens.map(sc => (
-                <tr key={sc.id}>
-                  <td style={s.td}>
-                    <SignageRowEditButton onClick={() => startEdit(sc)} textColor={s.text}>
-                      {sc.name}{!sc.active && <span style={{ color: s.muted }}> (inactive)</span>}
-                    </SignageRowEditButton>
-                  </td>
-                  <td style={s.tdMuted}>{areaName(sc.area_id)}</td>
-                  <td style={s.tdMuted}>{orientationLabel(sc.orientation)}</td>
-                  <td style={s.tdMuted}>{layoutLabel(sc.layout)}</td>
-                  <td style={s.td}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                      <AbleSignStatusDot online={sc.ablesign_screen_id ? sc.ablesign_online : null} />
-                      {sc.ablesign_screen_id
-                        ? (
-                          <>
-                            {sc.ablesign_online ? 'Online' : 'Offline'}
-                            {sc.ablesign_synced_at && (
-                              <span style={{ color: s.muted }}> · {formatSignageDate(sc.ablesign_synced_at)}</span>
-                            )}
-                          </>
-                        )
-                        : <span style={{ color: s.muted }}>Not linked</span>}
-                    </span>
-                  </td>
-                  <td style={s.tdMuted}>{sc.accepts_takeover ? 'Yes' : 'No'}</td>
-                  <td style={{ ...s.td, fontSize: 12 }}>
-                    <span style={{ color: '#9aa0ab' }}>/signage/screen/{sc.code}</span>{' '}
-                    <button type="button" onClick={() => copyUrl(sc.code)} style={s.btnSmall} title="Copy full URL">⎘</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <SignageListHint color={s.muted}>Click a screen to edit.</SignageListHint>
+          {screens.map(sc => {
+            const meta = [
+              areaName(sc.area_id),
+              layoutLabel(sc.layout),
+              orientationLabel(sc.orientation),
+              sc.accepts_takeover ? 'Takeover on' : 'Takeover off',
+            ].filter(v => v && v !== '—').join(' · ')
+            const statusText = sc.ablesign_screen_id
+              ? `${sc.ablesign_online ? 'Online' : 'Offline'}${sc.ablesign_synced_at ? ` · synced ${formatSignageDate(sc.ablesign_synced_at)}` : ''}`
+              : 'Not linked to AbleSign'
+            return (
+              <div key={sc.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <AbleSignStatusDot online={sc.ablesign_screen_id ? sc.ablesign_online : null} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <SignageRowEditButton onClick={() => startEdit(sc)} textColor={s.text} fontWeight={600}>
+                    {sc.name}{!sc.active && <span style={{ color: s.muted, fontWeight: 400 }}> (inactive)</span>}
+                  </SignageRowEditButton>
+                  <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>{meta}</div>
+                  <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{statusText}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, color: '#9aa0ab', fontFamily: 'ui-monospace, monospace' }}>/{sc.code}</span>
+                  <button type="button" onClick={() => copyUrl(sc.code)} style={s.btnSmall} title="Copy full URL">Copy URL</button>
+                </div>
+              </div>
+            )
+          })}
           {!screens.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No screens yet.</div>}
-          </div>
         </>
       )}
 

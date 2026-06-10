@@ -128,11 +128,7 @@ export default function SignageSitesPage() {
   )
 
   return (
-    <SignagePageShell title="Sites">
-      <p style={{ fontSize: 14, color: s.muted, margin: '0 0 16px' }}>
-        Each location (CIC, District Office, a school) is its own signage workspace — its own screens, content, colors, and AbleSign workspace.
-      </p>
-
+    <SignagePageShell title="Sites" subtitle="Each location is its own signage workspace">
       <button type="button" onClick={() => { setForm(EMPTY); setEditId(null); setShowForm(v => !v) }} style={{ ...s.btnPrimary, marginBottom: 16 }}>
         {showForm && !editId ? 'Close' : '+ New location'}
       </button>
