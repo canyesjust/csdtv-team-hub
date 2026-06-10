@@ -93,10 +93,19 @@ function ScreenHeader({
           <span aria-hidden>{weatherIcon}</span>
           {tempF != null && <span>{tempF}&deg;</span>}
         </div>
-        {!portrait && <div className="cic-clk">{clock}</div>}
+        {!portrait && <div className="cic-clk">{renderClock(clock)}</div>}
       </div>
     </div>
   )
+}
+
+function renderClock(clock: string) {
+  return clock.split(':').map((part, i) => (
+    <span key={i}>
+      {i > 0 && <span className="cic-clk-colon">:</span>}
+      {part}
+    </span>
+  ))
 }
 
 function WelcomeStrip({ visitor, portrait }: { visitor: FeedVisitor; portrait?: boolean }) {
@@ -115,7 +124,10 @@ function TickerBar({ items, portrait }: { items: string[]; portrait?: boolean })
     : 'Canyons Innovation Center'
   return (
     <div className={`cic-ticker${portrait ? ' portrait' : ''}`}>
-      <div className="cic-tickin">{text}</div>
+      <span className="cic-ticker-pill" aria-hidden>CIC</span>
+      <div className="cic-ticker-scroll">
+        <div className="cic-tickin">{text}</div>
+      </div>
     </div>
   )
 }
@@ -369,6 +381,15 @@ function MediaCarousel({
           {media.map((m, i) => (
             <span key={m.id} className={`cic-dot${i === index ? ' on' : ''}`} />
           ))}
+        </div>
+      )}
+      {media.length > 1 && (
+        <div className="cic-mediaprog" aria-hidden>
+          <span
+            key={index}
+            className="cic-mediaprog-fill"
+            style={{ animationDuration: `${Math.max(3, media[index]?.display_seconds ?? imageSeconds)}s` }}
+          />
         </div>
       )}
     </div>

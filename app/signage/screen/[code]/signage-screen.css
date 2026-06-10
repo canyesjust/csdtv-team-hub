@@ -1332,3 +1332,141 @@
 .cic-screen.portrait.layout-full_bleed .cic-welchip .cic-confetti-icon {
   font-size: var(--cic-ann-sub);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Zoned landscape — motion & polish (subtle, six-color palette only).
+   All true motion is gated behind prefers-reduced-motion: no-preference.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Ticker structure shared by all layouts (neutral; pill/mask only in zoned). */
+.cic-ticker-scroll {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.cic-ticker-pill { display: none; }
+
+/* Slide progress bar — hidden by default, shown in zoned (replaces dots). */
+.cic-mediaprog { display: none; }
+.cic-mediaprog-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+
+/* 1 + 6. Reveal the ambient drift behind the header; soft accent glow line. */
+.cic-screen.layout-zoned:not(.portrait) .cic-tvhead {
+  background: transparent;
+  border-bottom: none;
+  box-shadow:
+    0 0.05vmax 0 var(--accent-border),
+    0 0.6vmax 1.2vmax -0.6vmax var(--accent-ring);
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-logo {
+  box-shadow: 0 0 0 0.14vmax var(--accent-ring);
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-rail {
+  background: color-mix(in srgb, var(--navy) 88%, transparent);
+}
+
+/* 4. Announcements become soft cards with an accent edge. */
+.cic-screen.layout-zoned:not(.portrait) .cic-ann {
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  border-left: 0.2vmax solid var(--accent);
+  border-radius: 0 0.5vmax 0.5vmax 0;
+  padding: 0.6vmax 0.8vmax;
+}
+
+/* 5. Ticker — fixed label pill + soft edge fades. */
+.cic-screen.layout-zoned:not(.portrait) .cic-ticker-pill {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 0.9vmax;
+  background: var(--navy);
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.08vmax;
+  font-size: var(--cic-ticker-text);
+  flex: none;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-ticker-scroll {
+  -webkit-mask: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+
+/* 3. Slide progress bar shown in zoned (dots hidden). */
+.cic-screen.layout-zoned:not(.portrait) .cic-dots { display: none; }
+.cic-screen.layout-zoned:not(.portrait) .cic-mediaprog {
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.28vmax;
+  background: color-mix(in srgb, var(--white) 12%, transparent);
+  z-index: 3;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 2. Ken Burns on media images. */
+  .cic-screen.layout-zoned:not(.portrait) .cic-media16 img {
+    animation: cic-kenburns 18s ease-in-out infinite alternate;
+    transform-origin: 60% 40%;
+  }
+  /* 4. Announcement entrance (staggered fade-up). */
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann {
+    animation: cic-card-in 0.7s ease both;
+  }
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann:nth-child(2) { animation-delay: 0.1s; }
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann:nth-child(3) { animation-delay: 0.2s; }
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann:nth-child(4) { animation-delay: 0.3s; }
+  /* 7. Welcome sheen. */
+  .cic-screen.layout-zoned:not(.portrait) .cic-welcome { position: relative; overflow: hidden; }
+  .cic-screen.layout-zoned:not(.portrait) .cic-welcome::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 35%;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 16%, transparent), transparent);
+    transform: translateX(-120%);
+    animation: cic-sheen 9s ease-in-out infinite;
+    pointer-events: none;
+  }
+  /* 8. Clock colon blink. */
+  .cic-screen.layout-zoned:not(.portrait) .cic-clk-colon {
+    animation: cic-blink 1.1s steps(1) infinite;
+  }
+  /* 3. Progress fill (duration set inline per slide; restarts via React key). */
+  .cic-screen.layout-zoned:not(.portrait) .cic-mediaprog-fill {
+    animation-name: cic-prog;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+}
+
+@keyframes cic-kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.06) translate(-1%, -0.8%); }
+}
+@keyframes cic-card-in {
+  from { opacity: 0; transform: translateY(0.6vmax); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cic-sheen {
+  0%, 55% { transform: translateX(-120%); }
+  100% { transform: translateX(360%); }
+}
+@keyframes cic-blink {
+  50% { opacity: 0.25; }
+}
+@keyframes cic-prog {
+  from { width: 0; }
+  to { width: 100%; }
+}
