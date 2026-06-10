@@ -96,6 +96,13 @@ export default function SignageScreensPage() {
         </button>
       </div>
 
+      <div style={{ ...s.card, marginBottom: 16, padding: '12px 14px', background: s.infoBg, borderColor: s.infoBorder }}>
+        <p style={{ margin: 0, fontSize: 13, color: s.text, lineHeight: 1.55 }}>
+          Each screen has a <strong>layout</strong> (how content is arranged) and an optional <strong>area</strong> (which building zone it represents).
+          Directory entries are managed on the Wayfinding page and appear on any screen linked to that area — at the bottom of the announcements column on <strong>Zoned</strong> screens, or as the main directory on <strong>Wayfinding</strong> layout screens.
+        </p>
+      </div>
+
       {showForm && (
         <div style={{ ...s.card, marginBottom: 20 }}>
           <h3 style={s.h3}>{editId ? 'Edit screen' : 'Add screen'}</h3>
@@ -114,6 +121,9 @@ export default function SignageScreensPage() {
                 <option value="">No area</option>
                 {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
+              <p style={{ ...s.lbl, margin: '6px 0 0', lineHeight: 1.45 }}>
+                Links this screen to a zone. Wayfinding entries for that area show in the directory on this screen.
+              </p>
             </div>
             <div>
               <p style={s.lbl}>Building</p>
@@ -133,15 +143,28 @@ export default function SignageScreensPage() {
             <div>
               <p style={s.lbl}>Layout</p>
               <select value={form.layout} onChange={e => setForm(f => ({ ...f, layout: e.target.value }))} style={s.input}>
-                <option value="zoned">Zoned</option>
-                <option value="full_bleed">Full bleed</option>
-                <option value="wayfinding">Wayfinding</option>
+                <option value="zoned">Zoned — media + announcements (+ directory if area set)</option>
+                <option value="full_bleed">Full bleed — media only (hallways)</option>
+                <option value="wayfinding">Wayfinding — large directory + media (entrances)</option>
               </select>
+              <p style={{ ...s.lbl, margin: '6px 0 0', lineHeight: 1.45 }}>
+                Zoned is the default department screen. Full bleed hides the side rail. Wayfinding dedicates most of the screen to the directory.
+              </p>
             </div>
-            <div>
-              <p style={s.lbl}>Wayfinding heading</p>
-              <input value={form.wayfinding_heading || ''} onChange={e => setForm(f => ({ ...f, wayfinding_heading: e.target.value }))} style={s.input} />
-            </div>
+            {form.layout === 'wayfinding' && (
+              <div>
+                <p style={s.lbl}>Wayfinding heading</p>
+                <input
+                  value={form.wayfinding_heading || ''}
+                  onChange={e => setForm(f => ({ ...f, wayfinding_heading: e.target.value }))}
+                  placeholder="e.g. Find your way around Main Hall"
+                  style={s.input}
+                />
+                <p style={{ ...s.lbl, margin: '6px 0 0', lineHeight: 1.45 }}>
+                  Optional rotating title at the top of <strong>Wayfinding</strong> layout screens only. Cycles with visitor welcomes and a default “Find your way…” message. Not used on Zoned screens (they show the area name instead).
+                </p>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
             <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>

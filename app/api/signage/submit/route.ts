@@ -7,11 +7,13 @@ import {
   isAllowedImageMime,
   isAllowedVideoMime,
   isHeicFile,
+  MAX_RAW_UPLOAD_BYTES,
   processSignageImage,
   resolveImageMime,
   resolveVideoMime,
   validateVideoBuffer,
 } from '@/lib/signage/media-process'
+import { formatSignageUploadError } from '@/lib/signage/upload-errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -97,6 +99,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Image must be JPG, PNG, or WebP.' }, { status: 400 })
       }
       const raw = Buffer.from(await image.arrayBuffer())
+      if (raw.length > MAX_RAW_UPLOAD_BYTES) {
+        return NextResponse.json({ error: 'Image must be 4 MB or smaller.' }, { status: 400 })
+      }
       const processed = await processSignageImage(raw)
       const id = crypto.randomUUID()
       mediaPath = `${id}.${processed.ext}`
@@ -112,6 +117,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Video must be MP4.' }, { status: 400 })
       }
       const raw = Buffer.from(await video.arrayBuffer())
+      if (raw.length > MAX_RAW_UPLOAD_BYTES) {
+        return NextResponse.json({ error: 'Video must be 4 MB or smaller for upload.' }, { status: 400 })
+      }
       validateVideoBuffer(raw, videoMime)
       const ext = extFromVideoMime(videoMime)
       mediaPath = `${crypto.randomUUID()}.${ext}`
@@ -119,8 +127,8 @@ export async function POST(request: NextRequest) {
       if (upVid) throw upVid
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Upload failed'
-    return NextResponse.json({ error: msg }, { status: 400 })
+    console.error('signage submit upload error:', e)
+    return NextResponse.json({ error: formatSignageUploadError(e) }, { status: 400 })
   }
 
   const { error: insertErr } = await service.from('signage_content').insert({

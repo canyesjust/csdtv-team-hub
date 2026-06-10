@@ -6,11 +6,13 @@ import {
   isAllowedImageMime,
   isAllowedVideoMime,
   isHeicFile,
+  MAX_RAW_UPLOAD_BYTES,
   processSignageImage,
   resolveImageMime,
   resolveVideoMime,
   validateVideoBuffer,
 } from '@/lib/signage/media-process'
+import { formatSignageUploadError } from '@/lib/signage/upload-errors'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,14 +65,21 @@ export async function POST(request: NextRequest) {
       if (!isAllowedImageMime(imageMime)) {
         return NextResponse.json({ error: 'Image must be JPG, PNG, or WebP.' }, { status: 400 })
       }
-      const processed = await processSignageImage(Buffer.from(await image.arrayBuffer()))
+      const raw = Buffer.from(await image.arrayBuffer())
+      if (raw.length > MAX_RAW_UPLOAD_BYTES) {
+        return NextResponse.json({ error: 'Image must be 4 MB or smaller.' }, { status: 400 })
+      }
+      const processed = await processSignageImage(raw)
       const id = crypto.randomUUID()
       mediaPath = `${id}.${processed.ext}`
       thumbPath = `${id}-thumb.${processed.ext}`
       const { error: upMain } = await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(mediaPath, processed.main, { contentType: processed.contentType, upsert: false })
       if (upMain) throw upMain
       const { error: upThumb } = await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(thumbPath, processed.thumb, { contentType: processed.contentType, upsert: false })
-      if (upThumb) throw upThumb
+      if (upThumb) {
+        await service.storage.from(SIGNAGE_MEDIA_BUCKET).remove([mediaPath]).catch(() => {})
+        throw upThumb
+      }
     } else if (hasVideo && video instanceof File) {
       type = 'video'
       const videoMime = resolveVideoMime(video)
@@ -78,13 +87,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Video must be MP4.' }, { status: 400 })
       }
       const raw = Buffer.from(await video.arrayBuffer())
+      if (raw.length > MAX_RAW_UPLOAD_BYTES) {
+        return NextResponse.json({ error: 'Video must be 4 MB or smaller for upload.' }, { status: 400 })
+      }
       validateVideoBuffer(raw, videoMime)
       mediaPath = `${crypto.randomUUID()}.${extFromVideoMime(videoMime)}`
       const { error: upVid } = await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(mediaPath, raw, { contentType: videoMime, upsert: false })
       if (upVid) throw upVid
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Upload failed'
+    console.error('signage content upload error:', e)
+    const msg = formatSignageUploadError(e)
+    if (typeof e === 'object' && e && 'message' in e && String((e as { message: string }).message).includes('Bucket not found')) {
+      return NextResponse.json({ error: 'Storage bucket signage-media is missing. Run the signage media migration on Supabase.' }, { status: 500 })
+    }
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 

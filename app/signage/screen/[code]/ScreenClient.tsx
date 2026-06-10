@@ -1,7 +1,9 @@
 'use client'
 
+import Hls from 'hls.js'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
+import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import './signage-screen.css'
 
 type FeedMedia = { id: string; type: 'image' | 'video'; title: string | null; url: string; full_screen: boolean }
@@ -29,7 +31,7 @@ export type ScreenFeed = {
   offline?: boolean
 }
 
-const REFRESH_MS = 30_000
+const REFRESH_MS = 5_000
 const FADE_MS = 450
 const HEADING_ROTATE_MS = 3_500
 
@@ -123,19 +125,50 @@ function AnnouncementRow({ ann }: { ann: FeedAnnouncement }) {
   )
 }
 
-function AnnouncementsRail({ announcements, emptyLabel = 'No announcements' }: { announcements: FeedAnnouncement[]; emptyLabel?: string }) {
+function AnnouncementsRail({
+  announcements,
+  wayfinding,
+  emptyLabel = 'No announcements',
+  compactDirectory,
+}: {
+  announcements: FeedAnnouncement[]
+  wayfinding?: FeedWayfinding[]
+  emptyLabel?: string
+  compactDirectory?: boolean
+}) {
   return (
     <div className="cic-rail">
       <div className="cic-railhd">Announcements</div>
       {announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
       {!announcements.length && <div className="cic-empty-muted">{emptyLabel}</div>}
+      {wayfinding && wayfinding.length > 0 && (
+        <>
+          <div className="cic-rail-divider" />
+          <div className="cic-railhd">Directory</div>
+          <WayfindingDirectory entries={wayfinding} compact={compactDirectory} />
+        </>
+      )}
     </div>
   )
 }
 
-function WayfindingDirectory({ entries, portrait }: { entries: FeedWayfinding[]; portrait?: boolean }) {
+function WayfindingDirectory({
+  entries,
+  portrait,
+  compact,
+}: {
+  entries: FeedWayfinding[]
+  portrait?: boolean
+  compact?: boolean
+}) {
+  const className = [
+    'cic-dir',
+    portrait ? 'portrait' : '',
+    compact ? 'compact' : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <div className={`cic-dir${portrait ? ' portrait' : ''}`}>
+    <div className={className}>
       {entries.map(w => (
         <div key={w.id}>
           <span className="cic-dir-arrow">{WAYFINDING_ARROWS[w.direction as WayfindingDirection] || '→'}</span>
@@ -228,44 +261,79 @@ function MediaCarousel({
   )
 }
 
-function LiveTakeover({ hlsUrl, label }: { hlsUrl: string; label: string | null }) {
+function LiveTakeover({
+  hlsUrl,
+  label,
+  centerName,
+  screenName,
+}: {
+  hlsUrl: string
+  label: string | null
+  centerName: string
+  screenName: string
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const youtubeEmbed = useMemo(() => youtubeEmbedUrlFromStreamUrl(hlsUrl), [hlsUrl])
+  const useHls = !youtubeEmbed && isSignageHlsUrl(hlsUrl)
+  const title = label?.trim() || `${centerName} — Live`
 
   useEffect(() => {
+    if (youtubeEmbed || !useHls) return
     const video = videoRef.current
     if (!video) return
-    let hls: { destroy: () => void } | null = null
+    let hls: Hls | null = null
     let cancelled = false
 
-    ;(async () => {
-      const Hls = (await import('hls.js')).default
-      if (cancelled) return
-      if (Hls.isSupported()) {
-        const instance = new Hls()
-        hls = instance
-        instance.loadSource(hlsUrl)
-        instance.attachMedia(video)
-        instance.on(Hls.Events.MANIFEST_PARSED, () => {
-          void video.play().catch(() => {})
-        })
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = hlsUrl
-        void video.play().catch(() => {})
-      }
-    })()
+    if (Hls.isSupported()) {
+      hls = new Hls({ enableWorker: true, lowLatencyMode: true })
+      hls.loadSource(hlsUrl)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (!cancelled) void video.play().catch(() => {})
+      })
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal && hls) {
+          hls.destroy()
+          hls = null
+        }
+      })
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = hlsUrl
+      void video.play().catch(() => {})
+    } else {
+      video.src = hlsUrl
+      void video.play().catch(() => {})
+    }
 
     return () => {
       cancelled = true
       hls?.destroy()
     }
-  }, [hlsUrl])
+  }, [hlsUrl, useHls, youtubeEmbed])
 
   return (
-    <div className="cic-fill live-bg" style={{ position: 'fixed', inset: 0, zIndex: 100 }}>
-      <video ref={videoRef} muted playsInline autoPlay className="cic-live-video" />
+    <div className="cic-fill live-bg cic-live-shell" style={{ position: 'fixed', inset: 0, zIndex: 100 }}>
+      {youtubeEmbed ? (
+        <iframe
+          src={youtubeEmbed}
+          title={title}
+          allow="autoplay; encrypted-media; picture-in-picture"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+        />
+      ) : (
+        <video ref={videoRef} muted playsInline autoPlay className="cic-live-video" crossOrigin="anonymous" />
+      )}
       <div className="cic-live-badge"><span className="cic-live-dot" />live</div>
+      <div className="cic-live-context" aria-live="polite">
+        <div className="cic-live-context-kicker">Now showing</div>
+        <div className="cic-live-context-title">{title}</div>
+        <div className="cic-live-context-sub">
+          You&apos;re watching a live broadcast. Regular announcements and photos on this screen
+          will return when the stream ends.
+        </div>
+      </div>
       <div className="cic-capbar">
-        {label ? `${label} · ` : ''}Streaming live · reverts when the stream ends
+        {centerName} · {screenName} · Live event in progress
       </div>
     </div>
   )
@@ -347,8 +415,15 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
 
   useEffect(() => {
     void loadFeed()
-    const interval = setInterval(() => void loadFeed(), REFRESH_MS)
-    return () => clearInterval(interval)
+    const interval = window.setInterval(() => void loadFeed(), REFRESH_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void loadFeed()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [loadFeed])
 
   useEffect(() => {
@@ -393,17 +468,26 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
     ? 'Innovation Center'
     : feed.screen.center_name
 
+  const screenClass = `cic-screen${portrait ? ' portrait' : ''} layout-${layout}`
+
   if (offline) {
     return (
-      <div className={`cic-screen${portrait ? ' portrait' : ''}${layout === 'zoned' && !portrait ? ' layout-zoned' : ''}`}>
+      <div className={screenClass}>
         <OfflineFallback centerName={feed.screen.center_name} />
       </div>
     )
   }
 
   return (
-    <div className={`cic-screen${portrait ? ' portrait' : ''}${layout === 'zoned' && !portrait ? ' layout-zoned' : ''}`}>
-      {feed.live.live && <LiveTakeover hlsUrl={feed.live.hls_url} label={feed.live.label} />}
+    <div className={screenClass}>
+      {feed.live.live && (
+        <LiveTakeover
+          hlsUrl={feed.live.hls_url}
+          label={feed.live.label}
+          centerName={feed.screen.center_name}
+          screenName={feed.screen.name}
+        />
+      )}
 
       {/* 2. Full-bleed landscape */}
       {layout === 'full_bleed' && showZones && (
@@ -445,7 +529,11 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               imageSeconds={imageSeconds}
               onAdvance={advanceMedia}
             />
-            <AnnouncementsRail announcements={feed.announcements} />
+            <AnnouncementsRail
+              announcements={feed.announcements}
+              wayfinding={feed.wayfinding}
+              compactDirectory
+            />
           </div>
           <TickerBar items={feed.ticker} />
         </>
@@ -471,16 +559,17 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             onAdvance={advanceMedia}
             portrait
           />
-          {feed.wayfinding.length > 0 && (
-            <div className="cic-portrait-section">
-              <div className="cic-railhd tight">Directory</div>
-              <WayfindingDirectory entries={feed.wayfinding} portrait />
-            </div>
-          )}
           <div className="cic-portrait-ann">
             <div className="cic-railhd">Announcements</div>
             {feed.announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
             {!feed.announcements.length && <div className="cic-empty-muted">No announcements</div>}
+            {feed.wayfinding.length > 0 && (
+              <>
+                <div className="cic-rail-divider" />
+                <div className="cic-railhd">Directory</div>
+                <WayfindingDirectory entries={feed.wayfinding} portrait compact />
+              </>
+            )}
           </div>
           <TickerBar items={feed.ticker} portrait />
         </>

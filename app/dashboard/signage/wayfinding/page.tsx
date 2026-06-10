@@ -65,6 +65,9 @@ export default function SignageWayfindingPage() {
 
   return (
     <SignagePageShell title="Wayfinding">
+      <p style={{ fontSize: 13, color: muted, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 720 }}>
+        Add destinations and arrow directions for each area (e.g. “Culinary Arts → right”). Entries appear on every screen assigned to that area — below announcements on Zoned screens, or as the main directory on Wayfinding layout screens.
+      </p>
       <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 16, marginBottom: 20 }}>
         <h3 style={{ margin: '0 0 12px', color: text }}>{editId ? 'Edit wayfinding entry' : 'Add wayfinding entry'}</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

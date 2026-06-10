@@ -12,6 +12,7 @@ import SignageTargetingPicker, {
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import { signageMediaPublicUrl } from '@/lib/signage/constants'
+import { prepareSignageImageFile, SIGNAGE_MAX_UPLOAD_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
 
@@ -172,6 +173,24 @@ export default function SignageContentPage() {
       toast('Select "All screens" or at least one area/screen', 'error')
       return
     }
+
+    const isVideo = addFile.type.startsWith('video/') || addFile.name.toLowerCase().endsWith('.mp4')
+    let uploadFile: File
+    try {
+      if (isVideo) {
+        if (addFile.size > SIGNAGE_MAX_UPLOAD_BYTES) {
+          toast('Video must be 4 MB or smaller.', 'error')
+          return
+        }
+        uploadFile = addFile
+      } else {
+        uploadFile = await prepareSignageImageFile(addFile)
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not prepare file for upload', 'error')
+      return
+    }
+
     const fd = new FormData()
     fd.set('title', addDates.title)
     fd.set('start_date', addDates.start_date)
@@ -180,12 +199,15 @@ export default function SignageContentPage() {
     fd.set('all_screens', String(addTargeting.all_screens))
     fd.set('target_area_ids', JSON.stringify(addTargeting.target_area_ids))
     fd.set('target_screen_ids', JSON.stringify(addTargeting.target_screen_ids))
-    fd.set(addFile.type.startsWith('video/') || addFile.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image', addFile)
+    fd.set(isVideo ? 'video' : 'image', uploadFile)
     setBusy('add')
     const res = await fetch('/api/signage/content', { method: 'POST', body: fd })
     const data = await res.json().catch(() => ({}))
     setBusy(null)
-    if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Upload failed', 'error'); return }
+    if (!res.ok) {
+      toast(typeof data.error === 'string' ? data.error : `Upload failed (${res.status})`, 'error')
+      return
+    }
     toast('Content added', 'success')
     setShowAdd(false)
     setAddFile(null)
@@ -249,7 +271,10 @@ export default function SignageContentPage() {
               </div>
             </div>
             <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} lbl={s.lbl} />
-            <FilePickButton accept="image/png,image/jpeg,image/webp,video/mp4" label="Choose file" changeLabel="Change file" onChange={setAddFile} />
+            <FilePickButton accept="image/png,image/jpeg,image/jpg,image/webp,video/mp4" label="Choose file" changeLabel="Change file" onChange={setAddFile} />
+            <p style={{ ...s.lbl, margin: 0, lineHeight: 1.45 }}>
+              JPG, PNG, WebP, or MP4. Large photos are compressed automatically (max 4 MB upload).
+            </p>
             <button type="button" disabled={busy === 'add'} onClick={() => void addDirect()} style={s.btnPrimary}>Upload & publish</button>
           </div>
         </div>

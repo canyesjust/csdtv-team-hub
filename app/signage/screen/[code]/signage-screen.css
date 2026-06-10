@@ -268,6 +268,22 @@
   margin-bottom: 6px;
 }
 
+.cic-rail-divider {
+  border-top: 1px solid rgba(150, 183, 200, 0.25);
+  margin: 12px 0 10px;
+}
+
+.cic-dir.compact {
+  font-size: 11px;
+  line-height: 1.85;
+}
+
+.cic-dir.compact .cic-dir-arrow {
+  font-size: 12px;
+  width: 14px;
+  margin-right: 4px;
+}
+
 .cic-ann {
   display: flex;
   gap: 7px;
@@ -380,6 +396,71 @@
 
 .cic-fill.live-bg {
   background: var(--bezel);
+}
+
+/* Live takeover — viewer context overlay (all layouts / orientations) */
+.cic-live-shell {
+  --cic-live-title: 1.458vmax;
+  --cic-live-body: 1.042vmax;
+  --cic-live-kicker: 0.729vmax;
+  --cic-live-pad: 0.833vmax;
+}
+
+.cic-live-shell .cic-live-badge {
+  top: 0.729vmax;
+  left: 0.729vmax;
+  font-size: var(--cic-live-body);
+  padding: 0.26vmax 0.677vmax;
+  border-radius: 1.04vmax;
+  z-index: 3;
+}
+
+.cic-live-shell .cic-live-dot {
+  width: 0.365vmax;
+  height: 0.365vmax;
+  margin-right: 0.26vmax;
+}
+
+.cic-live-context {
+  position: absolute;
+  left: 0.729vmax;
+  bottom: 4.5vmax;
+  max-width: min(42vmax, 78%);
+  z-index: 3;
+  background: rgba(22, 40, 68, 0.92);
+  border-left: 0.21vmax solid var(--accent);
+  border-radius: 0 0.42vmax 0.42vmax 0;
+  padding: var(--cic-live-pad) 1.04vmax;
+  box-shadow: 0 0.21vmax 0.83vmax rgba(0, 0, 0, 0.35);
+}
+
+.cic-live-context-kicker {
+  font-size: var(--cic-live-kicker);
+  font-weight: 500;
+  letter-spacing: 0.08vmax;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.31vmax;
+}
+
+.cic-live-context-title {
+  font-size: var(--cic-live-title);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--white);
+  margin-bottom: 0.42vmax;
+}
+
+.cic-live-context-sub {
+  font-size: var(--cic-live-body);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.cic-live-shell .cic-capbar {
+  padding: 0.677vmax 0.833vmax;
+  font-size: var(--cic-live-body);
+  z-index: 3;
 }
 
 .cic-fill.offline-bg {
@@ -497,16 +578,17 @@
   color: var(--muted);
 }
 
-/* ── Zoned landscape — viewport scaling for TV readability (1920×1080 baseline) ──
-   Sizes use vmax (longest edge) except ticker height (vh). Other layouts stay in px until confirmed. */
+/* ── Landscape TV scaling (1920×1080 baseline) ──
+   Sizes use vmax (longest edge) except ticker height (vh). */
 
-.cic-screen.layout-zoned:not(.portrait) {
+.cic-screen:not(.portrait) {
   --cic-title: 1.5625vmax;   /* ~30px @ 1920 */
   --cic-body: 1.25vmax;       /* ~24px @ 1920 — subtitle, clock, weather */
   --cic-welcome: 1.458vmax;   /* ~28px @ 1920 */
   --cic-media-title: 3.333vmax; /* ~64px @ 1920 */
   --cic-ann-title: 1.458vmax; /* ~28px @ 1920 */
   --cic-ann-sub: 1.042vmax;   /* ~20px @ 1920 */
+  --cic-dir-title: 1.458vmax; /* ~28px @ 1920 — wayfinding destinations */
   --cic-ticker-h: 5.93vh;     /* ~64px @ 1080 */
   --cic-ticker-text: 1.458vmax; /* ~28px @ 1920 */
   --cic-label: 0.833vmax;     /* ~16px @ 1920 — rail section headers */
@@ -515,83 +597,112 @@
   --cic-pad-lg: 1.25vmax;     /* ~24px @ 1920 */
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-tvhead {
+.cic-screen:not(.portrait) .cic-tvhead {
   padding: var(--cic-pad) var(--cic-pad-lg);
   border-bottom-width: 0.052vmax;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-head-left {
+.cic-screen:not(.portrait) .cic-head-left {
   gap: var(--cic-gap);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-logo {
+.cic-screen:not(.portrait) .cic-logo {
   width: 1.667vmax;
   height: 1.667vmax;
   border-radius: 0.365vmax;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-brand {
+.cic-screen:not(.portrait) .cic-brand {
   font-size: var(--cic-title);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-brandsub {
+.cic-screen:not(.portrait) .cic-brandsub {
   font-size: var(--cic-body);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-head-right {
+.cic-screen:not(.portrait) .cic-head-right {
   gap: 0.677vmax;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-wx {
+.cic-screen:not(.portrait) .cic-wx {
   gap: 0.313vmax;
   font-size: var(--cic-body);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-clk {
+.cic-screen:not(.portrait) .cic-clk {
   font-size: var(--cic-body);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-welcome {
+.cic-screen:not(.portrait) .cic-welcome {
   gap: 0.417vmax;
   padding: 0.521vmax var(--cic-pad-lg);
   border-bottom-width: 0.052vmax;
   font-size: var(--cic-welcome);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-confetti-icon {
+.cic-screen:not(.portrait) .cic-confetti-icon {
   font-size: var(--cic-welcome);
   color: var(--accent);
   flex: none;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-media-overlay {
+.cic-screen:not(.portrait) .cic-media-overlay {
   padding: var(--cic-pad-lg);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-kicker {
+.cic-screen:not(.portrait) .cic-kicker {
   font-size: 0.729vmax;
   letter-spacing: 0.104vmax;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-mtitle {
+.cic-screen:not(.portrait) .cic-mtitle {
   font-size: var(--cic-media-title);
   margin: 0.208vmax 0;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-msub {
+.cic-screen:not(.portrait) .cic-msub {
   font-size: var(--cic-body);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-dots {
+.cic-screen:not(.portrait) .cic-dots {
   bottom: 0.469vmax;
   gap: 0.313vmax;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-dot {
+.cic-screen:not(.portrait) .cic-dot {
   width: 0.313vmax;
   height: 0.313vmax;
 }
 
+.cic-screen:not(.portrait) .cic-ticker {
+  height: var(--cic-ticker-h);
+}
+
+.cic-screen:not(.portrait) .cic-tickin {
+  font-size: var(--cic-ticker-text);
+}
+
+.cic-screen:not(.portrait) .cic-empty-muted {
+  font-size: var(--cic-body);
+}
+
+.cic-screen:not(.portrait) .cic-offline-logo {
+  width: 2.5vmax;
+  height: 2.5vmax;
+  border-radius: 0.521vmax;
+  margin-bottom: 0.729vmax;
+}
+
+.cic-screen:not(.portrait) .cic-offline-title {
+  font-size: var(--cic-title);
+}
+
+.cic-screen:not(.portrait) .cic-offline-foot {
+  font-size: var(--cic-ann-sub);
+  margin-top: 0.938vmax;
+}
+
+/* Zoned — announcements rail */
 .cic-screen.layout-zoned:not(.portrait) .cic-rail {
   padding: var(--cic-pad) 0.75vmax;
 }
@@ -630,14 +741,245 @@
   border-radius: 0.625vmax;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-empty-muted {
+.cic-screen.layout-zoned:not(.portrait) .cic-rail-divider {
+  margin: 1.042vmax 0 0.833vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir.compact {
+  font-size: 0.938vmax;
+  line-height: 1.75;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir.compact .cic-dir-arrow {
+  font-size: 1.042vmax;
+  width: 1.042vmax;
+}
+
+/* Full bleed — location / welcome chips */
+.cic-screen.layout-full_bleed:not(.portrait) .cic-locchip {
+  top: var(--cic-pad-lg);
+  left: var(--cic-pad-lg);
+  border-left-width: 0.208vmax;
+  padding: 0.365vmax 0.625vmax;
+  border-radius: 0 0.313vmax 0.313vmax 0;
+  font-size: var(--cic-title);
+}
+
+.cic-screen.layout-full_bleed:not(.portrait) .cic-welchip {
+  top: var(--cic-pad-lg);
+  right: var(--cic-pad-lg);
+  padding: 0.26vmax 0.573vmax;
+  border-radius: 0.313vmax;
+  font-size: var(--cic-ann-sub);
+}
+
+.cic-screen.layout-full_bleed:not(.portrait) .cic-welchip .cic-confetti-icon {
+  font-size: var(--cic-ann-sub);
+}
+
+/* Wayfinding — directory column */
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir {
+  padding: var(--cic-pad-lg) var(--cic-pad-lg);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir .cic-railhd {
+  font-size: var(--cic-label);
+  letter-spacing: 0.052vmax;
+  margin-bottom: 0.833vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir:not(.compact) {
+  font-size: var(--cic-dir-title);
+  line-height: 1.85;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir:not(.compact) .cic-dir-arrow {
+  font-size: 1.667vmax;
+  width: 1.667vmax;
+  margin-right: 0.313vmax;
+  vertical-align: -0.156vmax;
+}
+
+/* ── Portrait TV scaling (1080×1920 baseline, same vmax tokens) ── */
+
+.cic-screen.portrait {
+  --cic-title: 1.5625vmax;
+  --cic-body: 1.25vmax;
+  --cic-welcome: 1.458vmax;
+  --cic-media-title: 2.5vmax;
+  --cic-ann-title: 1.458vmax;
+  --cic-ann-sub: 1.042vmax;
+  --cic-dir-title: 1.458vmax;
+  --cic-ticker-h: 3.33vh;
+  --cic-ticker-text: 1.458vmax;
+  --cic-label: 0.833vmax;
+  --cic-gap: 0.625vmax;
+  --cic-pad: 0.833vmax;
+  --cic-pad-lg: 1.25vmax;
+}
+
+.cic-screen.portrait .cic-tvhead {
+  padding: var(--cic-pad) var(--cic-pad);
+  border-bottom-width: 0.052vmax;
+}
+
+.cic-screen.portrait .cic-head-left {
+  gap: var(--cic-gap);
+}
+
+.cic-screen.portrait .cic-logo {
+  width: 1.458vmax;
+  height: 1.458vmax;
+  border-radius: 0.365vmax;
+}
+
+.cic-screen.portrait .cic-brand {
+  font-size: var(--cic-title);
+}
+
+.cic-screen.portrait .cic-brandsub {
   font-size: var(--cic-body);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-ticker {
+.cic-screen.portrait .cic-wx {
+  gap: 0.313vmax;
+  font-size: var(--cic-body);
+}
+
+.cic-screen.portrait .cic-welcome {
+  gap: 0.417vmax;
+  padding: 0.417vmax var(--cic-pad);
+  border-bottom-width: 0.052vmax;
+  font-size: var(--cic-welcome);
+}
+
+.cic-screen.portrait .cic-confetti-icon {
+  font-size: var(--cic-welcome);
+  color: var(--accent);
+  flex: none;
+}
+
+.cic-screen.portrait .cic-kicker {
+  font-size: 0.729vmax;
+  letter-spacing: 0.104vmax;
+}
+
+.cic-screen.portrait .cic-mtitle {
+  font-size: var(--cic-media-title);
+  margin: 0.156vmax 0;
+}
+
+.cic-screen.portrait .cic-msub {
+  font-size: var(--cic-body);
+}
+
+.cic-screen.portrait .cic-dots {
+  bottom: 0.417vmax;
+  gap: 0.313vmax;
+}
+
+.cic-screen.portrait .cic-dot {
+  width: 0.313vmax;
+  height: 0.313vmax;
+}
+
+.cic-screen.portrait .cic-ticker {
   height: var(--cic-ticker-h);
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-tickin {
+.cic-screen.portrait .cic-tickin {
   font-size: var(--cic-ticker-text);
+}
+
+.cic-screen.portrait .cic-railhd {
+  font-size: var(--cic-label);
+  letter-spacing: 0.052vmax;
+  margin-bottom: 0.833vmax;
+}
+
+.cic-screen.portrait .cic-ann {
+  gap: 0.521vmax;
+  margin-bottom: 1.25vmax;
+}
+
+.cic-screen.portrait .cic-ann-icon {
+  font-size: var(--cic-ann-title);
+}
+
+.cic-screen.portrait .cic-anntop {
+  font-size: var(--cic-ann-title);
+  gap: 0.417vmax;
+  line-height: 1.25;
+}
+
+.cic-screen.portrait .cic-annsub {
+  font-size: var(--cic-ann-sub);
+  margin-top: 0.26vmax;
+}
+
+.cic-screen.portrait .cic-spill {
+  font-size: 0.729vmax;
+  padding: 0.104vmax 0.417vmax;
+  border-radius: 0.625vmax;
+}
+
+.cic-screen.portrait .cic-empty-muted {
+  font-size: var(--cic-body);
+}
+
+.cic-screen.portrait .cic-rail-divider {
+  margin: 0.833vmax 0 0.625vmax;
+}
+
+.cic-screen.portrait .cic-portrait-section {
+  padding: var(--cic-pad) var(--cic-pad);
+  border-bottom-width: 0.052vmax;
+}
+
+.cic-screen.portrait .cic-portrait-ann {
+  padding: var(--cic-pad) var(--cic-pad);
+}
+
+.cic-screen.portrait.layout-zoned .cic-dir.compact,
+.cic-screen.portrait.layout-wayfinding .cic-dir.compact {
+  font-size: 0.938vmax;
+  line-height: 1.75;
+}
+
+.cic-screen.portrait.layout-zoned .cic-dir.compact .cic-dir-arrow,
+.cic-screen.portrait.layout-wayfinding .cic-dir.compact .cic-dir-arrow {
+  font-size: 1.042vmax;
+  width: 1.042vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir:not(.compact) {
+  font-size: var(--cic-dir-title);
+  line-height: 1.85;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir:not(.compact) .cic-dir-arrow {
+  font-size: 1.667vmax;
+  width: 1.667vmax;
+  margin-right: 0.313vmax;
+}
+
+.cic-screen.portrait.layout-full_bleed .cic-locchip {
+  top: var(--cic-pad-lg);
+  left: var(--cic-pad);
+  border-left-width: 0.208vmax;
+  padding: 0.365vmax 0.625vmax;
+  border-radius: 0 0.313vmax 0.313vmax 0;
+  font-size: var(--cic-title);
+}
+
+.cic-screen.portrait.layout-full_bleed .cic-welchip {
+  top: var(--cic-pad-lg);
+  right: var(--cic-pad);
+  padding: 0.26vmax 0.573vmax;
+  border-radius: 0.313vmax;
+  font-size: var(--cic-ann-sub);
+}
+
+.cic-screen.portrait.layout-full_bleed .cic-welchip .cic-confetti-icon {
+  font-size: var(--cic-ann-sub);
 }

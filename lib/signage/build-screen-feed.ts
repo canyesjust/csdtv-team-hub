@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { signageMediaPublicUrl } from './constants'
+import { signageLiveMatchesScreen } from './live-targeting'
+import { normalizeSignageStreamUrl } from './stream-url'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
@@ -68,7 +70,7 @@ export async function buildScreenFeed(
   ] = await Promise.all([
     service.from('signage_content').select('*').eq('status', 'approved'),
     service.from('signage_announcements').select('*').eq('active', true),
-    screen.layout === 'wayfinding' && screen.area_id
+    screen.area_id
       ? service.from('signage_wayfinding').select('*').eq('area_id', screen.area_id).order('sort_order')
       : Promise.resolve({ data: [] as unknown[] }),
     service.from('signage_visitors').select('*').eq('active', true).eq('visit_date', today),
@@ -158,13 +160,14 @@ export async function buildScreenFeed(
 
   let live: ScreenFeed['live'] = { live: false }
   const liveRow = liveRes.data
+  const streamUrl = normalizeSignageStreamUrl(liveRow?.hls_url)
   if (
     liveRow?.is_live &&
-    liveRow.hls_url &&
+    streamUrl &&
     screen.accepts_takeover &&
-    signageTargetMatches(liveRow, target)
+    signageLiveMatchesScreen(liveRow, target)
   ) {
-    live = { live: true, hls_url: liveRow.hls_url, label: liveRow.label }
+    live = { live: true, hls_url: streamUrl, label: liveRow.label }
   }
 
   return {
