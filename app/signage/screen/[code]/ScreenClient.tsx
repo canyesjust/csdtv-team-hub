@@ -7,7 +7,15 @@ import { announcementIconEmoji } from '@/lib/signage/announcement-icons'
 import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import './signage-screen.css'
 
-type FeedMedia = { id: string; type: 'image' | 'video'; title: string | null; url: string; full_screen: boolean }
+type FeedMedia = {
+  id: string
+  type: 'image' | 'video' | 'html'
+  title: string | null
+  url: string
+  html: string | null
+  full_screen: boolean
+  display_seconds: number
+}
 type FeedAnnouncement = { id: string; title: string; subtitle: string | null; in_ticker: boolean; icon: string; scope_label: string | null; all_screens: boolean }
 type FeedWayfinding = { id: string; destination: string; direction: string }
 type FeedVisitor = { id: string; name: string; note: string | null }
@@ -217,12 +225,16 @@ function MediaCarousel({
 }) {
   const item = media[index]
   const videoRef = useRef<HTMLVideoElement>(null)
+  const onAdvanceRef = useRef(onAdvance)
+  onAdvanceRef.current = onAdvance
+
+  const slideSeconds = item?.display_seconds ?? imageSeconds
 
   useEffect(() => {
-    if (!item || item.type !== 'image') return
-    const t = setTimeout(onAdvance, imageSeconds * 1000)
+    if (!item || item.type === 'video') return
+    const t = setTimeout(() => onAdvanceRef.current(), slideSeconds * 1000)
     return () => clearTimeout(t)
-  }, [item, imageSeconds, onAdvance])
+  }, [item?.id, item?.type, slideSeconds])
 
   useEffect(() => {
     const v = videoRef.current
@@ -260,8 +272,14 @@ function MediaCarousel({
           muted
           playsInline
           autoPlay
-          onEnded={onAdvance}
+          onEnded={() => onAdvanceRef.current()}
           className={visible ? '' : 'hidden'}
+        />
+      )}
+      {item?.type === 'html' && item.html && (
+        <div
+          className={`cic-html-slide${visible ? '' : ' hidden'}`}
+          dangerouslySetInnerHTML={{ __html: item.html }}
         />
       )}
       {!item && (
@@ -382,6 +400,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const [feed, setFeed] = useState<ScreenFeed>(initialFeed)
   const [mediaIndex, setMediaIndex] = useState(0)
   const mediaIndexRef = useRef(0)
+  const mediaLengthRef = useRef(initialFeed.media.length)
   const [mediaVisible, setMediaVisible] = useState(true)
   const [now, setNow] = useState(new Date())
   const [headingIndex, setHeadingIndex] = useState(0)
@@ -390,6 +409,10 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   useEffect(() => {
     mediaIndexRef.current = mediaIndex
   }, [mediaIndex])
+
+  useEffect(() => {
+    mediaLengthRef.current = feed.media.length
+  }, [feed.media.length])
 
   const loadFeed = useCallback(async () => {
     try {
@@ -451,13 +474,14 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   }, [])
 
   const advanceMedia = useCallback(() => {
-    if (!feed.media.length) return
+    const len = mediaLengthRef.current
+    if (!len) return
     setMediaVisible(false)
     setTimeout(() => {
-      setMediaIndex(i => (i + 1) % feed.media.length)
+      setMediaIndex(i => (i + 1) % len)
       setMediaVisible(true)
     }, FADE_MS)
-  }, [feed.media.length])
+  }, [])
 
   const wayfindingHeadings = useMemo(() => {
     const list: string[] = []

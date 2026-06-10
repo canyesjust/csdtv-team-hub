@@ -203,8 +203,33 @@
 }
 
 .cic-media16 img.hidden,
-.cic-media16 video.hidden {
+.cic-media16 video.hidden,
+.cic-html-slide.hidden {
   opacity: 0;
+}
+
+.cic-html-slide {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 1.25vmax 1.5vmax;
+  color: var(--white);
+  font-size: 1.25vmax;
+  line-height: 1.45;
+  text-align: left;
+  background: var(--panel);
+}
+
+.cic-html-slide a {
+  color: var(--accent);
+}
+
+.cic-html-slide h1,
+.cic-html-slide h2,
+.cic-html-slide h3 {
+  color: var(--white);
+  margin: 0 0 0.5em;
+  font-weight: 500;
 }
 
 .cic-media-overlay {

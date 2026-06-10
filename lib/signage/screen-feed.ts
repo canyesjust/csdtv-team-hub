@@ -3,10 +3,12 @@ import type { SignageWeather } from './weather'
 
 export type ScreenFeedMedia = {
   id: string
-  type: 'image' | 'video'
+  type: 'image' | 'video' | 'html'
   title: string | null
   url: string
+  html: string | null
   full_screen: boolean
+  display_seconds: number
 }
 
 export type ScreenFeedAnnouncement = {

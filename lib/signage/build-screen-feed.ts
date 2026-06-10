@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
+import { clampDisplaySeconds, sanitizeSignageHtml } from './content-display'
 import { signageMediaPublicUrl } from './constants'
 import { signageLiveMatchesScreen } from './live-targeting'
 import { normalizeSignageStreamUrl } from './stream-url'
@@ -83,13 +84,20 @@ export async function buildScreenFeed(
     .filter(row => isInDateRange(row.start_date, row.end_date, today))
     .filter(row => signageTargetMatches(row, target))
     .sort((a, b) => b.priority - a.priority || String(b.created_at).localeCompare(String(a.created_at)))
-    .map(row => ({
-      id: row.id,
-      type: row.type as 'image' | 'video',
-      title: row.title,
-      url: signageMediaPublicUrl(row.media_path),
-      full_screen: row.full_screen,
-    }))
+    .map(row => {
+      const type = row.type as 'image' | 'video' | 'html'
+      return {
+        id: row.id,
+        type,
+        title: row.title,
+        url: type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path),
+        html: type === 'html' && row.html_body
+          ? sanitizeSignageHtml(String(row.html_body))
+          : null,
+        full_screen: row.full_screen,
+        display_seconds: clampDisplaySeconds(row.display_seconds),
+      }
+    })
 
   const { data: areaRows } = await service.from('signage_areas').select('id, name')
   const areaNameById = new Map((areaRows ?? []).map(a => [a.id, a.name]))

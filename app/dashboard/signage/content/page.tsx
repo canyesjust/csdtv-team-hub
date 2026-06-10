@@ -11,6 +11,7 @@ import SignageTargetingPicker, {
   type TargetingValue,
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
+import { SIGNAGE_DEFAULT_DISPLAY_SECONDS, SIGNAGE_MAX_DISPLAY_SECONDS, SIGNAGE_MIN_DISPLAY_SECONDS } from '@/lib/signage/content-display'
 import { signageMediaPublicUrl } from '@/lib/signage/constants'
 import { prepareSignageImageFile, SIGNAGE_MAX_UPLOAD_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
@@ -20,8 +21,10 @@ type ContentRow = {
   id: string
   type: string
   title: string | null
-  media_path: string
+  media_path: string | null
   thumb_path: string | null
+  html_body: string | null
+  display_seconds: number
   status: string
   submitter_name: string | null
   submitter_email: string | null
@@ -40,7 +43,7 @@ type ContentRow = {
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, full_screen, reject_reason, created_at'
+  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, full_screen, reject_reason, created_at'
 
 const EMPTY_COUNTS: Record<Tab, number> = { pending: 0, approved: 0, rejected: 0 }
 
@@ -62,14 +65,30 @@ export default function SignageContentPage() {
   const [counts, setCounts] = useState(EMPTY_COUNTS)
   const [tabLoading, setTabLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [edits, setEdits] = useState<Record<string, TargetingValue & { start_date: string; end_date: string; priority: number; title: string; full_screen: boolean }>>({})
+  const [edits, setEdits] = useState<Record<string, TargetingValue & {
+    start_date: string
+    end_date: string
+    priority: number
+    title: string
+    full_screen: boolean
+    display_seconds: number
+    html_body: string
+  }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [addFile, setAddFile] = useState<File | null>(null)
+  const [addContentType, setAddContentType] = useState<'image' | 'video' | 'html'>('image')
+  const [addHtmlBody, setAddHtmlBody] = useState('')
   const [addTargeting, setAddTargeting] = useState<TargetingValue>({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
-  const [addDates, setAddDates] = useState({ title: '', start_date: '', end_date: '', priority: 0 })
+  const [addDates, setAddDates] = useState({
+    title: '',
+    start_date: '',
+    end_date: '',
+    priority: 0,
+    display_seconds: SIGNAGE_DEFAULT_DISPLAY_SECONDS,
+  })
 
   const loadCounts = useCallback(async () => {
     const { data } = await supabase.from('signage_content').select('status')
@@ -110,6 +129,8 @@ export default function SignageContentPage() {
     priority: row.priority,
     title: row.title ?? '',
     full_screen: row.full_screen,
+    display_seconds: row.display_seconds ?? SIGNAGE_DEFAULT_DISPLAY_SECONDS,
+    html_body: row.html_body ?? '',
   }
 
   const saveEdit = async (row: ContentRow, extra?: Record<string, unknown>) => {
@@ -123,6 +144,8 @@ export default function SignageContentPage() {
       start_date: e.start_date,
       end_date: e.end_date,
       priority: e.priority,
+      display_seconds: e.display_seconds,
+      ...(row.type === 'html' ? { html_body: e.html_body } : {}),
       ...extra,
     })
   }
@@ -154,6 +177,8 @@ export default function SignageContentPage() {
       start_date: targeting.start_date,
       end_date: targeting.end_date,
       priority: targeting.priority,
+      display_seconds: targeting.display_seconds,
+      ...(row.type === 'html' ? { html_body: targeting.html_body } : {}),
     })
   }
 
@@ -164,7 +189,15 @@ export default function SignageContentPage() {
   }
 
   const addDirect = async () => {
-    if (!addFile || !addDates.start_date || !addDates.end_date) { toast('File and dates required', 'error'); return }
+    const needsFile = addContentType !== 'html'
+    if ((needsFile && !addFile) || !addDates.start_date || !addDates.end_date) {
+      toast(needsFile ? 'File and dates required' : 'Dates and HTML required', 'error')
+      return
+    }
+    if (addContentType === 'html' && !addHtmlBody.trim()) {
+      toast('Enter HTML content', 'error')
+      return
+    }
     if (
       !addTargeting.all_screens &&
       addTargeting.target_area_ids.length === 0 &&
@@ -174,32 +207,38 @@ export default function SignageContentPage() {
       return
     }
 
-    const isVideo = addFile.type.startsWith('video/') || addFile.name.toLowerCase().endsWith('.mp4')
-    let uploadFile: File
-    try {
-      if (isVideo) {
-        if (addFile.size > SIGNAGE_MAX_UPLOAD_BYTES) {
-          toast('Video must be 4 MB or smaller.', 'error')
-          return
-        }
-        uploadFile = addFile
-      } else {
-        uploadFile = await prepareSignageImageFile(addFile)
-      }
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not prepare file for upload', 'error')
-      return
-    }
-
     const fd = new FormData()
     fd.set('title', addDates.title)
     fd.set('start_date', addDates.start_date)
     fd.set('end_date', addDates.end_date)
     fd.set('priority', String(addDates.priority))
+    fd.set('display_seconds', String(addDates.display_seconds))
+    fd.set('content_type', addContentType)
     fd.set('all_screens', String(addTargeting.all_screens))
     fd.set('target_area_ids', JSON.stringify(addTargeting.target_area_ids))
     fd.set('target_screen_ids', JSON.stringify(addTargeting.target_screen_ids))
-    fd.set(isVideo ? 'video' : 'image', uploadFile)
+
+    if (addContentType === 'html') {
+      fd.set('html_body', addHtmlBody)
+    } else {
+      const isVideo = addFile!.type.startsWith('video/') || addFile!.name.toLowerCase().endsWith('.mp4')
+      let uploadFile: File
+      try {
+        if (isVideo) {
+          if (addFile!.size > SIGNAGE_MAX_UPLOAD_BYTES) {
+            toast('Video must be 4 MB or smaller.', 'error')
+            return
+          }
+          uploadFile = addFile!
+        } else {
+          uploadFile = await prepareSignageImageFile(addFile!)
+        }
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'Could not prepare file for upload', 'error')
+        return
+      }
+      fd.set(isVideo ? 'video' : 'image', uploadFile)
+    }
     setBusy('add')
     const res = await fetch('/api/signage/content', { method: 'POST', body: fd })
     const data = await res.json().catch(() => ({}))
@@ -211,8 +250,10 @@ export default function SignageContentPage() {
     toast('Content added', 'success')
     setShowAdd(false)
     setAddFile(null)
+    setAddContentType('image')
+    setAddHtmlBody('')
     setAddTargeting({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
-    setAddDates({ title: '', start_date: '', end_date: '', priority: 0 })
+    setAddDates({ title: '', start_date: '', end_date: '', priority: 0, display_seconds: SIGNAGE_DEFAULT_DISPLAY_SECONDS })
     void refreshAll()
   }
 
@@ -269,12 +310,49 @@ export default function SignageContentPage() {
                 <p style={s.lbl}>Priority</p>
                 <input type="number" value={addDates.priority} onChange={e => setAddDates(d => ({ ...d, priority: parseInt(e.target.value, 10) || 0 }))} style={s.input} />
               </div>
+              <div style={{ width: 110 }}>
+                <p style={s.lbl}>Show for (sec)</p>
+                <input
+                  type="number"
+                  min={SIGNAGE_MIN_DISPLAY_SECONDS}
+                  max={SIGNAGE_MAX_DISPLAY_SECONDS}
+                  value={addDates.display_seconds}
+                  onChange={e => setAddDates(d => ({ ...d, display_seconds: parseInt(e.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS }))}
+                  style={s.input}
+                />
+              </div>
+            </div>
+            <div>
+              <p style={s.lbl}>Content type</p>
+              <select value={addContentType} onChange={e => setAddContentType(e.target.value as 'image' | 'video' | 'html')} style={s.input}>
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+                <option value="html">HTML</option>
+              </select>
             </div>
             <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} lbl={s.lbl} />
-            <FilePickButton accept="image/png,image/jpeg,image/jpg,image/webp,video/mp4" label="Choose file" changeLabel="Change file" onChange={setAddFile} />
-            <p style={{ ...s.lbl, margin: 0, lineHeight: 1.45 }}>
-              JPG, PNG, WebP, or MP4. Large photos are compressed automatically (max 4 MB upload).
-            </p>
+            {addContentType === 'html' ? (
+              <>
+                <p style={s.lbl}>HTML</p>
+                <textarea
+                  value={addHtmlBody}
+                  onChange={e => setAddHtmlBody(e.target.value)}
+                  rows={8}
+                  placeholder="<h2>Welcome</h2><p>Your message here</p>"
+                  style={s.textarea}
+                />
+                <p style={{ ...s.lbl, margin: 0, lineHeight: 1.45 }}>
+                  Basic HTML for a custom slide. Script tags are stripped automatically.
+                </p>
+              </>
+            ) : (
+              <>
+                <FilePickButton accept="image/png,image/jpeg,image/jpg,image/webp,video/mp4" label="Choose file" changeLabel="Change file" onChange={setAddFile} />
+                <p style={{ ...s.lbl, margin: 0, lineHeight: 1.45 }}>
+                  JPG, PNG, WebP, or MP4. Large photos are compressed automatically (max 4 MB upload).
+                </p>
+              </>
+            )}
             <button type="button" disabled={busy === 'add'} onClick={() => void addDirect()} style={s.btnPrimary}>Upload & publish</button>
           </div>
         </div>
@@ -287,8 +365,11 @@ export default function SignageContentPage() {
           {rows.map(row => {
             const e = getEdit(row)
             const expanded = expandedId === row.id
-            const preview = row.thumb_path ? signageMediaPublicUrl(row.thumb_path) : signageMediaPublicUrl(row.media_path)
-            const fileName = mediaFileName(row.media_path)
+            const isHtml = row.type === 'html'
+            const preview = !isHtml && row.media_path
+              ? (row.thumb_path ? signageMediaPublicUrl(row.thumb_path) : signageMediaPublicUrl(row.media_path))
+              : null
+            const fileName = row.media_path ? mediaFileName(row.media_path) : 'HTML slide'
 
             if (!expanded) {
               return (
@@ -308,8 +389,12 @@ export default function SignageContentPage() {
                   }}
                 >
                   <div style={{ ...s.thumb, width: 64, height: 40 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                    {preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                    ) : (
+                      <span style={{ fontSize: 11, fontWeight: 600 }}>HTML</span>
+                    )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 500, color: s.text }}>{e.title || fileName}</div>
@@ -323,9 +408,15 @@ export default function SignageContentPage() {
             return (
               <div key={row.id} style={s.card}>
                 <div style={{ display: 'flex', gap: 14 }}>
-                  <div style={{ ...s.thumb, width: 150, height: 84, overflow: 'hidden', padding: 0 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                  <div style={{ ...s.thumb, width: 150, height: 84, overflow: 'hidden', padding: isHtml ? 8 : 0 }}>
+                    {preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                    ) : (
+                      <div style={{ fontSize: 11, color: s.muted, overflow: 'hidden', height: '100%' }}>
+                        {e.html_body.slice(0, 120) || 'HTML slide'}
+                      </div>
+                    )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <input
@@ -369,7 +460,29 @@ export default function SignageContentPage() {
                       <p style={s.lbl}>Priority</p>
                       <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={s.input} />
                     </div>
+                    <div style={{ width: 110 }}>
+                      <p style={s.lbl}>Show for (sec)</p>
+                      <input
+                        type="number"
+                        min={SIGNAGE_MIN_DISPLAY_SECONDS}
+                        max={SIGNAGE_MAX_DISPLAY_SECONDS}
+                        value={e.display_seconds}
+                        onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, display_seconds: parseInt(ev.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS } }))}
+                        style={s.input}
+                      />
+                    </div>
                   </div>
+                  {isHtml && (
+                    <div style={{ marginTop: 12 }}>
+                      <p style={s.lbl}>HTML</p>
+                      <textarea
+                        value={e.html_body}
+                        onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, html_body: ev.target.value } }))}
+                        rows={8}
+                        style={s.textarea}
+                      />
+                    </div>
+                  )}
                   <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
                     <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
                     Full-screen takeover

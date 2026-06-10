@@ -12,6 +12,7 @@ import {
   resolveVideoMime,
   validateVideoBuffer,
 } from '@/lib/signage/media-process'
+import { clampDisplaySeconds, sanitizeSignageHtml } from '@/lib/signage/content-display'
 import { formatSignageUploadError } from '@/lib/signage/upload-errors'
 
 export const dynamic = 'force-dynamic'
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
   const targetScreenIds = JSON.parse(String(form.get('target_screen_ids') ?? '[]')) as string[]
   const priority = parseInt(String(form.get('priority') ?? '0'), 10) || 0
   const fullScreen = String(form.get('full_screen') ?? 'false') === 'true'
+  const displaySeconds = clampDisplaySeconds(form.get('display_seconds'))
+  const contentType = String(form.get('content_type') ?? 'image').trim()
+  const htmlBody = String(form.get('html_body') ?? '').trim()
   const image = form.get('image')
   const video = form.get('video')
 
@@ -40,13 +44,19 @@ export async function POST(request: NextRequest) {
 
   const hasImage = image instanceof File && image.size > 0
   const hasVideo = video instanceof File && video.size > 0
-  if (!hasImage && !hasVideo) {
-    return NextResponse.json({ error: 'Upload an image or video.' }, { status: 400 })
+  const isHtml = contentType === 'html'
+
+  if (!hasImage && !hasVideo && !isHtml) {
+    return NextResponse.json({ error: 'Upload an image or video, or add HTML content.' }, { status: 400 })
+  }
+  if (isHtml && !htmlBody) {
+    return NextResponse.json({ error: 'HTML body is required for HTML content.' }, { status: 400 })
   }
 
-  let type: 'image' | 'video' = 'image'
-  let mediaPath = ''
+  let type: 'image' | 'video' | 'html' = isHtml ? 'html' : 'image'
+  let mediaPath: string | null = null
   let thumbPath: string | null = null
+  let storedHtml: string | null = null
 
   if (
     !allScreens &&
@@ -57,7 +67,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    if (hasImage && image instanceof File) {
+    if (isHtml) {
+      storedHtml = sanitizeSignageHtml(htmlBody)
+    } else if (hasImage && image instanceof File) {
       if (isHeicFile(image)) {
         return NextResponse.json({ error: 'HEIC photos are not supported. Save as JPG or PNG first.' }, { status: 400 })
       }
@@ -109,6 +121,8 @@ export async function POST(request: NextRequest) {
     title: title || null,
     media_path: mediaPath,
     thumb_path: thumbPath,
+    html_body: storedHtml,
+    display_seconds: displaySeconds,
     status: 'approved',
     start_date: startDate,
     end_date: endDate,
@@ -120,7 +134,9 @@ export async function POST(request: NextRequest) {
   }).select('*').single()
 
   if (error) {
-    await service.storage.from(SIGNAGE_MEDIA_BUCKET).remove([mediaPath, ...(thumbPath ? [thumbPath] : [])]).catch(() => {})
+    if (mediaPath) {
+      await service.storage.from(SIGNAGE_MEDIA_BUCKET).remove([mediaPath, ...(thumbPath ? [thumbPath] : [])]).catch(() => {})
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

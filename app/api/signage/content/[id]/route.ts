@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireManagerApi, requireSignageApproverApi } from '@/lib/signage/server-auth'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { emailSignageSubmitterDecision } from '@/lib/signage/email'
+import { clampDisplaySeconds, sanitizeSignageHtml } from '@/lib/signage/content-display'
 import {
   isAllowedImageMime,
   isAllowedVideoMime,
@@ -56,6 +57,8 @@ export async function PATCH(
   else if (typeof body.priority === 'string' && body.priority.trim()) patch.priority = parseInt(body.priority, 10) || 0
   if (typeof body.full_screen === 'boolean') patch.full_screen = body.full_screen
   if (typeof body.title === 'string') patch.title = body.title
+  if (body.display_seconds !== undefined) patch.display_seconds = clampDisplaySeconds(body.display_seconds)
+  if (typeof body.html_body === 'string') patch.html_body = sanitizeSignageHtml(body.html_body)
   if (body.reject_reason === null || typeof body.reject_reason === 'string') {
     patch.reject_reason = body.reject_reason
   }
@@ -90,7 +93,7 @@ export async function DELETE(
   const { data: row } = await service.from('signage_content').select('media_path, thumb_path').eq('id', id).maybeSingle()
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const paths = [row.media_path, row.thumb_path].filter((p): p is string => Boolean(p))
+  const paths = [row.media_path, row.thumb_path].filter((p): p is string => Boolean(p && !p.startsWith('html/')))
   await service.storage.from(SIGNAGE_MEDIA_BUCKET).remove(paths).catch(() => {})
   const { error } = await service.from('signage_content').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
