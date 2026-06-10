@@ -57,8 +57,8 @@ export function useSignageAdminStyles(theme: string) {
       width: '100%',
       boxSizing: 'border-box',
       fontFamily: 'inherit',
-      resize: 'vertical' as const,
-    },
+      resize: 'vertical',
+    } satisfies React.CSSProperties,
     btn: {
       fontSize: 13,
       padding: '7px 13px',
