@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTheme } from '@/lib/theme'
+import { formatMonthDay } from '@/lib/format-date'
 import { confirmDialog } from '@/lib/confirm'
 import AsyncButton from '../components/AsyncButton'
 import { useRouter } from 'next/navigation'
@@ -981,7 +982,7 @@ export default function EquipmentPage() {
                       {loan.borrower_info && ` (${loan.borrower_info})`}
                       {' · '}by {(loan.checked_out_by_user as any)?.name || 'Unknown'}
                       {' · '}{new Date(loan.checked_out_at).toLocaleDateString()}
-                      {loan.due_date && <span> · Due {new Date(loan.due_date).toLocaleDateString()}</span>}
+                      {loan.due_date && <span> · Due {formatMonthDay(loan.due_date)}</span>}
                     </div>
                   </div>
                   <AsyncButton

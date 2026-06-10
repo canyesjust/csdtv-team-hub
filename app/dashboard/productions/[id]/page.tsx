@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase'
 import { confirmDialog } from '@/lib/confirm'
+import { formatDate, formatMonthDay } from '@/lib/format-date'
 import AsyncButton from '../../components/AsyncButton'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
@@ -1909,7 +1910,7 @@ export default function ProductionDetailPage() {
                     <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: sc, flexShrink: 0 }} />
                     <Link href="/dashboard/tasks" style={{ flex: 1, fontSize: '14px', color: text, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{task.title}</Link>
                     <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: `${sc}20`, color: sc }}>{task.status}</span>
-                    {task.due_date && <span style={{ fontSize: '11px', color: muted }}>{new Date(task.due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
+                    {task.due_date && <span style={{ fontSize: '11px', color: muted }}>{formatMonthDay(task.due_date)}</span>}
                     {assignee && (
                       <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: assignee.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>{assignee.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</div>
                     )}
@@ -2410,7 +2411,7 @@ export default function ProductionDetailPage() {
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
-                      <p style={{ fontSize: '12px', color: muted, margin: '0 0 8px' }}>{v.video_type} · {v.status}{v.date_published ? ` · ${new Date(v.date_published).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}</p>
+                      <p style={{ fontSize: '12px', color: muted, margin: '0 0 8px' }}>{v.video_type} · {v.status}{v.date_published ? ` · ${formatDate(v.date_published)}` : ''}</p>
                       {(v.youtube_views !== null || v.youtube_likes !== null || v.youtube_duration) && (
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                           {v.youtube_views !== null && <span style={{ fontSize: '13px', color: text, fontWeight: 500 }}>👁 {v.youtube_views.toLocaleString()} views</span>}

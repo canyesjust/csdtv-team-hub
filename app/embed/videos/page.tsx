@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatDate } from '@/lib/format-date'
 
 interface Video {
   id: string; title: string; video_type: string; status: string
@@ -91,7 +92,7 @@ export default function EmbedVideosPage() {
               <div style={{ display: 'flex', gap: '10px', fontSize: '12px', color: '#64748b' }}>
                 {v.youtube_views !== null && <span>👁 {v.youtube_views.toLocaleString()}</span>}
                 {v.youtube_likes !== null && <span>👍 {v.youtube_likes.toLocaleString()}</span>}
-                {v.date_published && <span>{new Date(v.date_published).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                {v.date_published && <span>{formatDate(v.date_published)}</span>}
               </div>
               {v.video_type && v.video_type !== 'Other' && <span style={{ display: 'inline-block', marginTop: '6px', fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#f1f5f9', color: '#475569' }}>{v.video_type.replace(/\(.*\)/, '').trim()}</span>}
             </div>

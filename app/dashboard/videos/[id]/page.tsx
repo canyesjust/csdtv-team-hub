@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTheme } from '@/lib/theme'
+import { formatDate } from '@/lib/format-date'
 import { confirmDialog } from '@/lib/confirm'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -347,7 +348,7 @@ export default function VideoDetailPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
                 <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
                   <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Video info</h3>
-                  {([['Type', video.video_type], ['Status', video.status], ['Visibility', video.visibility], ['School year', video.school_year], ['Date filmed', video.date_filmed ? new Date(video.date_filmed + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null], ['Date published', video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null]] as [string, string | null][]).map(([l, v]) => v ? (
+                  {([['Type', video.video_type], ['Status', video.status], ['Visibility', video.visibility], ['School year', video.school_year], ['Date filmed', video.date_filmed ? formatDate(video.date_filmed) : null], ['Date published', video.date_published ? formatDate(video.date_published) : null]] as [string, string | null][]).map(([l, v]) => v ? (
                     <div key={l} style={{ display: 'flex', gap: '10px', padding: '6px 0', borderBottom: `0.5px solid ${border}`, fontSize: '13px' }}>
                       <span style={{ color: muted, minWidth: '90px', flexShrink: 0 }}>{l}</span>
                       <span style={{ color: text, minWidth: 0, wordBreak: 'break-word' as const }}>{v}</span>
@@ -532,7 +533,7 @@ export default function VideoDetailPage() {
                   </div>
                   {dest.url && <a href={dest.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none', wordBreak: 'break-all' as const, display: 'block', marginBottom: '6px' }}>{dest.url}</a>}
                   {dest.notes && <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>{dest.notes}</p>}
-                  {dest.published_at && <p style={{ fontSize: '12px', color: muted, margin: 0, opacity: 0.7 }}>Published {new Date(dest.published_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
+                  {dest.published_at && <p style={{ fontSize: '12px', color: muted, margin: 0, opacity: 0.7 }}>Published {formatDate(dest.published_at)}</p>}
                 </div>
               ))}
             </div>

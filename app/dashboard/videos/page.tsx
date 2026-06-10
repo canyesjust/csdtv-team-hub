@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useTheme } from '@/lib/theme'
+import { formatDate } from '@/lib/format-date'
 import { confirmDialog } from '@/lib/confirm'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -537,7 +538,7 @@ export default function VideosPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{video.title}</p>
                 <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
-                  {video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
+                  {video.date_published ? formatDate(video.date_published) : 'No date'}
                   {video.youtube_views !== null ? ` · ${video.youtube_views.toLocaleString()} views` : ''}
                   {video.youtube_duration ? ` · ${video.youtube_duration}` : ''}
                 </p>

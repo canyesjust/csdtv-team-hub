@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTheme } from '@/lib/theme'
+import { formatMonthDay } from '@/lib/format-date'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../components/Loader'
@@ -356,7 +357,7 @@ export default function EquipmentDetailPage() {
               <p style={{ fontSize: '14px', color: '#f59e0b', fontWeight: 600, margin: '0 0 4px' }}>Checked out to {activeLoan.borrower_name}</p>
               <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
                 By {activeLoan.checked_out_by_user?.name || 'Unknown'} on {new Date(activeLoan.checked_out_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                {activeLoan.due_date && ` | Due ${new Date(activeLoan.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                {activeLoan.due_date && ` | Due ${formatMonthDay(activeLoan.due_date)}`}
               </p>
               {canLoan && (
               <button onClick={() => handleCheckin(activeLoan)} style={{ marginTop: '10px', fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#22c55e', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Check in</button>
@@ -538,7 +539,7 @@ export default function EquipmentDetailPage() {
                   Out: {new Date(loan.checked_out_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   {loan.checked_in_at && ` / In: ${new Date(loan.checked_in_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
                   {!loan.checked_in_at && ' | Still out'}
-                  {loan.due_date && ` | Due ${new Date(loan.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                  {loan.due_date && ` | Due ${formatMonthDay(loan.due_date)}`}
                   {loan.checked_out_by_user && ` | ${loan.checked_out_by_user.name}`}
                 </p>
               </div>

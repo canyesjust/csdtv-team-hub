@@ -50,6 +50,11 @@ export function formatDate(input: DateInput, fallback = ''): string {
   return fmt(input, { month: 'short', day: 'numeric', year: 'numeric' }, fallback)
 }
 
+/** "Jun 9" (no year) - the app's most common compact date */
+export function formatMonthDay(input: DateInput, fallback = ''): string {
+  return fmt(input, { month: 'short', day: 'numeric' }, fallback)
+}
+
 /** "Jun 9, 2026, 3:42 PM" */
 export function formatDateTime(input: DateInput, fallback = ''): string {
   return fmt(
