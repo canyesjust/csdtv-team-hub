@@ -17,6 +17,8 @@
     "@tiptap/pm": "^3.22.1",
     "@tiptap/react": "^3.22.1",
     "@tiptap/starter-kit": "^3.22.1",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "hls.js": "^1.6.2",
     "next": "^16.2.4",
     "qrcode": "^1.5.4",
