@@ -597,13 +597,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
   background: var(--panel);
-  border: 2px solid var(--accent);
+  border: 3px solid var(--accent);
   color: var(--white);
-  font-size: 18px;
+  font-size: 32px;
   font-weight: 700;
   line-height: 1;
   flex: none;
@@ -623,20 +623,38 @@
   min-height: 0;
 }
 
-.cic-wayfind-media-wrap {
-  flex: 0 1 42%;
+.cic-wayfind-side {
+  flex: none;
+  height: 100%;
   min-width: 0;
+  max-width: 46%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 14px 12px 0;
+  flex-direction: column;
   background: var(--navy);
 }
 
+.cic-wayfind-media-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 12px 14px 0 0;
+}
+
+.cic-wayfind-ann-rail {
+  flex: 0 1 auto;
+  max-height: 34%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--cic-pad) var(--cic-pad-lg) var(--cic-pad) 0;
+  border-top: 1px solid var(--accent-border-faint);
+}
+
 .cic-media16.wayfind-media {
-  height: auto;
-  width: 100%;
-  max-height: 100%;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
   aspect-ratio: 16 / 9;
   flex: none;
 }
@@ -888,14 +906,19 @@
   font-size: var(--cic-ann-sub);
 }
 
-/* Wayfinding — directory column + smaller media */
+/* Wayfinding — directory column + full-height 16:9 media (reference layout) */
+.cic-screen.layout-wayfinding:not(.portrait) {
+  --cic-dir-title: 2.5vmax;
+}
+
 .cic-screen.layout-wayfinding:not(.portrait) .cic-body-wayfind {
   gap: 0;
+  align-items: stretch;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir {
-  flex: 1 1 58%;
-  max-width: 62%;
+  flex: 1 1 0;
+  min-width: 0;
   padding: var(--cic-pad-lg) calc(var(--cic-pad-lg) + 0.2vmax);
   border-right: 1px solid var(--accent-border-faint);
 }
@@ -907,20 +930,20 @@
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-dir.prominent {
-  font-size: 2.083vmax;
+  font-size: 2.5vmax;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-dir-row {
-  gap: 0.833vmax;
-  margin-bottom: 0.938vmax;
+  gap: 1.25vmax;
+  margin-bottom: 1.25vmax;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-dir-arrow-badge {
-  width: 2.5vmax;
-  height: 2.5vmax;
-  border-radius: 0.521vmax;
-  border-width: 0.156vmax;
-  font-size: 1.458vmax;
+  width: 4.583vmax;
+  height: 4.583vmax;
+  border-radius: 0.729vmax;
+  border-width: 0.208vmax;
+  font-size: 2.75vmax;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-welcome {
@@ -935,13 +958,20 @@
   font-size: var(--cic-body);
 }
 
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-side {
+  max-width: 44%;
+}
+
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-media-wrap {
-  flex: 0 1 40%;
+  padding: var(--cic-pad) var(--cic-pad-lg) 0 0;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail {
   padding: var(--cic-pad) var(--cic-pad-lg) var(--cic-pad) 0;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-media16.wayfind-media {
-  max-height: 78%;
+  height: 100%;
   width: auto;
   max-width: 100%;
 }
@@ -1117,20 +1147,20 @@
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-dir.prominent {
-  font-size: 1.667vmax;
+  font-size: 2.083vmax;
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-dir-row {
-  gap: 0.729vmax;
-  margin-bottom: 0.833vmax;
+  gap: 1.042vmax;
+  margin-bottom: 1.042vmax;
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-dir-arrow-badge {
-  width: 2.083vmax;
-  height: 2.083vmax;
-  border-radius: 0.417vmax;
-  border-width: 0.13vmax;
-  font-size: 1.25vmax;
+  width: 3.75vmax;
+  height: 3.75vmax;
+  border-radius: 0.625vmax;
+  border-width: 0.177vmax;
+  font-size: 2.25vmax;
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-wayfind-welcome {

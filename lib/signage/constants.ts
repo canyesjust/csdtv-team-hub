@@ -29,10 +29,25 @@ export function formatSignageClock(now = new Date()): string {
 export const CIC_REVIEW_URL = 'https://www.csdtvstaff.org/dashboard/signage/content'
 export const CIC_SUBMIT_URL = 'https://www.csdtvstaff.org/signage/submit'
 
+function signageBaseUrl(): string {
+  if (typeof window !== 'undefined') return window.location.origin
+  return (
+    process.env.SIGNAGE_BASE_URL
+    || process.env.NEXT_PUBLIC_SITE_URL
+    || 'https://www.csdtvstaff.org'
+  )
+}
+
+/** Browser copy-link helper — uses current origin when available. */
 export function signageScreenUrl(code: string): string {
-  const base = typeof window !== 'undefined'
-    ? window.location.origin
-    : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.csdtvstaff.org')
+  return `${signageBaseUrl().replace(/\/$/, '')}/signage/screen/${encodeURIComponent(code)}`
+}
+
+/** Server-side AbleSign sync — prefers SIGNAGE_BASE_URL. */
+export function signageScreenPublicUrl(code: string): string {
+  const base = process.env.SIGNAGE_BASE_URL
+    || process.env.NEXT_PUBLIC_SITE_URL
+    || 'https://www.csdtvstaff.org'
   return `${base.replace(/\/$/, '')}/signage/screen/${encodeURIComponent(code)}`
 }
 

@@ -10,12 +10,18 @@ import {
   SignagePageShell,
   SignageRowEditButton,
   deleteSignageItem,
+  formatSignageDate,
   layoutLabel,
   orientationLabel,
   useSignageAdminStyles,
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import { signageScreenUrl } from '@/lib/signage/constants'
+import {
+  AbleSignScreenPanel,
+  AbleSignStatusDot,
+  AbleSignSyncAllButton,
+} from '../components/AbleSignControls'
 
 type Screen = {
   id: string
@@ -30,6 +36,11 @@ type Screen = {
   accepts_takeover: boolean
   active: boolean
   notes: string | null
+  ablesign_screen_id: number | null
+  ablesign_webapp_id: number | null
+  ablesign_synced_at: string | null
+  ablesign_online: boolean | null
+  ablesign_heartbeat_at: string | null
 }
 
 const empty: Omit<Screen, 'id'> = {
@@ -85,17 +96,22 @@ export default function SignageScreensPage() {
     setShowForm(true)
   }
 
+  const linkedScreenIds = screens.filter(sc => sc.ablesign_screen_id).map(sc => sc.id)
+
   return (
     <SignagePageShell title="Screens">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
         <h3 style={{ ...s.h3, margin: 0 }}>Screens</h3>
-        <button
-          type="button"
-          onClick={() => { resetForm(); setShowForm(v => !v) }}
-          style={s.btn}
-        >
-          + Add screen
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <AbleSignSyncAllButton screenIds={linkedScreenIds} onDone={() => void loadScreens()} />
+          <button
+            type="button"
+            onClick={() => { resetForm(); setShowForm(v => !v) }}
+            style={s.btn}
+          >
+            + Add screen
+          </button>
+        </div>
       </div>
 
       <div style={{ ...s.card, marginBottom: 16, padding: '12px 14px', background: s.infoBg, borderColor: s.infoBorder }}>
@@ -193,6 +209,21 @@ export default function SignageScreensPage() {
             )}
             <button type="button" onClick={() => void save()} style={s.btnPrimary}>Save</button>
           </div>
+          {editId && (
+            <AbleSignScreenPanel
+              screen={{
+                id: editId,
+                name: form.name,
+                code: form.code,
+                ablesign_screen_id: screens.find(sc => sc.id === editId)?.ablesign_screen_id ?? null,
+                ablesign_webapp_id: screens.find(sc => sc.id === editId)?.ablesign_webapp_id ?? null,
+                ablesign_synced_at: screens.find(sc => sc.id === editId)?.ablesign_synced_at ?? null,
+                ablesign_online: screens.find(sc => sc.id === editId)?.ablesign_online ?? null,
+                ablesign_heartbeat_at: screens.find(sc => sc.id === editId)?.ablesign_heartbeat_at ?? null,
+              }}
+              onUpdated={() => void loadScreens()}
+            />
+          )}
         </div>
       )}
 
@@ -204,12 +235,13 @@ export default function SignageScreensPage() {
           <div style={s.cardCompact}>
           <table style={s.tbl}>
             <colgroup>
-              <col style={{ width: '20%' }} />
-              <col style={{ width: '16%' }} />
+              <col style={{ width: '18%' }} />
               <col style={{ width: '14%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '11%' }} />
-              <col style={{ width: '25%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '24%' }} />
             </colgroup>
             <thead>
               <tr>
@@ -217,6 +249,7 @@ export default function SignageScreensPage() {
                 <th style={s.th}>Area</th>
                 <th style={s.th}>Orientation</th>
                 <th style={s.th}>Layout</th>
+                <th style={s.th}>AbleSign</th>
                 <th style={s.th}>Takeover</th>
                 <th style={s.th}>URL</th>
               </tr>
@@ -232,6 +265,21 @@ export default function SignageScreensPage() {
                   <td style={s.tdMuted}>{areaName(sc.area_id)}</td>
                   <td style={s.tdMuted}>{orientationLabel(sc.orientation)}</td>
                   <td style={s.tdMuted}>{layoutLabel(sc.layout)}</td>
+                  <td style={s.td}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                      <AbleSignStatusDot online={sc.ablesign_screen_id ? sc.ablesign_online : null} />
+                      {sc.ablesign_screen_id
+                        ? (
+                          <>
+                            {sc.ablesign_online ? 'Online' : 'Offline'}
+                            {sc.ablesign_synced_at && (
+                              <span style={{ color: s.muted }}> · {formatSignageDate(sc.ablesign_synced_at)}</span>
+                            )}
+                          </>
+                        )
+                        : <span style={{ color: s.muted }}>Not linked</span>}
+                    </span>
+                  </td>
                   <td style={s.tdMuted}>{sc.accepts_takeover ? 'Yes' : 'No'}</td>
                   <td style={{ ...s.td, fontSize: 12 }}>
                     <span style={{ color: '#9aa0ab' }}>/signage/screen/{sc.code}</span>{' '}

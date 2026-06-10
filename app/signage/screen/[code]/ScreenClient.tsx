@@ -610,15 +610,22 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               </div>
               {visitor && <WayfindingVisitorWelcome visitor={visitor} />}
             </div>
-            <div className="cic-wayfind-media-wrap">
-              <MediaCarousel
-                media={feed.media}
-                index={mediaIndex}
-                visible={mediaVisible}
-                imageSeconds={imageSeconds}
-                onAdvance={advanceMedia}
-                wayfindMedia
-              />
+            <div className="cic-wayfind-side">
+              <div className="cic-wayfind-media-wrap">
+                <MediaCarousel
+                  media={feed.media}
+                  index={mediaIndex}
+                  visible={mediaVisible}
+                  imageSeconds={imageSeconds}
+                  onAdvance={advanceMedia}
+                  wayfindMedia
+                />
+              </div>
+              <div className="cic-wayfind-ann-rail">
+                <div className="cic-railhd">Announcements</div>
+                {feed.announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
+                {!feed.announcements.length && <div className="cic-empty-muted">No announcements</div>}
+              </div>
             </div>
           </div>
           <TickerBar items={feed.ticker} />

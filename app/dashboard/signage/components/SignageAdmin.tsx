@@ -296,6 +296,7 @@ export function SignageSubnav({ active, isManager }: { active: string; isManager
   const links: { href: string; label: string; managerOnly?: boolean }[] = [
     { href: '/dashboard/signage/content', label: 'Content' },
     { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
+    { href: '/dashboard/signage/floor-plan', label: 'Floor plan', managerOnly: true },
     { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
     { href: '/dashboard/signage/announcements', label: 'Announcements', managerOnly: true },
     { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },

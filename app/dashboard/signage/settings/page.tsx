@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
+import { AbleSignTestConnection } from '../components/AbleSignControls'
 import { SignagePageShell, useSignageTheme } from '../components/SignageAdmin'
 
 export default function SignageSettingsPage() {
@@ -62,6 +63,8 @@ export default function SignageSettingsPage() {
           </div>
         )}
       </div>
+      <AbleSignTestConnection />
+
       {!loading && (
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20 }}>
           <h3 style={{ margin: '0 0 12px' }}>Signage approvers</h3>
