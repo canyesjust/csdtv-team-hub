@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import Loader from '../components/Loader'
@@ -385,7 +386,7 @@ export default function VideosPage() {
   }
 
   const removeMissingVideo = async (videoId: string) => {
-    if (!confirm('Remove this video permanently? It will be deleted from the Hub.')) return
+    if (!(await confirmDialog({ message: 'Remove this video permanently? It will be deleted from the Hub.', tone: 'danger', confirmLabel: 'Remove' }))) return
     const { error } = await supabase.from('videos').delete().eq('id', videoId)
     if (error) { toast('Could not remove video', 'error'); return }
     setVideos(prev => prev.filter(v => v.id !== videoId))
@@ -395,7 +396,7 @@ export default function VideosPage() {
 
   const removeAllMissing = async () => {
     if (missingFromYoutube.length === 0) return
-    if (!confirm(`Remove all ${missingFromYoutube.length} videos that are no longer on YouTube?`)) return
+    if (!(await confirmDialog({ message: `Remove all ${missingFromYoutube.length} videos that are no longer on YouTube?`, tone: 'danger', confirmLabel: 'Remove' }))) return
     const ids = missingFromYoutube.map(v => v.id)
     const { error } = await supabase.from('videos').delete().in('id', ids)
     if (error) { toast('Could not remove all missing videos', 'error'); return }

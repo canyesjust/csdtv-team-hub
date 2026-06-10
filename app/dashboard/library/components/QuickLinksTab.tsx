@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { isStudentInternRole } from '@/lib/roles'
 import { toast } from '@/lib/toast'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
@@ -525,8 +526,8 @@ export default function QuickLinksTab() {
                       >
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm('Remove this link from the library?')) void deleteLink(link.id)
+                          onClick={async () => {
+                            if (await confirmDialog({ message: 'Remove this link from the library?', tone: 'danger', confirmLabel: 'Remove' })) void deleteLink(link.id)
                           }}
                           style={{
                             fontSize: '12px',

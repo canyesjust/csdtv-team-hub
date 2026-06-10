@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef, Suspense, type ReactNode } from 'react'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
 import Link from 'next/link'
@@ -800,7 +801,7 @@ function ProductionsPageContent() {
       toast('Missing profile email', 'error')
       return
     }
-    if (!window.confirm(`Send complete request for #${p.production_number} ${p.title}?`)) return
+    if (!(await confirmDialog({ message: `Send complete request for #${p.production_number} ${p.title}?`, confirmLabel: 'Send' }))) return
     setOverdueQuickActionId(p.id)
     try {
       const { data: { session } } = await supabase.auth.refreshSession()

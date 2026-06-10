@@ -12,6 +12,7 @@ import { useTasksSummary } from '@/lib/hooks/dashboard-cache'
 import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
 import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
@@ -490,7 +491,7 @@ export default function TasksPage() {
   }, [intakeActive])
 
   const revokeIntakeLink = useCallback(async () => {
-    if (!confirm('Revoke this intake link? Shared QR codes and URLs will stop working.')) return
+    if (!(await confirmDialog({ message: 'Revoke this intake link? Shared QR codes and URLs will stop working.', tone: 'danger', confirmLabel: 'Revoke' }))) return
     setIntakeBusy(true)
     try {
       const res = await fetch('/api/dashboard/task-intake-token', { method: 'DELETE' })
@@ -557,7 +558,7 @@ export default function TasksPage() {
 
   const clearTaskSignageIntake = useCallback(async () => {
     if (!canPublishTaskSignageIntake(currentUser?.role)) return
-    if (!confirm('Remove the intake QR from the task ops signage board?')) return
+    if (!(await confirmDialog({ message: 'Remove the intake QR from the task ops signage board?', tone: 'danger', confirmLabel: 'Remove' }))) return
     setSignageTaskIntakeBusy(true)
     try {
       const res = await fetch('/api/dashboard/signage-task-intake-url', { method: 'DELETE' })
@@ -688,7 +689,7 @@ export default function TasksPage() {
   }, [selectedTask, panelNotes, updateTask])
 
   const deleteTask = useCallback(async (id: string) => {
-    if (!confirm('Delete this task? This cannot be undone.')) return
+    if (!(await confirmDialog({ message: 'Delete this task? This cannot be undone.', tone: 'danger' }))) return
     const { error } = await supabase.from('tasks').delete().eq('id', id)
     if (error) { toast('Failed to delete task', 'error'); return }
     setTasks(prev => prev.filter(t => t.id !== id))
@@ -697,7 +698,7 @@ export default function TasksPage() {
   }, [supabase, selectedTask, closePanel])
 
   const clearCompleted = useCallback(async () => {
-    if (!confirm(`Delete all ${completedTasks.length} completed tasks? This cannot be undone.`)) return
+    if (!(await confirmDialog({ message: `Delete all ${completedTasks.length} completed tasks? This cannot be undone.`, tone: 'danger' }))) return
     const ids = completedTasks.map(t => t.id)
     const { error } = await supabase.from('tasks').delete().in('id', ids)
     if (error) { toast('Failed to clear completed tasks', 'error'); return }
@@ -1609,7 +1610,7 @@ export default function TasksPage() {
                         <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{tpl.items?.length || 0} tasks</p>
                       </div>
                       <button onClick={() => applyTemplate(tpl)} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Apply</button>
-                      <button onClick={() => { if (confirm(`Delete template "${tpl.name}"?`)) deleteTemplate(tpl.id) }} style={{ fontSize: '14px', padding: '6px 10px', borderRadius: '8px', background: dangerBg, color: danger, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
+                      <button onClick={async () => { if (await confirmDialog({ message: `Delete template "${tpl.name}"?`, tone: 'danger' })) deleteTemplate(tpl.id) }} style={{ fontSize: '14px', padding: '6px 10px', borderRadius: '8px', background: dangerBg, color: danger, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
                     </div>
                   ))}
                 </div>
@@ -1628,7 +1629,7 @@ export default function TasksPage() {
               <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{selectedIds.size} selected</span>
               {focusFilter !== 'recent-done' && (
                 <button onClick={async () => {
-                  if (!confirm(`Mark ${selectedIds.size} tasks complete?`)) return
+                  if (!(await confirmDialog(`Mark ${selectedIds.size} tasks complete?`))) return
                   const ids = Array.from(selectedIds)
                   const completedAt = new Date().toISOString()
                   const { error } = await supabase.from('tasks').update({ status: 'complete', completed_at: completedAt }).in('id', ids)
@@ -1672,7 +1673,7 @@ export default function TasksPage() {
                 {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
               <button onClick={async () => {
-                if (!confirm(`Delete ${selectedIds.size} tasks? This cannot be undone.`)) return
+                if (!(await confirmDialog({ message: `Delete ${selectedIds.size} tasks? This cannot be undone.`, tone: 'danger' }))) return
                 const ids = Array.from(selectedIds)
                 const { error } = await supabase.from('tasks').delete().in('id', ids)
                 if (error) { toast('Failed to bulk delete', 'error'); return }

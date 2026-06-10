@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 
@@ -198,7 +199,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
 
   const disableCrew = async () => {
     if (!isManager) return
-    if (!confirm('Disable student crew for this production? Existing sign-ups will remain in the database for reports but the public sign-up page will be hidden.')) return
+    if (!(await confirmDialog({ message: 'Disable student crew for this production? Existing sign-ups will remain in the database for reports but the public sign-up page will be hidden.', confirmLabel: 'Disable' }))) return
     await supabase.from('productions').update({ has_student_crew: false }).eq('id', productionId)
     setHasStudentCrew(false)
     toast('Student crew disabled', 'success')
@@ -295,9 +296,9 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   const deleteSlot = async (id: string, roleName: string) => {
     const slotSignups = signups.filter(su => su.crew_role_slot_id === id)
     if (slotSignups.length > 0) {
-      if (!confirm(`This role has ${slotSignups.length} sign-up${slotSignups.length === 1 ? '' : 's'}. Deleting will cancel them. Continue?`)) return
+      if (!(await confirmDialog({ message: `This role has ${slotSignups.length} sign-up${slotSignups.length === 1 ? '' : 's'}. Deleting will cancel them. Continue?`, tone: 'danger', confirmLabel: 'Delete role' }))) return
     } else {
-      if (!confirm(`Remove "${roleName}" role?`)) return
+      if (!(await confirmDialog({ message: `Remove "${roleName}" role?`, tone: 'danger', confirmLabel: 'Remove' }))) return
     }
     const { error } = await supabase.from('crew_role_slots').delete().eq('id', id)
     if (error) { toast('Failed: ' + error.message, 'error'); return }
@@ -307,7 +308,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   }
 
   const cancelSignup = async (signupId: string, studentName: string) => {
-    if (!confirm(`Remove ${studentName} from this slot? They can still sign up again unless you adjust their tier.`)) return
+    if (!(await confirmDialog({ message: `Remove ${studentName} from this slot? They can still sign up again unless you adjust their tier.`, tone: 'danger', confirmLabel: 'Remove' }))) return
     const { error } = await supabase.from('crew_signups').delete().eq('id', signupId)
     if (error) { toast('Failed: ' + error.message, 'error'); return }
     setSignups(prev => prev.filter(s => s.id !== signupId))

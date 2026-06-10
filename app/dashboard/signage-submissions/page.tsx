@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
@@ -166,7 +167,7 @@ export default function SignageSubmissionsPage() {
   }
 
   const deleteSubmission = async (id: string) => {
-    if (!confirm('Delete this submission and remove its image file?')) return
+    if (!(await confirmDialog({ message: 'Delete this submission and remove its image file?', tone: 'danger' }))) return
     setBusyId(id)
     try {
       const res = await fetch(`/api/signage-submissions/${id}`, { method: 'DELETE' })

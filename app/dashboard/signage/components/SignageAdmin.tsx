@@ -5,6 +5,7 @@ import { SIGNAGE_ANNOUNCEMENT_ICONS, type SignageAnnouncementIconId } from '@/li
 import { usePathname } from 'next/navigation'
 import { useState, type ReactNode } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { useSignage } from './SignageProvider'
 import { toast } from '@/lib/toast'
 
@@ -394,8 +395,8 @@ export function SignageDeleteButton({ label = 'Delete', confirmMessage, onConfir
     <button
       type="button"
       style={deleteBtnStyle}
-      onClick={() => {
-        if (!confirm(confirmMessage)) return
+      onClick={async () => {
+        if (!(await confirmDialog(confirmMessage))) return
         void onConfirm()
       }}
     >

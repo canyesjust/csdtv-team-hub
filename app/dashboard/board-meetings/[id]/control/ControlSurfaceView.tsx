@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { confirmDialog } from '@/lib/confirm'
 import { sortByBoardSeatOrder } from '@/lib/board-meetings/lower-third-board-order'
 import MotionAndVoteCard from './components/MotionAndVoteCard'
 
@@ -476,8 +477,8 @@ export default function ControlSurfaceView({ productionId, bundle, canControl, o
             }}>
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm('End the meeting? This cannot be undone.')) {
+                onClick={async () => {
+                  if (await confirmDialog({ message: 'End the meeting? This cannot be undone.', tone: 'danger', confirmLabel: 'End meeting' })) {
                     onAction('end-meeting')
                   }
                 }}

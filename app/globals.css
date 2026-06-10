@@ -258,4 +258,19 @@ a {
 }
 @keyframes sig-drift-1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(12%, 8%); } }
 @keyframes sig-drift-2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-10%, 10%); } }
+
+/* UX polish kit (Phase 2) */
+
+/* Spinner used by AsyncButton and inline loading states */
+@keyframes csdtv-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Subtle press feedback on interactive controls, app-wide */
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: translateY(0.5px);
+  }
+}
 @keyframes sig-drift-3 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(8%, -8%); } }

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Editor } from '@tiptap/react'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../components/Loader'
 import { isStudentInternRole } from '@/lib/roles'
@@ -282,7 +283,7 @@ export default function KnowledgeArticlesTab() {
   }
 
   const deleteArticle = async (article: Article) => {
-    if (!confirm(`Delete "${article.title}"? This cannot be undone.`)) return
+    if (!(await confirmDialog({ message: `Delete "${article.title}"? This cannot be undone.`, tone: 'danger' }))) return
     await supabase.from('knowledge_base').delete().eq('id', article.id)
     setArticles(prev => prev.filter(a => a.id !== article.id))
     if (selected?.id === article.id) clearArticleSelection()

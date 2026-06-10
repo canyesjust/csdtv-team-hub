@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import type { Editor } from '@tiptap/react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
 import ArticleEditorToolbar from '../components/ArticleEditorToolbar'
@@ -232,7 +233,7 @@ export default function IdeasPage() {
 
   const archiveIdea = async (idea: Idea) => {
     if (!currentUser) return
-    if (!confirm(`Archive "${idea.title}"?`)) return
+    if (!(await confirmDialog({ message: `Archive "${idea.title}"?`, confirmLabel: 'Archive' }))) return
     const { data, error } = await supabase
       .from('project_ideas')
       .update({
@@ -282,7 +283,7 @@ export default function IdeasPage() {
 
   const deleteIdea = async (idea: Idea) => {
     if (!isManager) return
-    if (!confirm(`Permanently delete "${idea.title}"? This cannot be undone.`)) return
+    if (!(await confirmDialog({ message: `Permanently delete "${idea.title}"? This cannot be undone.`, tone: 'danger' }))) return
     const { error } = await supabase.from('project_ideas').delete().eq('id', idea.id)
     if (error) {
       toast('Failed to delete', 'error')

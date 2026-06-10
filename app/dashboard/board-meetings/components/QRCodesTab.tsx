@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import {
   BUILTIN_QR_PRESET_KEYS,
   QR_TEMPLATE_VARS,
@@ -120,7 +121,7 @@ export default function QRCodesTab() {
 
   const remove = async (p: QrPresetRow) => {
     if (BUILTIN_QR_PRESET_KEYS.has(p.key)) return
-    if (!confirm(`Delete preset “${p.label}”?`)) return
+    if (!(await confirmDialog({ message: `Delete preset “${p.label}”?`, tone: 'danger' }))) return
     const res = await fetch(`/api/qr-presets/${p.id}`, { method: 'DELETE' })
     const body = await res.json()
     if (!res.ok) {

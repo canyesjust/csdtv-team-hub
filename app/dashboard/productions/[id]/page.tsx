@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -603,7 +604,7 @@ export default function ProductionDetailPage() {
     if (!production || !callSheet) return
     const teamEmails = members.map(m => allTeam.find(t => t.id === m.user_id)?.email).filter(Boolean) as string[]
     if (teamEmails.length === 0) { toast('No team members assigned to email'); return }
-    if (!confirm(`Email call sheet to ${teamEmails.join(', ')}?`)) return
+    if (!(await confirmDialog({ message: `Email call sheet to ${teamEmails.join(', ')}?`, confirmLabel: 'Send' }))) return
     try {
       const { data: { session } } = await supabase.auth.refreshSession()
       if (!session) return
@@ -1667,7 +1668,7 @@ export default function ProductionDetailPage() {
               // Find the most recent completed production of same type
               const { data: lastProd } = await supabase.from('productions').select('id, production_number, title').eq('request_type_label', typeLabel).neq('id', uuid).order('start_datetime', { ascending: false }).limit(1).single()
               if (!lastProd) { toast(`No previous ${typeLabel} production found`, 'error'); return }
-              if (!confirm(`Apply checklist and team from #${lastProd.production_number} ${lastProd.title}?`)) return
+              if (!(await confirmDialog({ message: `Apply checklist and team from #${lastProd.production_number} ${lastProd.title}?`, confirmLabel: 'Apply' }))) return
               const [clRes, tmRes] = await Promise.all([
                 supabase.from('checklist_items').select('title, sort_order').eq('production_id', lastProd.id).order('sort_order'),
                 supabase.from('production_members').select('user_id').eq('production_id', lastProd.id),
@@ -2382,7 +2383,7 @@ export default function ProductionDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <span style={{ fontSize: '13px', color: muted }}>{linkedVideos.length} video{linkedVideos.length !== 1 ? 's' : ''} linked{linkedVideos.some(v => v.youtube_views) ? ` · ${linkedVideos.reduce((s, v) => s + (v.youtube_views || 0), 0).toLocaleString()} total views` : ''}</span>
               <button onClick={async () => {
-                if (!confirm(`Unlink all ${linkedVideos.length} videos from this production?`)) return
+                if (!(await confirmDialog({ message: `Unlink all ${linkedVideos.length} videos from this production?`, tone: 'danger', confirmLabel: 'Unlink' }))) return
                 for (const v of linkedVideos) await supabase.from('videos').update({ production_id: null }).eq('id', v.id)
                 setLinkedVideos([])
                 toast(`Unlinked ${linkedVideos.length} videos`, 'success')

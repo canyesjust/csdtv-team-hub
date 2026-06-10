@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { useTheme } from '@/lib/theme'
 import Link from 'next/link'
 import Loader from '../components/Loader'
@@ -407,7 +408,7 @@ export default function SchedulePage() {
   }
 
   const deleteEvent = async (id: string) => {
-    if (!confirm('Delete this event?')) return
+    if (!(await confirmDialog({ message: 'Delete this event?', tone: 'danger' }))) return
     const { error } = await supabase.from('calendar_events').delete().eq('id', id)
     if (error) { toast('Failed to delete event', 'error'); return }
     setCalEvents(prev => prev.filter(e => e.id !== id))

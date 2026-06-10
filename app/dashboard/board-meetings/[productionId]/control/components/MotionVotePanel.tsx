@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import VoteInterface, { type VoterRow } from './VoteInterface'
 import type { VoteMode, VoteValue } from '@/lib/board-meetings/motion-types'
 import { resolveSuggestedMotionText } from '@/lib/board-meetings/motion-api'
@@ -242,7 +243,7 @@ export default function MotionVotePanel({
       toast('Record a vote for each member', 'error')
       return
     }
-    if (!window.confirm('Record this vote?')) return
+    if (!(await confirmDialog({ message: 'Record this vote?', confirmLabel: 'Record' }))) return
     const path = reRecord ? `${motionId}/re-record-vote` : `${motionId}/record-vote`
     const ok = await post(path, { votes: payload })
     if (ok) setVotingMotionId(null)

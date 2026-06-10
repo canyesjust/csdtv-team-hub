@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
@@ -203,7 +204,7 @@ export default function VideoDetailPage() {
   }
 
   const deleteVideo = async () => {
-    if (!video || !confirm('Delete this video and all its data? This cannot be undone.')) return
+    if (!video || !(await confirmDialog({ message: 'Delete this video and all its data? This cannot be undone.', tone: 'danger' }))) return
     await supabase.from('videos').delete().eq('id', video.id)
     router.push('/dashboard/videos')
   }

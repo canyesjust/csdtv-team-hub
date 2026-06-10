@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import {
   INFO_CARD_LABELS,
   PLAYLIST_ITEM_TYPES,
@@ -110,7 +111,7 @@ export default function PlaylistEditor(props: EditorMode) {
   }
 
   const removeItem = async (id: string) => {
-    if (!confirm('Remove this item?')) return
+    if (!(await confirmDialog({ message: 'Remove this item?', tone: 'danger', confirmLabel: 'Remove' }))) return
     setBusy(true)
     const res = await fetch(`${baseUrl}/items/${id}`, { method: 'DELETE' })
     setBusy(false)

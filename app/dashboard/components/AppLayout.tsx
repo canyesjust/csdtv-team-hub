@@ -10,6 +10,7 @@ import NotificationPanel from './NotificationPanel'
 import SearchPanel from './SearchPanel'
 import ImpersonationBanner from './ImpersonationBanner'
 import { ProductionDrawerProvider } from './ProductionDrawerProvider'
+import ConfirmHost from './ConfirmHost'
 import { statusBadge, uiStyles, statusTone } from '@/lib/ui/styles'
 import { isStudentInternRole, STUDENT_INTERN_HOME_PATH } from '@/lib/roles'
 import { hasProductionFocusDashboard, isDashboardPathAllowed } from '@/lib/dashboard-access'
@@ -481,6 +482,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {showNotifications && <NotificationPanel onClose={() => setShowNotifications(false)} onUnreadChange={setUnreadCount} userId={userId} />}
       {showSearch && !isStudentIntern && <SearchPanel onClose={() => setShowSearch(false)} />}
+
+      {/* Global confirmation modal host */}
+      <ConfirmHost />
 
       {/* Toast notifications */}
       <div style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 9999, display: 'flex', flexDirection: 'column' as const, gap: '8px', pointerEvents: 'none' }}>

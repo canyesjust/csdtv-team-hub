@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import SignageTargetingPicker, {
@@ -521,7 +522,7 @@ export default function SignageContentPage() {
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!confirm('Delete this content?')) return
+                        if (!(await confirmDialog({ message: 'Delete this content?', tone: 'danger' }))) return
                         await fetch(`/api/signage/content/${row.id}`, { method: 'DELETE' })
                         void refreshAll()
                       }}

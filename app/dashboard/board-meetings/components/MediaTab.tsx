@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import FilePickButton from '@/components/FilePickButton'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import type { MediaAssetRow } from '@/lib/board-meetings/playlist-types'
 
 type AssetWithUrls = MediaAssetRow & { public_url: string; thumbnail_url: string }
@@ -167,7 +168,7 @@ export default function MediaTab() {
   }
 
   const deleteAsset = async (a: AssetWithUrls) => {
-    if (!confirm(`Delete "${a.name}"?`)) return
+    if (!(await confirmDialog({ message: `Delete "${a.name}"?`, tone: 'danger' }))) return
     const res = await fetch(`/api/media-assets/${a.id}`, { method: 'DELETE' })
     const body = await res.json()
     if (!res.ok) {

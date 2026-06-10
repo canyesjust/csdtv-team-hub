@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { useTheme } from '@/lib/theme'
 import { toast } from '@/lib/toast'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
@@ -98,7 +99,7 @@ export default function ContactsPage() {
   }
 
   const deleteContact = async (id: string) => {
-    if (!confirm('Delete this contact?')) return
+    if (!(await confirmDialog({ message: 'Delete this contact?', tone: 'danger' }))) return
     await supabase.from('contacts').delete().eq('id', id)
     setContacts(prev => prev.filter(c => c.id !== id))
     setExpandedId(null)

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth-constants'
 import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
 import { PRODUCTION_FOCUS_ROLE } from '@/lib/roles'
@@ -297,7 +298,7 @@ export default function SettingsPage() {
     const confirmMsg = usePassword
       ? `Add ${inviteEmail} to the team as ${inviteRole}? You'll set their login password directly (no invite email).`
       : `Add ${inviteEmail} to the team as ${inviteRole}? They'll receive an email with a sign-in link.`
-    if (!confirm(confirmMsg)) return
+    if (!(await confirmDialog({ message: confirmMsg, confirmLabel: 'Add' }))) return
     setInviting(true)
     setInviteResult(null)
 
@@ -442,9 +443,10 @@ export default function SettingsPage() {
       return
     }
     if (
-      !confirm(
-        `Set a new login password for ${member.name}? They can sign in at csdtvstaff.org with their email and this password.`,
-      )
+      !(await confirmDialog({
+        message: `Set a new login password for ${member.name}? They can sign in at csdtvstaff.org with their email and this password.`,
+        confirmLabel: 'Set password',
+      }))
     ) {
       return
     }
@@ -501,7 +503,7 @@ export default function SettingsPage() {
   }
 
   const deactivateMember = async (memberId: string, memberName: string) => {
-    if (!confirm(`Remove ${memberName} from the team?`)) return
+    if (!(await confirmDialog({ message: `Remove ${memberName} from the team?`, tone: 'danger', confirmLabel: 'Remove' }))) return
     try {
       await callAdminSettings('deactivate_member', { memberId })
     } catch (e: any) {
@@ -601,7 +603,7 @@ export default function SettingsPage() {
   }
 
   const deleteTpl = async (id: string, label: string) => {
-    if (!confirm(`Delete template "${label}"? This cannot be undone.`)) return
+    if (!(await confirmDialog({ message: `Delete template "${label}"? This cannot be undone.`, tone: 'danger' }))) return
     try {
       await callAdminSettings('delete_template', { id })
     } catch (e: any) {
@@ -1799,7 +1801,7 @@ export default function SettingsPage() {
                         {schoolBrandingId === school.id ? 'Close' : 'Colors'}
                       </button>
                       <button type="button" onClick={() => { setSchoolBrandingId(null); setEditingSchool(school.id); setEditSchoolName(school.name) }} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
-                      <button type="button" onClick={() => { if (confirm(`Remove "${school.name}"?`)) deleteSchool(school.id) }} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
+                      <button type="button" onClick={async () => { if (await confirmDialog({ message: `Remove "${school.name}"?`, tone: 'danger', confirmLabel: 'Remove' })) deleteSchool(school.id) }} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
                     </div>
                   )}
                 </div>

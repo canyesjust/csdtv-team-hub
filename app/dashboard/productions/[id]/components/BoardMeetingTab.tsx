@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import GenerateChaptersButton from '@/app/dashboard/board-meetings/[productionId]/components/GenerateChaptersButton'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import type { AgendaItemUI, BoardMeetingRecord } from '@/lib/board-meetings/types'
@@ -162,7 +163,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   }
 
   const deleteItem = async (itemId: string) => {
-    if (!confirm('Remove this agenda item from the extracted agenda?')) return
+    if (!(await confirmDialog({ message: 'Remove this agenda item from the extracted agenda?', tone: 'danger', confirmLabel: 'Remove' }))) return
     setDeletingId(itemId)
     const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/${itemId}`, {
       method: 'DELETE',
@@ -222,7 +223,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   }
 
   const unlockAgenda = async () => {
-    if (!confirm('Unlock the agenda? You can edit items and lock again when ready.')) return
+    if (!(await confirmDialog({ message: 'Unlock the agenda? You can edit items and lock again when ready.', confirmLabel: 'Unlock' }))) return
     setUnlocking(true)
     const res = await fetch(`/api/board-meetings/${productionId}/unlock-agenda`, { method: 'POST' })
     const body = await res.json()
@@ -236,7 +237,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   }
 
   const reopenMeeting = async () => {
-    if (!confirm('Reopen this meeting? Control surface and live broadcast will be available again. Reassign output channels if needed.')) return
+    if (!(await confirmDialog({ message: 'Reopen this meeting? Control surface and live broadcast will be available again. Reassign output channels if needed.', confirmLabel: 'Reopen' }))) return
     setReopening(true)
     const res = await fetch(`/api/board-meetings/${productionId}/reopen-meeting`, { method: 'POST' })
     const body = await res.json()
@@ -250,7 +251,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   }
 
   const resetMeeting = async () => {
-    if (!confirm('Delete all board meeting data for this production? Agenda, motions, timers, and broadcast history will be removed. This cannot be undone.')) return
+    if (!(await confirmDialog({ message: 'Delete all board meeting data for this production? Agenda, motions, timers, and broadcast history will be removed. This cannot be undone.', tone: 'danger' }))) return
     setResetting(true)
     const res = await fetch(`/api/board-meetings/${productionId}/reset`, { method: 'POST' })
     const body = await res.json()

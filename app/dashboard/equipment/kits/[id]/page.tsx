@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
@@ -97,7 +98,7 @@ export default function KitDetailPage() {
 
   async function handleRemoveItem(itemId: string, equipmentId: string) {
     if (!user) return
-    if (!confirm('Remove this item from the kit?')) return
+    if (!(await confirmDialog({ message: 'Remove this item from the kit?', tone: 'danger', confirmLabel: 'Remove' }))) return
     await supabase.from('equipment_kit_items').delete().eq('id', itemId)
     await supabase.from('equipment_activity').insert({
       equipment_id: equipmentId, action: 'removed_from_kit',

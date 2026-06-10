@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { toast } from '@/lib/toast'
 import Loader from '../../components/Loader'
 import {
@@ -164,7 +165,7 @@ function OnboardingAdminContent() {
   }
 
   const retireItem = async (item: OnboardingTemplateItem) => {
-    if (!confirm(`Remove "${item.title}" from the track for everyone still onboarding?`)) return
+    if (!(await confirmDialog({ message: `Remove "${item.title}" from the track for everyone still onboarding?`, tone: 'danger', confirmLabel: 'Remove' }))) return
     await updateItem(item, { active: false })
     setItems((list) => list.filter((x) => x.id !== item.id))
   }
@@ -172,9 +173,10 @@ function OnboardingAdminContent() {
   const reapplyStudentTemplate = async () => {
     if (trackId !== ONBOARDING_TRACK_STUDENT_INTERN) return
     if (
-      !confirm(
-        'Replace the student intern checklist with the latest default template? Existing custom edits will be retired. Active onboardings will get the new items.',
-      )
+      !(await confirmDialog({
+        message: 'Replace the student intern checklist with the latest default template? Existing custom edits will be retired. Active onboardings will get the new items.',
+        confirmLabel: 'Replace',
+      }))
     ) {
       return
     }

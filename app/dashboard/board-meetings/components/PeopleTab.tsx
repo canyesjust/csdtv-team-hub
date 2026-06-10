@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import FilePickButton from '@/components/FilePickButton'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
@@ -193,7 +194,7 @@ export default function PeopleTab() {
   }
 
   const remove = async (id: string) => {
-    if (!confirm('Delete this person?')) return
+    if (!(await confirmDialog({ message: 'Delete this person?', tone: 'danger' }))) return
     const res = await fetch(`/api/lower-third-people/${id}`, { method: 'DELETE' })
     const body = await res.json()
     if (!res.ok) {

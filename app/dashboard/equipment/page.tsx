@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTheme } from '@/lib/theme'
+import { confirmDialog } from '@/lib/confirm'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
@@ -327,9 +328,10 @@ export default function EquipmentPage() {
     async (eq: Equipment) => {
       if (!user || !canDeleteRows) return
       if (
-        !confirm(
-          `${eq.asset_tag} is marked checked out but has no open loan record. Mark it available? (Use only if the item was returned or the record was wrong.)`,
-        )
+        !(await confirmDialog({
+          message: `${eq.asset_tag} is marked checked out but has no open loan record. Mark it available? (Use only if the item was returned or the record was wrong.)`,
+          confirmLabel: 'Mark available',
+        }))
       )
         return
       const { error } = await supabase
@@ -368,7 +370,7 @@ export default function EquipmentPage() {
   }, [kitName, kitDesc, user, supabase, loadData])
 
   const handleDeleteKit = useCallback(async (kitId: string) => {
-    if (!confirm('Delete this kit? Items won\'t be deleted, just ungrouped.')) return
+    if (!(await confirmDialog({ message: 'Delete this kit? Items won\'t be deleted, just ungrouped.', tone: 'danger' }))) return
     const { error } = await supabase.from('equipment_kits').delete().eq('id', kitId)
     if (error) { toast('Error: ' + error.message); return }
     loadData()
@@ -984,7 +986,7 @@ export default function EquipmentPage() {
                   <button
                     onClick={async () => {
                       if (!user) return
-                      if (!confirm(`Check in "${loan.equipment?.name || loan.kit?.name}" from ${loan.borrower_name}?`)) return
+                      if (!(await confirmDialog({ message: `Check in "${loan.equipment?.name || loan.kit?.name}" from ${loan.borrower_name}?`, confirmLabel: 'Check in' }))) return
                       const res = await fetch('/api/equipment/checkin', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

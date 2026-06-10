@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { confirmDialog } from '@/lib/confirm'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
@@ -133,7 +134,7 @@ export default function OnboardingCoachPage() {
   }
 
   const removeForPerson = async (task: OnboardingItemInstance) => {
-    if (!managerId || !confirm(`Remove "${task.title}" for ${member?.name}?`)) return
+    if (!managerId || !(await confirmDialog({ message: `Remove "${task.title}" for ${member?.name}?`, tone: 'danger', confirmLabel: 'Remove' }))) return
     const now = new Date().toISOString()
     await supabase
       .from('onboarding_item_instances')
@@ -179,7 +180,7 @@ export default function OnboardingCoachPage() {
 
   const signOff = async () => {
     if (!assignment || !managerId) return
-    if (!confirm(`Sign off onboarding for ${member?.name}?`)) return
+    if (!(await confirmDialog({ message: `Sign off onboarding for ${member?.name}?`, confirmLabel: 'Sign off' }))) return
     const now = new Date().toISOString()
     await supabase
       .from('onboarding_assignments')
@@ -220,7 +221,7 @@ export default function OnboardingCoachPage() {
   }
 
   const deleteAssignment = async () => {
-    if (!assignment || !confirm(`Delete all onboarding progress for ${member?.name}?`)) return
+    if (!assignment || !(await confirmDialog({ message: `Delete all onboarding progress for ${member?.name}?`, tone: 'danger' }))) return
     await supabase.from('onboarding_assignments').delete().eq('id', assignment.id)
     router.push('/dashboard/onboarding')
   }

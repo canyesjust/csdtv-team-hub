@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import Loader from '../../components/Loader'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 
 type TemplateRow = {
   id: string
@@ -101,7 +102,7 @@ export default function TemplatesTab() {
   }
 
   const remove = async (t: TemplateRow) => {
-    if (!confirm(`Delete template "${t.name}"?`)) return
+    if (!(await confirmDialog({ message: `Delete template "${t.name}"?`, tone: 'danger' }))) return
     const res = await fetch(`/api/playlist-templates/${t.id}`, { method: 'DELETE' })
     const body = await res.json()
     if (!res.ok) {
