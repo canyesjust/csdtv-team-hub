@@ -165,16 +165,20 @@ export default function SignageAnnouncementsPage() {
     return label ?? 'All screens'
   }
 
+  const avatarStyle: React.CSSProperties = {
+    width: 38, height: 38, borderRadius: 10, background: s.infoBg, color: s.info,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0,
+  }
+
   return (
-    <SignagePageShell title="Announcements">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ ...s.h3, margin: 0 }}>Announcements</h3>
+    <SignagePageShell title="Announcements" subtitle="Short messages & ticker notes on the screens">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14 }}>
         <button
           type="button"
           onClick={() => { resetForm(); setShowForm(v => !v) }}
-          style={s.btn}
+          style={s.btnPrimary}
         >
-          + Add announcement
+          {showForm ? 'Cancel' : '+ Add announcement'}
         </button>
       </div>
 
@@ -241,11 +245,10 @@ export default function SignageAnnouncementsPage() {
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ ...s.h3, fontSize: 14 }}>Pending review ({pendingRows.length})</h3>
               {pendingRows.map(row => (
-                <div key={row.id} style={{ ...s.cardCompact, marginBottom: 8, borderLeft: '3px solid #d97706', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: s.text }}>
-                      <span aria-hidden style={{ marginRight: 6 }}>{announcementIconEmoji(row.icon)}</span>{row.title}
-                    </div>
+                <div key={row.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, borderLeft: '3px solid #d97706', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={avatarStyle} aria-hidden>{announcementIconEmoji(row.icon)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: s.text }}>{row.title}</div>
                     {row.subtitle && <div style={{ fontSize: 13, color: s.muted, marginTop: 2 }}>{row.subtitle}</div>}
                     <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
                       {formatSignageDate(row.start_date)} – {formatSignageDate(row.end_date)}
@@ -273,10 +276,10 @@ export default function SignageAnnouncementsPage() {
               <div key={group.key} style={{ marginBottom: 18 }}>
                 <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, color: s.muted, margin: '0 0 8px' }}>{group.heading}</h4>
                 {groupRows.map(row => (
-                  <div key={row.id} style={{ ...s.cardCompact, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ minWidth: 0 }}>
+                  <div key={row.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={avatarStyle} aria-hidden>{announcementIconEmoji(row.icon)}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <SignageRowEditButton onClick={() => startEdit(row)} textColor={s.text} fontWeight={600}>
-                        <span aria-hidden style={{ marginRight: 6 }}>{announcementIconEmoji(row.icon)}</span>
                         {row.title}{!row.active && <span style={{ color: s.muted, fontWeight: 400 }}> (inactive)</span>}
                       </SignageRowEditButton>
                       {row.subtitle && <div style={{ fontSize: 13, color: s.muted, marginTop: 2 }}>{row.subtitle}</div>}

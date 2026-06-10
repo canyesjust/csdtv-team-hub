@@ -66,6 +66,13 @@ export default function SignageVisitorsPage() {
     void load()
   }
 
+  const initials = (name: string) =>
+    name.trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '?'
+  const avatarStyle: React.CSSProperties = {
+    width: 38, height: 38, borderRadius: '50%', background: s.infoBg, color: s.info,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, flexShrink: 0,
+  }
+
   useEffect(() => { void load() }, [load])
 
   const startEdit = (row: VisitorRow) => {
@@ -94,15 +101,14 @@ export default function SignageVisitorsPage() {
   }
 
   return (
-    <SignagePageShell title="Visiting today">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ ...s.h3, margin: 0 }}>Visitors</h3>
+    <SignagePageShell title="Visitors" subtitle="Welcome guests by name on the screens">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14 }}>
         <button
           type="button"
           onClick={() => { resetForm(); setShowForm(v => !v) }}
-          style={s.btn}
+          style={s.btnPrimary}
         >
-          + Add visitor
+          {showForm ? 'Cancel' : '+ Add visitor'}
         </button>
       </div>
 
@@ -153,8 +159,9 @@ export default function SignageVisitorsPage() {
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ ...s.h3, fontSize: 14 }}>Pending review ({pendingRows.length})</h3>
               {pendingRows.map(r => (
-                <div key={r.id} style={{ ...s.cardCompact, marginBottom: 8, borderLeft: '3px solid #d97706', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ minWidth: 0 }}>
+                <div key={r.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, borderLeft: '3px solid #d97706', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={avatarStyle} aria-hidden>{initials(r.name)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: s.text }}>{r.name}</div>
                     <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
                       {r.visit_date?.slice(0, 10)}{r.note ? ` · ${r.note}` : ''}{r.submitter_name ? ` · from ${r.submitter_name}` : ''}
@@ -172,42 +179,24 @@ export default function SignageVisitorsPage() {
               ))}
             </div>
           )}
-          <SignageListHint color={s.muted} />
-          <div style={s.cardCompact}>
-            <table style={s.tbl}>
-              <colgroup>
-                <col style={{ width: '26%' }} />
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '40%' }} />
-                <col style={{ width: '18%' }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th style={s.th}>Name</th>
-                  <th style={s.th}>Visit date</th>
-                  <th style={s.th}>Note</th>
-                  <th style={s.th}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {liveRows.map(r => (
-                  <tr key={r.id}>
-                    <td style={s.td}>
-                      <SignageRowEditButton onClick={() => startEdit(r)} textColor={s.text}>
-                        {r.name}
-                      </SignageRowEditButton>
-                    </td>
-                    <td style={s.tdMuted}>{r.visit_date?.slice(0, 10)}</td>
-                    <td style={s.tdMuted}>{r.note || '—'}</td>
-                    <td style={s.tdMuted}>
-                      {r.active ? <LifecyclePill lifecycle={singleDateLifecycle(r.visit_date, today)} /> : <span style={{ color: s.muted }}>Off</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!liveRows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No visitors yet.</div>}
-          </div>
+          <SignageListHint color={s.muted}>Click a name to edit.</SignageListHint>
+          {liveRows.map(r => (
+            <div key={r.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={avatarStyle} aria-hidden>{initials(r.name)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <SignageRowEditButton onClick={() => startEdit(r)} textColor={s.text} fontWeight={600}>
+                  {r.name}{!r.active && <span style={{ color: s.muted, fontWeight: 400 }}> (off)</span>}
+                </SignageRowEditButton>
+                <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
+                  {r.visit_date?.slice(0, 10)}{r.note ? ` · ${r.note}` : ''}
+                </div>
+              </div>
+              {r.active
+                ? <LifecyclePill lifecycle={singleDateLifecycle(r.visit_date, today)} />
+                : <span style={{ fontSize: 12, color: s.muted }}>Off</span>}
+            </div>
+          ))}
+          {!liveRows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No visitors yet.</div>}
         </>
       )}
     </SignagePageShell>

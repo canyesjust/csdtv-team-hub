@@ -291,7 +291,7 @@ export default function SignageContentPage() {
   }
 
   return (
-    <SignagePageShell title="Content">
+    <SignagePageShell title="Content" subtitle="Images, videos & slides on the screens">
       <div style={{ ...s.card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Share the submission link</div>
