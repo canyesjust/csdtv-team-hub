@@ -319,10 +319,16 @@
   line-height: 1.85;
 }
 
-.cic-dir.compact .cic-dir-arrow {
-  font-size: 12px;
-  width: 14px;
-  margin-right: 4px;
+.cic-dir-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cic-dir-label-compact {
+  color: var(--white);
+  font-weight: 500;
 }
 
 .cic-ann {
@@ -567,12 +573,13 @@
 }
 
 .cic-wayfind-dir {
-  flex: 1;
+  flex: 1 1 50%;
   padding: 14px 16px;
   min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: linear-gradient(180deg, var(--navy) 0%, color-mix(in srgb, var(--panel) 35%, var(--navy)) 100%);
 }
 
 .cic-wayfind-dir-scroll {
@@ -584,13 +591,14 @@
 .cic-wayfind-welcome {
   flex-shrink: 0;
   margin-top: 12px;
-  padding: 10px 12px;
-  background: var(--panel);
-  border-top: 1px solid var(--accent-border);
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
+  gap: 10px;
+  font-size: 15px;
   line-height: 1.45;
   color: var(--accent);
 }
@@ -611,37 +619,61 @@
   margin-top: 1px;
 }
 
-.cic-dir-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
 .cic-dir-arrow-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
-  background: var(--panel);
+  flex: none;
+  border-radius: 12px;
+  background: var(--navy);
   border: 3px solid var(--accent);
   color: var(--white);
-  font-size: 32px;
   font-weight: 700;
   line-height: 1;
-  flex: none;
-  box-shadow: 0 0 0 1px var(--accent-ring);
+  box-shadow:
+    0 0 0 1px var(--accent-ring),
+    0 0.35vmax 1vmax var(--black-shadow);
+}
+
+.cic-dir-arrow-badge.compact {
+  width: 44px;
+  height: 44px;
+  font-size: 26px;
+}
+
+.cic-dir-arrow-badge.hero {
+  width: 88px;
+  height: 88px;
+  font-size: 52px;
+  border-radius: 14px;
+  border-width: 4px;
+}
+
+.cic-dir-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  background: var(--panel);
+  border: 1px solid var(--accent-border);
+  border-left: 5px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 0.25vmax 0.75vmax var(--black-shadow);
 }
 
 .cic-dir.prominent {
-  line-height: 1.35;
+  line-height: 1.2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .cic-dir.prominent .cic-dir-label {
   font-weight: 500;
   color: var(--white);
+  flex: 1;
+  min-width: 0;
 }
 
 .cic-body-wayfind {
@@ -649,31 +681,43 @@
 }
 
 .cic-wayfind-side {
-  flex: none;
+  flex: 1 1 50%;
   height: 100%;
   min-width: 0;
-  max-width: 46%;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr minmax(11rem, 26%);
+  gap: 0;
   background: var(--navy);
+  border-left: 1px solid var(--accent-border-faint);
 }
 
 .cic-wayfind-media-wrap {
-  flex: 1 1 0;
   min-height: 0;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  padding: 12px 14px 0 0;
+  padding: 12px 10px 12px 14px;
+  background: var(--panel);
 }
 
 .cic-wayfind-ann-rail {
-  flex: 0 1 auto;
-  max-height: 34%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 12px 10px;
+  border-left: 1px solid var(--accent-border-faint);
+  background: var(--navy);
+}
+
+.cic-wayfind-ann-list {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--cic-pad) var(--cic-pad-lg) var(--cic-pad) 0;
-  border-top: 1px solid var(--accent-border-faint);
+}
+
+.cic-wayfind-ann-title {
+  margin-bottom: 10px;
 }
 
 .cic-media16.wayfind-media {
@@ -900,13 +944,24 @@
 }
 
 .cic-screen.layout-zoned:not(.portrait) .cic-dir.compact {
-  font-size: 0.938vmax;
-  line-height: 1.75;
+  font-size: 1.1vmax;
+  line-height: 1.5;
 }
 
-.cic-screen.layout-zoned:not(.portrait) .cic-dir.compact .cic-dir-arrow {
-  font-size: 1.042vmax;
-  width: 1.042vmax;
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-arrow-badge.compact {
+  width: 3.25vmax;
+  height: 3.25vmax;
+  font-size: 2vmax;
+  border-width: 0.16vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-row-compact {
+  gap: 0.75vmax;
+  margin-bottom: 0.75vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-label-compact {
+  font-size: 1.1vmax;
 }
 
 /* Full bleed — location / welcome chips */
@@ -931,9 +986,9 @@
   font-size: var(--cic-ann-sub);
 }
 
-/* Wayfinding — directory column + full-height 16:9 media (reference layout) */
+/* Wayfinding — destination cards + media/announcements split */
 .cic-screen.layout-wayfinding:not(.portrait) {
-  --cic-dir-title: 2.5vmax;
+  --cic-dir-title: 3.75vmax;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-body-wayfind {
@@ -942,81 +997,105 @@
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: var(--cic-pad-lg) calc(var(--cic-pad-lg) + 0.2vmax);
+  flex: 1 1 50%;
+  padding: var(--cic-pad-lg);
   border-right: 1px solid var(--accent-border-faint);
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir-title {
-  font-size: var(--cic-label);
-  letter-spacing: 0.052vmax;
-  margin-bottom: 1.042vmax;
+  font-size: var(--cic-title);
+  letter-spacing: 0.04vmax;
+  margin-bottom: 1.25vmax;
+  color: var(--white);
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-dir.prominent {
-  font-size: 2.5vmax;
+  font-size: var(--cic-dir-title);
+  gap: 0.75vmax;
 }
 
-.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-row {
-  gap: 1.25vmax;
-  margin-bottom: 1.25vmax;
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-card {
+  gap: 1.5vmax;
+  padding: 1.1vmax 1.35vmax;
+  margin-bottom: 1.1vmax;
+  border-left-width: 0.35vmax;
+  border-radius: 0.65vmax;
+  min-height: 9vmax;
 }
 
-.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-arrow-badge {
-  width: 4.583vmax;
-  height: 4.583vmax;
-  border-radius: 0.729vmax;
-  border-width: 0.208vmax;
-  font-size: 2.75vmax;
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-arrow-badge.hero {
+  width: 8vmax;
+  height: 8vmax;
+  font-size: 5vmax;
+  border-radius: 1vmax;
+  border-width: 0.26vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-arrow-badge.compact {
+  width: 3.25vmax;
+  height: 3.25vmax;
+  font-size: 2vmax;
+  border-width: 0.16vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-row-compact {
+  gap: 0.75vmax;
+  margin-bottom: 0.75vmax;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-welcome {
-  margin-top: 1.042vmax;
-  padding: 0.833vmax 0 0;
-  border-top-width: 0.052vmax;
-  font-size: var(--cic-body);
-  gap: 0.521vmax;
+  margin-top: auto;
+  padding: 0.9vmax 1vmax;
+  font-size: var(--cic-welcome);
+  gap: 0.6vmax;
+  border-radius: 0.55vmax;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-welcome .cic-confetti-icon {
-  font-size: var(--cic-body);
+  font-size: var(--cic-welcome);
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-side {
-  max-width: 44%;
+  flex: 1 1 50%;
+  grid-template-columns: 1fr minmax(14vmax, 24%);
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-media-wrap {
-  padding: var(--cic-pad) var(--cic-pad-lg) 0 0;
+  padding: var(--cic-pad-lg) 0.6vmax var(--cic-pad-lg) var(--cic-pad-lg);
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail {
-  padding: var(--cic-pad) var(--cic-pad-lg) var(--cic-pad) 0;
+  padding: var(--cic-pad-lg) var(--cic-pad-lg) var(--cic-pad-lg) 0.6vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-title {
+  font-size: var(--cic-label);
+  margin-bottom: 0.75vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail .cic-ann {
+  margin-bottom: 0.85vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail .cic-anntop {
+  font-size: var(--cic-ann-sub);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail .cic-ann-icon {
+  font-size: var(--cic-ann-sub);
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-media16.wayfind-media {
   height: 100%;
-  width: auto;
+  width: 100%;
   max-width: 100%;
+  aspect-ratio: 16 / 9;
 }
 
 .cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir .cic-railhd {
   font-size: var(--cic-label);
   letter-spacing: 0.052vmax;
   margin-bottom: 0.833vmax;
-}
-
-.cic-screen.layout-wayfinding:not(.portrait) .cic-dir:not(.compact) {
-  font-size: var(--cic-dir-title);
-  line-height: 1.85;
-}
-
-.cic-screen.layout-wayfinding:not(.portrait) .cic-dir:not(.compact) .cic-dir-arrow {
-  font-size: 1.667vmax;
-  width: 1.667vmax;
-  margin-right: 0.313vmax;
-  vertical-align: -0.156vmax;
 }
 
 /* ── Portrait TV scaling (1080×1920 baseline, same vmax tokens) ── */
@@ -1161,53 +1240,50 @@
 
 .cic-screen.portrait.layout-zoned .cic-dir.compact,
 .cic-screen.portrait.layout-wayfinding .cic-dir.compact {
-  font-size: 0.938vmax;
-  line-height: 1.75;
+  font-size: 1.05vmax;
+  line-height: 1.5;
 }
 
-.cic-screen.portrait.layout-zoned .cic-dir.compact .cic-dir-arrow,
-.cic-screen.portrait.layout-wayfinding .cic-dir.compact .cic-dir-arrow {
-  font-size: 1.042vmax;
-  width: 1.042vmax;
+.cic-screen.portrait.layout-zoned .cic-dir-arrow-badge.compact,
+.cic-screen.portrait.layout-wayfinding .cic-dir-arrow-badge.compact {
+  width: 2.75vmax;
+  height: 2.75vmax;
+  font-size: 1.75vmax;
+  border-width: 0.14vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding {
+  --cic-dir-title: 2.75vmax;
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-dir.prominent {
-  font-size: 2.083vmax;
+  font-size: var(--cic-dir-title);
 }
 
-.cic-screen.portrait.layout-wayfinding .cic-dir-row {
-  gap: 1.042vmax;
-  margin-bottom: 1.042vmax;
+.cic-screen.portrait.layout-wayfinding .cic-dir-card {
+  gap: 1.1vmax;
+  padding: 1vmax 1.1vmax;
+  margin-bottom: 1vmax;
+  border-left-width: 0.3vmax;
 }
 
-.cic-screen.portrait.layout-wayfinding .cic-dir-arrow-badge {
-  width: 3.75vmax;
-  height: 3.75vmax;
-  border-radius: 0.625vmax;
-  border-width: 0.177vmax;
-  font-size: 2.25vmax;
+.cic-screen.portrait.layout-wayfinding .cic-dir-arrow-badge.hero {
+  width: 5.5vmax;
+  height: 5.5vmax;
+  font-size: 3.5vmax;
+  border-radius: 0.75vmax;
+  border-width: 0.2vmax;
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-wayfind-welcome {
-  font-size: var(--cic-body);
-  gap: 0.417vmax;
-  margin-top: 0.833vmax;
-  padding-top: 0.729vmax;
+  font-size: var(--cic-welcome);
+  gap: 0.5vmax;
+  margin-top: 0.9vmax;
+  padding: 0.75vmax 0.85vmax;
 }
 
 .cic-screen.portrait.layout-wayfinding .cic-wayfind-welcome .cic-confetti-icon {
-  font-size: var(--cic-body);
-}
-
-.cic-screen.portrait.layout-wayfinding .cic-dir:not(.compact) {
-  font-size: var(--cic-dir-title);
-  line-height: 1.85;
-}
-
-.cic-screen.portrait.layout-wayfinding .cic-dir:not(.compact) .cic-dir-arrow {
-  font-size: 1.667vmax;
-  width: 1.667vmax;
-  margin-right: 0.313vmax;
+  font-size: var(--cic-welcome);
 }
 
 .cic-screen.portrait.layout-full_bleed .cic-locchip {

@@ -182,11 +182,17 @@ function WayfindingDirectory({
   return (
     <div className={className}>
       {entries.map(w => (
-        <div key={w.id} className={prominent ? 'cic-dir-row' : undefined}>
-          <span className={prominent ? 'cic-dir-arrow-badge' : 'cic-dir-arrow'}>
+        <div
+          key={w.id}
+          className={prominent ? 'cic-dir-card' : 'cic-dir-row cic-dir-row-compact'}
+        >
+          <span
+            className={`cic-dir-arrow-badge${prominent ? ' hero' : ' compact'}`}
+            aria-hidden
+          >
             {WAYFINDING_ARROWS[w.direction as WayfindingDirection] || '→'}
           </span>
-          <span className={prominent ? 'cic-dir-label' : undefined}>{w.destination}</span>
+          <span className={prominent ? 'cic-dir-label' : 'cic-dir-label-compact'}>{w.destination}</span>
         </div>
       ))}
       {!entries.length && <div className="cic-empty-muted">Directory coming soon</div>}
@@ -645,11 +651,13 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
                   wayfindMedia
                 />
               </div>
-              <div className="cic-wayfind-ann-rail">
-                <div className="cic-railhd">Announcements</div>
-                {feed.announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
-                {!feed.announcements.length && <div className="cic-empty-muted">No announcements</div>}
-              </div>
+              <aside className="cic-wayfind-ann-rail" aria-label="Announcements">
+                <div className="cic-railhd cic-wayfind-ann-title">Announcements</div>
+                <div className="cic-wayfind-ann-list">
+                  {feed.announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
+                  {!feed.announcements.length && <div className="cic-empty-muted">No announcements</div>}
+                </div>
+              </aside>
             </div>
           </div>
           <TickerBar items={feed.ticker} />
