@@ -191,6 +191,30 @@
   aspect-ratio: auto;
 }
 
+.cic-media-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  transition: opacity var(--crossfade-ms, 700ms) ease-in-out;
+}
+
+.cic-media-layer--out {
+  z-index: 1;
+}
+
+.cic-media-layer--in {
+  z-index: 2;
+  opacity: 0;
+}
+
+.cic-media-layer--out.is-fading {
+  opacity: 0;
+}
+
+.cic-media-layer--in.is-fading {
+  opacity: 1;
+}
+
 .cic-media16 img,
 .cic-media16 video {
   position: absolute;
@@ -198,14 +222,6 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  opacity: 1;
-  transition: opacity 450ms ease;
-}
-
-.cic-media16 img.hidden,
-.cic-media16 video.hidden,
-.cic-html-slide.hidden {
-  opacity: 0;
 }
 
 .cic-html-slide {
@@ -274,7 +290,7 @@
   transform: translateX(-50%);
   display: flex;
   gap: 6px;
-  z-index: 2;
+  z-index: 3;
 }
 
 .cic-dot {

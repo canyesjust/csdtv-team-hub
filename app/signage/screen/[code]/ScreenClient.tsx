@@ -1,7 +1,7 @@
 'use client'
 
 import Hls from 'hls.js'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
 import { announcementIconEmoji } from '@/lib/signage/announcement-icons'
 import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
@@ -41,7 +41,7 @@ export type ScreenFeed = {
 }
 
 const REFRESH_MS = 5_000
-const FADE_MS = 450
+const CROSSFADE_MS = 700
 const HEADING_ROTATE_MS = 3_500
 
 function ConfettiIcon() {
@@ -210,10 +210,66 @@ function WayfindingVisitorWelcome({ visitor, portrait }: { visitor: FeedVisitor;
   )
 }
 
+function MediaSlide({
+  item,
+  layerClass,
+  active,
+  imageSeconds,
+  onAdvance,
+}: {
+  item: FeedMedia | undefined
+  layerClass: string
+  active: boolean
+  imageSeconds: number
+  onAdvance: () => void
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const onAdvanceRef = useRef(onAdvance)
+  onAdvanceRef.current = onAdvance
+
+  const slideSeconds = item?.display_seconds ?? imageSeconds
+
+  useEffect(() => {
+    if (!active || !item || item.type === 'video') return
+    const t = setTimeout(() => onAdvanceRef.current(), slideSeconds * 1000)
+    return () => clearTimeout(t)
+  }, [active, item?.id, item?.type, slideSeconds])
+
+  useEffect(() => {
+    const v = videoRef.current
+    if (!active || !v || !item || item.type !== 'video') return
+    v.load()
+    void v.play().catch(() => {})
+  }, [active, item])
+
+  if (!item) return null
+
+  return (
+    <div className={layerClass}>
+      {item.type === 'image' && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.url} alt={item.title || ''} />
+      )}
+      {item.type === 'video' && (
+        <video
+          ref={videoRef}
+          src={item.url}
+          muted
+          playsInline
+          autoPlay
+          onEnded={() => onAdvanceRef.current()}
+        />
+      )}
+      {item.type === 'html' && item.html && (
+        <div className="cic-html-slide" dangerouslySetInnerHTML={{ __html: item.html }} />
+      )}
+    </div>
+  )
+}
+
 function MediaCarousel({
   media,
   index,
-  visible,
   imageSeconds,
   onAdvance,
   fill,
@@ -222,32 +278,38 @@ function MediaCarousel({
 }: {
   media: FeedMedia[]
   index: number
-  visible: boolean
   imageSeconds: number
   onAdvance: () => void
   fill?: boolean
   portrait?: boolean
   wayfindMedia?: boolean
 }) {
-  const item = media[index]
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const onAdvanceRef = useRef(onAdvance)
-  onAdvanceRef.current = onAdvance
-
-  const slideSeconds = item?.display_seconds ?? imageSeconds
+  const displayedIndexRef = useRef(index)
+  const [crossfade, setCrossfade] = useState<{ from: number; to: number; active: boolean } | null>(null)
 
   useEffect(() => {
-    if (!item || item.type === 'video') return
-    const t = setTimeout(() => onAdvanceRef.current(), slideSeconds * 1000)
-    return () => clearTimeout(t)
-  }, [item?.id, item?.type, slideSeconds])
-
-  useEffect(() => {
-    const v = videoRef.current
-    if (!v || !item || item.type !== 'video') return
-    v.load()
-    void v.play().catch(() => {})
-  }, [item])
+    if (index === displayedIndexRef.current) return
+    if (media.length <= 1) {
+      displayedIndexRef.current = index
+      return
+    }
+    const from = displayedIndexRef.current
+    const to = index
+    setCrossfade({ from, to, active: false })
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setCrossfade(cf => (cf && cf.to === to ? { ...cf, active: true } : cf))
+      })
+    })
+    const t = setTimeout(() => {
+      displayedIndexRef.current = to
+      setCrossfade(null)
+    }, CROSSFADE_MS)
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(t)
+    }
+  }, [index, media.length])
 
   useEffect(() => {
     if (!media.length) return
@@ -263,32 +325,40 @@ function MediaCarousel({
     fill ? 'fill' : '',
     portrait && !fill ? 'portrait-top' : '',
     wayfindMedia ? 'wayfind-media' : '',
+    crossfade ? 'cic-media-crossfading' : '',
   ].filter(Boolean).join(' ')
 
+  const item = media[index]
+
   return (
-    <div className={className}>
-      {item?.type === 'image' && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.url} alt={item.title || ''} className={visible ? '' : 'hidden'} />
-      )}
-      {item?.type === 'video' && (
-        <video
-          ref={videoRef}
-          src={item.url}
-          muted
-          playsInline
-          autoPlay
-          onEnded={() => onAdvanceRef.current()}
-          className={visible ? '' : 'hidden'}
+    <div className={className} style={{ '--crossfade-ms': `${CROSSFADE_MS}ms` } as CSSProperties}>
+      {crossfade ? (
+        <>
+          <MediaSlide
+            item={media[crossfade.from]}
+            layerClass={`cic-media-layer cic-media-layer--out${crossfade.active ? ' is-fading' : ''}`}
+            active={false}
+            imageSeconds={imageSeconds}
+            onAdvance={onAdvance}
+          />
+          <MediaSlide
+            item={media[crossfade.to]}
+            layerClass={`cic-media-layer cic-media-layer--in${crossfade.active ? ' is-fading' : ''}`}
+            active
+            imageSeconds={imageSeconds}
+            onAdvance={onAdvance}
+          />
+        </>
+      ) : (
+        <MediaSlide
+          item={item}
+          layerClass="cic-media-layer"
+          active
+          imageSeconds={imageSeconds}
+          onAdvance={onAdvance}
         />
       )}
-      {item?.type === 'html' && item.html && (
-        <div
-          className={`cic-html-slide${visible ? '' : ' hidden'}`}
-          dangerouslySetInnerHTML={{ __html: item.html }}
-        />
-      )}
-      {!item && (
+      {!item && !crossfade && (
         <div className="cic-media-overlay">
           <div className="cic-msub">No media scheduled</div>
         </div>
@@ -407,7 +477,6 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const [mediaIndex, setMediaIndex] = useState(0)
   const mediaIndexRef = useRef(0)
   const mediaLengthRef = useRef(initialFeed.media.length)
-  const [mediaVisible, setMediaVisible] = useState(true)
   const [now, setNow] = useState(new Date())
   const [headingIndex, setHeadingIndex] = useState(0)
   const [offline, setOffline] = useState(Boolean(initialFeed.offline))
@@ -482,11 +551,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const advanceMedia = useCallback(() => {
     const len = mediaLengthRef.current
     if (!len) return
-    setMediaVisible(false)
-    setTimeout(() => {
-      setMediaIndex(i => (i + 1) % len)
-      setMediaVisible(true)
-    }, FADE_MS)
+    setMediaIndex(i => (i + 1) % len)
   }, [])
 
   const wayfindingHeadings = useMemo(() => {
@@ -542,7 +607,6 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             <MediaCarousel
               media={feed.media}
               index={mediaIndex}
-              visible={mediaVisible}
               imageSeconds={imageSeconds}
               onAdvance={advanceMedia}
               fill
@@ -571,7 +635,6 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             <MediaCarousel
               media={feed.media}
               index={mediaIndex}
-              visible={mediaVisible}
               imageSeconds={imageSeconds}
               onAdvance={advanceMedia}
             />
@@ -600,7 +663,6 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
           <MediaCarousel
             media={feed.media}
             index={mediaIndex}
-            visible={mediaVisible}
             imageSeconds={imageSeconds}
             onAdvance={advanceMedia}
             portrait
@@ -645,7 +707,6 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
                 <MediaCarousel
                   media={feed.media}
                   index={mediaIndex}
-                  visible={mediaVisible}
                   imageSeconds={imageSeconds}
                   onAdvance={advanceMedia}
                   wayfindMedia
@@ -679,7 +740,6 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
           <MediaCarousel
             media={feed.media}
             index={mediaIndex}
-            visible={mediaVisible}
             imageSeconds={imageSeconds}
             onAdvance={advanceMedia}
             portrait
@@ -702,7 +762,6 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         <MediaCarousel
           media={feed.media}
           index={mediaIndex}
-          visible={mediaVisible}
           imageSeconds={imageSeconds}
           onAdvance={advanceMedia}
           fill
