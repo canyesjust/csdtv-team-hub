@@ -23,8 +23,7 @@ import {
   AbleSignSyncAllButton,
 } from '../components/AbleSignControls'
 
-type Screen = {
-  id: string
+type ScreenForm = {
   code: string
   name: string
   area_id: string | null
@@ -36,6 +35,10 @@ type Screen = {
   accepts_takeover: boolean
   active: boolean
   notes: string | null
+}
+
+type Screen = ScreenForm & {
+  id: string
   ablesign_screen_id: number | null
   ablesign_webapp_id: number | null
   ablesign_synced_at: string | null
@@ -43,7 +46,7 @@ type Screen = {
   ablesign_heartbeat_at: string | null
 }
 
-const empty: Omit<Screen, 'id'> = {
+const empty: ScreenForm = {
   code: '', name: '', area_id: null, building: '', floor: null, orientation: 'landscape', layout: 'zoned',
   wayfinding_heading: '', accepts_takeover: true, active: true, notes: '',
 }
@@ -55,7 +58,7 @@ export default function SignageScreensPage() {
   const { areas, refreshCatalog } = useSignage()
   const [loading, setLoading] = useState(true)
   const [screens, setScreens] = useState<Screen[]>([])
-  const [form, setForm] = useState(empty)
+  const [form, setForm] = useState<ScreenForm>(empty)
   const [editId, setEditId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
 
@@ -92,7 +95,19 @@ export default function SignageScreensPage() {
 
   const startEdit = (sc: Screen) => {
     setEditId(sc.id)
-    setForm({ ...sc, building: sc.building || '', wayfinding_heading: sc.wayfinding_heading || '', notes: sc.notes || '' })
+    setForm({
+      code: sc.code,
+      name: sc.name,
+      area_id: sc.area_id,
+      building: sc.building || '',
+      floor: sc.floor,
+      orientation: sc.orientation,
+      layout: sc.layout,
+      wayfinding_heading: sc.wayfinding_heading || '',
+      accepts_takeover: sc.accepts_takeover,
+      active: sc.active,
+      notes: sc.notes || '',
+    })
     setShowForm(true)
   }
 
