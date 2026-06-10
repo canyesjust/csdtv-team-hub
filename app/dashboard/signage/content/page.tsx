@@ -13,10 +13,30 @@ import SignageTargetingPicker, {
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import { SIGNAGE_DEFAULT_DISPLAY_SECONDS, SIGNAGE_MAX_DISPLAY_SECONDS, SIGNAGE_MIN_DISPLAY_SECONDS } from '@/lib/signage/content-display'
-import { signageMediaPublicUrl } from '@/lib/signage/constants'
+import { signageMediaPublicUrl, CIC_SUBMIT_URL } from '@/lib/signage/constants'
 import { prepareSignageImageFile, SIGNAGE_MAX_UPLOAD_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
+
+type Lifecycle = 'active' | 'upcoming' | 'expired' | 'none'
+
+function contentLifecycle(start: string | null, end: string | null, today: string): Lifecycle {
+  const s = start?.slice(0, 10)
+  const e = end?.slice(0, 10)
+  if (!s || !e) return 'none'
+  if (e < today) return 'expired'
+  if (s > today) return 'upcoming'
+  return 'active'
+}
+
+const LIFECYCLE_META: Record<Lifecycle, { label: string; color: string; bg: string }> = {
+  active: { label: 'Showing now', color: '#16a34a', bg: 'rgba(34,197,94,0.14)' },
+  upcoming: { label: 'Scheduled', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
+  expired: { label: 'Ended', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
+  none: { label: '', color: '#6b7280', bg: 'transparent' },
+}
+
+const LIFECYCLE_RANK: Record<Lifecycle, number> = { active: 0, upcoming: 1, none: 2, expired: 3 }
 
 type ContentRow = {
   id: string
@@ -133,6 +153,18 @@ export default function SignageContentPage() {
     display_seconds: row.display_seconds ?? SIGNAGE_DEFAULT_DISPLAY_SECONDS,
     html_body: row.html_body ?? '',
   }
+
+  const today = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }, [])
+  const displayRows = useMemo(() =>
+    tab === 'approved'
+      ? [...rows].sort((a, b) =>
+          LIFECYCLE_RANK[contentLifecycle(a.start_date, a.end_date, today)] -
+          LIFECYCLE_RANK[contentLifecycle(b.start_date, b.end_date, today)])
+      : rows
+  , [rows, tab, today])
 
   const saveEdit = async (row: ContentRow, extra?: Record<string, unknown>) => {
     const e = getEdit(row)
@@ -277,6 +309,16 @@ export default function SignageContentPage() {
 
   return (
     <SignagePageShell title="Content">
+      <div style={{ ...s.card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Share the submission link</div>
+          <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>Send this to anyone who needs to submit content for the CIC screens. It goes to the approval queue.</div>
+          <div style={{ fontSize: 12.5, color: s.text, marginTop: 6, wordBreak: 'break-all', fontFamily: 'ui-monospace, monospace' }}>{CIC_SUBMIT_URL}</div>
+        </div>
+        <button type="button" onClick={() => { void navigator.clipboard.writeText(CIC_SUBMIT_URL); toast('Submission link copied', 'success') }} style={s.btnPrimary}>Copy link</button>
+        <a href={CIC_SUBMIT_URL} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, textDecoration: 'none' }}>Open form</a>
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {(['pending', 'approved', 'rejected'] as Tab[]).map(t => (
           <button key={t} type="button" onClick={() => setTab(t)} style={s.seg(tab === t)}>
@@ -363,8 +405,10 @@ export default function SignageContentPage() {
         <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>Loading…</div>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
-          {rows.map(row => {
+          {displayRows.map(row => {
             const e = getEdit(row)
+            const lc = contentLifecycle(row.start_date, row.end_date, today)
+            const showStatus = tab === 'approved' && lc !== 'none'
             const expanded = expandedId === row.id
             const isHtml = row.type === 'html'
             const preview = !isHtml && row.media_path
@@ -381,6 +425,7 @@ export default function SignageContentPage() {
                   style={{
                     ...s.card,
                     marginTop: 0,
+                    borderLeft: showStatus ? `4px solid ${LIFECYCLE_META[lc].color}` : undefined,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 14,
@@ -398,6 +443,9 @@ export default function SignageContentPage() {
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
+                    {showStatus && (
+                      <span style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 20, marginBottom: 3, color: LIFECYCLE_META[lc].color, background: LIFECYCLE_META[lc].bg }}>{LIFECYCLE_META[lc].label}</span>
+                    )}
                     <div style={{ fontSize: 14, fontWeight: 500, color: s.text }}>{e.title || fileName}</div>
                     <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{submitterLine(row)}</div>
                   </div>
@@ -407,7 +455,7 @@ export default function SignageContentPage() {
             }
 
             return (
-              <div key={row.id} style={s.card}>
+              <div key={row.id} style={{ ...s.card, borderLeft: showStatus ? `4px solid ${LIFECYCLE_META[lc].color}` : undefined }}>
                 <div style={{ display: 'flex', gap: 14 }}>
                   <div style={{ ...s.thumb, width: 150, height: 84, overflow: 'hidden', padding: isHtml ? 8 : 0 }}>
                     {preview ? (
@@ -420,6 +468,9 @@ export default function SignageContentPage() {
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
+                    {showStatus && (
+                      <span style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 20, marginBottom: 4, color: LIFECYCLE_META[lc].color, background: LIFECYCLE_META[lc].bg }}>{LIFECYCLE_META[lc].label}</span>
+                    )}
                     <input
                       value={e.title}
                       onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, title: ev.target.value } }))}
