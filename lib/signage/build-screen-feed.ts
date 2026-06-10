@@ -46,7 +46,7 @@ export async function buildScreenFeed(
 ): Promise<{ feed: ScreenFeed } | { error: 'not_found' | 'server_error' }> {
   const { data: screen, error: screenErr } = await service
     .from('signage_screens')
-    .select('id, code, name, orientation, layout, theme, wayfinding_heading, accepts_takeover, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
+    .select('id, code, name, orientation, layout, theme, site_id, wayfinding_heading, accepts_takeover, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
     .eq('code', code)
     .maybeSingle()
 
@@ -61,6 +61,16 @@ export async function buildScreenFeed(
     | null
   const area = Array.isArray(rawArea) ? rawArea[0] ?? null : rawArea
   const target = { id: screen.id, area_id: screen.area_id }
+  const siteId = (screen.site_id as string | null) ?? null
+
+  let contentQuery = service.from('signage_content').select('*').eq('status', 'approved')
+  let annQuery = service.from('signage_announcements').select('*').eq('active', true)
+  let visitorsQuery = service.from('signage_visitors').select('*').eq('active', true).eq('visit_date', today)
+  if (siteId) {
+    contentQuery = contentQuery.eq('site_id', siteId)
+    annQuery = annQuery.eq('site_id', siteId)
+    visitorsQuery = visitorsQuery.eq('site_id', siteId)
+  }
 
   const [
     contentRes,
@@ -68,16 +78,18 @@ export async function buildScreenFeed(
     wayfindingRes,
     visitorsRes,
     liveRes,
-    settingsRes,
+    siteRes,
   ] = await Promise.all([
-    service.from('signage_content').select('*').eq('status', 'approved'),
-    service.from('signage_announcements').select('*').eq('active', true),
+    contentQuery,
+    annQuery,
     screen.area_id
       ? service.from('signage_wayfinding').select('*').eq('area_id', screen.area_id).order('sort_order')
       : Promise.resolve({ data: [] as unknown[] }),
-    service.from('signage_visitors').select('*').eq('active', true).eq('visit_date', today),
+    visitorsQuery,
     service.from('signage_live').select('*').eq('id', 1).maybeSingle(),
-    service.from('signage_settings').select('*').eq('id', 1).maybeSingle(),
+    siteId
+      ? service.from('signage_sites').select('*').eq('id', siteId).maybeSingle()
+      : service.from('signage_settings').select('*').eq('id', 1).maybeSingle(),
   ])
 
   const media = (contentRes.data ?? [])
@@ -99,9 +111,15 @@ export async function buildScreenFeed(
       }
     })
 
-  const { data: areaRows } = await service.from('signage_areas').select('id, name')
+  let areaRowsQuery = service.from('signage_areas').select('id, name')
+  let screenRowsQuery = service.from('signage_screens').select('id, name')
+  if (siteId) {
+    areaRowsQuery = areaRowsQuery.eq('site_id', siteId)
+    screenRowsQuery = screenRowsQuery.eq('site_id', siteId)
+  }
+  const { data: areaRows } = await areaRowsQuery
   const areaNameById = new Map((areaRows ?? []).map(a => [a.id, a.name]))
-  const { data: screenRows } = await service.from('signage_screens').select('id, name')
+  const { data: screenRows } = await screenRowsQuery
   const screenNameById = new Map((screenRows ?? []).map(sc => [sc.id, sc.name]))
 
   const announcements = (annRes.data ?? [])
@@ -125,9 +143,9 @@ export async function buildScreenFeed(
       priority: 10,
     }))
 
-  const settings = settingsRes.data
-  const weatherLat = Number(settings?.weather_lat ?? 40.5649)
-  const weatherLon = Number(settings?.weather_lon ?? -111.8389)
+  const site = siteRes.data
+  const weatherLat = Number(site?.weather_lat ?? 40.5649)
+  const weatherLon = Number(site?.weather_lon ?? -111.8389)
 
   const [scheduleItems, weather] = await Promise.all([
     scheduleTickerSafe(service, today),
@@ -149,8 +167,8 @@ export async function buildScreenFeed(
     })
   }
 
-  if (settings?.ticker_extra?.trim()) {
-    tickerItems.push({ text: settings.ticker_extra.trim(), priority: 0 })
+  if (site?.ticker_extra?.trim()) {
+    tickerItems.push({ text: site.ticker_extra.trim(), priority: 0 })
   }
 
   const ticker = mergeTickerItems(tickerItems)
@@ -182,8 +200,11 @@ export async function buildScreenFeed(
         layout: normalizeSignageLayout(screen.layout),
         heading: screen.wayfinding_heading,
         area: area ? { name: area.name, slug: area.slug, building: area.building, floor: area.floor } : null,
-        center_name: settings?.center_name ?? 'Canyons Innovation Center',
-        theme: normalizeSignageTheme(screen.theme ?? settings?.default_theme),
+        center_name: site?.center_name ?? 'Canyons Innovation Center',
+        theme: normalizeSignageTheme(screen.theme ?? site?.default_theme),
+        colors: site?.use_brand_colors && site?.bg_color
+          ? { bg: site.bg_color, panel: site.panel_color ?? null, accent: site.accent_color ?? null }
+          : null,
       },
       media,
       announcements,

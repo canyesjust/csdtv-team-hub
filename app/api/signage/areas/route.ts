@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { data, error } = await service.from('signage_areas').insert({
     name: body.name,
+    site_id: body.site_id || null,
     building: body.building || null,
     floor: body.floor ?? null,
     slug: body.slug,

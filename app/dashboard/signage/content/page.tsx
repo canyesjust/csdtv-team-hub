@@ -79,7 +79,7 @@ export default function SignageContentPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { isManager, areas, screens } = useSignage()
+  const { isManager, areas, screens, activeSiteId } = useSignage()
 
   const [tab, setTab] = useState<Tab>('pending')
   const [rows, setRows] = useState<ContentRow[]>([])
@@ -112,14 +112,14 @@ export default function SignageContentPage() {
   })
 
   const loadCounts = useCallback(async () => {
-    const { data } = await supabase.from('signage_content').select('status')
+    const { data } = await supabase.from('signage_content').select('status').eq('site_id', activeSiteId)
     const next = { ...EMPTY_COUNTS }
     for (const row of data ?? []) {
       const st = row.status as Tab
       if (st in next) next[st] += 1
     }
     setCounts(next)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   const loadTab = useCallback(async (activeTab: Tab) => {
     setTabLoading(true)
@@ -127,12 +127,13 @@ export default function SignageContentPage() {
       .from('signage_content')
       .select(CONTENT_COLUMNS)
       .eq('status', activeTab)
+      .eq('site_id', activeSiteId)
       .order('created_at', { ascending: false })
     const list = (data as ContentRow[]) || []
     setRows(list)
     setExpandedId(list[0]?.id ?? null)
     setTabLoading(false)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   const refreshAll = useCallback(async () => {
     await Promise.all([loadCounts(), loadTab(tab)])
@@ -247,6 +248,7 @@ export default function SignageContentPage() {
     fd.set('priority', String(addDates.priority))
     fd.set('display_seconds', String(addDates.display_seconds))
     fd.set('content_type', addContentType)
+    fd.set('site_id', activeSiteId)
     fd.set('all_screens', String(addTargeting.all_screens))
     fd.set('target_area_ids', JSON.stringify(addTargeting.target_area_ids))
     fd.set('target_screen_ids', JSON.stringify(addTargeting.target_screen_ids))

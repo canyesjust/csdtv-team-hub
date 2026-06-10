@@ -316,6 +316,7 @@ export function SignageSubnav({ active, isManager }: { active: string; isManager
     { href: '/dashboard/signage/visitors', label: 'Visitors', managerOnly: true },
     { href: '/dashboard/signage/live', label: 'Live', managerOnly: true },
     { href: '/dashboard/signage/settings', label: 'Settings', managerOnly: true },
+    { href: '/dashboard/signage/sites', label: 'Sites', managerOnly: true },
   ]
 
   const isActive = (href: string) => active === href || active.startsWith(`${href}/`)
@@ -359,14 +360,31 @@ export function useSignageTheme(theme: string) {
 
 export function SignagePageShell({ children, title }: { children: ReactNode; title: string }) {
   const pathname = usePathname()
-  const { isManager } = useSignage()
+  const { isManager, sites, activeSiteId, setActiveSite } = useSignage()
   const { theme } = useTheme()
-  const { text, muted } = useSignageTheme(theme)
+  const { text, muted, border, inputBg } = useSignageTheme(theme)
+  const activeSite = sites.find(s => s.id === activeSiteId)
 
   return (
     <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: text }}>{title}</h1>
-      <p style={{ fontSize: 14, color: muted, margin: '0 0 16px' }}>Canyons Innovation Center signage</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: text }}>{title}</h1>
+          <p style={{ fontSize: 14, color: muted, margin: '0 0 16px' }}>{activeSite ? `${activeSite.name} signage` : 'Digital signage'}</p>
+        </div>
+        {sites.length > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: muted }}>
+            Location
+            <select
+              value={activeSiteId}
+              onChange={e => setActiveSite(e.target.value)}
+              style={{ background: inputBg, color: text, border: `1px solid ${border}`, borderRadius: 8, padding: '6px 10px', fontSize: 14, fontFamily: 'inherit' }}
+            >
+              {sites.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
       <SignageSubnav active={pathname} isManager={isManager} />
       {children}
     </div>

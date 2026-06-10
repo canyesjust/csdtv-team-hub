@@ -31,6 +31,7 @@ export type ScreenFeed = {
     area: { name: string; slug: string; building: string | null; floor: number | null } | null
     center_name: string
     theme: SignageTheme
+    colors: { bg: string; panel: string | null; accent: string | null } | null
   }
   media: FeedMedia[]
   announcements: FeedAnnouncement[]
@@ -536,6 +537,30 @@ type ScreenClientProps = {
   imageSeconds: number
 }
 
+// Per-site brand colors → CSS variables. Light brand backgrounds are auto-
+// darkened so white signage text stays legible.
+function ensureDarkBg(hex: string): string {
+  const m = hex.replace('#', '')
+  const full = m.length === 3 ? m.split('').map(c => c + c).join('') : m
+  if (full.length !== 6) return hex
+  const r = parseInt(full.slice(0, 2), 16)
+  const g = parseInt(full.slice(2, 4), 16)
+  const b = parseInt(full.slice(4, 6), 16)
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  return lum > 110 ? `color-mix(in srgb, ${hex} 52%, #0a0a0a)` : hex
+}
+
+function siteColorVars(colors: { bg: string; panel: string | null; accent: string | null } | null): CSSProperties | undefined {
+  if (!colors?.bg) return undefined
+  const bg = ensureDarkBg(colors.bg)
+  const vars: Record<string, string> = {
+    '--navy': bg,
+    '--panel': colors.panel || `color-mix(in srgb, ${bg} 78%, #ffffff)`,
+  }
+  if (colors.accent) vars['--accent'] = colors.accent
+  return vars as CSSProperties
+}
+
 export default function ScreenClient({ code, initialFeed, imageSeconds }: ScreenClientProps) {
   const [feed, setFeed] = useState<ScreenFeed>(initialFeed)
   const [mediaIndex, setMediaIndex] = useState(0)
@@ -644,10 +669,11 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
     : feed.screen.center_name
 
   const screenClass = `cic-screen${portrait ? ' portrait' : ''} layout-${layout} cic-theme-${feed.screen.theme}`
+  const siteStyle = siteColorVars(feed.screen.colors)
 
   if (offline) {
     return (
-      <div className={screenClass}>
+      <div className={screenClass} style={siteStyle}>
         <SignageBackground />
         <div className="cic-screen-content">
           <OfflineFallback centerName={feed.screen.center_name} />

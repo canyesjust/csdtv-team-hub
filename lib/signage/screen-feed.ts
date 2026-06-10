@@ -43,6 +43,7 @@ export type ScreenFeed = {
     area: { name: string; slug: string; building: string | null; floor: number | null } | null
     center_name: string
     theme: SignageTheme
+    colors: { bg: string; panel: string | null; accent: string | null } | null
   }
   media: ScreenFeedMedia[]
   announcements: ScreenFeedAnnouncement[]

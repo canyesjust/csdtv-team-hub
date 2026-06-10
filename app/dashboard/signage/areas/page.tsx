@@ -22,7 +22,7 @@ export default function SignageAreasPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { refreshCatalog } = useSignage()
+  const { refreshCatalog, activeSiteId } = useSignage()
   const [loading, setLoading] = useState(true)
   const [areas, setAreas] = useState<Area[]>([])
   const [form, setForm] = useState(empty)
@@ -30,10 +30,10 @@ export default function SignageAreasPage() {
   const [showForm, setShowForm] = useState(false)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('signage_areas').select('*').order('sort_order')
+    const { data } = await supabase.from('signage_areas').select('*').eq('site_id', activeSiteId).order('sort_order')
     setAreas(data || [])
     setLoading(false)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   useEffect(() => { void load() }, [load])
 
@@ -70,7 +70,7 @@ export default function SignageAreasPage() {
     const res = await fetch('/api/signage/areas', {
       method: editId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editId ? { id: editId, ...body } : body),
+      body: JSON.stringify(editId ? { id: editId, ...body } : { ...body, site_id: activeSiteId }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Save failed', 'error'); return }

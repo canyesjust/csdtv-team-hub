@@ -56,7 +56,7 @@ export default function SignageScreensPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { areas, refreshCatalog } = useSignage()
+  const { areas, refreshCatalog, activeSiteId } = useSignage()
   const [loading, setLoading] = useState(true)
   const [screens, setScreens] = useState<Screen[]>([])
   const [form, setForm] = useState<ScreenForm>(empty)
@@ -66,10 +66,11 @@ export default function SignageScreensPage() {
   const areaName = (areaId: string | null) => areas.find(a => a.id === areaId)?.name ?? '—'
 
   const loadScreens = useCallback(async () => {
-    const { data } = await supabase.from('signage_screens').select('*').order('code')
+    if (!activeSiteId) { setScreens([]); setLoading(false); return }
+    const { data } = await supabase.from('signage_screens').select('*').eq('site_id', activeSiteId).order('code')
     setScreens(data || [])
     setLoading(false)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   useEffect(() => { void loadScreens() }, [loadScreens])
 
@@ -80,7 +81,7 @@ export default function SignageScreensPage() {
   }
 
   const save = async () => {
-    const body = { ...form, area_id: form.area_id || null, floor: form.floor ? Number(form.floor) : null, building: form.building || null, wayfinding_heading: form.wayfinding_heading || null, notes: form.notes || null, theme: form.theme || null }
+    const body = { ...form, area_id: form.area_id || null, floor: form.floor ? Number(form.floor) : null, building: form.building || null, wayfinding_heading: form.wayfinding_heading || null, notes: form.notes || null, theme: form.theme || null, site_id: activeSiteId }
     const res = await fetch('/api/signage/screens', { method: editId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editId ? { id: editId, ...body } : body) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { toast(data.error || 'Save failed', 'error'); return }

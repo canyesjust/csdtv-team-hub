@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSignage } from '../components/SignageProvider'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
@@ -21,6 +22,7 @@ const emptyForm = { name: '', note: '', visit_date: '', active: true }
 export default function SignageVisitorsPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
+  const { activeSiteId } = useSignage()
   const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<VisitorRow[]>([])
@@ -38,10 +40,11 @@ export default function SignageVisitorsPage() {
     const { data } = await supabase
       .from('signage_visitors')
       .select('id, name, note, visit_date, active')
+      .eq('site_id', activeSiteId)
       .order('visit_date', { ascending: false })
     setRows(data || [])
     setLoading(false)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   useEffect(() => { void load() }, [load])
 
@@ -61,7 +64,7 @@ export default function SignageVisitorsPage() {
     const res = await fetch('/api/signage/visitors', {
       method: editId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editId ? { id: editId, ...form } : form),
+      body: JSON.stringify(editId ? { id: editId, ...form } : { ...form, site_id: activeSiteId }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Save failed', 'error'); return }

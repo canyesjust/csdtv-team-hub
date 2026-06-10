@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     orientation: body.orientation || 'landscape',
     layout: body.layout || 'zoned',
     theme: body.theme || null,
+    site_id: body.site_id || null,
     wayfinding_heading: body.wayfinding_heading || null,
     accepts_takeover: body.accepts_takeover ?? true,
     active: body.active ?? true,

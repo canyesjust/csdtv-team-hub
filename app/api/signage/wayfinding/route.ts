@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { data, error } = await service.from('signage_wayfinding').insert({
     area_id: body.area_id,
+    site_id: body.site_id || null,
     destination: body.destination,
     direction: body.direction,
     sort_order: body.sort_order ?? 0,

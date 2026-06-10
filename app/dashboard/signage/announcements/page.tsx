@@ -58,7 +58,7 @@ export default function SignageAnnouncementsPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { areas, screens } = useSignage()
+  const { areas, screens, activeSiteId } = useSignage()
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<AnnouncementRow[]>([])
   const [form, setForm] = useState(emptyForm)
@@ -77,6 +77,7 @@ export default function SignageAnnouncementsPage() {
     const { data, error } = await supabase
       .from('signage_announcements')
       .select('id, title, subtitle, icon, start_date, end_date, priority, in_ticker, active, all_screens, target_area_ids, target_screen_ids')
+      .eq('site_id', activeSiteId)
       .order('start_date', { ascending: false })
     if (error) {
       toast(error.message, 'error')
@@ -85,7 +86,7 @@ export default function SignageAnnouncementsPage() {
     }
     setRows((data as AnnouncementRow[]) || [])
     setLoading(false)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   useEffect(() => { void load() }, [load])
 
@@ -129,7 +130,7 @@ export default function SignageAnnouncementsPage() {
     const res = await fetch('/api/signage/announcements', {
       method: editId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(editId ? payload : { ...payload, site_id: activeSiteId }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Save failed', 'error'); return }

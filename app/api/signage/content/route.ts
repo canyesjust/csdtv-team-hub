@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await service.from('signage_content').insert({
     type,
+    site_id: String(form.get('site_id') ?? '') || null,
     title: title || null,
     media_path: mediaPath,
     thumb_path: thumbPath,

@@ -24,7 +24,7 @@ export default function SignageWayfindingPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { areas } = useSignage()
+  const { areas, activeSiteId } = useSignage()
   const [loading, setLoading] = useState(true)
   const [entries, setEntries] = useState<WayfindingRow[]>([])
   const [form, setForm] = useState(emptyForm)
@@ -38,10 +38,10 @@ export default function SignageWayfindingPage() {
   }
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('signage_wayfinding').select('id, area_id, destination, direction, sort_order').order('sort_order')
+    const { data } = await supabase.from('signage_wayfinding').select('id, area_id, destination, direction, sort_order').eq('site_id', activeSiteId).order('sort_order')
     setEntries(data || [])
     setLoading(false)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   useEffect(() => { void load() }, [load])
 
@@ -61,7 +61,7 @@ export default function SignageWayfindingPage() {
     const res = await fetch('/api/signage/wayfinding', {
       method: editId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(editId ? { id: editId, ...form } : form),
+      body: JSON.stringify(editId ? { id: editId, ...form } : { ...form, site_id: activeSiteId }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Save failed', 'error'); return }

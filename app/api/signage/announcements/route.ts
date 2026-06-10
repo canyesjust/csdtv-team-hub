@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
     : normalizeSignageAnnouncementIcon(null)
   const { data, error } = await service.from('signage_announcements').insert({
     title: body.title,
+    site_id: body.site_id || null,
     subtitle: body.subtitle || null,
     icon,
     all_screens: body.all_screens ?? (
