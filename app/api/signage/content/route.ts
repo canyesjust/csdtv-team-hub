@@ -5,7 +5,10 @@ import {
   extFromVideoMime,
   isAllowedImageMime,
   isAllowedVideoMime,
+  isHeicFile,
   processSignageImage,
+  resolveImageMime,
+  resolveVideoMime,
   validateVideoBuffer,
 } from '@/lib/signage/media-process'
 
@@ -43,29 +46,46 @@ export async function POST(request: NextRequest) {
   let mediaPath = ''
   let thumbPath: string | null = null
 
+  if (
+    !allScreens &&
+    targetAreaIds.length === 0 &&
+    targetScreenIds.length === 0
+  ) {
+    return NextResponse.json({ error: 'Select "All screens" or at least one area/screen.' }, { status: 400 })
+  }
+
   try {
     if (hasImage && image instanceof File) {
-      if (!isAllowedImageMime(image.type)) {
+      if (isHeicFile(image)) {
+        return NextResponse.json({ error: 'HEIC photos are not supported. Save as JPG or PNG first.' }, { status: 400 })
+      }
+      const imageMime = resolveImageMime(image)
+      if (!isAllowedImageMime(imageMime)) {
         return NextResponse.json({ error: 'Image must be JPG, PNG, or WebP.' }, { status: 400 })
       }
       const processed = await processSignageImage(Buffer.from(await image.arrayBuffer()))
       const id = crypto.randomUUID()
       mediaPath = `${id}.${processed.ext}`
       thumbPath = `${id}-thumb.${processed.ext}`
-      await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(mediaPath, processed.main, { contentType: processed.contentType })
-      await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(thumbPath, processed.thumb, { contentType: processed.contentType })
+      const { error: upMain } = await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(mediaPath, processed.main, { contentType: processed.contentType, upsert: false })
+      if (upMain) throw upMain
+      const { error: upThumb } = await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(thumbPath, processed.thumb, { contentType: processed.contentType, upsert: false })
+      if (upThumb) throw upThumb
     } else if (hasVideo && video instanceof File) {
       type = 'video'
-      if (!isAllowedVideoMime(video.type)) {
+      const videoMime = resolveVideoMime(video)
+      if (!isAllowedVideoMime(videoMime)) {
         return NextResponse.json({ error: 'Video must be MP4.' }, { status: 400 })
       }
       const raw = Buffer.from(await video.arrayBuffer())
-      validateVideoBuffer(raw, video.type)
-      mediaPath = `${crypto.randomUUID()}.${extFromVideoMime(video.type)}`
-      await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(mediaPath, raw, { contentType: video.type })
+      validateVideoBuffer(raw, videoMime)
+      mediaPath = `${crypto.randomUUID()}.${extFromVideoMime(videoMime)}`
+      const { error: upVid } = await service.storage.from(SIGNAGE_MEDIA_BUCKET).upload(mediaPath, raw, { contentType: videoMime, upsert: false })
+      if (upVid) throw upVid
     }
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Upload failed' }, { status: 400 })
+    const msg = e instanceof Error ? e.message : 'Upload failed'
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
 
   const { data, error } = await service.from('signage_content').insert({

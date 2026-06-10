@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import FilePickButton from '@/components/FilePickButton'
+import SignageDateInput from '@/components/SignageDateInput'
 
 const colors = {
   bg: '#f8f9fc',
@@ -159,11 +160,11 @@ export default function CicSignageSubmitPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <label style={{ display: 'grid', gap: '6px' }}>
                   <span style={{ fontSize: '13px', fontWeight: 600 }}>Show from *</span>
-                  <input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} style={inputStyle} />
+                  <SignageDateInput value={form.start_date} defaultToToday onChange={v => setForm(f => ({ ...f, start_date: v }))} style={inputStyle} />
                 </label>
                 <label style={{ display: 'grid', gap: '6px' }}>
                   <span style={{ fontSize: '13px', fontWeight: 600 }}>Show until *</span>
-                  <input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} style={inputStyle} />
+                  <SignageDateInput value={form.end_date} onChange={v => setForm(f => ({ ...f, end_date: v }))} style={inputStyle} min={form.start_date || undefined} />
                 </label>
               </div>
               <label style={{ display: 'grid', gap: '6px' }}>

@@ -9,6 +9,13 @@ export const CIC_PALETTE = {
 
 export const SIGNAGE_MEDIA_BUCKET = 'signage-media'
 
+/** CIC is in Utah — feed date windows use this zone, not UTC. */
+export const SIGNAGE_TIMEZONE = 'America/Denver'
+
+export function signageTodayDateString(now = new Date()): string {
+  return now.toLocaleDateString('en-CA', { timeZone: SIGNAGE_TIMEZONE })
+}
+
 export const CIC_REVIEW_URL = 'https://www.csdtvstaff.org/dashboard/signage/content'
 export const CIC_SUBMIT_URL = 'https://www.csdtvstaff.org/signage/submit'
 

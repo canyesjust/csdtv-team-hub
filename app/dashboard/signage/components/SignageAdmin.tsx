@@ -1,6 +1,11 @@
 'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { useTheme } from '@/lib/theme'
+import { useSignage } from './SignageProvider'
+import { toast } from '@/lib/toast'
 
 export type SignageArea = { id: string; name: string; slug: string }
 export type SignageScreen = { id: string; code: string; name: string; area_id: string | null }
@@ -87,6 +92,8 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
 }
 
 export function SignageSubnav({ active, isManager }: { active: string; isManager: boolean }) {
+  const { theme } = useTheme()
+  const { text, border } = useSignageTheme(theme)
   const links: { href: string; label: string; managerOnly?: boolean }[] = [
     { href: '/dashboard/signage/content', label: 'Content' },
     { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
@@ -98,25 +105,28 @@ export function SignageSubnav({ active, isManager }: { active: string; isManager
     { href: '/dashboard/signage/settings', label: 'Settings', managerOnly: true },
   ]
 
+  const isActive = (href: string) => active === href || active.startsWith(`${href}/`)
+
   return (
     <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
       {links.filter(l => isManager || !l.managerOnly).map(l => (
-        <a
+        <Link
           key={l.href}
           href={l.href}
+          prefetch
           style={{
             padding: '8px 14px',
             borderRadius: 10,
             fontSize: 14,
-            fontWeight: active === l.href ? 600 : 400,
-            background: active === l.href ? '#162844' : 'transparent',
-            color: active === l.href ? '#fefefe' : 'inherit',
+            fontWeight: isActive(l.href) ? 600 : 400,
+            background: isActive(l.href) ? '#162844' : 'transparent',
+            color: isActive(l.href) ? '#fefefe' : text,
             textDecoration: 'none',
-            border: '1px solid rgba(0,0,0,0.08)',
+            border: `1px solid ${border}`,
           }}
         >
           {l.label}
-        </a>
+        </Link>
       ))}
     </nav>
   )
@@ -135,11 +145,61 @@ export function useSignageTheme(theme: string) {
 }
 
 export function SignagePageShell({ children, title }: { children: ReactNode; title: string }) {
+  const pathname = usePathname()
+  const { isManager } = useSignage()
+  const { theme } = useTheme()
+  const { text, muted } = useSignageTheme(theme)
+
   return (
     <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 4px' }}>{title}</h1>
-      <p style={{ fontSize: 14, color: '#6b7280', margin: '0 0 16px' }}>Canyons Innovation Center signage</p>
+      <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: text }}>{title}</h1>
+      <p style={{ fontSize: 14, color: muted, margin: '0 0 16px' }}>Canyons Innovation Center signage</p>
+      <SignageSubnav active={pathname} isManager={isManager} />
       {children}
     </div>
+  )
+}
+
+const deleteBtnStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  borderRadius: 8,
+  border: 'none',
+  background: 'transparent',
+  color: '#ef4444',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  fontSize: 13,
+  fontWeight: 600,
+}
+
+export async function deleteSignageItem(apiPath: string, id: string): Promise<boolean> {
+  const res = await fetch(`${apiPath}?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    toast(data.error || 'Delete failed', 'error')
+    return false
+  }
+  toast('Deleted', 'success')
+  return true
+}
+
+type SignageDeleteButtonProps = {
+  label?: string
+  confirmMessage: string
+  onConfirm: () => void | Promise<void>
+}
+
+export function SignageDeleteButton({ label = 'Delete', confirmMessage, onConfirm }: SignageDeleteButtonProps) {
+  return (
+    <button
+      type="button"
+      style={deleteBtnStyle}
+      onClick={() => {
+        if (!confirm(confirmMessage)) return
+        void onConfirm()
+      }}
+    >
+      {label}
+    </button>
   )
 }

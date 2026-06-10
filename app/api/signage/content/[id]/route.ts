@@ -38,6 +38,14 @@ export async function PATCH(
     patch.status = body.status
     patch.reviewed_by = user.id
     patch.reviewed_at = new Date().toISOString()
+    if (body.status === 'approved') {
+      const allScreens = typeof body.all_screens === 'boolean' ? body.all_screens : existing.all_screens
+      const areaIds = Array.isArray(body.target_area_ids) ? body.target_area_ids : existing.target_area_ids
+      const screenIds = Array.isArray(body.target_screen_ids) ? body.target_screen_ids : existing.target_screen_ids
+      if (!allScreens && areaIds.length === 0 && screenIds.length === 0) {
+        patch.all_screens = true
+      }
+    }
   }
   if (typeof body.all_screens === 'boolean') patch.all_screens = body.all_screens
   if (Array.isArray(body.target_area_ids)) patch.target_area_ids = body.target_area_ids

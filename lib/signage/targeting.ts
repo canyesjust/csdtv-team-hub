@@ -24,8 +24,10 @@ export function signageTargetMatches(
   return false
 }
 
+import { signageTodayDateString } from './constants'
+
 export function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10)
+  return signageTodayDateString()
 }
 
 export function isInDateRange(startDate: string, endDate: string, today: string): boolean {

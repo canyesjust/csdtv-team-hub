@@ -8,6 +8,36 @@ const MAX_VIDEO_BYTES = 25 * 1024 * 1024
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const VIDEO_TYPES = new Set(['video/mp4'])
 
+const EXT_TO_IMAGE_MIME: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+}
+
+/** Browsers often omit File.type — infer from extension when possible. */
+export function resolveImageMime(file: File): string {
+  const declared = file.type.trim().toLowerCase()
+  if (declared && declared !== 'application/octet-stream') return declared
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+  return EXT_TO_IMAGE_MIME[ext] ?? declared
+}
+
+export function resolveVideoMime(file: File): string {
+  const declared = file.type.trim().toLowerCase()
+  if (declared && declared !== 'application/octet-stream') return declared
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+  if (ext === 'mp4') return 'video/mp4'
+  return declared
+}
+
+export function isHeicFile(file: File): boolean {
+  const mime = resolveImageMime(file)
+  if (mime === 'image/heic' || mime === 'image/heif') return true
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+  return ext === 'heic' || ext === 'heif'
+}
+
 export function isAllowedImageMime(mime: string): boolean {
   return IMAGE_TYPES.has(mime)
 }
