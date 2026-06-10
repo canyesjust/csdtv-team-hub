@@ -190,6 +190,10 @@ export default function SettingsPage() {
       if (prefs) setNotifPrefs(prefs)
     }
 
+    // Core settings are ready — show the page now. The signage integration
+    // status below is only used on the signage tab, so it loads in the background.
+    setLoading(false)
+
     try {
       const sigRes = await fetch('/api/dashboard/signage-links', { cache: 'no-store' })
       const sigBody = await sigRes.json().catch(() => ({}))
@@ -218,8 +222,6 @@ export default function SettingsPage() {
       setSignageOutlookEnabled(false)
       setSignageOutlookConfigured(false)
     }
-
-    setLoading(false)
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])

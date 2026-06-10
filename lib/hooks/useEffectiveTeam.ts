@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import {
+  clearEffectiveTeamCache,
   fetchEffectiveTeam,
   type EffectiveTeamMember,
   type EffectiveTeamResponse,
@@ -38,6 +39,6 @@ export function useEffectiveTeam(): UseEffectiveTeamResult {
     team: data?.team ?? null,
     isViewAs: data?.isViewAs ?? false,
     actorName: data?.actor?.name ?? null,
-    refresh: () => setTick((t) => t + 1),
+    refresh: () => { clearEffectiveTeamCache(); setTick((t) => t + 1) },
   }
 }

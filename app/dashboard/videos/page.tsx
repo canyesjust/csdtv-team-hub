@@ -92,17 +92,22 @@ export default function VideosPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [videosRes, userRes, prodsRes, schoolsRes] = await Promise.all([
+    const [videosRes, userRes] = await Promise.all([
       supabase.from('videos').select('id, title, description, video_type, status, production_id, school_department, school_year, visibility, date_filmed, date_published, thumbnail_url, created_by, created_at, updated_at, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, needs_review, youtube_tags, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }),
       resolveEffectiveTeamRow<TeamMember>(supabase, 'id, name, role'),
-      supabase.from('productions').select('id, title, production_number, start_datetime, organizer_name').order('production_number', { ascending: false }).limit(500),
-      supabase.from('schools').select('code, name'),
     ])
     setVideos((videosRes.data as unknown as Video[]) || [])
     setCurrentUser(userRes)
+    // Show the video grid now; the productions + schools lists are only used in
+    // the add/edit dropdowns, so they load in the background.
+    setLoading(false)
+
+    const [prodsRes, schoolsRes] = await Promise.all([
+      supabase.from('productions').select('id, title, production_number, start_datetime, organizer_name').order('production_number', { ascending: false }).limit(500),
+      supabase.from('schools').select('code, name'),
+    ])
     setProductions(prodsRes.data || [])
     setSchools(schoolsRes.data || [])
-    setLoading(false)
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
