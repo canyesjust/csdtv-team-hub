@@ -384,6 +384,14 @@ function ProductionsPageContent() {
     ;(dismissedData || []).forEach((d: any) => { dSet.add(`${d.production_a_id}-${d.production_b_id}`); dSet.add(`${d.production_b_id}-${d.production_a_id}`) })
     setDismissedConflicts(dSet)
 
+    const latestSync = (prodsData || []).reduce<string | null>((max, p) =>
+      p.synced_at && (!max || p.synced_at > max) ? p.synced_at : max, null)
+    if (latestSync) setLastSync(latestSync)
+    // Paint the list now. The activity backfill below only refines a few chip
+    // counts and badges (YouTube-email-pending, complete-requested), so it runs
+    // in the background instead of blocking first render.
+    setLoading(false)
+
     const organizerEmailActs: { production_id: string; detail: string | null }[] = []
     const completeRequestedActs: { production_id: string }[] = []
     const requestedInProgressActs: { production_id: string }[] = []
@@ -438,11 +446,6 @@ function ProductionsPageContent() {
     setOrganizerYoutubeEmailedIds(productionIdsFromOrganizerYoutubeActivity(organizerEmailActs || []))
     setCompleteRequestedIds(new Set((completeRequestedActs || []).map(r => r.production_id)))
     setRequestedInProgressIds(new Set((requestedInProgressActs || []).map(r => r.production_id)))
-
-    const latestSync = (prodsData || []).reduce<string | null>((max, p) =>
-      p.synced_at && (!max || p.synced_at > max) ? p.synced_at : max, null)
-    if (latestSync) setLastSync(latestSync)
-    setLoading(false)
   }, [supabase, sortProductions])
 
   useEffect(() => { loadData() }, [loadData])
