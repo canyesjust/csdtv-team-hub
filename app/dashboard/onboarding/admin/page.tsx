@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 import Loader from '../../components/Loader'
 import {
   ONBOARDING_TRACK_INTERN,
@@ -182,7 +183,7 @@ function OnboardingAdminContent() {
       const res = await fetch('/api/admin/onboarding/reapply-student-template', { method: 'POST' })
       const body = (await res.json()) as { error?: string }
       if (!res.ok) {
-        alert(body.error || 'Failed to reload template')
+        toast(body.error || 'Failed to reload template', 'error')
         return
       }
       await load()

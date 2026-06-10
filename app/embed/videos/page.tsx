@@ -80,7 +80,7 @@ export default function EmbedVideosPage() {
           >
             {/* Thumbnail */}
             <div style={{ position: 'relative', paddingTop: '56.25%', background: '#f1f5f9', overflow: 'hidden' }}>
-              {v.youtube_thumbnail && <img src={v.youtube_thumbnail} alt="" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+              {v.youtube_thumbnail && <img src={v.youtube_thumbnail} alt="" loading="lazy" decoding="async" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
               {v.youtube_duration && (
                 <span style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px' }}>{v.youtube_duration}</span>
               )}

@@ -29,6 +29,10 @@ const VIDEO_TYPES = ['Recap', 'Promo', 'Event Coverage', 'Interview', 'B-Roll', 
 const STATUSES = ['Filming', 'Editing', 'Review', 'Published', 'Archived', 'Hidden']
 const VISIBILITIES = ['Public', 'Internal', 'Unlisted']
 
+/** Smaller YouTube thumbnail (mqdefault, 320x180) for list/grid rendering instead of the stored high-res one. */
+const smallThumb = (v: { youtube_id: string | null; youtube_thumbnail: string | null }) =>
+  v.youtube_id ? `https://i.ytimg.com/vi/${v.youtube_id}/mqdefault.jpg` : v.youtube_thumbnail
+
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   'Filming': { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b' },
   'Editing': { bg: 'rgba(168,85,247,0.15)', color: '#a855f7' },
@@ -87,12 +91,12 @@ export default function VideosPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     const [videosRes, userRes, prodsRes, schoolsRes] = await Promise.all([
-      supabase.from('videos').select('*, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }),
+      supabase.from('videos').select('id, title, description, video_type, status, production_id, school_department, school_year, visibility, date_filmed, date_published, thumbnail_url, created_by, created_at, updated_at, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, needs_review, youtube_tags, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }),
       resolveEffectiveTeamRow<TeamMember>(supabase, 'id, name, role'),
       supabase.from('productions').select('id, title, production_number, start_datetime, organizer_name').order('production_number', { ascending: false }).limit(500),
       supabase.from('schools').select('code, name'),
     ])
-    setVideos(videosRes.data || [])
+    setVideos((videosRes.data as unknown as Video[]) || [])
     setCurrentUser(userRes)
     setProductions(prodsRes.data || [])
     setSchools(schoolsRes.data || [])
@@ -528,7 +532,7 @@ export default function VideosPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '14px', padding: '12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '10px', marginBottom: '14px' }}>
-              {video.youtube_thumbnail && <img src={video.youtube_thumbnail} alt="" style={{ width: '120px', height: '68px', objectFit: 'cover' as const, borderRadius: '6px', flexShrink: 0 }} />}
+              {video.youtube_thumbnail && <img src={smallThumb(video) || ''} alt="" loading="lazy" decoding="async" style={{ width: '120px', height: '68px', objectFit: 'cover' as const, borderRadius: '6px', flexShrink: 0 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{video.title}</p>
                 <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
@@ -752,7 +756,7 @@ export default function VideosPage() {
                           <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusDot, flexShrink: 0 }} title={video.needs_review ? 'Needs review' : video.production_id ? 'Linked' : 'No production'} />
                           {video.youtube_thumbnail ? (
                             <a href={video.youtube_url || `https://youtube.com/watch?v=${video.youtube_id}`} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0 }}>
-                              <img src={video.youtube_thumbnail} alt="" style={{ width: '64px', height: '36px', objectFit: 'cover' as const, borderRadius: '4px' }} />
+                              <img src={smallThumb(video) || ''} alt="" loading="lazy" decoding="async" style={{ width: '64px', height: '36px', objectFit: 'cover' as const, borderRadius: '4px' }} />
                             </a>
                           ) : <div style={{ width: '64px', height: '36px', borderRadius: '4px', background: 'var(--surface-2)', flexShrink: 0 }} />}
                           <div style={{ minWidth: 0 }}>

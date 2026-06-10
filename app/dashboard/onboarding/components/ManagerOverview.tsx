@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { toast } from '@/lib/toast'
 import { useTheme } from '@/lib/theme'
 import Loader from '../../components/Loader'
 import {
@@ -125,7 +126,7 @@ export default function ManagerOverview() {
   const handleStart = async (memberId: string, trackId: OnboardingTrackId) => {
     setStarting(memberId)
     const { error } = await startOnboardingForMember(supabase, trackId, memberId)
-    if (error) alert(error)
+    if (error) toast(error, 'error')
     await load()
     setStarting(null)
   }
