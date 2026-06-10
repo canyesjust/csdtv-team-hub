@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <circle cx="60" cy="60" r="52" stroke="#96b7c8" stroke-width="4"/>
+  <circle cx="60" cy="60" r="36" stroke="#96b7c8" stroke-width="2" opacity="0.5"/>
+  <text x="60" y="68" text-anchor="middle" fill="#96b7c8" font-family="system-ui,sans-serif" font-size="18" font-weight="600">CIC</text>
+</svg>

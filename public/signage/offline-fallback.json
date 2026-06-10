@@ -1,0 +1,11 @@
+{
+  "offline": true,
+  "screen": { "name": "Offline", "orientation": "landscape", "layout": "zoned", "center_name": "Canyons Innovation Center" },
+  "media": [],
+  "announcements": [],
+  "ticker": ["Display will resume shortly"],
+  "wayfinding": [],
+  "visitors": [],
+  "live": { "live": false },
+  "weather": { "tempF": null, "condition": "", "icon": "🌤" }
+}

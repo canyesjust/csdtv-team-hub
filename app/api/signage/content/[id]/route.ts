@@ -1,0 +1,89 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireManagerApi, requireSignageApproverApi } from '@/lib/signage/server-auth'
+import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
+import { emailSignageSubmitterDecision } from '@/lib/signage/email'
+import {
+  isAllowedImageMime,
+  isAllowedVideoMime,
+  processSignageImage,
+  validateVideoBuffer,
+  extFromVideoMime,
+} from '@/lib/signage/media-process'
+
+export const dynamic = 'force-dynamic'
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireSignageApproverApi()
+  if ('error' in auth) return auth.error
+  const { user, service } = auth
+  const { id } = await params
+
+  const body = await request.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
+  }
+
+  const { data: existing } = await service.from('signage_content').select('*').eq('id', id).maybeSingle()
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+  if (typeof body.status === 'string') {
+    if (!['pending', 'approved', 'rejected'].includes(body.status)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+    }
+    patch.status = body.status
+    patch.reviewed_by = user.id
+    patch.reviewed_at = new Date().toISOString()
+  }
+  if (typeof body.all_screens === 'boolean') patch.all_screens = body.all_screens
+  if (Array.isArray(body.target_area_ids)) patch.target_area_ids = body.target_area_ids
+  if (Array.isArray(body.target_screen_ids)) patch.target_screen_ids = body.target_screen_ids
+  if (typeof body.start_date === 'string') patch.start_date = body.start_date
+  if (typeof body.end_date === 'string') patch.end_date = body.end_date
+  if (typeof body.priority === 'number') patch.priority = body.priority
+  if (typeof body.full_screen === 'boolean') patch.full_screen = body.full_screen
+  if (typeof body.title === 'string') patch.title = body.title
+  if (body.reject_reason === null || typeof body.reject_reason === 'string') {
+    patch.reject_reason = body.reject_reason
+  }
+
+  const { data, error } = await service.from('signage_content').update(patch).eq('id', id).select('*').single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (typeof body.status === 'string' && existing.submitter_email) {
+    if (body.status === 'approved' || body.status === 'rejected') {
+      void emailSignageSubmitterDecision({
+        email: existing.submitter_email,
+        name: existing.submitter_name || 'there',
+        approved: body.status === 'approved',
+        title: existing.title,
+        rejectReason: body.reject_reason ?? existing.reject_reason,
+      })
+    }
+  }
+
+  return NextResponse.json({ content: data })
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireManagerApi()
+  if ('error' in auth) return auth.error
+  const { service } = auth
+  const { id } = await params
+
+  const { data: row } = await service.from('signage_content').select('media_path, thumb_path').eq('id', id).maybeSingle()
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const paths = [row.media_path, row.thumb_path].filter((p): p is string => Boolean(p))
+  await service.storage.from(SIGNAGE_MEDIA_BUCKET).remove(paths).catch(() => {})
+  const { error } = await service.from('signage_content').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}

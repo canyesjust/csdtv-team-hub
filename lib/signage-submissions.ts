@@ -4,6 +4,6 @@ export function signageSubmissionPublicUrl(imagePath: string): string {
   return `${base}/storage/v1/object/public/signage-submissions/${imagePath}`
 }
 
-export const SIGNAGE_SUBMIT_URL = 'https://www.csdtvstaff.org/signage/submit'
+export const SIGNAGE_SUBMIT_URL = 'https://www.csdtvstaff.org/signage/csdtv/submit'
 export const SIGNAGE_SLIDESHOW_URL = 'https://www.csdtvstaff.org/signage/slideshow'
 export const SIGNAGE_REVIEW_URL = 'https://www.csdtvstaff.org/dashboard/signage-submissions'

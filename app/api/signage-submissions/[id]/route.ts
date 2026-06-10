@@ -126,7 +126,7 @@ export async function PATCH(
               'Thanks for submitting an image for the CSDtv office digital signage. It was not approved this time.',
               reason,
               '',
-              'You are welcome to submit another image at https://www.csdtvstaff.org/signage/submit',
+              'You are welcome to submit another image at https://www.csdtvstaff.org/signage/csdtv/submit',
               '',
               '— CSDtv',
             ].join('\n'),

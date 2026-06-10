@@ -24,7 +24,13 @@ const MORE_BASE: DashboardNavItem[] = [
 ]
 
 const SIGNAGE: DashboardNavItem = {
-  label: 'Signage',
+  label: 'CIC Signage',
+  href: '/dashboard/signage/content',
+  icon: 'tv',
+}
+
+const OFFICE_SIGNAGE: DashboardNavItem = {
+  label: 'Office signage',
   href: '/dashboard/signage-submissions',
   icon: 'image',
 }
@@ -55,7 +61,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
   const moreItems: DashboardNavItem[] = [
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
-    ...(manager ? [SIGNAGE] : []),
+    ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
     { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
     { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
@@ -65,7 +71,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
   const sidebarMoreItems: DashboardNavItem[] = [
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
-    ...(manager ? [SIGNAGE] : []),
+    ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
   ]
 
   return {
