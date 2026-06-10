@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 csdtv-handoff.zip
+
+# cursor deploy scratch files
+.cursor-*
