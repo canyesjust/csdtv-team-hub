@@ -39,7 +39,7 @@ async function scheduleTickerSafe(service: SupabaseClient, today: string): Promi
 export async function buildScreenFeed(
   service: SupabaseClient,
   code: string,
-): Promise<{ feed: ScreenFeedPayload } | { error: 'not_found' | 'server_error' }> {
+): Promise<{ feed: ScreenFeed } | { error: 'not_found' | 'server_error' }> {
   const { data: screen, error: screenErr } = await service
     .from('signage_screens')
     .select('id, code, name, orientation, layout, wayfinding_heading, accepts_takeover, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
