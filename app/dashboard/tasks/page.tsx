@@ -13,6 +13,7 @@ import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/confirm'
+import AsyncButton from '../components/AsyncButton'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { isStudentInternRole } from '@/lib/roles'
 import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
@@ -1628,7 +1629,7 @@ export default function TasksPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: cardBg, border: `1px solid var(--brand-primary)`, borderRadius: '10px', marginBottom: '12px', fontSize: '13px', flexWrap: 'wrap' as const }}>
               <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>{selectedIds.size} selected</span>
               {focusFilter !== 'recent-done' && (
-                <button onClick={async () => {
+                <AsyncButton onClick={async () => {
                   if (!(await confirmDialog(`Mark ${selectedIds.size} tasks complete?`))) return
                   const ids = Array.from(selectedIds)
                   const completedAt = new Date().toISOString()
@@ -1639,7 +1640,7 @@ export default function TasksPage() {
                   setCompletedTasks(prev => [...movedTasks, ...prev])
                   if (selectedTask && selectedIds.has(selectedTask.id)) closePanel()
                   setSelectedIds(new Set())
-                }} style={{ padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600 }}>Complete all</button>
+                }} style={{ padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: 'var(--brand-primary)', border: '1px solid var(--brand-primary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600 }}>Complete all</AsyncButton>
               )}
               <select onChange={async e => {
                 if (!e.target.value) return
@@ -1672,7 +1673,7 @@ export default function TasksPage() {
                 <option value="">Assign to...</option>
                 {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
-              <button onClick={async () => {
+              <AsyncButton onClick={async () => {
                 if (!(await confirmDialog({ message: `Delete ${selectedIds.size} tasks? This cannot be undone.`, tone: 'danger' }))) return
                 const ids = Array.from(selectedIds)
                 const { error } = await supabase.from('tasks').delete().in('id', ids)
@@ -1681,7 +1682,7 @@ export default function TasksPage() {
                 setCompletedTasks(prev => prev.filter(t => !selectedIds.has(t.id)))
                 if (selectedTask && selectedIds.has(selectedTask.id)) closePanel()
                 setSelectedIds(new Set())
-              }} style={{ padding: '6px 12px', borderRadius: '6px', background: dangerBg, color: danger, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Delete</button>
+              }} style={{ padding: '6px 12px', borderRadius: '6px', background: dangerBg, color: danger, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>Delete</AsyncButton>
               <button onClick={() => setSelectedIds(new Set())} style={{ padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: muted, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', marginLeft: 'auto' }}>Clear</button>
             </div>
           )}

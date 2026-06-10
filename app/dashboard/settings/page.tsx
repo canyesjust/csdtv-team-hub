@@ -7,6 +7,7 @@ import { useTheme } from '@/lib/theme'
 import Loader from '../components/Loader'
 import { toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/confirm'
+import AsyncButton from '../components/AsyncButton'
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth-constants'
 import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
 import { PRODUCTION_FOCUS_ROLE } from '@/lib/roles'
@@ -1221,7 +1222,7 @@ export default function SettingsPage() {
                   {member.email}
                   {!member.supabase_user_id && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>Pending login</span>}
                   {!member.supabase_user_id && isManager && (
-                    <button onClick={async () => {
+                    <AsyncButton onClick={async () => {
                       try {
                         const { data: { session } } = await supabase.auth.refreshSession()
                         if (!session) { toast('Session expired. Please refresh.', 'error'); return }
@@ -1248,7 +1249,7 @@ export default function SettingsPage() {
                           toast(result.error || 'Failed to send invite', 'error')
                         }
                       } catch { toast('Failed to send invite') }
-                    }} style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.2)', cursor: 'pointer', fontFamily: 'inherit' }}>Send invite</button>
+                    }} style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.2)', cursor: 'pointer', fontFamily: 'inherit' }}>Send invite</AsyncButton>
                   )}
                 </p>
               </div>

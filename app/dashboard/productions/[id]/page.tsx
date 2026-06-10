@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'react'
 import { createClient } from '@/lib/supabase'
 import { confirmDialog } from '@/lib/confirm'
+import AsyncButton from '../../components/AsyncButton'
 import { useTheme } from '@/lib/theme'
 import { getSchoolName } from '@/lib/schools'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -2382,14 +2383,14 @@ export default function ProductionDetailPage() {
           {linkedVideos.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <span style={{ fontSize: '13px', color: muted }}>{linkedVideos.length} video{linkedVideos.length !== 1 ? 's' : ''} linked{linkedVideos.some(v => v.youtube_views) ? ` · ${linkedVideos.reduce((s, v) => s + (v.youtube_views || 0), 0).toLocaleString()} total views` : ''}</span>
-              <button onClick={async () => {
+              <AsyncButton onClick={async () => {
                 if (!(await confirmDialog({ message: `Unlink all ${linkedVideos.length} videos from this production?`, tone: 'danger', confirmLabel: 'Unlink' }))) return
                 for (const v of linkedVideos) await supabase.from('videos').update({ production_id: null }).eq('id', v.id)
                 setLinkedVideos([])
                 toast(`Unlinked ${linkedVideos.length} videos`, 'success')
               }} style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
                 Unlink all
-              </button>
+              </AsyncButton>
             </div>
           )}
           {linkedVideos.length === 0 ? (

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTheme } from '@/lib/theme'
 import { confirmDialog } from '@/lib/confirm'
+import AsyncButton from '../components/AsyncButton'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../components/Loader'
@@ -983,7 +984,7 @@ export default function EquipmentPage() {
                       {loan.due_date && <span> · Due {new Date(loan.due_date).toLocaleDateString()}</span>}
                     </div>
                   </div>
-                  <button
+                  <AsyncButton
                     onClick={async () => {
                       if (!user) return
                       if (!(await confirmDialog({ message: `Check in "${loan.equipment?.name || loan.kit?.name}" from ${loan.borrower_name}?`, confirmLabel: 'Check in' }))) return
@@ -1000,7 +1001,7 @@ export default function EquipmentPage() {
                       loadData()
                     }}
                     style={{ background: '#22c55e', border: 'none', borderRadius: '10px', color: '#fff', padding: '8px 18px', fontSize: '13px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', minHeight: '40px', whiteSpace: 'nowrap' as const }}
-                  >Check In</button>
+                  >Check In</AsyncButton>
                 </div>
               )
             })}
