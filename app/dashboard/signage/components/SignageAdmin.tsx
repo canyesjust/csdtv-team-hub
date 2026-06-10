@@ -303,45 +303,114 @@ export function SignageAnnouncementIconPicker({ value, onChange, lbl }: Announce
   )
 }
 
+type SignageNavItem = { href: string; label: string; managerOnly?: boolean }
+type SignageNavGroup = { key: string; label: string; href?: string; items: SignageNavItem[] }
+
+const SIGNAGE_NAV: SignageNavGroup[] = [
+  { key: 'overview', label: 'Overview', href: '/dashboard/signage/overview', items: [] },
+  {
+    key: 'publish',
+    label: 'Publish',
+    items: [
+      { href: '/dashboard/signage/content', label: 'Content' },
+      { href: '/dashboard/signage/announcements', label: 'Announcements', managerOnly: true },
+      { href: '/dashboard/signage/visitors', label: 'Visitors', managerOnly: true },
+    ],
+  },
+  {
+    key: 'layout',
+    label: 'Layout',
+    items: [
+      { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
+      { href: '/dashboard/signage/floor-plan', label: 'Floor plan', managerOnly: true },
+      { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
+      { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
+    ],
+  },
+  {
+    key: 'monitor',
+    label: 'Monitor',
+    items: [{ href: '/dashboard/signage/live', label: 'Live view', managerOnly: true }],
+  },
+  {
+    key: 'setup',
+    label: 'Setup',
+    items: [
+      { href: '/dashboard/signage/sites', label: 'Sites', managerOnly: true },
+      { href: '/dashboard/signage/settings', label: 'Settings', managerOnly: true },
+    ],
+  },
+]
+
 export function SignageSubnav({ active, isManager }: { active: string; isManager: boolean }) {
   const { theme } = useTheme()
-  const { text, border } = useSignageTheme(theme)
-  const links: { href: string; label: string; managerOnly?: boolean }[] = [
-    { href: '/dashboard/signage/content', label: 'Content' },
-    { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
-    { href: '/dashboard/signage/floor-plan', label: 'Floor plan', managerOnly: true },
-    { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
-    { href: '/dashboard/signage/announcements', label: 'Announcements', managerOnly: true },
-    { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
-    { href: '/dashboard/signage/visitors', label: 'Visitors', managerOnly: true },
-    { href: '/dashboard/signage/live', label: 'Live', managerOnly: true },
-    { href: '/dashboard/signage/settings', label: 'Settings', managerOnly: true },
-    { href: '/dashboard/signage/sites', label: 'Sites', managerOnly: true },
-  ]
+  const { text, muted, border, info, infoBg } = useSignageAdminStyles(theme)
 
   const isActive = (href: string) => active === href || active.startsWith(`${href}/`)
 
+  // Each group is visible if it has at least one accessible destination.
+  const groups = SIGNAGE_NAV
+    .map(g => ({ ...g, items: g.items.filter(it => isManager || !it.managerOnly) }))
+    .filter(g => (g.href ? isManager : g.items.length > 0))
+
+  const groupHref = (g: SignageNavGroup) => g.href ?? g.items[0]?.href ?? '#'
+  const isGroupActive = (g: SignageNavGroup) =>
+    (g.href ? isActive(g.href) : false) || g.items.some(it => isActive(it.href))
+
+  const activeGroup = groups.find(isGroupActive)
+
   return (
-    <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-      {links.filter(l => isManager || !l.managerOnly).map(l => (
-        <Link
-          key={l.href}
-          href={l.href}
-          prefetch
-          style={{
-            padding: '8px 14px',
-            borderRadius: 10,
-            fontSize: 14,
-            fontWeight: isActive(l.href) ? 600 : 400,
-            background: isActive(l.href) ? '#162844' : 'transparent',
-            color: isActive(l.href) ? '#fefefe' : text,
-            textDecoration: 'none',
-            border: `1px solid ${border}`,
-          }}
-        >
-          {l.label}
-        </Link>
-      ))}
+    <nav style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: `1px solid ${border}`, marginBottom: activeGroup?.items.length ? 0 : 4 }}>
+        {groups.map(g => {
+          const on = isGroupActive(g)
+          return (
+            <Link
+              key={g.key}
+              href={groupHref(g)}
+              prefetch
+              style={{
+                padding: '9px 14px',
+                fontSize: 14,
+                fontWeight: on ? 600 : 400,
+                color: on ? info : muted,
+                textDecoration: 'none',
+                borderBottom: `2px solid ${on ? info : 'transparent'}`,
+                marginBottom: -1,
+              }}
+            >
+              {g.label}
+            </Link>
+          )
+        })}
+      </div>
+
+      {activeGroup && activeGroup.items.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '12px 0 2px' }}>
+          {activeGroup.items.map(it => {
+            const on = isActive(it.href)
+            return (
+              <Link
+                key={it.href}
+                href={it.href}
+                prefetch
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: on ? 500 : 400,
+                  color: on ? info : text,
+                  background: on ? infoBg : 'transparent',
+                  border: `1px solid ${on ? 'transparent' : border}`,
+                  textDecoration: 'none',
+                }}
+              >
+                {it.label}
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </nav>
   )
 }
@@ -358,7 +427,7 @@ export function useSignageTheme(theme: string) {
   }
 }
 
-export function SignagePageShell({ children, title }: { children: ReactNode; title: string }) {
+export function SignagePageShell({ children, title, subtitle }: { children: ReactNode; title: string; subtitle?: string }) {
   const pathname = usePathname()
   const { isManager, sites, activeSiteId, setActiveSite } = useSignage()
   const { theme } = useTheme()
@@ -367,13 +436,12 @@ export function SignagePageShell({ children, title }: { children: ReactNode; tit
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 4px', color: text }}>{title}</h1>
-          <p style={{ fontSize: 14, color: muted, margin: '0 0 16px' }}>{activeSite ? `${activeSite.name} signage` : 'Digital signage'}</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <SignageSubnav active={pathname} isManager={isManager} />
         </div>
-        {sites.length > 0 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: muted }}>
+        {sites.length > 1 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: muted, paddingTop: 4, flexShrink: 0 }}>
             Location
             <select
               value={activeSiteId}
@@ -385,7 +453,10 @@ export function SignagePageShell({ children, title }: { children: ReactNode; tit
           </label>
         )}
       </div>
-      <SignageSubnav active={pathname} isManager={isManager} />
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 3px', color: text }}>{title}</h1>
+        <p style={{ fontSize: 13, color: muted, margin: 0 }}>{subtitle ?? (activeSite ? `${activeSite.name} signage` : 'Digital signage')}</p>
+      </div>
       {children}
     </div>
   )

@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { toast } from '@/lib/toast'
-import { isSignageStreamUrl, normalizeSignageStreamUrl } from '@/lib/signage/stream-url'
+import { isSignageStreamUrl, normalizeSignageStreamUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import SignageTargetingPicker, { SignagePageShell, useSignageTheme, type TargetingValue } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 
@@ -16,6 +16,12 @@ export default function SignageLivePage() {
   const [targeting, setTargeting] = useState<TargetingValue>({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
   const [saving, setSaving] = useState(false)
   const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: 10, padding: '8px 12px', fontSize: 14, color: text, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }
+
+  // Live preview of the entered YouTube stream — autoplays muted with captions on.
+  const previewEmbed = useMemo(
+    () => youtubeEmbedUrlFromStreamUrl(normalizeSignageStreamUrl(form.hls_url) || '', { controls: true }),
+    [form.hls_url],
+  )
 
   const load = useCallback(async () => {
     const liveRes = await fetch('/api/signage/live')
@@ -86,6 +92,20 @@ export default function SignageLivePage() {
           <div style={{ color: muted, padding: 8 }}>Loading live state…</div>
         ) : (
           <>
+            {previewEmbed && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 12, overflow: 'hidden', background: '#000', border: `1px solid ${border}` }}>
+                  <iframe
+                    src={previewEmbed}
+                    title="Live stream preview"
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                  />
+                </div>
+                <p style={{ fontSize: 12, color: muted, margin: '6px 0 0' }}>Preview · autoplays muted with captions on, matching the screens.</p>
+              </div>
+            )}
             <p style={{ fontSize: 13, color: muted, margin: '0 0 14px', lineHeight: 1.55 }}>
               Paste an encoder HLS URL (<code>.m3u8</code>) or a YouTube live/watch link. Targeted screens with
               &ldquo;Accepts live takeover&rdquo; enabled will switch within about 5 seconds.

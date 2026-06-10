@@ -17,26 +17,7 @@ import { signageMediaPublicUrl, CIC_SUBMIT_URL } from '@/lib/signage/constants'
 import { prepareSignageImageFile, SIGNAGE_MAX_UPLOAD_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
-
-type Lifecycle = 'active' | 'upcoming' | 'expired' | 'none'
-
-function contentLifecycle(start: string | null, end: string | null, today: string): Lifecycle {
-  const s = start?.slice(0, 10)
-  const e = end?.slice(0, 10)
-  if (!s || !e) return 'none'
-  if (e < today) return 'expired'
-  if (s > today) return 'upcoming'
-  return 'active'
-}
-
-const LIFECYCLE_META: Record<Lifecycle, { label: string; color: string; bg: string }> = {
-  active: { label: 'Showing now', color: '#16a34a', bg: 'rgba(34,197,94,0.14)' },
-  upcoming: { label: 'Scheduled', color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
-  expired: { label: 'Ended', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
-  none: { label: '', color: '#6b7280', bg: 'transparent' },
-}
-
-const LIFECYCLE_RANK: Record<Lifecycle, number> = { active: 0, upcoming: 1, none: 2, expired: 3 }
+import { dateRangeLifecycle as contentLifecycle, LIFECYCLE_META, LIFECYCLE_RANK } from '@/lib/signage/lifecycle'
 
 type ContentRow = {
   id: string

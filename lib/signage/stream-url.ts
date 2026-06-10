@@ -17,10 +17,25 @@ export function youtubeVideoIdFromUrl(url: string): string | null {
   return match?.[1] ?? null
 }
 
-export function youtubeEmbedUrlFromStreamUrl(url: string): string | null {
+export function youtubeEmbedUrlFromStreamUrl(
+  url: string,
+  opts: { controls?: boolean; captions?: boolean } = {},
+): string | null {
   const id = youtubeVideoIdFromUrl(url)
   if (!id) return null
-  return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=0&rel=0&playsinline=1`
+  const { controls = false, captions = true } = opts
+  const params = new URLSearchParams({
+    autoplay: '1',
+    mute: '1',
+    rel: '0',
+    playsinline: '1',
+    controls: controls ? '1' : '0',
+  })
+  if (captions) {
+    params.set('cc_load_policy', '1')
+    params.set('cc_lang_pref', 'en')
+  }
+  return `https://www.youtube.com/embed/${id}?${params.toString()}`
 }
 
 export function isSignageStreamUrl(url: string): boolean {

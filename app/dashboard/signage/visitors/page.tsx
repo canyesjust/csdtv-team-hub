@@ -14,8 +14,9 @@ import {
   useSignageAdminStyles,
 } from '../components/SignageAdmin'
 import SignageDateInput from '@/components/SignageDateInput'
+import { singleDateLifecycle, LIFECYCLE_RANK, LifecyclePill, todayISO } from '@/lib/signage/lifecycle'
 
-type VisitorRow = { id: string; name: string; note: string | null; visit_date: string; active: boolean }
+type VisitorRow = { id: string; name: string; note: string | null; visit_date: string; active: boolean; pending: boolean; submitter_name: string | null }
 
 const emptyForm = { name: '', note: '', visit_date: '', active: true }
 
@@ -39,12 +40,31 @@ export default function SignageVisitorsPage() {
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('signage_visitors')
-      .select('id, name, note, visit_date, active')
+      .select('id, name, note, visit_date, active, pending, submitter_name')
       .eq('site_id', activeSiteId)
       .order('visit_date', { ascending: false })
     setRows(data || [])
     setLoading(false)
   }, [supabase, activeSiteId])
+
+  const today = useMemo(() => todayISO(), [])
+  const pendingRows = useMemo(() => rows.filter(r => r.pending), [rows])
+  const liveRows = useMemo(() =>
+    rows.filter(r => !r.pending).sort((a, b) =>
+      LIFECYCLE_RANK[singleDateLifecycle(a.visit_date, today)] - LIFECYCLE_RANK[singleDateLifecycle(b.visit_date, today)]
+      || (b.visit_date || '').localeCompare(a.visit_date || '')
+    ), [rows, today])
+
+  const approve = async (r: VisitorRow) => {
+    const res = await fetch('/api/signage/visitors', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: r.id, name: r.name, note: r.note, visit_date: r.visit_date, active: true, pending: false }),
+    })
+    if (!res.ok) { toast('Approve failed', 'error'); return }
+    toast('Visitor approved', 'success')
+    void load()
+  }
 
   useEffect(() => { void load() }, [load])
 
@@ -129,14 +149,37 @@ export default function SignageVisitorsPage() {
         <div style={{ color: s.muted, padding: 16 }}>Loading…</div>
       ) : (
         <>
+          {pendingRows.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ ...s.h3, fontSize: 14 }}>Pending review ({pendingRows.length})</h3>
+              {pendingRows.map(r => (
+                <div key={r.id} style={{ ...s.cardCompact, marginBottom: 8, borderLeft: '3px solid #d97706', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: s.text }}>{r.name}</div>
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
+                      {r.visit_date?.slice(0, 10)}{r.note ? ` · ${r.note}` : ''}{r.submitter_name ? ` · from ${r.submitter_name}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button type="button" onClick={() => void approve(r)} style={s.btnPrimary}>Approve</button>
+                    <SignageDeleteButton
+                      label="Reject"
+                      confirmMessage={`Reject visitor entry for "${r.name}"?`}
+                      onConfirm={async () => { if (await deleteSignageItem('/api/signage/visitors', r.id)) void load() }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <SignageListHint color={s.muted} />
           <div style={s.cardCompact}>
             <table style={s.tbl}>
               <colgroup>
-                <col style={{ width: '28%' }} />
+                <col style={{ width: '26%' }} />
                 <col style={{ width: '16%' }} />
-                <col style={{ width: '44%' }} />
-                <col style={{ width: '12%' }} />
+                <col style={{ width: '40%' }} />
+                <col style={{ width: '18%' }} />
               </colgroup>
               <thead>
                 <tr>
@@ -147,7 +190,7 @@ export default function SignageVisitorsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
+                {liveRows.map(r => (
                   <tr key={r.id}>
                     <td style={s.td}>
                       <SignageRowEditButton onClick={() => startEdit(r)} textColor={s.text}>
@@ -156,12 +199,14 @@ export default function SignageVisitorsPage() {
                     </td>
                     <td style={s.tdMuted}>{r.visit_date?.slice(0, 10)}</td>
                     <td style={s.tdMuted}>{r.note || '—'}</td>
-                    <td style={s.tdMuted}>{r.active ? 'Active' : 'Inactive'}</td>
+                    <td style={s.tdMuted}>
+                      {r.active ? <LifecyclePill lifecycle={singleDateLifecycle(r.visit_date, today)} /> : <span style={{ color: s.muted }}>Off</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {!rows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No visitors yet.</div>}
+            {!liveRows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No visitors yet.</div>}
           </div>
         </>
       )}

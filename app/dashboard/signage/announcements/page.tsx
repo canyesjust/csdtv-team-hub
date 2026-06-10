@@ -22,6 +22,7 @@ import {
   announcementScopeLabel,
   type SignageAnnouncementIconId,
 } from '@/lib/signage/announcement-icons'
+import { dateRangeLifecycle, LIFECYCLE_GROUPS, LifecyclePill, todayISO } from '@/lib/signage/lifecycle'
 
 type AnnouncementRow = {
   id: string
@@ -36,6 +37,8 @@ type AnnouncementRow = {
   all_screens: boolean
   target_area_ids: string[]
   target_screen_ids: string[]
+  pending: boolean
+  submitter_name: string | null
 }
 
 const emptyForm = {
@@ -76,7 +79,7 @@ export default function SignageAnnouncementsPage() {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('signage_announcements')
-      .select('id, title, subtitle, icon, start_date, end_date, priority, in_ticker, active, all_screens, target_area_ids, target_screen_ids')
+      .select('id, title, subtitle, icon, start_date, end_date, priority, in_ticker, active, all_screens, target_area_ids, target_screen_ids, pending, submitter_name')
       .eq('site_id', activeSiteId)
       .order('start_date', { ascending: false })
     if (error) {
@@ -138,6 +141,21 @@ export default function SignageAnnouncementsPage() {
     resetForm()
     void load()
   }
+
+  const approve = async (id: string) => {
+    const res = await fetch('/api/signage/announcements', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, pending: false, active: true }),
+    })
+    if (!res.ok) { toast('Approve failed', 'error'); return }
+    toast('Announcement approved', 'success')
+    void load()
+  }
+
+  const today = useMemo(() => todayISO(), [])
+  const pendingRows = useMemo(() => rows.filter(r => r.pending), [rows])
+  const liveRows = useMemo(() => rows.filter(r => !r.pending), [rows])
 
   const areaNameById = useMemo(() => new Map(areas.map(a => [a.id, a.name])), [areas])
   const screenNameById = useMemo(() => new Map(screens.map(sc => [sc.id, sc.name])), [screens])
@@ -219,23 +237,61 @@ export default function SignageAnnouncementsPage() {
         <div style={{ color: s.muted, padding: 16 }}>Loading…</div>
       ) : (
         <>
-          <SignageListHint color={s.muted}>Click a title to edit.</SignageListHint>
-          {rows.map(row => (
-            <div key={row.id} style={{ ...s.cardCompact, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ minWidth: 0 }}>
-                <SignageRowEditButton onClick={() => startEdit(row)} textColor={s.text} fontWeight={600}>
-                  <span aria-hidden style={{ marginRight: 6 }}>{announcementIconEmoji(row.icon)}</span>
-                  {row.title}{!row.active && <span style={{ color: s.muted, fontWeight: 400 }}> (inactive)</span>}
-                </SignageRowEditButton>
-                {row.subtitle && <div style={{ fontSize: 13, color: s.muted, marginTop: 2 }}>{row.subtitle}</div>}
-                <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
-                  {formatSignageDate(row.start_date)} – {formatSignageDate(row.end_date)}
-                  {' · '}{targetingLabel(row)}
-                  {row.priority >= PIN_PRIORITY ? ' · pinned' : ''}
+          {pendingRows.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ ...s.h3, fontSize: 14 }}>Pending review ({pendingRows.length})</h3>
+              {pendingRows.map(row => (
+                <div key={row.id} style={{ ...s.cardCompact, marginBottom: 8, borderLeft: '3px solid #d97706', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: s.text }}>
+                      <span aria-hidden style={{ marginRight: 6 }}>{announcementIconEmoji(row.icon)}</span>{row.title}
+                    </div>
+                    {row.subtitle && <div style={{ fontSize: 13, color: s.muted, marginTop: 2 }}>{row.subtitle}</div>}
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
+                      {formatSignageDate(row.start_date)} – {formatSignageDate(row.end_date)}
+                      {' · '}{targetingLabel(row)}
+                      {row.submitter_name ? ` · from ${row.submitter_name}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button type="button" onClick={() => void approve(row.id)} style={s.btnPrimary}>Approve</button>
+                    <SignageDeleteButton
+                      label="Reject"
+                      confirmMessage={`Reject announcement "${row.title}"?`}
+                      onConfirm={async () => { if (await deleteSignageItem('/api/signage/announcements', row.id)) void load() }}
+                    />
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
+          <SignageListHint color={s.muted}>Click a title to edit.</SignageListHint>
+          {LIFECYCLE_GROUPS.map(group => {
+            const groupRows = liveRows.filter(r => dateRangeLifecycle(r.start_date, r.end_date, today) === group.key)
+            if (!groupRows.length) return null
+            return (
+              <div key={group.key} style={{ marginBottom: 18 }}>
+                <h4 style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, color: s.muted, margin: '0 0 8px' }}>{group.heading}</h4>
+                {groupRows.map(row => (
+                  <div key={row.id} style={{ ...s.cardCompact, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <SignageRowEditButton onClick={() => startEdit(row)} textColor={s.text} fontWeight={600}>
+                        <span aria-hidden style={{ marginRight: 6 }}>{announcementIconEmoji(row.icon)}</span>
+                        {row.title}{!row.active && <span style={{ color: s.muted, fontWeight: 400 }}> (inactive)</span>}
+                      </SignageRowEditButton>
+                      {row.subtitle && <div style={{ fontSize: 13, color: s.muted, marginTop: 2 }}>{row.subtitle}</div>}
+                      <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>
+                        {formatSignageDate(row.start_date)} – {formatSignageDate(row.end_date)}
+                        {' · '}{targetingLabel(row)}
+                        {row.priority >= PIN_PRIORITY ? ' · pinned' : ''}
+                      </div>
+                    </div>
+                    <LifecyclePill lifecycle={dateRangeLifecycle(row.start_date, row.end_date, today)} />
+                  </div>
+                ))}
+              </div>
+            )
+          })}
           {!rows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No announcements yet.</div>}
         </>
       )}

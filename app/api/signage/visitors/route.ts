@@ -30,6 +30,7 @@ export async function PATCH(request: NextRequest) {
     note: body.note,
     visit_date: body.visit_date,
     active: body.active,
+    ...(typeof body.pending === 'boolean' ? { pending: body.pending } : {}),
   }).eq('id', body.id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ visitor: data })
