@@ -8,8 +8,7 @@ import { getSchoolName } from '@/lib/schools'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Loader from '../../components/Loader'
-import CommentsSection from '../../components/CommentsSection'
-import StudentCrewTab from '../../components/StudentCrewTab'
+import StudentCrewTab from './components/StudentCrewTab'
 import BoardMeetingTab from './components/BoardMeetingTab'
 import ChecklistTab from './components/ChecklistTab'
 import InfoTab from './components/InfoTab'
@@ -19,6 +18,7 @@ import ActivityTab from './components/ActivityTab'
 import VideosTab from './components/VideosTab'
 import ThumbnailTab from './components/ThumbnailTab'
 import CallsheetTab from './components/CallsheetTab'
+import CommentsTab from './components/CommentsTab'
 import type { PTabCtx } from './components/production-tab-ctx'
 import { toast } from '@/lib/toast'
 import { ZoneHeader } from '../../components/ZoneHeader'
@@ -216,7 +216,9 @@ export default function ProductionDetailPage() {
   const [generatingSheet, setGeneratingSheet] = useState(false)
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<ProductionTab>('checklist')
+  const [activeTab, setActiveTab] = useState<ProductionTab>(
+    () => parseProductionTabFromUrl(searchParams.get('tab'), false) ?? 'checklist',
+  )
   const [selectedMember, setSelectedMember] = useState<string|null>(null)
   const [assignSuccess, setAssignSuccess] = useState(false)
   const [addingMember, setAddingMember] = useState(false)
@@ -350,6 +352,18 @@ export default function ProductionDetailPage() {
     setKbArticles(kbRes.data || [])
     setTemplates(tplRes.data || [])
     setSchools((schoolsRes.data as SchoolBrand[]) || [])
+
+    // Resolve the default tab before first paint so we don't flash Checklist
+    // and then jump to Info. URL tab wins; otherwise empty checklists open on Info.
+    const isBM = prodRes.data.request_type_number === 4
+    const urlTabAtLoad = parseProductionTabFromUrl(searchParams.get('tab'), isBM)
+    if (!urlTabAtLoad && (checkRes.data?.length ?? 0) === 0) {
+      const infoVisible = isProductionTabVisible('info', isBM, userRes?.role, userRes?.dashboard_profile)
+      if (infoVisible) setActiveTab('info')
+    }
+    // Paint now with core data; the heavier, tab-specific data loads in the background.
+    setLoading(false)
+
     const [vidRes, taskRes, sheetRes, allProdsRes] = await Promise.all([
       supabase
         .from('videos')
@@ -372,10 +386,8 @@ export default function ProductionDetailPage() {
     setLinkedVideos(vidRes.data || [])
     setLinkedTasks(taskRes.data || [])
     if (sheetRes.data) setCallSheet(sheetRes.data)
-    const allProdsData = allProdsRes.data
-    setAllProductions(allProdsData || [])
-    setLoading(false)
-  }, [supabase, productionNum, router])
+    setAllProductions(allProdsRes.data || [])
+  }, [supabase, productionNum, router, searchParams])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -1848,11 +1860,7 @@ export default function ProductionDetailPage() {
       {activeTab === 'activity' && <ActivityTab c={ctx} />}
 
       {/* COMMENTS TAB */}
-      {activeTab === 'comments' && uuid && currentUser && (
-        <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-          <CommentsSection entityType="production" entityId={uuid} currentUserId={currentUser.id} team={allTeam} />
-        </div>
-      )}
+      {activeTab === 'comments' && <CommentsTab c={ctx} />}
 
       {/* VIDEOS TAB */}
       {activeTab === 'videos' && <VideosTab c={ctx} />}

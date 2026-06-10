@@ -111,14 +111,14 @@ export default function InfoTab({ c }: { c: PTabCtx }) {
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 8px' }}>Estimated outsourced cost</h3>
-                    <p style={{ fontSize: '26px', fontWeight: 800, color: '#22c55e', margin: '0 0 6px', lineHeight: 1.2 }}>{formatOutsourcedUsd(displayAmount)}</p>
+                    <p style={{ fontSize: '26px', fontWeight: 800, color: successTone, margin: '0 0 6px', lineHeight: 1.2 }}>{formatOutsourcedUsd(displayAmount)}</p>
                     <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>{subtitle}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => void recomputeOneEstimatedCost()}
                     disabled={recomputingEstCost}
-                    style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: 'transparent', color: '#22c55e', border: '1px solid rgba(34,197,94,0.35)', cursor: recomputingEstCost ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0, alignSelf: 'flex-start' }}
+                    style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: 'transparent', color: successTone, border: '1px solid rgba(34,197,94,0.35)', cursor: recomputingEstCost ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0, alignSelf: 'flex-start' }}
                   >
                     {recomputingEstCost ? 'Recomputing…' : 'Recompute'}
                   </button>
@@ -126,8 +126,9 @@ export default function InfoTab({ c }: { c: PTabCtx }) {
               </div>
             )
           })()}
-          <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
-            <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Source metadata</h3>
+          <details style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
+            <summary style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', cursor: 'pointer' }}>Source metadata</summary>
+            <div style={{ marginTop: '12px' }}>
             {([
               ['Status code', production.status_code ? String(production.status_code) : null],
               ['Created on', formatRawCreatedOn(production.created_on)],
@@ -160,7 +161,8 @@ export default function InfoTab({ c }: { c: PTabCtx }) {
                 <span style={{ color: text }}>{production.production_staff.length} from source system</span>
               </div>
             )}
-          </div>
+            </div>
+          </details>
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 12px' }}>Organizer YouTube link</h3>
             <div style={{ fontSize: '13px', color: text, lineHeight: 1.5 }}>

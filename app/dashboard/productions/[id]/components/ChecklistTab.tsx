@@ -7,7 +7,7 @@ import { formatMonthDay } from '@/lib/format-date'
 import type { PTabCtx } from './production-tab-ctx'
 
 export default function ChecklistTab({ c }: { c: PTabCtx }) {
-  const { allProductions, allTeam, assignSuccess, border, cardBg, checklist, completedCount, copySetupTo, copyTargetId, createTaskForProduction, currentUser, dark, infoTone, initChecklist, inputBg, inputStyle, kbArticles, linkedTasks, loadData, massAssign, members, moveItem, muted, newTaskAssignee, newTaskDue, newTaskHideFromSignage, newTaskPriority, newTaskPurchaseLink, newTaskPurchaseRequest, newTaskTitle, production, progress, selectedMember, setChecklist, setCopyTargetId, setNewTaskAssignee, setNewTaskDue, setNewTaskHideFromSignage, setNewTaskPriority, setNewTaskPurchaseLink, setNewTaskPurchaseRequest, setNewTaskTitle, setSelectedMember, setShowCopySetup, setShowCreateTask, showCopySetup, showCreateTask, supabase, text, toggleItem, typeLabel, uuid } = c
+  const { allProductions, allTeam, assignSuccess, border, brandTone, cardBg, checklist, completedCount, copySetupTo, copyTargetId, createTaskForProduction, currentUser, dark, infoTone, successTone, initChecklist, inputBg, inputStyle, kbArticles, linkedTasks, loadData, massAssign, members, moveItem, muted, newTaskAssignee, newTaskDue, newTaskHideFromSignage, newTaskPriority, newTaskPurchaseLink, newTaskPurchaseRequest, newTaskTitle, production, progress, selectedMember, setChecklist, setCopyTargetId, setNewTaskAssignee, setNewTaskDue, setNewTaskHideFromSignage, setNewTaskPriority, setNewTaskPurchaseLink, setNewTaskPurchaseRequest, setNewTaskTitle, setSelectedMember, setShowCopySetup, setShowCreateTask, showCopySetup, showCreateTask, supabase, text, toggleItem, typeLabel, uuid } = c
   return (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' as const }}>
@@ -61,7 +61,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
                   <option value="">Select a production...</option>
                   {allProductions.map(p => <option key={p.id} value={p.id}>#{p.production_number} {p.title}</option>)}
                 </select>
-                <button onClick={copySetupTo} disabled={!copyTargetId} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: copyTargetId ? '#1e6cb5' : 'var(--surface-2)', color: copyTargetId ? '#fff' : muted, border: 'none', cursor: copyTargetId ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Copy</button>
+                <button onClick={copySetupTo} disabled={!copyTargetId} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: copyTargetId ? brandTone : 'var(--surface-2)', color: copyTargetId ? '#fff' : muted, border: 'none', cursor: copyTargetId ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>Copy</button>
               </div>
             </div>
           )}
@@ -114,7 +114,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
                 <button
                   onClick={createTaskForProduction}
                   disabled={!newTaskTitle}
-                  style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: newTaskTitle ? '#1e6cb5' : 'var(--surface-2)', color: newTaskTitle ? '#fff' : muted, border: 'none', cursor: newTaskTitle ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
+                  style={{ fontSize: '13px', padding: '7px 16px', borderRadius: '8px', background: newTaskTitle ? brandTone : 'var(--surface-2)', color: newTaskTitle ? '#fff' : muted, border: 'none', cursor: newTaskTitle ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}
                 >
                   Create task
                 </button>
@@ -133,7 +133,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
               <p style={{ color: muted, fontSize: '14px', marginBottom: '12px' }}>No checklist yet</p>
               <button
                 onClick={initChecklist}
-                style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '8px', background: brandTone, color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
               >
                 Load {typeLabel} template
               </button>
@@ -142,7 +142,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
                 <div style={{ flex: 1, height: '6px', background: 'var(--surface-2)', borderRadius: '3px', overflow: 'hidden' }}>
-                  <div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? '#22c55e' : '#1e6cb5', borderRadius: '3px', transition: 'width 0.3s' }} />
+                  <div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? successTone : brandTone, borderRadius: '3px', transition: 'width 0.3s' }} />
                 </div>
                 <span style={{ fontSize: '12px', color: muted, flexShrink: 0 }}>{completedCount} of {checklist.length}</span>
               </div>
@@ -155,7 +155,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
                     <button
                       key={member.id}
                       onClick={() => setSelectedMember(selectedMember === member.id ? null : member.id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', border: `0.5px solid ${selectedMember === member.id ? '#22c55e' : border}`, background: selectedMember === member.id ? 'rgba(34,197,94,0.1)' : 'transparent', color: selectedMember === member.id ? '#22c55e' : muted, fontFamily: 'inherit' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer', border: `0.5px solid ${selectedMember === member.id ? successTone : border}`, background: selectedMember === member.id ? 'rgba(34,197,94,0.1)' : 'transparent', color: selectedMember === member.id ? successTone : muted, fontFamily: 'inherit' }}
                     >
                       <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: member.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '7px', fontWeight: 700, color: '#0a0f1e' }}>
                         {member.name.slice(0, 2).toUpperCase()}
@@ -167,7 +167,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
                 <button
                   onClick={massAssign}
                   disabled={!selectedMember}
-                  style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: selectedMember ? '#1e6cb5' : 'var(--surface-2)', color: selectedMember ? '#fff' : muted, cursor: selectedMember ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}
+                  style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', border: 'none', background: selectedMember ? brandTone : 'var(--surface-2)', color: selectedMember ? '#fff' : muted, cursor: selectedMember ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}
                 >
                   {assignSuccess ? '✓ Assigned' : 'Assign all'}
                 </button>
@@ -180,7 +180,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, padding: '12px 16px', borderBottom: i < checklist.length - 1 ? `0.5px solid ${border}` : 'none', background: item.completed ? (dark ? 'rgba(34,197,94,0.04)' : 'rgba(34,197,94,0.03)') : 'transparent' }}>
                       <button
                         onClick={() => toggleItem(item)}
-                        style={{ width: '18px', height: '18px', borderRadius: '4px', flexShrink: 0, border: `1.5px solid ${item.completed ? '#22c55e' : border}`, background: item.completed ? '#22c55e' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ width: '18px', height: '18px', borderRadius: '4px', flexShrink: 0, border: `1.5px solid ${item.completed ? successTone : border}`, background: item.completed ? successTone : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         {item.completed && (
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
@@ -251,7 +251,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
               <p style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 10px' }}>Tasks ({linkedTasks.length})</p>
               {linkedTasks.map((task, i) => {
                 const assignee = allTeam.find(m => m.id === task.assigned_to)
-                const statusColors: Record<string, string> = { pending: '#94a3b8', 'in progress': '#f59e0b', 'in review': '#a855f7', complete: '#22c55e' }
+                const statusColors: Record<string, string> = { pending: '#94a3b8', 'in progress': '#f59e0b', 'in review': '#a855f7', complete: successTone }
                 const sc = statusColors[task.status] || '#94a3b8'
                 return (
                   <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: i < linkedTasks.length - 1 ? `0.5px solid ${border}` : 'none' }}>
