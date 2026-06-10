@@ -99,6 +99,46 @@ function ScreenHeader({
   )
 }
 
+function ZonedHeader({
+  centerName,
+  areaLabel,
+  weatherIcon,
+  tempF,
+  clock,
+  visitor,
+}: {
+  centerName: string
+  areaLabel: string
+  weatherIcon: string
+  tempF: number | null
+  clock: string
+  visitor?: FeedVisitor
+}) {
+  return (
+    <div className="cic-tvhead cic-zhead">
+      <div className="cic-zhead-id">
+        <ScreenLogo />
+        <span className="cic-zhead-area">{areaLabel}</span>
+      </div>
+      <div className="cic-zhead-welcome">
+        <ConfettiIcon />
+        <span>
+          {visitor
+            ? <>Welcome, <b>{visitor.name}</b></>
+            : <>Welcome to <b>{centerName}</b></>}
+        </span>
+      </div>
+      <div className="cic-head-right">
+        <div className="cic-wx">
+          <span aria-hidden>{weatherIcon}</span>
+          {tempF != null && <span>{tempF}&deg;</span>}
+        </div>
+        <div className="cic-clk">{renderClock(clock)}</div>
+      </div>
+    </div>
+  )
+}
+
 function renderClock(clock: string) {
   return clock.split(':').map((part, i) => (
     <span key={i}>
@@ -651,14 +691,14 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
       {/* 1. Zoned landscape */}
       {layout === 'zoned' && showZones && !portrait && (
         <div className="cic-zoned-stage">
-          <ScreenHeader
-            brandTitle={areaLabel}
-            brandSub={centerSub}
+          <ZonedHeader
+            centerName={feed.screen.center_name}
+            areaLabel={areaLabel}
             weatherIcon={feed.weather.icon}
             tempF={feed.weather.tempF}
             clock={clock}
+            visitor={visitor}
           />
-          {visitor && <WelcomeStrip visitor={visitor} />}
           <div className="cic-body">
             <MediaCarousel
               media={feed.media}

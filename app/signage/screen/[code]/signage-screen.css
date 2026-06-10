@@ -1571,3 +1571,42 @@
 .cic-screen.layout-zoned:not(.portrait) .cic-ticker-pill {
   border-radius: 0.7vmax 0 0 0.7vmax;
 }
+
+/* Zoned header — compact bar: area label · centered welcome · weather/clock.
+   The welcome fills what used to be empty space and is the prominent name. */
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead {
+  display: flex;
+  align-items: center;
+  gap: 1vmax;
+  padding: 0.5vmax 1.3vmax;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7vmax;
+  flex: none;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-area {
+  font-size: var(--cic-body);
+  color: var(--accent);
+  font-weight: 500;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-welcome {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5vmax;
+  font-size: var(--cic-title);
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-welcome b {
+  color: var(--white);
+  font-weight: 500;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead .cic-head-right {
+  flex: none;
+}
