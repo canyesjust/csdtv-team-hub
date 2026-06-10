@@ -1,13 +1,11 @@
+/** CIC signage brand colors — six-color palette only. */
 export const CIC_PALETTE = {
   navy: '#162844',
   panel: '#1e3649',
-  bezel: '#0c1626',
   gray: '#585555',
   accent: '#96b7c8',
-  muted: '#7e9cb0',
-  offWhite: '#fefefe',
+  white: '#fefefe',
   black: '#000000',
-  liveRed: '#c0392b',
 } as const
 
 export const SIGNAGE_MEDIA_BUCKET = 'signage-media'

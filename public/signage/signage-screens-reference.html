@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 <style>
 :root{
-  --navy:#162844; --panel:#1e3649; --gray:#585555; --accent:#96b7c8; --white:#fefefe; --muted:#7e9cb0;
+  --navy:#162844; --panel:#1e3649; --gray:#585555; --accent:#96b7c8; --white:#fefefe; --black:#000000;
+  --muted:var(--gray);
   --ink:#1a1f36; --inkmute:#6b7280; --line:rgba(0,0,0,.10); --card:#ffffff; --info:#185fa5; --infobg:#e6f1fb;
 }
 *{box-sizing:border-box}
@@ -20,7 +21,7 @@ h2{font-size:18px;font-weight:600;margin:38px 0 4px;padding-top:18px;border-top:
 .stage{background:#e9ebef;border-radius:14px;padding:22px;display:flex;justify-content:center}
 
 /* ---- TV SCREENS (navy palette) ---- */
-.tv{position:relative;background:var(--navy);border:8px solid #0c1626;border-radius:12px;overflow:hidden;color:var(--white);display:flex;flex-direction:column}
+.tv{position:relative;background:var(--navy);border:8px solid var(--black);border-radius:12px;overflow:hidden;color:var(--white);display:flex;flex-direction:column}
 .tv.land{width:640px;aspect-ratio:16/9}
 .tv.port{width:300px;aspect-ratio:9/16}
 .tvhead{background:var(--navy);display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid rgba(150,183,200,.25)}
@@ -54,8 +55,8 @@ h2{font-size:18px;font-weight:600;margin:38px 0 4px;padding-top:18px;border-top:
 .fill{flex:1;position:relative;background:var(--panel);display:flex;align-items:center;justify-content:center}
 .dir{font-size:14px;line-height:2.1}
 .dir i{font-size:16px;color:var(--accent);vertical-align:-3px;margin-right:6px}
-.live{position:absolute;top:14px;left:14px;background:#c0392b;font-size:12px;font-weight:500;padding:3px 11px;border-radius:20px}
-.capbar{position:absolute;bottom:0;left:0;right:0;background:rgba(12,22,38,.85);padding:8px 14px;font-size:11.5px;color:var(--accent)}
+.live{position:absolute;top:14px;left:14px;background:var(--black);color:var(--white);border:2px solid var(--accent);font-size:12px;font-weight:500;padding:3px 11px;border-radius:20px}
+.capbar{position:absolute;bottom:0;left:0;right:0;background:color-mix(in srgb,var(--black) 85%,transparent);padding:8px 14px;font-size:11.5px;color:var(--accent)}
 
 /* ---- ADMIN (light theme = Hub dashboard) ---- */
 .adm{width:680px;max-width:100%;background:#fbfbfc;border-radius:12px;padding:18px}
@@ -180,8 +181,8 @@ h2{font-size:18px;font-weight:600;margin:38px 0 4px;padding-top:18px;border-top:
   <p class="note">When a stream is live and the screen accepts it, the zones hide and the HLS feed fills the screen. Reverts when the stream ends.</p>
   <div class="stage">
     <div class="tv land">
-      <div class="fill" style="background:#0c1626">
-        <div class="live"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;vertical-align:1px;margin-right:5px"></span>live</div>
+      <div class="fill" style="background:var(--black)">
+        <div class="live"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--white);vertical-align:1px;margin-right:5px"></span>live</div>
         <div style="text-align:center"><i class="ti ti-player-play" style="font-size:34px;color:var(--accent)"></i><div style="font-size:14px;font-weight:500;margin-top:8px">Innovation Center Showcase &mdash; Live</div><div class="msub" style="margin-top:2px">Full-screen takeover on accepting screens</div></div>
         <div class="capbar">Streaming via Cablecast &middot; reverts when the stream ends</div>
       </div>
