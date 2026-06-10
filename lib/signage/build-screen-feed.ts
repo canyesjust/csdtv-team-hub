@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
 import { clampDisplaySeconds, sanitizeSignageHtml } from './content-display'
-import { signageMediaPublicUrl } from './constants'
+import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
 import { signageLiveMatchesScreen } from './live-targeting'
 import { normalizeSignageStreamUrl } from './stream-url'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
@@ -46,7 +46,7 @@ export async function buildScreenFeed(
 ): Promise<{ feed: ScreenFeed } | { error: 'not_found' | 'server_error' }> {
   const { data: screen, error: screenErr } = await service
     .from('signage_screens')
-    .select('id, code, name, orientation, layout, wayfinding_heading, accepts_takeover, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
+    .select('id, code, name, orientation, layout, theme, wayfinding_heading, accepts_takeover, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
     .eq('code', code)
     .maybeSingle()
 
@@ -183,6 +183,7 @@ export async function buildScreenFeed(
         heading: screen.wayfinding_heading,
         area: area ? { name: area.name, slug: area.slug, building: area.building, floor: area.floor } : null,
         center_name: settings?.center_name ?? 'Canyons Innovation Center',
+        theme: normalizeSignageTheme(screen.theme ?? settings?.default_theme),
       },
       media,
       announcements,

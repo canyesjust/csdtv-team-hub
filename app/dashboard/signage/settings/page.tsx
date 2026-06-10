@@ -6,19 +6,20 @@ import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { AbleSignTestConnection } from '../components/AbleSignControls'
 import { SignagePageShell, useSignageTheme } from '../components/SignageAdmin'
+import { SIGNAGE_THEMES } from '@/lib/signage/constants'
 
 export default function SignageSettingsPage() {
   const { theme } = useTheme()
   const { text, border, cardBg, inputBg } = useSignageTheme(theme)
   const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
-  const [settings, setSettings] = useState({ center_name: '', weather_lat: 40.5649, weather_lon: -111.8389, ticker_extra: '' })
+  const [settings, setSettings] = useState({ center_name: '', weather_lat: 40.5649, weather_lon: -111.8389, ticker_extra: '', default_theme: 'primary' })
   const [team, setTeam] = useState<Array<{ id: string; name: string; role: string; signage_approver: boolean }>>([])
   const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: 10, padding: '8px 12px', fontSize: 14, color: text, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }
 
   const load = useCallback(async () => {
     const [s, t] = await Promise.all([
-      supabase.from('signage_settings').select('center_name, weather_lat, weather_lon, ticker_extra').eq('id', 1).maybeSingle(),
+      supabase.from('signage_settings').select('center_name, weather_lat, weather_lon, ticker_extra, default_theme').eq('id', 1).maybeSingle(),
       supabase.from('team').select('id, name, role, signage_approver').eq('active', true).order('name'),
     ])
     if (s.data) setSettings({
@@ -26,6 +27,7 @@ export default function SignageSettingsPage() {
       weather_lat: Number(s.data.weather_lat),
       weather_lon: Number(s.data.weather_lon),
       ticker_extra: s.data.ticker_extra || '',
+      default_theme: s.data.default_theme || 'primary',
     })
     setTeam(t.data || [])
     setLoading(false)
@@ -59,6 +61,12 @@ export default function SignageSettingsPage() {
               <input type="number" step="0.0001" value={settings.weather_lon} onChange={e => setSettings(s => ({ ...s, weather_lon: parseFloat(e.target.value) }))} style={inputStyle} placeholder="Lon" />
             </div>
             <textarea placeholder="Extra ticker text" value={settings.ticker_extra} onChange={e => setSettings(s => ({ ...s, ticker_extra: e.target.value }))} rows={2} style={{ ...inputStyle, resize: 'vertical' as const }} />
+            <label style={{ fontSize: 13, color: text, display: 'grid', gap: 4 }}>
+              Default screen theme
+              <select value={settings.default_theme} onChange={e => setSettings(s => ({ ...s, default_theme: e.target.value }))} style={inputStyle}>
+                {SIGNAGE_THEMES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </label>
             <button type="button" onClick={() => void saveSettings()} style={{ padding: '10px 18px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', width: 'fit-content' }}>Save settings</button>
           </div>
         )}

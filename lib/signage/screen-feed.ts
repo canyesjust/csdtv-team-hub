@@ -1,4 +1,4 @@
-import type { SignageLayout, SignageOrientation } from './constants'
+import type { SignageLayout, SignageOrientation, SignageTheme } from './constants'
 import type { SignageWeather } from './weather'
 
 export type ScreenFeedMedia = {
@@ -42,6 +42,7 @@ export type ScreenFeed = {
     heading: string | null
     area: { name: string; slug: string; building: string | null; floor: number | null } | null
     center_name: string
+    theme: SignageTheme
   }
   media: ScreenFeedMedia[]
   announcements: ScreenFeedAnnouncement[]

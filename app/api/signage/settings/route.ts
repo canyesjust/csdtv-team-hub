@@ -13,6 +13,7 @@ export async function PATCH(request: NextRequest) {
     weather_lat: body.weather_lat,
     weather_lon: body.weather_lon,
     ticker_extra: body.ticker_extra,
+    default_theme: ['secondary', 'special', 'spectrum'].includes(body.default_theme) ? body.default_theme : 'primary',
   }).eq('id', 1).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ settings: data })

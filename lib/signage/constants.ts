@@ -58,6 +58,20 @@ export function signageMediaPublicUrl(path: string): string {
 
 export type SignageOrientation = 'landscape' | 'portrait'
 export type SignageLayout = 'full_bleed' | 'zoned' | 'wayfinding'
+
+export type SignageTheme = 'primary' | 'secondary' | 'special' | 'spectrum'
+
+export const SIGNAGE_THEMES: { value: SignageTheme; label: string }[] = [
+  { value: 'primary', label: 'Primary — navy' },
+  { value: 'secondary', label: 'Secondary — slate' },
+  { value: 'special', label: 'Colorful' },
+  { value: 'spectrum', label: 'Spectrum — color fade' },
+]
+
+export function normalizeSignageTheme(value: string | null | undefined): SignageTheme {
+  return value === 'secondary' || value === 'special' || value === 'spectrum' ? value : 'primary'
+}
+
 export type WayfindingDirection = 'left' | 'right' | 'up' | 'down' | 'straight'
 
 export const WAYFINDING_ARROWS: Record<WayfindingDirection, string> = {

@@ -2,7 +2,7 @@
 
 import Hls from 'hls.js'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type WayfindingDirection } from '@/lib/signage/constants'
+import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type SignageTheme, type WayfindingDirection } from '@/lib/signage/constants'
 import { announcementIconEmoji } from '@/lib/signage/announcement-icons'
 import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import SignageBackground from '@/app/signage/_components/SignageBackground'
@@ -30,6 +30,7 @@ export type ScreenFeed = {
     heading: string | null
     area: { name: string; slug: string; building: string | null; floor: number | null } | null
     center_name: string
+    theme: SignageTheme
   }
   media: FeedMedia[]
   announcements: FeedAnnouncement[]
@@ -57,7 +58,7 @@ function ScreenLogo({ portrait }: { portrait?: boolean }) {
   return (
     <div className={`cic-logo${portrait ? ' portrait' : ''}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/cic-logo.svg" alt="" onError={e => { e.currentTarget.style.display = 'none' }} />
+      <img src="/cic-logo.png" alt="" onError={e => { e.currentTarget.style.display = 'none' }} />
     </div>
   )
 }
@@ -124,7 +125,7 @@ function ZonedHeader({
         <ConfettiIcon />
         <span>
           {visitor
-            ? <>Welcome, <b>{visitor.name}</b></>
+            ? <>Welcome, <b>{visitor.name}</b>{visitor.note ? <span className="cic-zhead-note"> — {visitor.note}</span> : null}</>
             : <>Welcome to <b>{centerName}</b></>}
         </span>
       </div>
@@ -642,7 +643,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
     ? 'Innovation Center'
     : feed.screen.center_name
 
-  const screenClass = `cic-screen${portrait ? ' portrait' : ''} layout-${layout}`
+  const screenClass = `cic-screen${portrait ? ' portrait' : ''} layout-${layout} cic-theme-${feed.screen.theme}`
 
   if (offline) {
     return (

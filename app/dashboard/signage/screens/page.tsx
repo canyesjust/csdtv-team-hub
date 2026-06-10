@@ -16,7 +16,7 @@ import {
   useSignageAdminStyles,
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
-import { signageScreenUrl } from '@/lib/signage/constants'
+import { signageScreenUrl, SIGNAGE_THEMES } from '@/lib/signage/constants'
 import {
   AbleSignScreenPanel,
   AbleSignStatusDot,
@@ -31,6 +31,7 @@ type ScreenForm = {
   floor: number | null
   orientation: string
   layout: string
+  theme: string | null
   wayfinding_heading: string | null
   accepts_takeover: boolean
   active: boolean
@@ -48,7 +49,7 @@ type Screen = ScreenForm & {
 
 const empty: ScreenForm = {
   code: '', name: '', area_id: null, building: '', floor: null, orientation: 'landscape', layout: 'zoned',
-  wayfinding_heading: '', accepts_takeover: true, active: true, notes: '',
+  theme: '', wayfinding_heading: '', accepts_takeover: true, active: true, notes: '',
 }
 
 export default function SignageScreensPage() {
@@ -79,7 +80,7 @@ export default function SignageScreensPage() {
   }
 
   const save = async () => {
-    const body = { ...form, area_id: form.area_id || null, floor: form.floor ? Number(form.floor) : null, building: form.building || null, wayfinding_heading: form.wayfinding_heading || null, notes: form.notes || null }
+    const body = { ...form, area_id: form.area_id || null, floor: form.floor ? Number(form.floor) : null, building: form.building || null, wayfinding_heading: form.wayfinding_heading || null, notes: form.notes || null, theme: form.theme || null }
     const res = await fetch('/api/signage/screens', { method: editId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editId ? { id: editId, ...body } : body) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { toast(data.error || 'Save failed', 'error'); return }
@@ -103,6 +104,7 @@ export default function SignageScreensPage() {
       floor: sc.floor,
       orientation: sc.orientation,
       layout: sc.layout,
+      theme: sc.theme || '',
       wayfinding_heading: sc.wayfinding_heading || '',
       accepts_takeover: sc.accepts_takeover,
       active: sc.active,
@@ -183,6 +185,13 @@ export default function SignageScreensPage() {
               <p style={{ ...s.lbl, margin: '6px 0 0', lineHeight: 1.45 }}>
                 Zoned is the default department screen. Full bleed hides the side rail. Wayfinding dedicates most of the screen to the directory.
               </p>
+            </div>
+            <div>
+              <p style={s.lbl}>Color theme</p>
+              <select value={form.theme ?? ''} onChange={e => setForm(f => ({ ...f, theme: e.target.value }))} style={s.input}>
+                <option value="">Use building default</option>
+                {SIGNAGE_THEMES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
             </div>
             {form.layout === 'wayfinding' && (
               <div>
