@@ -18,6 +18,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const [phase, setPhase] = useState<Phase>('loading')
+  const [portalInput, setPortalInput] = useState('')
   const [meeting, setMeeting] = useState<BoardMeetingRecord | null>(null)
   const [productionNumber, setProductionNumber] = useState<number | null>(null)
   const [items, setItems] = useState<AgendaItemUI[]>([])
@@ -69,6 +70,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       return
     }
     setMeeting(body.board_meeting)
+    if (body.board_meeting?.icompass_meeting_id) setPortalInput(String(body.board_meeting.icompass_meeting_id))
     setProductionNumber(body.production?.production_number ?? null)
     const loaded: AgendaItemUI[] = (body.items || []).map((it: AgendaItemUI & { presenters?: { name: string; title?: string | null }[] }) => ({
       ...it,
@@ -121,6 +123,27 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
     } catch {
       setError('Extraction failed. Try again or upload a different PDF.')
       setPhase(reupload ? 'locked' : 'empty')
+    }
+  }
+
+  const importFromPortal = async () => {
+    if (!portalInput.trim()) { setError('Enter the meeting ID or agenda URL from the portal'); return }
+    setError('')
+    setPhase('extracting')
+    try {
+      const res = await fetch(`/api/board-meetings/${productionId}/import-agenda`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting: portalInput.trim() }),
+      })
+      const body = await res.json()
+      if (!res.ok) { setError(body.error || 'Import failed'); setPhase('empty'); return }
+      toast('Agenda imported from the portal — review items below', 'success')
+      await load()
+      setPhase('review')
+    } catch {
+      setError('Import failed. Check the ID/URL and try again.')
+      setPhase('empty')
     }
   }
 
@@ -346,9 +369,25 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       )}
 
       {phase === 'empty' && (
-        <div style={{ textAlign: 'center', padding: '48px 20px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}` }}>
-          <p style={{ color: muted, marginBottom: '16px' }}>Upload a BoardDocs agenda PDF to extract structured agenda items.</p>
-          {fileInput(false)}
+        <div style={{ padding: '40px 24px', background: cardBg, borderRadius: '12px', border: `0.5px solid ${border}`, textAlign: 'center' }}>
+          <p style={{ color: text, fontWeight: 600, marginBottom: '4px' }}>Import the agenda from the board portal</p>
+          <p style={{ color: muted, fontSize: '13px', marginBottom: '14px' }}>Pulls items exactly as listed — no AI rewriting. Paste the meeting&apos;s agenda URL or its ID.</p>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', maxWidth: '520px', margin: '0 auto' }}>
+            <input
+              value={portalInput}
+              onChange={e => setPortalInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') void importFromPortal() }}
+              placeholder="Agenda URL or meeting ID (e.g. 478)"
+              style={{ flex: 1, minWidth: '220px', height: '44px', padding: '0 12px', borderRadius: '10px', border: `1px solid ${border}`, background: 'transparent', color: text, fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }}
+            />
+            <button type="button" onClick={() => void importFromPortal()} style={{ fontSize: '14px', padding: '0 18px', height: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+              Import agenda
+            </button>
+          </div>
+          <div style={{ marginTop: '20px', paddingTop: '18px', borderTop: `0.5px solid ${border}` }}>
+            <p style={{ color: muted, fontSize: '13px', marginBottom: '12px' }}>Or upload a BoardDocs PDF (uses AI extraction):</p>
+            {fileInput(false)}
+          </div>
         </div>
       )}
 

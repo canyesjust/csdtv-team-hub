@@ -10,6 +10,7 @@ export type BoardMeetingRow = {
   agenda_locked: boolean
   agenda_locked_at: string | null
   agenda_locked_by: string | null
+  icompass_meeting_id: string | null
   created_at: string
   updated_at: string
 }
