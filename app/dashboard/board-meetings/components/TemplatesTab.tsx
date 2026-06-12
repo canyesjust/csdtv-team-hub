@@ -119,7 +119,7 @@ export default function TemplatesTab() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
         <p style={{ margin: 0, fontSize: '14px', color: muted }}>Reusable pre-roll playlists. Apply to any meeting from the production Board Meeting tab.</p>
-        <button type="button" onClick={() => setModalOpen(true)} style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>New template</button>
+        <button type="button" onClick={() => setModalOpen(true)} style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>New template</button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -152,7 +152,7 @@ export default function TemplatesTab() {
             <input placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} style={{ ...inputStyle, marginBottom: '16px' }} />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button type="button" disabled={saving} onClick={() => setModalOpen(false)} style={{ padding: '10px 16px', borderRadius: '8px', border: `0.5px solid ${border}`, background: 'transparent', color: text, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button type="button" disabled={saving || !name.trim()} onClick={createTemplate} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: '#1e6cb5', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{saving ? 'Creating…' : 'Create'}</button>
+              <button type="button" disabled={saving || !name.trim()} onClick={createTemplate} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: 'var(--brand-primary)', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{saving ? 'Creating…' : 'Create'}</button>
             </div>
           </div>
         </div>

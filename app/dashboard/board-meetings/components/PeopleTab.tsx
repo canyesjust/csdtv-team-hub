@@ -231,7 +231,7 @@ export default function PeopleTab() {
         <button
           type="button"
           onClick={openAdd}
-          style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}
+          style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}
         >
           Add person
         </button>
@@ -297,7 +297,7 @@ export default function PeopleTab() {
               style={{ ...inputStyle, resize: 'vertical', minHeight: '200px', fontFamily: 'ui-monospace, monospace', fontSize: '13px' }}
             />
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
-              <button type="button" onClick={runImport} disabled={importing || !importCsv.trim()} style={{ flex: 1, minHeight: '44px', padding: '10px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+              <button type="button" onClick={runImport} disabled={importing || !importCsv.trim()} style={{ flex: 1, minHeight: '44px', padding: '10px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                 {importing ? 'Importing…' : 'Import'}
               </button>
               <button type="button" onClick={() => { setImportOpen(false); setImportCsv('') }} style={{ minHeight: '44px', padding: '10px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -345,7 +345,7 @@ export default function PeopleTab() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '20px', flexWrap: 'wrap' }}>
-              <button type="button" onClick={save} disabled={saving} style={{ flex: 1, minHeight: '44px', padding: '10px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+              <button type="button" onClick={save} disabled={saving} style={{ flex: 1, minHeight: '44px', padding: '10px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                 {saving ? 'Saving…' : 'Save'}
               </button>
               {editingId && (
