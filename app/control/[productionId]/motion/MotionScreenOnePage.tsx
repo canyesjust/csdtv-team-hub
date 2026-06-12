@@ -40,9 +40,11 @@ type Props = {
   onMinimize: () => void
   onPushResult: () => void
   onSetAttendance: (personId: string, status: AttStatus) => void
+  /** When embedded in the console: drop the full-screen chrome and attendance strip. */
+  inline?: boolean
 }
 
-export default function MotionScreenOnePage({ bundle, busy, error, onAction, onMinimize, onPushResult, onSetAttendance }: Props) {
+export default function MotionScreenOnePage({ bundle, busy, error, onAction, onMinimize, onPushResult, onSetAttendance, inline = false }: Props) {
   const motion = bundle.active_motion
   const isVoting = motion?.status === 'voting'
   const item = bundle.current_agenda_item
@@ -70,7 +72,10 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
   })
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'system-ui, sans-serif', padding: '18px 22px', boxSizing: 'border-box' }}>
+    <div style={inline
+      ? { background: 'transparent', color: C.text, fontFamily: 'system-ui, sans-serif' }
+      : { minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'system-ui, sans-serif', padding: '18px 22px', boxSizing: 'border-box' }}>
+      {!inline && (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: 13, color: C.soft }}>
@@ -85,9 +90,11 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
           <button type="button" onClick={onMinimize} style={{ fontSize: 13, padding: '7px 13px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.text, cursor: 'pointer', fontFamily: 'inherit' }}>Minimize</button>
         </div>
       </div>
+      )}
 
       {error && <div style={{ background: C.nayBg, color: C.nay, fontSize: 13, padding: '8px 12px', borderRadius: 8, marginBottom: 12 }}>{error}</div>}
 
+      {!inline && (
       <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
         <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent, marginBottom: 10 }}>Attendance</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '8px 20px' }}>
@@ -113,9 +120,25 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
           })}
         </div>
       </div>
+      )}
 
       <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18, marginBottom: 14 }}>
-        <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent, marginBottom: 8 }}>Motion</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent }}>
+            {motion?.motion_type === 'substitute' || motion?.motion_type === 'amendment' ? 'Amendment / substitute motion' : 'Motion'}
+          </span>
+          {motion && !isVoting && motion.motion_type === 'main' && bundle.current_agenda_item?.id && (
+            <button type="button" onClick={() => onAction('propose-substitute', { agenda_item_id: bundle.current_agenda_item!.id })}
+              style={{ fontSize: 12, padding: '5px 11px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.accent, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Amend / substitute
+            </button>
+          )}
+        </div>
+        {bundle.parent_motion && (
+          <div style={{ fontSize: 12, color: C.abstain, background: C.abstainBg, padding: '7px 11px', borderRadius: 8, marginBottom: 10 }}>
+            Amending the main motion: “{bundle.parent_motion.text || 'main motion'}”. The board votes this amendment first.
+          </div>
+        )}
         <textarea
           value={motion?.text ?? bundle.suggested_motion_text ?? ''}
           onChange={e => onAction('set-text', { text: e.target.value })}

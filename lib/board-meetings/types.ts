@@ -23,6 +23,8 @@ export type BoardMeetingRecord = {
   public_agenda_url?: string | null
   /** Wall-clock go-live from control surface (used for chapters when event log is incomplete). */
   live_started_at?: string | null
+  /** When the YouTube stream began (video 0:00) — the anchor for chapter timestamps. */
+  stream_started_at?: string | null
 }
 
 export type AgendaItemUI = {
@@ -82,6 +84,7 @@ export type ControlAgendaItem = {
   is_broadcastable: boolean
   consent_block?: string | null
   suggested_motion_text?: string | null
+  live_status?: 'tabled' | 'postponed' | null
 }
 
 /** Agenda item shape for the motion screen UI. */

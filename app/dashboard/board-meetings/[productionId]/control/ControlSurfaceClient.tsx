@@ -80,7 +80,8 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(fn: T, delay
 export default function ControlSurfaceClient({ productionId, initialBundle = null }: Props) {
   const supabase = createClient()
   const searchParams = useSearchParams()
-  const useConsole = searchParams.get('v') === '2'
+  // New console is the default; ?v=1 falls back to the classic control surface.
+  const useConsole = searchParams.get('v') !== '1'
   const [bundle, setBundle] = useState<ControlBundle | null>(initialBundle)
   const [resultOverlay, setResultOverlay] = useState<ResultOverlayState | null>(
     initialBundle?.result_overlay ?? null,
@@ -897,6 +898,42 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     [productionId, loadLive],
   )
 
+  const reorderAgendaByIds = useCallback(
+    async (orderedBroadcastableIds: string[]) => {
+      const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_ids: orderedBroadcastableIds, broadcastable_only: true }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast((body as { error?: string }).error || 'Failed to reorder agenda', 'error')
+      }
+      void load()
+    },
+    [productionId, load],
+  )
+
+  const onMarkStreamStarted = useCallback(
+    async (clear: boolean) => {
+      const stamp = clear ? null : new Date().toISOString()
+      setBundle(prev => (prev ? { ...prev, board_meeting: { ...prev.board_meeting, stream_started_at: stamp } } : prev))
+      const res = await fetch(`/api/board-meetings/${productionId}/control/stream-started`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast((body as { error?: string }).error || 'Failed to mark stream start', 'error')
+        void loadLive()
+      } else {
+        toast(clear ? 'Stream start cleared' : 'Stream start marked — chapters anchored here', 'success')
+      }
+    },
+    [productionId, loadLive],
+  )
+
   const viewBundle = useMemo(
     () => (bundle ? { ...bundle, result_overlay: resultOverlay } : null),
     [bundle, resultOverlay],
@@ -924,6 +961,10 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         canControl={canControl}
         onAction={onAction}
         onSetAttendance={onSetAttendance}
+        onMarkStreamStarted={onMarkStreamStarted}
+        onPatchAgendaItem={async (itemId, patch) => { await patchAgendaItem(itemId, patch) }}
+        onReorderAgenda={reorderAgendaByIds}
+        onListeningChange={onListeningChange}
       />
     )
   }

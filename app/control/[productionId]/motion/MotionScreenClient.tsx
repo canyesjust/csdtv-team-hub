@@ -50,9 +50,11 @@ const LOCAL_SUPPRESS_MS = 5000
 type Props = {
   productionId: string
   initialBundle: MotionScreenBundle
+  /** Embedded in the console — no full-screen chrome, no navigation on minimize/push. */
+  inline?: boolean
 }
 
-export default function MotionScreenClient({ productionId, initialBundle }: Props) {
+export default function MotionScreenClient({ productionId, initialBundle, inline = false }: Props) {
   const router = useRouter()
   const [bundle, setBundle] = useState<MotionScreenBundle>(initialBundle)
   const [pendingMotionText, setPendingMotionText] = useState<string | null>(null)
@@ -428,8 +430,9 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
   }, [initialBundle.meeting.id, refreshDebounced])
 
   const onMinimize = useCallback(() => {
+    if (inline) return
     router.push(`/control/${productionId}`)
-  }, [router, productionId])
+  }, [router, productionId, inline])
 
   const onPushResult = useCallback(async () => {
     const motionId = bundleRef.current.active_motion?.id
@@ -441,12 +444,17 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
         method: 'POST',
       })
       if (!res.ok) throw new Error(await readApiError(res))
-      router.push(`/control/${productionId}`)
+      if (inline) {
+        setBusy(false)
+        void refresh()
+      } else {
+        router.push(`/control/${productionId}`)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Push failed')
       setBusy(false)
     }
-  }, [productionId, router])
+  }, [productionId, router, inline, refresh])
 
   const onSetAttendance = useCallback(
     (personId: string, status: 'present' | 'remote' | 'absent') => {
@@ -478,6 +486,7 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
       onMinimize={onMinimize}
       onPushResult={onPushResult}
       onSetAttendance={onSetAttendance}
+      inline={inline}
     />
   )
 }

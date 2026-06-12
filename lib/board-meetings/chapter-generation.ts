@@ -41,45 +41,54 @@ function advanceEventTimes(events: MeetingEventRow[]): number[] {
 export function resolveChapterT0Ms(
   events: MeetingEventRow[],
   opts: {
+    streamStartedAt?: string | null
     liveStartedAt?: string | null
     elapsedStartedAt?: string | null
     scheduledPublicStart?: string | null
     productionStartDatetime?: string | null
   },
-): { t0Ms: number; warnings: string[] } {
+): { t0Ms: number; warnings: string[]; anchoredToStream: boolean } {
   const warnings: string[] = []
+
+  // Highest priority: the actual stream start (video 0:00). The gavel and agenda
+  // advances then land at their true offset into the video, and we add a
+  // "Pre-meeting" chapter at 0:00 for the preroll.
+  if (opts.streamStartedAt) {
+    return { t0Ms: new Date(opts.streamStartedAt).getTime(), warnings, anchoredToStream: true }
+  }
 
   const liveEvent = events.find(e => LIVE_EVENT_TYPES.includes(e.event_type))
   if (liveEvent) {
-    return { t0Ms: new Date(liveEvent.occurred_at).getTime(), warnings }
+    warnings.push('No stream-start time recorded — chapters are measured from the gavel, so they may be early by your preroll length. Use "Stream started" next time.')
+    return { t0Ms: new Date(liveEvent.occurred_at).getTime(), warnings, anchoredToStream: false }
   }
 
   if (opts.liveStartedAt) {
     warnings.push('Using stored live start time (go-live event was not recorded in the event log).')
-    return { t0Ms: new Date(opts.liveStartedAt).getTime(), warnings }
+    return { t0Ms: new Date(opts.liveStartedAt).getTime(), warnings, anchoredToStream: false }
   }
 
   const advanceMs = advanceEventTimes(events)
   if (advanceMs.length > 0) {
     warnings.push('Using first agenda advance as start time because go-live was not recorded.')
-    return { t0Ms: Math.min(...advanceMs), warnings }
+    return { t0Ms: Math.min(...advanceMs), warnings, anchoredToStream: false }
   }
 
   if (opts.elapsedStartedAt) {
     warnings.push('Using meeting elapsed clock as start time because go-live was not recorded.')
-    return { t0Ms: new Date(opts.elapsedStartedAt).getTime(), warnings }
+    return { t0Ms: new Date(opts.elapsedStartedAt).getTime(), warnings, anchoredToStream: false }
   }
 
   if (opts.scheduledPublicStart) {
     warnings.push(
       'Generated chapters use scheduled start time because live-start event was not recorded.',
     )
-    return { t0Ms: new Date(opts.scheduledPublicStart).getTime(), warnings }
+    return { t0Ms: new Date(opts.scheduledPublicStart).getTime(), warnings, anchoredToStream: false }
   }
 
   if (opts.productionStartDatetime) {
     warnings.push('Using production start time because live-start event was not recorded.')
-    return { t0Ms: new Date(opts.productionStartDatetime).getTime(), warnings }
+    return { t0Ms: new Date(opts.productionStartDatetime).getTime(), warnings, anchoredToStream: false }
   }
 
   throw new Error('No live start time available')
@@ -88,8 +97,10 @@ export function resolveChapterT0Ms(
 export async function generateYouTubeChapters(
   service: SupabaseClient,
   productionId: string,
-): Promise<{ chapters_text: string; line_count: number; warnings: string[] }> {
+  opts: { nudgeSeconds?: number } = {},
+): Promise<{ chapters_text: string; line_count: number; warnings: string[]; stream_anchored: boolean; nudge_seconds: number }> {
   const warnings: string[] = []
+  const nudgeSeconds = Math.round(opts.nudgeSeconds ?? 0)
 
   const { data: bm } = await service.from('board_meetings').select('*').eq('production_id', productionId).maybeSingle()
   if (!bm) throw new Error('Board meeting not found')
@@ -116,7 +127,8 @@ export async function generateYouTubeChapters(
 
   const eventRows = (events || []) as MeetingEventRow[]
 
-  let { t0Ms, warnings: t0Warnings } = resolveChapterT0Ms(eventRows, {
+  let { t0Ms, warnings: t0Warnings, anchoredToStream } = resolveChapterT0Ms(eventRows, {
+    streamStartedAt: bm.stream_started_at ?? null,
     liveStartedAt: bm.live_started_at ?? null,
     elapsedStartedAt: bstate?.elapsed_started_at ?? null,
     scheduledPublicStart: bm.scheduled_public_start,
@@ -142,7 +154,7 @@ export async function generateYouTubeChapters(
   }
 
   if (raw.length === 0) {
-    return { chapters_text: '', line_count: 0, warnings: [...warnings, 'No agenda advances recorded.'] }
+    return { chapters_text: '', line_count: 0, warnings: [...warnings, 'No agenda advances recorded.'], stream_anchored: anchoredToStream, nudge_seconds: nudgeSeconds }
   }
 
   const ids = [...new Set(raw.map(r => r.itemId))]
@@ -163,11 +175,12 @@ export async function generateYouTubeChapters(
     deduped.push({ ...entry, title })
   }
 
+  const zeroTitle = anchoredToStream ? 'Pre-meeting' : 'Welcome'
   if (deduped[0].offsetSeconds > 0) {
-    deduped.unshift({ offsetSeconds: 0, title: 'Welcome', itemId: '__welcome__' })
+    deduped.unshift({ offsetSeconds: 0, title: zeroTitle, itemId: '__welcome__' })
   } else {
     deduped[0].offsetSeconds = 0
-    if (deduped[0].title === 'Agenda item') deduped[0].title = 'Welcome'
+    if (deduped[0].title === 'Agenda item') deduped[0].title = zeroTitle
   }
 
   const merged: ChapterEntry[] = []
@@ -186,8 +199,26 @@ export async function generateYouTubeChapters(
     return {
       chapters_text: '',
       line_count: 0,
-      warnings: [...warnings, 'Not enough chapters to meet YouTube minimum (3 required).'],
+      warnings: [...warnings, 'YouTube needs at least 3 chapters; only ' + distinct.length + ' found.'],
+      stream_anchored: anchoredToStream,
+      nudge_seconds: nudgeSeconds,
     }
+  }
+
+  // Apply the operator's fine-alignment nudge, keep the first chapter pinned to 0:00,
+  // and preserve YouTube's minimum 10s spacing after shifting.
+  if (nudgeSeconds !== 0) {
+    for (const c of distinct) c.offsetSeconds = Math.max(0, c.offsetSeconds + nudgeSeconds)
+    distinct[0].offsetSeconds = 0
+    for (let i = 1; i < distinct.length; i++) {
+      if (distinct[i].offsetSeconds < distinct[i - 1].offsetSeconds + 10) {
+        distinct[i].offsetSeconds = distinct[i - 1].offsetSeconds + 10
+      }
+    }
+  }
+
+  if (!anchoredToStream) {
+    warnings.push('Tip: record "Stream started" at the start of your stream so 0:00 matches the video exactly.')
   }
 
   const lines = distinct.map(c => `${formatOffsetSeconds(c.offsetSeconds)} ${c.title}`)
@@ -195,5 +226,7 @@ export async function generateYouTubeChapters(
     chapters_text: lines.join('\n'),
     line_count: lines.length,
     warnings,
+    stream_anchored: anchoredToStream,
+    nudge_seconds: nudgeSeconds,
   }
 }

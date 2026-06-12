@@ -67,7 +67,7 @@ export async function PATCH(
     const fields = [
       'section_number', 'section_title', 'item_number', 'sort_order', 'title', 'original_title',
       'type', 'action_requested', 'is_broadcastable', 'consent_block', 'notes', 'subitems',
-      'needs_review', 'review_notes', 'suggested_motion_text',
+      'needs_review', 'review_notes', 'suggested_motion_text', 'live_status',
     ] as const
 
     for (const f of fields) {
