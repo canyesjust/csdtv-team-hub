@@ -212,7 +212,7 @@ export default function PlaylistEditor(props: EditorMode) {
             )}
             <div>
               <button type="button" disabled={busy} onClick={() => setAddOpen(false)} style={btnStyle(border, text)}>Cancel</button>
-              <button type="button" disabled={busy} onClick={addItem} style={{ ...btnStyle(border, text), background: '#1e6cb5', color: '#fff', border: 'none' }}>Add</button>
+              <button type="button" disabled={busy} onClick={addItem} style={{ ...btnStyle(border, text), background: 'var(--brand-primary)', color: '#fff', border: 'none' }}>Add</button>
             </div>
           </div>
         </div>

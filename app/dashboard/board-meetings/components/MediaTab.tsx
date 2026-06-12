@@ -188,7 +188,7 @@ export default function MediaTab() {
           {TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <input type="search" placeholder="Search by name…" value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, flex: '1 1 200px', maxWidth: '320px' }} />
-        <button type="button" onClick={() => { setUploadOpen(true); setUploadFile(null); setUploadName('') }} style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+        <button type="button" onClick={() => { setUploadOpen(true); setUploadFile(null); setUploadName('') }} style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
           Upload
         </button>
       </div>
@@ -248,7 +248,7 @@ export default function MediaTab() {
             <input placeholder="Tags (comma-separated)" value={uploadTags} onChange={e => setUploadTags(e.target.value)} style={{ ...inputStyle, marginBottom: '16px' }} />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button type="button" disabled={uploading} onClick={() => setUploadOpen(false)} style={{ padding: '10px 16px', borderRadius: '8px', border: `0.5px solid ${border}`, background: 'transparent', color: text, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button type="button" disabled={uploading || !uploadFile} onClick={submitUpload} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: '#1e6cb5', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{uploading ? 'Uploading…' : 'Upload'}</button>
+              <button type="button" disabled={uploading || !uploadFile} onClick={submitUpload} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: 'var(--brand-primary)', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{uploading ? 'Uploading…' : 'Upload'}</button>
             </div>
           </div>
         </div>
@@ -262,7 +262,7 @@ export default function MediaTab() {
             <input value={editTags} onChange={e => setEditTags(e.target.value)} placeholder="Tags" style={{ ...inputStyle, marginBottom: '16px' }} />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button type="button" disabled={saving} onClick={() => setEditAsset(null)} style={{ padding: '10px 16px', borderRadius: '8px', border: `0.5px solid ${border}`, background: 'transparent', color: text, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-              <button type="button" disabled={saving} onClick={saveEdit} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: '#1e6cb5', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{saving ? 'Saving…' : 'Save'}</button>
+              <button type="button" disabled={saving} onClick={saveEdit} style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: 'var(--brand-primary)', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
           </div>
         </div>

@@ -202,34 +202,27 @@ export default function MeetingsTab() {
   const cardBg = 'var(--surface-1)'
 
   const load = useCallback(async () => {
-    const { data: prods, error: prodErr } = await supabase
-      .from('productions')
-      .select('id, production_number, title, start_datetime, event_date, status')
-      .eq('request_type_number', 4)
+    // board_meetings is one row per meeting (small), so fetch it in full in
+    // parallel with the productions list and join client-side — no waterfall.
+    const [prodsRes, bmsRes] = await Promise.all([
+      supabase
+        .from('productions')
+        .select('id, production_number, title, start_datetime, event_date, status')
+        .eq('request_type_number', 4),
+      supabase
+        .from('board_meetings')
+        .select('production_id, broadcast_status, agenda_locked, agenda_locked_at, scheduled_public_start, agenda_extracted_at, updated_at'),
+    ])
 
-    if (prodErr) {
-      console.error(prodErr)
+    if (prodsRes.error) {
+      console.error(prodsRes.error)
       setRows([])
       setLoading(false)
       return
     }
 
-    const list = prods || []
-    if (list.length === 0) {
-      setRows([])
-      setLoading(false)
-      return
-    }
-
-    const ids = list.map(p => p.id)
-    const { data: bms } = await supabase
-      .from('board_meetings')
-      .select(
-        'production_id, broadcast_status, agenda_locked, agenda_locked_at, scheduled_public_start, agenda_extracted_at, updated_at',
-      )
-      .in('production_id', ids)
-
-    const bmByProd = new Map((bms || []).map(b => [b.production_id, b]))
+    const list = prodsRes.data || []
+    const bmByProd = new Map((bmsRes.data || []).map(b => [b.production_id, b]))
     setRows(
       list.map(p => ({
         ...p,

@@ -105,7 +105,7 @@ export default function VotingRecordsPage() {
           type="button"
           onClick={loadRecords}
           disabled={!personId || loadingRecords}
-          style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: '#1e6cb5', color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+          style={{ padding: '10px 16px', borderRadius: '8px', border: 'none', background: 'var(--brand-primary)', color: '#fff', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
         >
           {loadingRecords ? 'Loading…' : 'Load'}
         </button>
