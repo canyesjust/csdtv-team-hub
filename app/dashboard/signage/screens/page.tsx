@@ -34,6 +34,8 @@ type ScreenForm = {
   theme: string | null
   wayfinding_heading: string | null
   accepts_takeover: boolean
+  board_takeover_enabled: boolean
+  board_takeover_audio: boolean
   active: boolean
   notes: string | null
 }
@@ -49,7 +51,7 @@ type Screen = ScreenForm & {
 
 const empty: ScreenForm = {
   code: '', name: '', area_id: null, building: '', floor: null, orientation: 'landscape', layout: 'zoned',
-  theme: '', wayfinding_heading: '', accepts_takeover: true, active: true, notes: '',
+  theme: '', wayfinding_heading: '', accepts_takeover: true, board_takeover_enabled: false, board_takeover_audio: false, active: true, notes: '',
 }
 
 export default function SignageScreensPage() {
@@ -108,6 +110,8 @@ export default function SignageScreensPage() {
       theme: sc.theme || '',
       wayfinding_heading: sc.wayfinding_heading || '',
       accepts_takeover: sc.accepts_takeover,
+      board_takeover_enabled: sc.board_takeover_enabled,
+      board_takeover_audio: sc.board_takeover_audio,
       active: sc.active,
       notes: sc.notes || '',
     })
@@ -206,10 +210,18 @@ export default function SignageScreensPage() {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 18, marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'wrap' }}>
             <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
               <input type="checkbox" checked={form.accepts_takeover} onChange={e => setForm(f => ({ ...f, accepts_takeover: e.target.checked }))} />
               Accepts live takeover
+            </label>
+            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
+              <input type="checkbox" checked={form.board_takeover_enabled} onChange={e => setForm(f => ({ ...f, board_takeover_enabled: e.target.checked }))} />
+              Board meeting takeover
+            </label>
+            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
+              <input type="checkbox" checked={form.board_takeover_audio} onChange={e => setForm(f => ({ ...f, board_takeover_audio: e.target.checked }))} />
+              Play board audio
             </label>
             <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
               <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />

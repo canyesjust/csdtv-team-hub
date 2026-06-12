@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
     site_id: body.site_id || null,
     wayfinding_heading: body.wayfinding_heading || null,
     accepts_takeover: body.accepts_takeover ?? true,
+    board_takeover_enabled: body.board_takeover_enabled ?? false,
+    board_takeover_audio: body.board_takeover_audio ?? false,
     active: body.active ?? true,
     notes: body.notes || null,
   }).select('*').single()
@@ -44,6 +46,8 @@ export async function PATCH(request: NextRequest) {
     theme: body.theme ?? null,
     wayfinding_heading: body.wayfinding_heading,
     accepts_takeover: body.accepts_takeover,
+    board_takeover_enabled: body.board_takeover_enabled,
+    board_takeover_audio: body.board_takeover_audio,
     active: body.active,
     notes: body.notes,
   }).eq('id', body.id).select('*').single()

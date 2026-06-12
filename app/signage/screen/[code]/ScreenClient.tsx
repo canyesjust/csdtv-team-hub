@@ -39,6 +39,7 @@ export type ScreenFeed = {
   wayfinding: FeedWayfinding[]
   visitors: FeedVisitor[]
   live: { live: true; hls_url: string; label: string | null } | { live: false }
+  board_takeover?: { mode: 'preroll' | 'live'; url: string; audio: boolean; label: string | null }
   weather: { tempF: number | null; condition: string; icon: string }
   offline?: boolean
 }
@@ -660,7 +661,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const layout = feed.screen.layout ?? 'zoned'
   const currentMedia = feed.media[mediaIndex]
   const takeoverContent = currentMedia?.full_screen
-  const showZones = !takeoverContent && !feed.live.live
+  const showZones = !takeoverContent && !feed.live.live && !feed.board_takeover
   const visitor = feed.visitors[0]
   const clock = formatSignageClock(now)
   const areaLabel = feed.screen.area?.name || feed.screen.name
@@ -693,6 +694,17 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
           centerName={feed.screen.center_name}
           screenName={feed.screen.name}
         />
+      )}
+
+      {feed.board_takeover && !feed.live.live && (
+        <div className="cic-fill" style={{ position: 'fixed', inset: 0, zIndex: 101, background: '#000' }}>
+          <iframe
+            src={feed.board_takeover.url}
+            title={feed.board_takeover.label || 'Board meeting'}
+            allow="autoplay; encrypted-media; picture-in-picture"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+          />
+        </div>
       )}
 
       {/* 2. Full-bleed landscape */}

@@ -17,6 +17,39 @@ export default function SignageLivePage() {
   const [saving, setSaving] = useState(false)
   const inputStyle: React.CSSProperties = { background: inputBg, border: `0.5px solid ${border}`, borderRadius: 10, padding: '8px 12px', fontSize: 14, color: text, fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }
 
+  // Board meeting takeover (separate from the generic stream takeover above).
+  const [bt, setBt] = useState<{ active: boolean; mode: string; board_channel_number: number | null; label: string | null } | null>(null)
+  const [btChannel, setBtChannel] = useState('')
+  const [btLabel, setBtLabel] = useState('')
+  const [btSaving, setBtSaving] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/signage/board-takeover').then(r => r.json()).then(d => {
+      const t = d.takeover
+      if (t) {
+        setBt(t)
+        if (t.board_channel_number) setBtChannel(String(t.board_channel_number))
+        if (t.label) setBtLabel(t.label)
+      }
+    }).catch(() => {})
+  }, [])
+
+  const btPost = async (action: 'preroll' | 'live' | 'off') => {
+    setBtSaving(true)
+    const res = await fetch('/api/signage/board-takeover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, board_channel_number: Number(btChannel) || undefined, label: btLabel }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setBtSaving(false)
+    if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Failed', 'error'); return }
+    const r = await fetch('/api/signage/board-takeover')
+    const d = await r.json().catch(() => ({}))
+    setBt(d.takeover || null)
+    toast(action === 'off' ? 'Board takeover ended' : action === 'live' ? 'Screens switched to the live stream' : 'Board preroll is on the signage screens', 'success')
+  }
+
   // Live preview of the entered YouTube stream — autoplays muted with captions on.
   const previewEmbed = useMemo(
     () => youtubeEmbedUrlFromStreamUrl(normalizeSignageStreamUrl(form.hls_url) || '', { controls: true }),
@@ -144,6 +177,28 @@ export default function SignageLivePage() {
             </div>
           </>
         )}
+      </div>
+
+      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, marginTop: 20, maxWidth: 560 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: text, margin: '0 0 4px' }}>Board meeting takeover</h3>
+        <p style={{ fontSize: 13, color: muted, margin: '0 0 14px', lineHeight: 1.55 }}>
+          Takes over signage screens that have board takeover enabled. Start the preroll graphic, flip to the live
+          YouTube stream (pulled from the meeting&apos;s production), then end to return screens to normal signage.
+        </p>
+        {bt?.active && (
+          <p style={{ fontSize: 13, color: '#16a34a', margin: '0 0 12px' }}>
+            On air now: {bt.mode === 'live' ? 'live stream' : 'preroll'}{bt.board_channel_number ? ` · channel ${bt.board_channel_number}` : ''}
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <input placeholder="Board channel #" value={btChannel} onChange={e => setBtChannel(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+          <input placeholder="On-screen label (optional)" value={btLabel} onChange={e => setBtLabel(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" disabled={btSaving} onClick={() => void btPost('preroll')} style={{ padding: '10px 18px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Start preroll</button>
+          <button type="button" disabled={btSaving} onClick={() => void btPost('live')} style={{ padding: '10px 18px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Go live</button>
+          <button type="button" disabled={btSaving} onClick={() => void btPost('off')} style={{ padding: '10px 18px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>End takeover</button>
+        </div>
       </div>
     </SignagePageShell>
   )
