@@ -389,10 +389,19 @@ function StatusHero({ label, accent }: { label: string; accent: string }) {
   )
 }
 
+const VOTE_DISPLAY: Record<string, { label: string; color: string }> = {
+  yea: { label: 'Yea', color: C.green },
+  nay: { label: 'Nay', color: C.red },
+  abstain: { label: 'Abstain', color: C.amber },
+  absent: { label: 'Absent', color: C.textDim },
+  recused: { label: 'Recused', color: C.textDim },
+}
+
 function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
   const passed = result.result === 'passed'
   const accent = passed ? C.green : C.red
   const glow = passed ? C.greenGlow : C.redGlow
+  const members = [...(result.votes ?? [])].sort((a, b) => a.person_name.localeCompare(b.person_name))
   return (
     <div
       style={{
@@ -407,9 +416,22 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
       <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent }}>
         {passed ? 'Motion passed' : 'Motion failed'} · {result.tally.yea}–{result.tally.nay}
       </p>
-      <p style={{ ...motionTextFitStyle(result.motion_text, 'dais'), margin: 0, color: C.text }}>
+      <p style={{ ...motionTextFitStyle(result.motion_text, 'dais'), margin: '0 0 18px', color: C.text }}>
         {result.motion_text}
       </p>
+      {members.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '6px 24px', borderTop: `1px solid ${C.glassBorder}`, paddingTop: '14px' }}>
+          {members.map((v, i) => {
+            const d = VOTE_DISPLAY[v.vote] ?? { label: v.vote, color: C.textSoft }
+            return (
+              <div key={`${v.person_name}-${i}`} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '4px 0' }}>
+                <span style={{ fontSize: '18px', color: C.text }}>{v.person_name}</span>
+                <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: d.color }}>{d.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -109,28 +109,24 @@ export async function loadMotionScreenBundle(
       })),
   )
 
+  // Real attendance drives each member's status (present/remote/absent), which in
+  // turn pre-fills the vote grid: absent members can't vote, present default to yea.
+  const att3 = (status: string): VoteRecord['attendance'] =>
+    status === 'absent' || status === 'left_early' ? 'absent' : status === 'remote' ? 'remote' : 'present'
+  const attMap = new Map(attendance.records.map(r => [r.person_id, att3(r.status)]))
+  const recordedVote = new Map<string, VoteValue>()
+  if (activeRow) for (const v of activeRow.votes) recordedVote.set(v.person_id, v.vote)
+
   const votes: Record<string, VoteRecord> = {}
   const tally = { yea: 0, nay: 0, abstain: 0, absent: 0 }
-
-  if (activeRow) {
-    for (const v of activeRow.votes) {
-      votes[v.person_id] = {
-        vote: v.vote,
-        attendance: v.vote === 'absent' ? 'absent' : 'present',
-        recorded_at: null,
-      }
-    }
-  }
-
   for (const m of voting_members) {
-    if (!votes[m.id]) {
-      votes[m.id] = { vote: 'yea', attendance: 'present', recorded_at: null }
-    }
-    const v = votes[m.id]?.vote || 'yea'
-    if (v === 'yea') tally.yea++
-    else if (v === 'nay') tally.nay++
-    else if (v === 'abstain') tally.abstain++
-    else if (v === 'absent') tally.absent++
+    const a = attMap.get(m.id) ?? 'present'
+    const vote: VoteValue = a === 'absent' ? 'absent' : (recordedVote.get(m.id) ?? 'yea')
+    votes[m.id] = { vote, attendance: a, recorded_at: null }
+    if (vote === 'yea') tally.yea++
+    else if (vote === 'nay') tally.nay++
+    else if (vote === 'abstain') tally.abstain++
+    else if (vote === 'absent') tally.absent++
   }
 
   const liveElapsed = state?.elapsed_started_at

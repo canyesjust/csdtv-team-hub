@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import MotionScreenView from './MotionScreenView'
+import MotionScreenOnePage from './MotionScreenOnePage'
 import type { MotionScreenBundle, VoteValue } from '@/lib/board-meetings/motion-types'
 import {
   applyVoiceVoteDefaults,
@@ -448,14 +448,36 @@ export default function MotionScreenClient({ productionId, initialBundle }: Prop
     }
   }, [productionId, router])
 
+  const onSetAttendance = useCallback(
+    (personId: string, status: 'present' | 'remote' | 'absent') => {
+      setBundle(prev => {
+        const cur = prev.votes[personId] ?? { vote: 'yea' as VoteValue, attendance: 'present' as const, recorded_at: null }
+        const vote: VoteValue = status === 'absent' ? 'absent' : (cur.vote === 'absent' ? 'yea' : cur.vote)
+        return { ...prev, votes: { ...prev.votes, [personId]: { ...cur, attendance: status, vote } } }
+      })
+      suppressRefreshUntilRef.current = Date.now() + LOCAL_SUPPRESS_MS
+      setError(null)
+      void fetch(`/api/board-meetings/${productionId}/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({ person_id: personId, status }),
+      })
+        .then(async res => { if (!res.ok) { setError(await readApiError(res)); refreshInBackground() } })
+        .catch(() => { setError('Action failed'); refreshInBackground() })
+    },
+    [productionId, refreshInBackground],
+  )
+
   return (
-    <MotionScreenView
+    <MotionScreenOnePage
       bundle={bundleForView}
       busy={busy}
       error={error}
       onAction={onAction}
       onMinimize={onMinimize}
       onPushResult={onPushResult}
+      onSetAttendance={onSetAttendance}
     />
   )
 }
