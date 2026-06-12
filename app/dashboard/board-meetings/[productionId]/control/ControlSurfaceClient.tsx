@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
 import ControlSurfaceView from './ControlSurfaceView'
+import ConsoleView from './ConsoleView'
 import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
 import type { ControlLivePatch } from '@/lib/board-meetings/control-live-bundle'
 import { normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
@@ -77,6 +79,8 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(fn: T, delay
 
 export default function ControlSurfaceClient({ productionId, initialBundle = null }: Props) {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const useConsole = searchParams.get('v') === '2'
   const [bundle, setBundle] = useState<ControlBundle | null>(initialBundle)
   const [resultOverlay, setResultOverlay] = useState<ResultOverlayState | null>(
     initialBundle?.result_overlay ?? null,
@@ -859,6 +863,40 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     [bundle, productionId, load],
   )
 
+  const onSetAttendance = useCallback(
+    async (personId: string, status: 'present' | 'remote' | 'absent') => {
+      setBundle(prev => {
+        if (!prev?.attendance) return prev
+        const records = prev.attendance.records.map(r =>
+          r.person_id === personId ? { ...r, status } : r,
+        )
+        const present = records.filter(r => r.status !== 'absent' && r.status !== 'left_early').length
+        return {
+          ...prev,
+          attendance: {
+            records,
+            quorum: {
+              ...prev.attendance.quorum,
+              present_count: present,
+              quorum_met: present >= prev.attendance.quorum.threshold,
+            },
+          },
+        }
+      })
+      const res = await fetch(`/api/board-meetings/${productionId}/attendance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ person_id: personId, status }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast((body as { error?: string }).error || 'Failed to update attendance', 'error')
+        void loadLive()
+      }
+    },
+    [productionId, loadLive],
+  )
+
   const viewBundle = useMemo(
     () => (bundle ? { ...bundle, result_overlay: resultOverlay } : null),
     [bundle, resultOverlay],
@@ -876,6 +914,19 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
 
   const status = viewBundle.broadcast_state?.status || viewBundle.board_meeting.broadcast_status
   const canControl = viewBundle.board_meeting.agenda_locked && status !== 'archived' && status !== 'cancelled'
+
+  if (useConsole) {
+    return (
+      <ConsoleView
+        productionId={productionId}
+        bundle={viewBundle}
+        busy={busy}
+        canControl={canControl}
+        onAction={onAction}
+        onSetAttendance={onSetAttendance}
+      />
+    )
+  }
 
   return (
     <ControlSurfaceView

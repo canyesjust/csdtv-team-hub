@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Board Operator Console — redesign mockup v2</title>
+<style>
+  :root{
+    --bg:#0a0f1a; --panel:#111a2b; --panel2:#16223a; --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.14); --text:#eaf1fb; --soft:#9fb2d0; --dim:#64748b;
+    --accent:#4f9dee; --accentbg:rgba(79,157,238,.16);
+    --live:#ff5d5d; --livebg:rgba(255,93,93,.16);
+    --yea:#34d399; --yeabg:rgba(52,211,153,.16);
+    --nay:#f87171; --naybg:rgba(248,113,113,.16);
+    --amber:#fbbf24; --amberbg:rgba(251,191,36,.15);
+    --r:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#05080f;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:22px}
+  h1{font-size:18px;font-weight:600;margin:0 0 2px}
+  .lead{color:var(--soft);font-size:13px;margin:0 0 16px}
+  .switcher{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+  .switcher button{font:inherit;font-size:13px;padding:8px 14px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--text);cursor:pointer}
+  .switcher button.on{background:var(--accentbg);border-color:transparent;color:#bcdcff;font-weight:600}
+  .monitorlabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:18px 0 8px;font-weight:600}
+
+  .console{background:var(--bg);border:1px solid var(--line);border-radius:16px;overflow:hidden;max-width:1480px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:12px 18px;border-bottom:1px solid var(--line);background:#0c1220}
+  .mtitle{font-size:15px;font-weight:600}
+  .msub{font-size:12px;color:var(--dim)}
+  .statuswrap{display:flex;align-items:center;gap:14px}
+  .live{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#ffb3b3;background:var(--livebg);padding:6px 13px;border-radius:999px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--live);animation:p 1.6s infinite}
+  @keyframes p{0%{box-shadow:0 0 0 0 rgba(255,93,93,.45)}70%{box-shadow:0 0 0 7px rgba(255,93,93,0)}100%{box-shadow:0 0 0 0 rgba(255,93,93,0)}}
+  .clock{font-variant-numeric:tabular-nums;font-size:15px;font-weight:600}
+  .onair-strip{font-size:13px;color:var(--soft)}
+  .onair-strip b{color:var(--text);font-weight:600}
+  .quorum{font-size:12px;font-weight:600;color:#b7f0d8;background:var(--yeabg);padding:6px 12px;border-radius:999px}
+  .btn{font:inherit;font-size:13px;padding:8px 13px;border-radius:9px;border:1px solid var(--line2);background:transparent;color:var(--text);cursor:pointer}
+  .btn.danger{color:#ffc4c4;border-color:rgba(255,93,93,.4)}
+
+  .cols{display:grid;grid-template-columns:250px minmax(0,1fr) 340px;gap:0}
+  .col{padding:14px;min-height:600px}
+  .col+.col{border-left:1px solid var(--line)}
+  .coltitle{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+
+  /* agenda */
+  .sec{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 5px;font-weight:600}
+  .sec:first-of-type{margin-top:0}
+  .item{display:flex;gap:9px;align-items:flex-start;padding:7px 9px;border-radius:9px;border:1px solid transparent;cursor:pointer;margin-bottom:2px}
+  .item:hover{background:var(--panel)}
+  .item .num{font-size:12px;color:var(--dim);font-weight:600;min-width:30px;font-variant-numeric:tabular-nums}
+  .item .t{font-size:13px;line-height:1.3}
+  .item .tag{font-size:10px;color:var(--amber);background:var(--amberbg);padding:1px 6px;border-radius:5px;margin-top:3px;display:inline-block}
+  .item.live{background:var(--accentbg);border-color:rgba(79,157,238,.4)}
+  .item.live .num{color:#bcdcff}
+  .item.done{opacity:.42}
+  .navrow{display:flex;gap:8px;margin-top:14px}
+  .navrow .btn{flex:1;text-align:center}
+  .navrow .take{background:var(--accent);color:#06101f;border:none;font-weight:600}
+
+  /* center control workspace */
+  .transbar{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:12px}
+  .transbar .lbl{flex:1;font-size:13px}
+  .transbar .lbl b{font-weight:600}
+  .transbar .btn{padding:9px 14px}
+  .transbar .next{background:var(--accent);color:#06101f;border:none;font-weight:600}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:13px;margin-bottom:12px}
+  .card h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+  .card h3 .ctx{color:var(--dim);font-weight:500;text-transform:none;letter-spacing:0}
+  .search{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:13px;padding:9px 11px;margin-bottom:10px}
+  .grouplbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:600;margin:8px 0 6px}
+  .people{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font:inherit;font-size:12px;padding:7px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--text);cursor:pointer}
+  .chip.sel{background:var(--accentbg);border-color:transparent;color:#bcdcff;font-weight:600}
+  .ltbottom{display:flex;gap:12px;margin-top:12px;align-items:stretch}
+  .ltlive{flex:1;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:9px;background:var(--livebg);border:1px solid rgba(255,93,93,.35)}
+  .ltlive.empty{background:var(--panel2);border-color:var(--line)}
+  .ltlive .who .nm{font-weight:700;font-size:14px}
+  .ltlive .who .ti{font-size:11px;color:var(--soft)}
+  .onairtag{font-size:10px;font-weight:700;letter-spacing:.08em;color:#ffb3b3}
+  .posbox{display:flex;flex-direction:column;gap:5px;min-width:96px}
+  .posbox .grouplbl{margin:0 0 1px}
+  .posrow{display:flex;gap:5px}
+  .posrow .chip{flex:1;text-align:center;padding:6px 0}
+  .queue{display:flex;gap:7px;margin-top:11px;align-items:center;flex-wrap:wrap}
+  .queue .qlbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:600}
+  .qchip{font-size:11px;padding:5px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);color:var(--soft);cursor:pointer}
+
+  /* motion inline */
+  .motiontext{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--text);font:inherit;font-size:15px;font-weight:500;padding:10px 12px;resize:none;line-height:1.35}
+  .mlabel{font-size:11px;color:var(--soft);margin:12px 0 6px}
+  .vbig{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .vrow{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;cursor:pointer}
+  .pill{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px}
+  .pill.y{color:#bff3dd;background:var(--yeabg)} .pill.n{color:#ffc4c4;background:var(--naybg)} .pill.a{color:#fde3a7;background:var(--amberbg)}
+  .openvote{width:100%;padding:13px;border:none;border-radius:10px;background:var(--accent);color:#06101f;font:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}
+  .result{display:flex;align-items:center;justify-content:space-between;margin-top:13px}
+  .result .r{font-size:17px;font-weight:700}
+  .result .r .c{color:var(--yea)}
+  .pushbtn{padding:11px 18px;border:none;border-radius:10px;background:var(--yea);color:#06101f;font:inherit;font-weight:700;cursor:pointer}
+  .muted-card{opacity:.55}
+
+  /* right rail */
+  .confmon{aspect-ratio:16/9;background:#000;border:1px solid var(--line2);border-radius:10px;position:relative;overflow:hidden;display:flex;align-items:flex-end}
+  .confmon .bg{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 0%,#10233f 0%,#060c16 70%)}
+  .lt{position:relative;margin:0 0 14px 14px;background:rgba(8,14,26,.86);border-left:3px solid var(--accent);padding:6px 11px;border-radius:0 6px 6px 0;max-width:78%}
+  .lt .nm{font-size:13px;font-weight:700}
+  .lt .ti{font-size:10px;color:var(--soft)}
+  .vmini{position:relative;padding:11px 13px;width:100%}
+  .vmini .vh{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#bcdcff;margin-bottom:3px}
+  .vmini .vm{font-size:13px;font-weight:600;margin-bottom:6px}
+  .vmini .tal{font-size:12px}.vmini .tal .c{color:var(--yea);font-weight:700}
+  .confrow{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--soft)}
+  .confrow .ok{color:var(--yea);font-weight:600}
+  .smallbtns{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}
+  .smallbtns .btn{text-align:center;font-size:12px}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .modes .btn{text-align:center}
+  .chanrow{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:7px 9px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);margin-bottom:6px}
+  .chanrow .on{color:var(--yea);font-weight:600}
+  .timerrow{display:flex;gap:7px;flex-wrap:wrap}
+  .golive{width:100%;padding:13px;border:none;border-radius:10px;background:var(--accent);color:#06101f;font:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px}
+  .hidden{display:none}
+  /* attendance drawer */
+  .scrim{position:fixed;inset:0;background:rgba(2,5,11,.55);display:none;z-index:40}
+  .scrim.open{display:block}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:430px;background:var(--bg);border-left:1px solid var(--line2);z-index:41;transform:translateX(100%);transition:transform .18s ease;display:flex;flex-direction:column}
+  .drawer.open{transform:translateX(0)}
+  .drawer .dh{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
+  .drawer .dh .ttl{font-size:15px;font-weight:600}
+  .drawer .dh .sub{font-size:12px;color:var(--soft);margin-top:2px}
+  .drawer .body{padding:14px 18px;overflow:auto;flex:1}
+  .quickrow{display:flex;gap:8px;margin-bottom:14px}
+  .quickrow .btn{flex:1;text-align:center}
+  .arow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .arow .nm{font-size:14px;font-weight:500}
+  .arow .meta{font-size:11px;color:var(--dim);margin-top:2px}
+  .seg{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+  .seg button{font:inherit;font-size:12px;padding:6px 11px;background:transparent;color:var(--soft);border:none;cursor:pointer;border-left:1px solid var(--line)}
+  .seg button:first-child{border-left:none}
+  .seg button.p{background:var(--yeabg);color:#bff3dd;font-weight:600}
+  .seg button.r{background:var(--amberbg);color:#fde3a7;font-weight:600}
+  .seg button.a{background:var(--naybg);color:#ffc4c4;font-weight:600}
+  .dfoot{padding:14px 18px;border-top:1px solid var(--line);font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .dfoot .met{color:var(--yea);font-weight:600}
+  .legend{max-width:1480px;margin-top:18px;color:var(--soft);font-size:13px;line-height:1.6}
+  .legend b{color:var(--text)}
+</style>
+</head>
+<body>
+
+<h1>Board operator console — v2 (compact confidence monitor, more control)</h1>
+<p class="lead">The confidence monitor shrinks into the right rail. The whole center column becomes control: a much bigger lower-third panel (search, board + staff, position, queue) with motion folding in. Toggle a state below.</p>
+
+<div class="switcher">
+  <button id="b-idle" class="on" onclick="setState('idle')">State: agenda + lower third</button>
+  <button id="b-motion" onclick="setState('motion')">State: action item — running a vote</button>
+</div>
+
+<div class="monitorlabel">Monitor 1 — operator console</div>
+<div class="console">
+  <div class="topbar">
+    <div>
+      <div class="mtitle">ZZ TEST — Board Meeting</div>
+      <div class="msub">June 11, 2026 · production 999999999</div>
+    </div>
+    <div class="statuswrap">
+      <span class="live"><span class="dot"></span> ON AIR</span>
+      <span class="clock">00:42:15</span>
+      <span class="onair-strip">On air: <b id="onair-item">Item 7 — Consent Agenda</b></span>
+    </div>
+    <div class="statuswrap">
+      <button class="quorum" onclick="toggleAtt()" style="cursor:pointer;border:none;font:inherit">Attendance 7 / 7 ▾</button>
+      <button class="btn danger">End meeting</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- AGENDA -->
+    <div class="col">
+      <div class="coltitle">Agenda</div>
+      <div class="sec">1 · Opening</div>
+      <div class="item done"><span class="num">1A</span><span class="t">Call to Order</span></div>
+      <div class="item done"><span class="num">1B</span><span class="t">Pledge of Allegiance</span></div>
+      <div class="item done"><span class="num">1C</span><span class="t">Roll Call</span></div>
+      <div class="sec">2 · Recognition</div>
+      <div class="item done"><span class="num">2A</span><span class="t">Students of the Month</span></div>
+      <div class="sec">7 · Consent Agenda</div>
+      <div class="item live" id="ag-consent"><span class="num">7A–C</span><span class="t">Consent Agenda<br><span class="tag">action · bundled</span></span></div>
+      <div class="sec">8 · Action Items</div>
+      <div class="item" id="ag-8a"><span class="num">8A</span><span class="t">Approval of 2026–2027 Budget<br><span class="tag">action</span></span></div>
+      <div class="item"><span class="num">8B</span><span class="t">New School Bus Purchase<br><span class="tag">action</span></span></div>
+      <div class="sec">9 · Information</div>
+      <div class="item"><span class="num">9A</span><span class="t">Superintendent's Report</span></div>
+      <div class="navrow">
+        <button class="btn">◀ Back</button>
+        <button class="btn take">Take next ▶</button>
+      </div>
+    </div>
+
+    <!-- CENTER CONTROL WORKSPACE -->
+    <div class="col">
+      <div class="transbar">
+        <button class="btn">◀ Prev</button>
+        <div class="lbl">On air: <b id="trans-item">Item 7 — Consent Agenda</b></div>
+        <button class="btn next">Next item ▶</button>
+      </div>
+
+      <div class="card">
+        <h3>Lower third <span class="ctx">click a person to put them on air</span></h3>
+        <input class="search" placeholder="Search all people…" />
+        <div class="grouplbl">Board members</div>
+        <div class="people">
+          <button class="chip sel">Amanda Oaks</button>
+          <button class="chip">Holly Neibaur</button>
+          <button class="chip">Andrew Edtl</button>
+          <button class="chip">McKay Robinson</button>
+          <button class="chip">Steve Tibbitts</button>
+          <button class="chip">Denise Haycock</button>
+          <button class="chip">Mont Bringhurst</button>
+        </div>
+        <div class="grouplbl">Frequent staff</div>
+        <div class="people">
+          <button class="chip">Dr. Rick Robins · Superintendent</button>
+          <button class="chip">Leon Wilcox · Business Admin</button>
+          <button class="chip">Charlie Evans · Legal</button>
+        </div>
+
+        <div class="ltbottom">
+          <div class="ltlive" id="ltlive">
+            <div class="who"><span class="onairtag">● ON AIR</span><div class="nm">Amanda Oaks</div><div class="ti">Board President · District 4</div></div>
+            <button class="btn danger">Clear</button>
+          </div>
+          <div class="posbox">
+            <div class="grouplbl">Position</div>
+            <div class="posrow"><button class="chip sel">L</button><button class="chip">C</button><button class="chip">R</button></div>
+            <div class="grouplbl">Style</div>
+            <div class="posrow"><button class="chip sel">Name+title</button></div>
+          </div>
+        </div>
+
+        <div class="queue">
+          <span class="qlbl">Recent</span>
+          <span class="qchip">Holly Neibaur</span>
+          <span class="qchip">Dr. Rick Robins</span>
+          <span class="qchip">Andrew Edtl</span>
+        </div>
+      </div>
+
+      <div class="card" id="motioncard">
+        <h3>Motion <span class="ctx" id="motion-ctx">no action item on air</span></h3>
+        <div id="motion-body">
+          <div style="font-size:13px;color:var(--soft);line-height:1.5">When you take an action item on air (like 8A), the full motion workflow opens right here — mover, seconder, and voting — without leaving this screen.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT RAIL -->
+    <div class="col">
+      <div class="coltitle">Confidence + controls</div>
+
+      <div class="card">
+        <h3>On air now</h3>
+        <div class="confmon">
+          <div class="bg"></div>
+          <div class="lt" id="cm-lt"><div class="nm" id="cm-nm">Amanda Oaks</div><div class="ti" id="cm-ti">Board President · District 4</div></div>
+          <div class="vmini hidden" id="cm-vote">
+            <div class="vh">Motion — voting</div>
+            <div class="vm">Move to approve the 2026–2027 Budget.</div>
+            <div class="tal"><span class="c">Carried</span> · 5–1 · 1 absent</div>
+          </div>
+        </div>
+        <div class="confrow"><span>Delivered to output</span><span class="ok">✓ 0.3s ago</span></div>
+        <div class="smallbtns">
+          <button class="btn">Pop to Monitor 2</button>
+          <button class="btn">Full output view</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Output channels</h3>
+        <div class="chanrow"><span>Board Room — main</span><span class="on">● listening</span></div>
+        <div class="chanrow"><span>Overflow / lobby</span><span class="on">● listening</span></div>
+        <div class="chanrow"><span>YouTube / stream</span><span class="on">● listening</span></div>
+      </div>
+
+      <div class="card">
+        <h3>Modes</h3>
+        <div class="modes">
+          <button class="btn">Recess</button>
+          <button class="btn">Technical difficulties</button>
+          <button class="btn">Closed session</button>
+          <button class="btn">Agenda branding</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Timers</h3>
+        <div class="timerrow">
+          <button class="chip">Public comment 3:00</button>
+          <button class="chip">Recess 10:00</button>
+          <button class="chip">Custom…</button>
+        </div>
+      </div>
+
+      <button class="golive">Go to break ▣</button>
+    </div>
+  </div>
+</div>
+
+<div class="monitorlabel">Monitor 2 — program / multiview (optional pop-out)</div>
+<div class="legend" style="margin-top:8px">
+  <p>Monitor 2 stays available as a clean full-screen program view, but it's now optional — the compact confidence monitor in the right rail already confirms what's on air, so you only pop out Monitor 2 if you want the big glanceable view across the room.</p>
+  <p><b>What this version changes from the last one.</b> The big center preview is gone. That space is now the control workspace: a fuller lower-third panel with search, board + staff groups, position and style, and a recents strip — plus motion folding in below it. The confidence monitor is a small card in the right rail with the delivery-confirmed indicator, sitting above output channels, modes, and timers so more controls are visible at once.</p>
+</div>
+
+<div class="scrim" id="scrim" onclick="toggleAtt()"></div>
+<div class="drawer" id="drawer">
+  <div class="dh">
+    <div><div class="ttl">Attendance · roll call</div><div class="sub">Adjust anytime — quorum and the vote grid update live</div></div>
+    <button class="btn" onclick="toggleAtt()">Close</button>
+  </div>
+  <div class="body">
+    <div class="quickrow">
+      <button class="btn">Mark all present</button>
+      <button class="btn">Clear all</button>
+    </div>
+    <div class="arow"><div><div class="nm">Amanda Oaks</div><div class="meta">Board President · arrived 6:00</div></div><div class="seg"><button class="p">Present</button><button>Remote</button><button>Absent</button></div></div>
+    <div class="arow"><div><div class="nm">Holly Neibaur</div><div class="meta">Vice President · arrived 6:00</div></div><div class="seg"><button class="p">Present</button><button>Remote</button><button>Absent</button></div></div>
+    <div class="arow"><div><div class="nm">Andrew Edtl</div><div class="meta">arrived 6:00</div></div><div class="seg"><button class="p">Present</button><button>Remote</button><button>Absent</button></div></div>
+    <div class="arow"><div><div class="nm">McKay Robinson</div><div class="meta">arrived 6:00</div></div><div class="seg"><button class="p">Present</button><button>Remote</button><button>Absent</button></div></div>
+    <div class="arow"><div><div class="nm">Steve Tibbitts</div><div class="meta">arrived 6:14 · late</div></div><div class="seg"><button class="p">Present</button><button>Remote</button><button>Absent</button></div></div>
+    <div class="arow"><div><div class="nm">Denise Haycock</div><div class="meta">joined remotely 6:02</div></div><div class="seg"><button>Present</button><button class="r">Remote</button><button>Absent</button></div></div>
+    <div class="arow"><div><div class="nm">Mont Bringhurst</div><div class="meta">arrived 6:00</div></div><div class="seg"><button class="p">Present</button><button>Remote</button><button>Absent</button></div></div>
+  </div>
+  <div class="dfoot"><span>Present 6 · Remote 1 · Absent 0</span><span class="met">Quorum met · need 4 of 7</span></div>
+</div>
+
+<script>
+function toggleAtt(){document.getElementById('scrim').classList.toggle('open');document.getElementById('drawer').classList.toggle('open');}
+function setState(s){
+  var idle = s==='idle';
+  document.getElementById('b-idle').classList.toggle('on',idle);
+  document.getElementById('b-motion').classList.toggle('on',!idle);
+  document.getElementById('cm-lt').classList.toggle('hidden',!idle);
+  document.getElementById('cm-vote').classList.toggle('hidden',idle);
+  document.getElementById('ag-consent').classList.toggle('live',idle);
+  document.getElementById('ag-8a').classList.toggle('live',!idle);
+  if(!idle){document.getElementById('ag-consent').classList.add('done');}else{document.getElementById('ag-consent').classList.remove('done');}
+  document.getElementById('onair-item').textContent = idle ? 'Item 7 — Consent Agenda' : 'Item 8A — Approval of 2026–2027 Budget';
+  document.getElementById('trans-item').textContent = idle ? 'Item 7 — Consent Agenda' : 'Item 8A — Approval of 2026–2027 Budget';
+  document.getElementById('motion-ctx').textContent = idle ? 'no action item on air' : 'Item 8A on air';
+  document.getElementById('motion-body').innerHTML = idle ? IDLE_MOTION : LIVE_MOTION;
+}
+var IDLE_MOTION = '<div style="font-size:13px;color:var(--soft);line-height:1.5">When you take an action item on air (like 8A), the full motion workflow opens right here — mover, seconder, and voting — without leaving this screen.</div>';
+var LIVE_MOTION = ''+
+'<textarea class="motiontext" rows="2">Move to approve the 2026–2027 Budget.</textarea>'+
+'<div class="mlabel">Moved by</div><div class="people">'+
+'<button class="chip sel">Oaks</button><button class="chip">Neibaur</button><button class="chip">Edtl</button><button class="chip">Robinson</button><button class="chip">Tibbitts</button><button class="chip">Bringhurst</button></div>'+
+'<div class="mlabel">Seconded by</div><div class="people">'+
+'<button class="chip">Oaks</button><button class="chip sel">Neibaur</button><button class="chip">Edtl</button><button class="chip">Robinson</button><button class="chip">Tibbitts</button><button class="chip">Bringhurst</button></div>'+
+'<div class="mlabel">Vote — everyone defaults to yea; tap to mark nay or abstain</div>'+
+'<div class="vbig">'+
+'<div class="vrow">Oaks <span class="pill y">YEA</span></div>'+
+'<div class="vrow">Neibaur <span class="pill y">YEA</span></div>'+
+'<div class="vrow">Edtl <span class="pill n">NAY</span></div>'+
+'<div class="vrow">Robinson <span class="pill y">YEA</span></div>'+
+'<div class="vrow">Tibbitts <span class="pill y">YEA</span></div>'+
+'<div class="vrow" style="opacity:.5">Haycock <span class="pill a">ABSENT</span></div>'+
+'</div>'+
+'<div class="result"><div class="r">Result: <span class="c">Carried</span> <span style="font-size:13px;font-weight:400;color:var(--soft)">5–1 · 1 absent</span></div>'+
+'<button class="pushbtn">Push result ▶</button></div>';
+</script>
+</body>
+</html>
