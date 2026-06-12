@@ -51,6 +51,8 @@ export type ScreenFeed = {
   wayfinding: ScreenFeedWayfinding[]
   visitors: ScreenFeedVisitor[]
   live: { live: true; hls_url: string; label: string | null } | { live: false }
+  /** Board meeting takeover (opt-in screens only): preroll graphics or live stream. */
+  board_takeover?: { mode: 'preroll' | 'live'; url: string; audio: boolean; label: string | null }
   weather: SignageWeather
   offline?: boolean
 }

@@ -19,14 +19,14 @@ export function youtubeVideoIdFromUrl(url: string): string | null {
 
 export function youtubeEmbedUrlFromStreamUrl(
   url: string,
-  opts: { controls?: boolean; captions?: boolean } = {},
+  opts: { controls?: boolean; captions?: boolean; muted?: boolean } = {},
 ): string | null {
   const id = youtubeVideoIdFromUrl(url)
   if (!id) return null
-  const { controls = false, captions = true } = opts
+  const { controls = false, captions = true, muted = true } = opts
   const params = new URLSearchParams({
     autoplay: '1',
-    mute: '1',
+    mute: muted ? '1' : '0',
     rel: '0',
     playsinline: '1',
     controls: controls ? '1' : '0',

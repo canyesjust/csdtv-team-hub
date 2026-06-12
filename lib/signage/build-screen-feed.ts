@@ -3,7 +3,7 @@ import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './anno
 import { clampDisplaySeconds, sanitizeSignageHtml } from './content-display'
 import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
 import { signageLiveMatchesScreen } from './live-targeting'
-import { normalizeSignageStreamUrl } from './stream-url'
+import { normalizeSignageStreamUrl, youtubeEmbedUrlFromStreamUrl } from './stream-url'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
@@ -46,7 +46,7 @@ export async function buildScreenFeed(
 ): Promise<{ feed: ScreenFeed } | { error: 'not_found' | 'server_error' }> {
   const { data: screen, error: screenErr } = await service
     .from('signage_screens')
-    .select('id, code, name, orientation, layout, theme, site_id, wayfinding_heading, accepts_takeover, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
+    .select('id, code, name, orientation, layout, theme, site_id, wayfinding_heading, accepts_takeover, board_takeover_enabled, board_takeover_audio, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
     .eq('code', code)
     .maybeSingle()
 
@@ -79,6 +79,7 @@ export async function buildScreenFeed(
     visitorsRes,
     liveRes,
     siteRes,
+    takeoverRes,
   ] = await Promise.all([
     contentQuery,
     annQuery,
@@ -90,6 +91,7 @@ export async function buildScreenFeed(
     siteId
       ? service.from('signage_sites').select('*').eq('id', siteId).maybeSingle()
       : service.from('signage_settings').select('*').eq('id', 1).maybeSingle(),
+    service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle(),
   ])
 
   const media = (contentRes.data ?? [])
@@ -191,6 +193,19 @@ export async function buildScreenFeed(
     live = { live: true, hls_url: streamUrl, label: liveRow.label }
   }
 
+  // Board meeting takeover — only screens that opted in follow the board meeting.
+  let board_takeover: ScreenFeed['board_takeover'] = undefined
+  const tk = takeoverRes.data
+  if (tk?.active && screen.board_takeover_enabled) {
+    const audio = !!screen.board_takeover_audio
+    if (tk.mode === 'preroll' && tk.board_channel_number) {
+      board_takeover = { mode: 'preroll', url: `/board/${tk.board_channel_number}/preroll`, audio, label: tk.label ?? null }
+    } else if (tk.mode === 'live' && tk.youtube_url) {
+      const embed = youtubeEmbedUrlFromStreamUrl(tk.youtube_url, { controls: false, captions: true, muted: !audio })
+      if (embed) board_takeover = { mode: 'live', url: embed, audio, label: tk.label ?? null }
+    }
+  }
+
   return {
     feed: {
       screen: {
@@ -212,6 +227,7 @@ export async function buildScreenFeed(
       wayfinding,
       visitors,
       live,
+      board_takeover,
       weather,
     },
   }
