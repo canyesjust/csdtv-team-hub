@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pre-show console — mockup</title>
+<style>
+  :root{
+    --bg:#0a0f1a; --panel:#111a2b; --panel2:#16223a; --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.14); --text:#eaf1fb; --soft:#9fb2d0; --dim:#64748b;
+    --accent:#4f9dee; --accentbg:rgba(79,157,238,.16);
+    --amber:#fbbf24; --amberbg:rgba(251,191,36,.15);
+    --yea:#34d399; --yeabg:rgba(52,211,153,.16); --gold:#e7b549;
+  }
+  *{box-sizing:border-box}
+  html,body{height:auto}
+  body{margin:0;background:#05080f;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:18px;overflow-y:auto}
+  h1{font-size:17px;font-weight:600;margin:0 0 2px}
+  .lead{color:var(--soft);font-size:13px;margin:0 0 14px;max-width:980px;line-height:1.5}
+  .console{background:var(--bg);border:1px solid var(--line);border-radius:14px;overflow:hidden;max-width:1480px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:#0c1220}
+  .mtitle{font-size:14px;font-weight:600}
+  .msub{font-size:11px;color:var(--dim)}
+  .preshow{display:flex;align-items:center;gap:7px;font-weight:700;font-size:12px;color:#fde3a7;background:var(--amberbg);padding:5px 11px;border-radius:999px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block}
+  .clock{font-variant-numeric:tabular-nums;font-size:14px;font-weight:600}
+  .pill{font-size:11px;font-weight:600;color:#fde3a7;background:var(--amberbg);padding:5px 11px;border-radius:999px}
+  .btn{font:inherit;font-size:12px;padding:7px 11px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--text);cursor:pointer}
+
+  /* launch sequence */
+  .launch{display:flex;align-items:center;gap:0;padding:9px 16px;border-bottom:1px solid var(--line);background:#0b1322;flex-wrap:wrap}
+  .step{display:flex;align-items:center;gap:8px;padding:5px 12px}
+  .step + .step{border-left:1px solid var(--line)}
+  .scheck{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+  .done .scheck{background:var(--yea);color:#06101f}
+  .now .scheck{background:var(--amber);color:#06101f}
+  .todo .scheck{background:transparent;border:1px solid var(--line2);color:var(--dim)}
+  .slabel{font-size:12px;font-weight:600}
+  .ssub{font-size:10px;color:var(--soft);margin-top:1px}
+  .launch .spacer{flex:1;min-width:10px}
+  .golive{background:var(--accent);color:#06101f;border:none;border-radius:10px;padding:11px 18px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .golive small{display:block;font-size:9px;font-weight:500;opacity:.8}
+
+  .cols{display:grid;grid-template-columns:250px minmax(0,1fr) 320px}
+  .col{padding:12px}
+  .col+.col{border-left:1px solid var(--line)}
+  .coltitle{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 9px;display:flex;justify-content:space-between;align-items:center}
+  .coltitle .add{font-size:11px;color:var(--accent);text-transform:none;letter-spacing:0;font-weight:500;cursor:pointer}
+
+  .pitem{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);margin-bottom:5px;cursor:pointer}
+  .pitem.cur{border-color:rgba(79,157,238,.5);background:var(--accentbg)}
+  .pthumb{width:42px;height:27px;border-radius:4px;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--soft);flex-shrink:0;text-align:center;line-height:1.1}
+  .pname{font-size:12px}
+  .pmeta{font-size:10px;color:var(--dim);margin-top:1px}
+  .ptag{font-size:9px;color:#fde3a7;background:var(--amberbg);padding:1px 5px;border-radius:4px;margin-left:4px}
+
+  /* previews: two screens side by side */
+  .previews{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pvwrap .pvlabel{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:600}
+  .preview{aspect-ratio:16/9;background:#05080f;border:1px solid var(--line2);border-radius:9px;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto}
+  .pv-top{display:flex;justify-content:space-between;align-items:center;padding:5px 9px}
+  .pv-logo{font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.03em}
+  .pv-clock{font-size:9px;color:var(--soft)}
+  .pv-body{display:grid;grid-template-columns:1.9fr 1fr;gap:6px;padding:0 9px;min-height:0}
+  .pv-media{background:linear-gradient(135deg,#13243f,#0a1322);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--soft);font-size:10px;text-align:center;padding:4px}
+  .pv-side{display:flex;flex-direction:column;gap:2px;justify-content:center}
+  .pv-soon{font-size:9px;color:var(--gold);font-weight:600}
+  .pv-time{font-size:13px;font-weight:700}
+  .pv-aglbl{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+  .pv-ag{font-size:9px;color:var(--soft);line-height:1.45}
+  .pv-tick{padding:4px 9px;font-size:9px;color:var(--soft);border-top:1px solid var(--line);white-space:nowrap;overflow:hidden}
+  /* dais variant */
+  .dais{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:3px;background:radial-gradient(120% 90% at 50% 0%,#10233f,#060c16)}
+  .dais .dclock{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  .dais .dsoon{font-size:10px;color:var(--gold);font-weight:600}
+  .dais .dnext{font-size:9px;color:var(--soft);margin-top:4px}
+
+  .transport{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+  .transport .btn{flex:1;text-align:center;min-width:60px}
+  .transport .primary{background:var(--accent);color:#06101f;border:none;font-weight:600}
+  .actions2{display:flex;gap:7px;margin-top:7px}
+  .actions2 .btn{flex:1;text-align:center}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px;margin-bottom:10px}
+  .card h3{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 9px}
+  .srow{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:5px 0}
+  .seg{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+  .seg button{font:inherit;font-size:11px;padding:6px 10px;background:transparent;color:var(--soft);border:none;border-left:1px solid var(--line);cursor:pointer}
+  .seg button:first-child{border-left:none}
+  .seg .on{background:var(--accentbg);color:#bcdcff;font-weight:600}
+  .switchbtn{width:100%;margin-top:9px;padding:10px;border-radius:9px;border:none;background:var(--gold);color:#1a1305;font:inherit;font-weight:700;font-size:13px;cursor:pointer}
+  .muted{font-size:11px;color:var(--dim);margin-top:7px;line-height:1.5}
+  .legend{max-width:1480px;margin-top:16px;color:var(--soft);font-size:13px;line-height:1.6}
+  .legend b{color:var(--text)}
+</style>
+</head>
+<body>
+
+<h1>Pre-show console — v2</h1>
+<p class="lead">Both displays previewed (district screens + dais), compact so it scrolls, and the two switches kept separate: “Go live” gavels in; flipping the screens to the stream is its own button. Study session → back to pre-roll → business meeting all use this same mode.</p>
+
+<div class="console">
+  <div class="topbar">
+    <div>
+      <div class="mtitle">ZZ TEST — Board Meeting</div>
+      <div class="msub">June 11, 2026 · pre-show · study session next</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="preshow"><span class="dot"></span> PRE-SHOW</span>
+      <span class="clock">Stream 42:15</span>
+    </div>
+    <span class="pill">Attendance 5 / 7 arriving</span>
+  </div>
+
+  <!-- LAUNCH SEQUENCE: two deliberate switches -->
+  <div class="launch">
+    <div class="step done"><span class="scheck">✓</span><div><div class="slabel">Stream started</div><div class="ssub">5:00 PM · video 0:00</div></div></div>
+    <div class="step done"><span class="scheck">✓</span><div><div class="slabel">Screens on pre-roll</div><div class="ssub">12 following</div></div></div>
+    <div class="step now"><span class="scheck">●</span><div><div class="slabel">Pre-roll playing</div><div class="ssub">loops until gavel</div></div></div>
+    <span class="spacer"></span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="golive" style="background:var(--gold);color:#1a1305">Switch screens → stream<small>deliberate · district screens</small></button>
+      <button class="golive">Go live (gavel)<small>starts the study session</small></button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- PLAYLIST -->
+    <div class="col">
+      <div class="coltitle"><span>Pre-roll playlist</span><span class="add">+ Edit ↗</span></div>
+      <div class="pitem"><div class="pthumb">BUMPER</div><div><div class="pname">CSDTV open</div><div class="pmeta">video · 0:20</div></div></div>
+      <div class="pitem cur"><div class="pthumb">COUNT<br>DOWN</div><div><div class="pname">Countdown<span class="ptag">on now</span></div><div class="pmeta">info card · loops</div></div></div>
+      <div class="pitem"><div class="pthumb">AGENDA</div><div><div class="pname">Tonight's agenda</div><div class="pmeta">info card · 0:30</div></div></div>
+      <div class="pitem"><div class="pthumb">BOARD</div><div><div class="pname">Meet the board</div><div class="pmeta">info card · 0:40</div></div></div>
+      <div class="pitem"><div class="pthumb">IMG</div><div><div class="pname">Bond highlights</div><div class="pmeta">image<span class="ptag">full screen</span></div></div></div>
+      <div class="muted">Click to jump · drag to reorder · ★ plays full-screen.</div>
+    </div>
+
+    <!-- TWO PREVIEWS + TRANSPORT -->
+    <div class="col">
+      <div class="coltitle">What's showing right now</div>
+      <div class="previews">
+        <div class="pvwrap">
+          <div class="pvlabel">District screens / stream</div>
+          <div class="preview">
+            <div class="pv-top"><span class="pv-logo">CANYONS DISTRICT</span><span class="pv-clock">6:42 PM</span></div>
+            <div class="pv-body">
+              <div class="pv-media">Countdown — starts 7:00</div>
+              <div class="pv-side">
+                <div class="pv-soon">Starts soon</div>
+                <div class="pv-time">7:00 PM</div>
+                <div class="pv-aglbl">Upcoming</div>
+                <div class="pv-ag">1. Call to Order<br>2. Recognition<br>7. Consent</div>
+              </div>
+            </div>
+            <div class="pv-tick">District news · Students earn state honors · Board approves STEM wing…</div>
+          </div>
+        </div>
+        <div class="pvwrap">
+          <div class="pvlabel">Dais display</div>
+          <div class="preview dais">
+            <div class="dsoon">Board Meeting</div>
+            <div class="dclock">6:42</div>
+            <div class="dsoon" style="color:var(--soft)">Meeting starts at 7:00 PM</div>
+            <div class="dnext">First up · 1. Call to Order</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="btn primary">Pause</button>
+        <button class="btn">◀ Back</button>
+        <button class="btn">Skip ▶</button>
+        <button class="btn">Hold</button>
+      </div>
+      <div class="actions2">
+        <button class="btn">Full-screen this now</button>
+        <button class="btn">Show something now…</button>
+        <button class="btn">Back to pre-roll</button>
+      </div>
+      <div class="muted">“Back to pre-roll” returns here between the study session and business meeting. “Show something now” overlays a clip/graphic, then auto-returns. Music bed: <b style="color:var(--text)">Calm strings</b>.</div>
+    </div>
+
+    <!-- SIGNAGE + CHECKLIST -->
+    <div class="col">
+      <div class="coltitle">Signage takeover</div>
+      <div class="card">
+        <h3>District screens</h3>
+        <div class="srow"><span>Mode</span>
+          <div class="seg"><button class="on">Pre-roll</button><button>Live</button><button>Off</button></div>
+        </div>
+        <div class="srow"><span>Following</span><span style="color:var(--yea);font-weight:600">12 screens</span></div>
+        <div class="srow"><span>Audio</span>
+          <div class="seg"><button class="on">On</button><button>Mute</button></div>
+        </div>
+        <button class="switchbtn">Switch screens → live stream</button>
+        <div class="muted">This is the deliberate screen switch — separate from gavel. End of meeting returns screens to normal signage.</div>
+      </div>
+
+      <div class="card">
+        <h3>Pre-show checklist</h3>
+        <div class="srow"><span>Stream live</span><span style="color:var(--yea)">✓ 5:00 PM</span></div>
+        <div class="srow"><span>Pre-roll playing</span><span style="color:var(--yea)">✓ 12 screens</span></div>
+        <div class="srow"><span>News ticker</span><span style="color:var(--yea)">✓ 12 headlines</span></div>
+        <div class="srow"><span>Captions</span><span style="color:var(--yea)">✓ auto</span></div>
+        <div class="srow"><span>Quorum</span><span style="color:var(--amber)">5 / 7 arriving</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <p><b>Two deliberate switches.</b> “Go live (gavel)” starts the session; “Switch screens → live stream” flips the district signage — kept separate so you control each. Between the study session and the business meeting you tap “Back to pre-roll” and the screens hold here until you gavel the next session.</p>
+  <p><b>Mechanics to verify when building:</b> playlist play/pause/skip/back/hold, jump-to, full-screen toggle, and “show now” all exist in the backend but need their wiring checked end-to-end; the dais preview reuses the real dais view; the signage switch calls the existing board-takeover bridge.</p>
+</div>
+</body>
+</html>

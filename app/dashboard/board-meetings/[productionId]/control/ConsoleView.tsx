@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { resolveCurrentAgendaItem } from '@/lib/board-meetings/control-meeting-cache'
 import MotionInline from './MotionInline'
 import ConsoleQR from './ConsoleQR'
+import PreshowMode from './PreshowMode'
 import type { ControlBundle, LowerThirdPerson } from '@/lib/board-meetings/types'
 
 type AttStatus = 'present' | 'remote' | 'absent'
@@ -46,6 +47,9 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const isLive = status === 'live'
   const isPrepared = status === 'prepared'
   const mode = bs?.mode || 'normal'
+  const onBreak = isLive && mode === 'recess'
+  // Pre-show body before the gavel, or when recessed between sessions; Live body otherwise.
+  const isPreshow = !isLive || onBreak
   const elapsedStartedAt = bs?.elapsed_started_at ?? null
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [attOpen, setAttOpen] = useState(false)
@@ -140,11 +144,13 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {isLive ? (
+            {onBreak ? (
+              <span style={{ fontWeight: 700, fontSize: 13, color: '#fde3a7', background: C.amberbg, padding: '6px 13px', borderRadius: 999 }}>ON BREAK</span>
+            ) : isLive ? (
               <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: 13, color: '#ffb3b3', background: C.livebg, padding: '6px 13px', borderRadius: 999 }}>
                 <span style={{ width: 9, height: 9, borderRadius: '50%', background: C.live, display: 'inline-block' }} /> ON AIR
               </span>
-            ) : isPrepared ? <span style={{ fontSize: 13, fontWeight: 600, color: C.soft }}>Pre-show</span> : null}
+            ) : <span style={{ fontWeight: 700, fontSize: 13, color: '#fde3a7', background: C.amberbg, padding: '6px 13px', borderRadius: 999 }}>PRE-SHOW</span>}
             {elapsedStartedAt && <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 15, fontWeight: 600 }}>{fmtElapsed(nowMs - new Date(elapsedStartedAt).getTime())}</span>}
             {currentItem && <span style={{ fontSize: 13, color: C.soft }}>On air: <b style={{ color: C.text, fontWeight: 600 }}>Item {currentItem.item_number} — {currentItem.title}</b></span>}
           </div>
@@ -152,6 +158,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             <button onClick={() => setAttOpen(true)} style={{ font: 'inherit', cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: 600, color: quorumMet ? '#b7f0d8' : '#ffc4c4', background: quorumMet ? C.yeabg : C.naybg, padding: '6px 12px', borderRadius: 999 }}>
               Attendance {presentCount} / {att?.records.length ?? 0} ▾
             </button>
+            {isLive && !onBreak && <button onClick={() => onAction('recess')} disabled={!canControl} title="Recess between sessions — returns the screens to pre-roll" style={{ ...btn }}>Back to pre-roll</button>}
             {isLive && <button onClick={() => onAction('end-meeting')} disabled={!canControl} style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }}>End meeting</button>}
           </div>
         </div>
@@ -160,7 +167,10 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
           <p style={{ margin: 0, padding: '10px 18px', background: C.amberbg, color: '#fde3a7', fontSize: 13 }}>Lock the agenda before using broadcast controls.</p>
         )}
 
-        {/* THREE COLUMNS */}
+        {/* BODY — Pre-show before gavel / on break, Live otherwise */}
+        {isPreshow ? (
+          <PreshowMode productionId={productionId} bundle={bundle} canControl={canControl} busy={busy} onAction={onAction} onMarkStreamStarted={onMarkStreamStarted} />
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '250px minmax(0,1fr) 340px' }}>
           {/* AGENDA */}
           <div style={{ padding: 14, minHeight: 600 }}>
@@ -426,6 +436,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* ATTENDANCE DRAWER */}
