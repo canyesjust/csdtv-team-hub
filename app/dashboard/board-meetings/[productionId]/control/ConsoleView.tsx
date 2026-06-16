@@ -64,6 +64,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [attOpen, setAttOpen] = useState(false)
   const [editAgenda, setEditAgenda] = useState(false)
+  const [showPreviews, setShowPreviews] = useState(false)
   const dragId = useRef<string | null>(null)
 
   const handleAgendaDrop = (targetId: string) => {
@@ -348,10 +349,15 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 <span>On air now</span>
                 <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} onClick={() => window.open(`/control/${productionId}/program`, 'board-program', 'width=1280,height=720')}>Pop to Monitor 2 ↗</button>
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <BoardPreview channel={boardChannel} view="live" label="On air (overlay + lower third)" />
-                <BoardPreview channel={boardChannel} view="dais" label="Dais display" />
-              </div>
+              {showPreviews ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <BoardPreview channel={boardChannel} view="live" label="On air (overlay + lower third)" />
+                  <BoardPreview channel={boardChannel} view="dais" label="Dais display" />
+                  <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} onClick={() => setShowPreviews(false)}>Hide previews</button>
+                </div>
+              ) : (
+                <button style={{ ...btn, width: '100%', fontSize: 12 }} onClick={() => setShowPreviews(true)}>Show on-air + dais previews</button>
+              )}
               {(() => {
                 const listening = (bundle.channel_assignments || []).length
                 if (listening === 0) {

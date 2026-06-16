@@ -156,6 +156,19 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     setBundle(prev => {
       if (!prev) return prev
       const merged = { ...prev, ...live }
+      // Protect an optimistic go-live: a background read that runs before end-preroll
+      // commits can report 'prepared' and knock us off live. While we're inside the
+      // post-action window and the client already believes it's live, keep it live.
+      // (Only guards the prepared/draft regression — ending the meeting still works.)
+      if (
+        prev.broadcast_state?.status === 'live' &&
+        merged.broadcast_state &&
+        (merged.broadcast_state.status === 'prepared' || merged.broadcast_state.status === 'draft') &&
+        Date.now() < suppressRealtimeUntilRef.current
+      ) {
+        merged.broadcast_state = { ...merged.broadcast_state, status: 'live' }
+        merged.board_meeting = { ...merged.board_meeting, broadcast_status: 'live' }
+      }
       const currentId = merged.broadcast_state?.current_agenda_item_id ?? null
       return {
         ...merged,
