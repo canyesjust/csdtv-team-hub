@@ -50,8 +50,10 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const isPrepared = status === 'prepared'
   const mode = bs?.mode || 'normal'
   const onBreak = isLive && mode === 'recess'
-  // The natural phase: pre-show before the gavel / when recessed, live otherwise.
-  const phase: 'preshow' | 'live' = !isLive || onBreak ? 'preshow' : 'live'
+  // The agenda/live console is the default workhorse; pre-show is opt-in via the
+  // toggle (and auto-shows only during a recess). This keeps clicking agenda items
+  // or running a motion from ever bouncing to the pre-show screen.
+  const phase: 'preshow' | 'live' = onBreak ? 'preshow' : 'live'
   // The operator can switch views; the choice sticks until a REAL phase change
   // (gavel / recess) happens — so clicking an agenda item never bounces the screen.
   const [viewOverride, setViewOverride] = useState<{ phase: string; view: 'preshow' | 'live' } | null>(null)
