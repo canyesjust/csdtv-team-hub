@@ -914,6 +914,24 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     [productionId, load],
   )
 
+  const onPullFromConsent = useCallback(
+    async (consentItemId: string, itemNumber: string) => {
+      const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/${consentItemId}/pull-subitem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_number: itemNumber }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        toast((body as { error?: string }).error || 'Could not pull the item from consent', 'error')
+      } else {
+        toast('Item pulled from the consent agenda', 'success')
+      }
+      void load()
+    },
+    [productionId, load],
+  )
+
   const onMarkStreamStarted = useCallback(
     async (clear: boolean) => {
       const stamp = clear ? null : new Date().toISOString()
@@ -965,6 +983,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         onPatchAgendaItem={async (itemId, patch) => { await patchAgendaItem(itemId, patch) }}
         onReorderAgenda={reorderAgendaByIds}
         onListeningChange={onListeningChange}
+        onPullFromConsent={onPullFromConsent}
       />
     )
   }

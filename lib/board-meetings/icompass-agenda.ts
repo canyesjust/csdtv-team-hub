@@ -186,39 +186,61 @@ export function parseIcompassAgendaHtml(html: string): ExtractedAgendaResponse {
     const sectionHtml = html.slice(sliceStart, sliceEnd)
 
     const h3matches = [...sectionHtml.matchAll(/<h3[^>]*>([\s\S]*?)<\/h3>/gi)]
-    for (let j = 0; j < h3matches.length; j++) {
-      const h3 = h3matches[j]
+    const isConsent = /consent agenda/i.test(sectionTitle)
+
+    // Parse each sub-item (h3) once.
+    const parsed = h3matches.map((h3, j) => {
       const raw = decodeHtml(h3[1])
-      // Presenter follows an en-dash (with spaces). Em-dashes inside policy names are left alone.
       const dash = raw.search(/\s–\s/)
       const title = dash > 0 ? raw.slice(0, dash).trim() : raw
       const presenters = dash > 0 ? parsePresenters(raw.slice(dash + 2).trim()) : []
-
       const subStart = (h3.index ?? 0) + h3[0].length
       const subEnd = j + 1 < h3matches.length ? (h3matches[j + 1].index ?? sectionHtml.length) : sectionHtml.length
       const documents = extractDocuments(sectionHtml.slice(subStart, subEnd))
+      return { item_number: LETTERS[j] ?? String(j + 1), title, presenters, documents }
+    })
 
-      const cls = classify(title)
-      const isConsent = /consent agenda/i.test(sectionTitle)
-      let suggested = cls.suggested_motion_text
-      // The board makes ONE motion for the whole consent agenda — match that wording.
-      if (isConsent && cls.action_requested) suggested = 'Move to approve the Consent Agenda.'
+    if (isConsent && parsed.length > 0) {
+      // The consent agenda is ONE agenda item that votes as one motion, with each
+      // member listed as a sub-item (and listed in the motion text).
+      const listed = parsed.map(p => `${p.item_number}. ${p.title}`).join('; ')
       items.push({
         section_number: sectionNumber,
         section_title: sectionTitle,
-        item_number: LETTERS[j] ?? String(j + 1),
+        item_number: 'A',
         sort_order: items.length,
-        title,
-        original_title: title,
-        type: cls.type,
-        action_requested: cls.action_requested,
+        title: 'Consent Agenda',
+        original_title: 'Consent Agenda',
+        type: 'action',
+        action_requested: true,
         is_broadcastable: true,
-        consent_block: isConsent ? sectionTitle : null,
-        presenters,
-        documents,
-        suggested_motion_text: suggested,
+        consent_block: sectionTitle,
+        presenters: [],
+        documents: parsed.flatMap(p => p.documents),
+        subitems: parsed.map(p => ({ item_number: p.item_number, title: p.title })),
+        suggested_motion_text: `Move to approve the Consent Agenda: ${listed}.`,
         needs_review: false,
       })
+    } else {
+      for (const p of parsed) {
+        const cls = classify(p.title)
+        items.push({
+          section_number: sectionNumber,
+          section_title: sectionTitle,
+          item_number: p.item_number,
+          sort_order: items.length,
+          title: p.title,
+          original_title: p.title,
+          type: cls.type,
+          action_requested: cls.action_requested,
+          is_broadcastable: true,
+          consent_block: null,
+          presenters: p.presenters,
+          documents: p.documents,
+          suggested_motion_text: cls.suggested_motion_text,
+          needs_review: false,
+        })
+      }
     }
   }
 

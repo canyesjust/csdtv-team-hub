@@ -237,9 +237,9 @@ export async function openMotion(
   }
 
   const trimmedOverride = motionTextOverride?.trim()
-  const motionText = consentBlock
-    ? trimmedOverride || 'Move to approve the Consent Agenda.'
-    : trimmedOverride || (await suggestedTextForAgendaItem(ctx.service, ctx.boardMeetingId, agendaItemId))
+  const suggested = await suggestedTextForAgendaItem(ctx.service, ctx.boardMeetingId, agendaItemId)
+  const motionText =
+    trimmedOverride || suggested || (consentBlock ? 'Move to approve the Consent Agenda.' : '')
   const motion = await openMotionRecord(ctx.service, ctx.boardMeetingId, ctx.teamUserId, {
     agenda_item_id: agendaItemId,
     consent_block: consentBlock,

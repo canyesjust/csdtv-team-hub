@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const AGENDA_ITEM_SELECT_BASE =
-  'id, item_number, title, type, section_number, section_title, sort_order, is_broadcastable, action_requested, consent_block'
+  'id, item_number, title, type, section_number, section_title, sort_order, is_broadcastable, action_requested, consent_block, subitems'
 
 export const AGENDA_ITEM_SELECT_WITH_TEMPLATE = `${AGENDA_ITEM_SELECT_BASE}, suggested_motion_text`
 
@@ -16,6 +16,7 @@ export type AgendaItemRow = {
   is_broadcastable?: boolean
   action_requested?: boolean
   consent_block?: string | null
+  subitems?: unknown
   suggested_motion_text?: string | null
 }
 
@@ -49,6 +50,7 @@ function normalizeAgendaRow(row: Record<string, unknown>): AgendaItemRow {
     is_broadcastable: row.is_broadcastable as boolean | undefined,
     action_requested: row.action_requested as boolean | undefined,
     consent_block: (row.consent_block as string | null) ?? null,
+    subitems: row.subitems ?? null,
     suggested_motion_text: (row.suggested_motion_text as string | null | undefined) ?? null,
   }
 }

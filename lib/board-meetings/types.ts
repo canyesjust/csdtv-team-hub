@@ -85,6 +85,7 @@ export type ControlAgendaItem = {
   consent_block?: string | null
   suggested_motion_text?: string | null
   live_status?: 'tabled' | 'postponed' | null
+  subitems?: { item_number: string; title: string }[] | null
 }
 
 /** Agenda item shape for the motion screen UI. */

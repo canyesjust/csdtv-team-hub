@@ -22,6 +22,7 @@ type Props = {
   onPatchAgendaItem?: (itemId: string, patch: Partial<ControlBundle['agenda_items'][number]>) => void | Promise<void>
   onReorderAgenda?: (orderedBroadcastableIds: string[]) => void | Promise<void>
   onListeningChange?: (channelId: string, enabled: boolean) => void | Promise<void>
+  onPullFromConsent?: (consentItemId: string, itemNumber: string) => void | Promise<void>
 }
 
 const C = {
@@ -42,7 +43,7 @@ function fmtElapsed(ms: number): string {
   return `${m}:${String(sec).padStart(2, '0')}`
 }
 
-export default function ConsoleView({ productionId, bundle, canControl, busy, onAction, onSetAttendance, onMarkStreamStarted, onPatchAgendaItem, onReorderAgenda, onListeningChange }: Props) {
+export default function ConsoleView({ productionId, bundle, canControl, busy, onAction, onSetAttendance, onMarkStreamStarted, onPatchAgendaItem, onReorderAgenda, onListeningChange, onPullFromConsent }: Props) {
   const bs = bundle.broadcast_state
   const status = bs?.status || bundle.board_meeting.broadcast_status || 'draft'
   const isLive = status === 'live'
@@ -214,30 +215,26 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                       </div>
                     )
                   }
-                  // Consent agenda: render the whole block as one votable stop with
-                  // the items nested under it. Only render at the first block item.
-                  if (it.consent_block) {
-                    const firstId = sec.items.find(x => x.consent_block === it.consent_block)?.id
-                    if (it.id !== firstId) return null
-                    const blockItems = sec.items.filter(x => x.consent_block === it.consent_block)
-                    const blockCurrent = blockItems.some(x => x.id === bs?.current_agenda_item_id)
-                    const first = blockItems[0], last = blockItems[blockItems.length - 1]
+                  // Consent agenda: one item that votes as one motion, with each
+                  // member listed underneath and a live "pull out" per member.
+                  if (it.consent_block && it.subitems && it.subitems.length > 0) {
+                    const subs = it.subitems
                     return (
-                      <div key={`consent-${it.consent_block}`} style={{ marginBottom: 4, borderRadius: 9, border: `1px solid ${blockCurrent ? 'rgba(79,157,238,.4)' : C.line}`, background: blockCurrent ? C.accentbg : C.panel, overflow: 'hidden' }}>
-                        <div onClick={() => canControl && onAction('jump-to', { agenda_item_id: first.id })}
+                      <div key={it.id} style={{ marginBottom: 4, borderRadius: 9, border: `1px solid ${live ? 'rgba(79,157,238,.4)' : C.line}`, background: live ? C.accentbg : C.panel, overflow: 'hidden' }}>
+                        <div onClick={() => canControl && onAction('jump-to', { agenda_item_id: it.id })}
                           style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '8px 9px', cursor: canControl ? 'pointer' : 'default' }}>
-                          <span style={{ fontSize: 12, color: blockCurrent ? '#bcdcff' : C.dim, fontWeight: 600, minWidth: 30 }}>{first.item_number}–{last.item_number}</span>
+                          <span style={{ fontSize: 12, color: live ? '#bcdcff' : C.dim, fontWeight: 600, minWidth: 30 }}>{it.item_number}</span>
                           <span style={{ fontSize: 13, fontWeight: 600 }}>Consent Agenda
-                            <span style={{ fontSize: 10, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6 }}>one vote</span>
+                            <span style={{ fontSize: 10, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6 }}>one vote · {subs.length} items</span>
                           </span>
                         </div>
                         <div style={{ borderTop: `1px solid ${C.line}`, padding: '4px 9px 6px' }}>
-                          {blockItems.map(child => (
-                            <div key={child.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', opacity: child.is_broadcastable ? 1 : 0.45 }}>
-                              <span style={{ fontSize: 11, color: C.dim, minWidth: 24, fontVariantNumeric: 'tabular-nums' }}>{child.item_number}</span>
-                              <span style={{ fontSize: 12, flex: 1, lineHeight: 1.3 }}>{child.title}</span>
-                              {canControl && onPatchAgendaItem && (
-                                <button title="Remove from consent — discuss & vote separately" onClick={e => { e.stopPropagation(); void onPatchAgendaItem(child.id, { consent_block: null }) }}
+                          {subs.map(s => (
+                            <div key={s.item_number} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+                              <span style={{ fontSize: 11, color: C.dim, minWidth: 24, fontVariantNumeric: 'tabular-nums' }}>{s.item_number}</span>
+                              <span style={{ fontSize: 12, flex: 1, lineHeight: 1.3 }}>{s.title}</span>
+                              {canControl && onPullFromConsent && (
+                                <button title="Remove from consent — discuss & vote separately" onClick={e => { e.stopPropagation(); void onPullFromConsent(it.id, s.item_number) }}
                                   style={{ font: 'inherit', fontSize: 10, padding: '2px 7px', borderRadius: 6, border: `1px solid ${C.line2}`, background: 'transparent', color: C.soft, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pull out</button>
                               )}
                             </div>
