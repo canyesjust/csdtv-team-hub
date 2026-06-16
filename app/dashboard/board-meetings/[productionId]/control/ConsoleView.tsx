@@ -50,16 +50,12 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const isPrepared = status === 'prepared'
   const mode = bs?.mode || 'normal'
   const onBreak = isLive && mode === 'recess'
-  // The agenda/live console is the default workhorse; pre-show is opt-in via the
-  // toggle (and auto-shows only during a recess). This keeps clicking agenda items
-  // or running a motion from ever bouncing to the pre-show screen.
-  const phase: 'preshow' | 'live' = onBreak ? 'preshow' : 'live'
-  // The operator can switch views; the choice sticks until a REAL phase change
-  // (gavel / recess) happens — so clicking an agenda item never bounces the screen.
-  const [viewOverride, setViewOverride] = useState<{ phase: string; view: 'preshow' | 'live' } | null>(null)
-  const view = viewOverride && viewOverride.phase === phase ? viewOverride.view : phase
+  // The view is PURELY manual — it never changes on its own. No status change,
+  // poll, or background reload can flip it. Only the operator's buttons switch it.
+  // Default is the agenda/live console; pre-show is opt-in. This permanently stops
+  // clicking an agenda item / go-live from bouncing back to the pre-show screen.
+  const [view, setView] = useState<'preshow' | 'live'>('live')
   const isPreshow = view === 'preshow'
-  const setView = (v: 'preshow' | 'live') => setViewOverride({ phase, view: v })
   const elapsedStartedAt = bs?.elapsed_started_at ?? null
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [attOpen, setAttOpen] = useState(false)
@@ -178,8 +174,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             <button onClick={() => setAttOpen(true)} style={{ font: 'inherit', cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: 600, color: quorumMet ? '#b7f0d8' : '#ffc4c4', background: quorumMet ? C.yeabg : C.naybg, padding: '6px 12px', borderRadius: 999 }}>
               Attendance {presentCount} / {att?.records.length ?? 0} ▾
             </button>
-            {isPrepared && !isPreshow && <button onClick={() => onAction('end-preroll')} disabled={!canControl} style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}>Go live (gavel)</button>}
-            {isLive && !onBreak && <button onClick={() => onAction('recess')} disabled={!canControl} title="Recess between sessions — returns the screens to pre-roll" style={{ ...btn }}>Back to pre-roll</button>}
+            {isPrepared && !isPreshow && <button onClick={() => { void onAction('end-preroll'); setView('live') }} disabled={!canControl} style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}>Go live (gavel)</button>}
+            {isLive && !onBreak && <button onClick={() => { void onAction('recess'); setView('preshow') }} disabled={!canControl} title="Recess between sessions — returns the screens to pre-roll" style={{ ...btn }}>Back to pre-roll</button>}
             {isLive && <button onClick={() => onAction('end-meeting')} disabled={!canControl} style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }}>End meeting</button>}
           </div>
         </div>
@@ -190,7 +186,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
 
         {/* BODY — Pre-show before gavel / on break, Live otherwise */}
         {isPreshow ? (
-          <PreshowMode productionId={productionId} bundle={bundle} canControl={canControl} busy={busy} onAction={onAction} onMarkStreamStarted={onMarkStreamStarted} />
+          <PreshowMode productionId={productionId} bundle={bundle} canControl={canControl} busy={busy} onAction={onAction} onMarkStreamStarted={onMarkStreamStarted} onLeavePreshow={() => setView('live')} />
         ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '250px minmax(0,1fr) 340px' }}>
           {/* AGENDA */}

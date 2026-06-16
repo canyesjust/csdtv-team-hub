@@ -32,6 +32,8 @@ type Props = {
   busy: boolean
   onAction: (action: string, body?: unknown) => Promise<void>
   onMarkStreamStarted?: (clear: boolean) => void | Promise<void>
+  /** Switch the console to the live/agenda view (after gavel or resume). */
+  onLeavePreshow?: () => void
 }
 
 const btn: React.CSSProperties = { font: 'inherit', fontSize: 13, padding: '8px 13px', borderRadius: 9, border: `1px solid ${C.line2}`, background: 'transparent', color: C.text, cursor: 'pointer' }
@@ -49,7 +51,7 @@ function Step({ state, label, sub }: { state: 'done' | 'now' | 'todo'; label: st
   )
 }
 
-export default function PreshowMode({ productionId, bundle, canControl, busy, onAction, onMarkStreamStarted }: Props) {
+export default function PreshowMode({ productionId, bundle, canControl, busy, onAction, onMarkStreamStarted, onLeavePreshow }: Props) {
   const bs = bundle.broadcast_state
   const status = bs?.status || bundle.board_meeting.broadcast_status
   const isLive = status === 'live'
@@ -154,9 +156,9 @@ export default function PreshowMode({ productionId, bundle, canControl, busy, on
             Switch screens → stream
           </button>
           {onBreak ? (
-            <button style={{ background: C.accent, color: '#06101f', border: 'none', borderRadius: 10, padding: '11px 18px', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }} disabled={!canControl || busy} onClick={() => onAction('clear-mode')}>Resume meeting</button>
+            <button style={{ background: C.accent, color: '#06101f', border: 'none', borderRadius: 10, padding: '11px 18px', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }} disabled={!canControl || busy} onClick={() => { void onAction('clear-mode'); onLeavePreshow?.() }}>Resume meeting</button>
           ) : (
-            <button style={{ background: C.accent, color: '#06101f', border: 'none', borderRadius: 10, padding: '11px 18px', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }} disabled={!canControl || busy} onClick={() => onAction('end-preroll')}>Go live (gavel)</button>
+            <button style={{ background: C.accent, color: '#06101f', border: 'none', borderRadius: 10, padding: '11px 18px', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }} disabled={!canControl || busy} onClick={() => { void onAction('end-preroll'); onLeavePreshow?.() }}>Go live (gavel)</button>
           )}
         </div>
       </div>
