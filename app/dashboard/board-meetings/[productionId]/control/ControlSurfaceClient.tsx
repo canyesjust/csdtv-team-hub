@@ -95,6 +95,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   const [agendaEditMode, setAgendaEditMode] = useState(false)
   const [agendaEditBusy, setAgendaEditBusy] = useState(false)
   const suppressRealtimeUntilRef = useRef(0)
+  // Set once the server confirms go-live committed; while true a stale background
+  // read that reports 'prepared' can never knock the meeting off live.
+  const liveConfirmedRef = useRef(false)
   const liveFetchGenRef = useRef(0)
   const optimisticEpochRef = useRef(0)
 
@@ -160,11 +163,17 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       // commits can report 'prepared' and knock us off live. While we're inside the
       // post-action window and the client already believes it's live, keep it live.
       // (Only guards the prepared/draft regression — ending the meeting still works.)
-      if (
+      // A genuine end-of-meeting moves to archived/cancelled — let that through and
+      // drop the live lock. Otherwise, while we believe we're live (confirmed or
+      // within the just-acted window), never let a stale read downgrade to prepared.
+      const incomingStatus = merged.broadcast_state?.status
+      if (incomingStatus === 'archived' || incomingStatus === 'cancelled') {
+        liveConfirmedRef.current = false
+      } else if (
         prev.broadcast_state?.status === 'live' &&
         merged.broadcast_state &&
-        (merged.broadcast_state.status === 'prepared' || merged.broadcast_state.status === 'draft') &&
-        Date.now() < suppressRealtimeUntilRef.current
+        (incomingStatus === 'prepared' || incomingStatus === 'draft') &&
+        (liveConfirmedRef.current || Date.now() < suppressRealtimeUntilRef.current)
       ) {
         merged.broadcast_state = { ...merged.broadcast_state, status: 'live' }
         merged.board_meeting = { ...merged.board_meeting, broadcast_status: 'live' }
@@ -658,8 +667,25 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           }
         })
       })
-      postOptimisticInBackground('end-preroll')
       void loadUtilities()
+      // Await the server so we KNOW it committed. On success, lock it live so no
+      // stale read can revert it; on failure, surface the reason instead of a
+      // silent flip back to pre-show.
+      try {
+        const result = await postControl('end-preroll')
+        if (result.ok) {
+          liveConfirmedRef.current = true
+          refreshInBackground()
+        } else {
+          liveConfirmedRef.current = false
+          toast('Could not go live — make sure the agenda is locked, then try again', 'error')
+          void loadLive()
+        }
+      } catch {
+        liveConfirmedRef.current = false
+        toast('Could not go live — check your connection and try again', 'error')
+        void loadLive()
+      }
       return
     }
 

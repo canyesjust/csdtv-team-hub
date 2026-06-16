@@ -400,7 +400,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
                 <button style={{ ...btn, textAlign: 'center', ...(mode === 'recess' ? { background: C.amberbg, color: '#fde3a7', borderColor: 'transparent' } : {}) }} disabled={!canControl} onClick={() => onAction(mode === 'recess' ? 'clear-mode' : 'recess', mode === 'recess' ? undefined : { message: 'Recess' })}>Recess</button>
                 <button style={{ ...btn, textAlign: 'center', ...(mode === 'technical_difficulties' ? { background: C.amberbg, color: '#fde3a7', borderColor: 'transparent' } : {}) }} disabled={!canControl} onClick={() => onAction(mode === 'technical_difficulties' ? 'clear-mode' : 'technical-difficulties')}>Technical difficulties</button>
-                <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl} onClick={() => onAction('toggle-overlay')}>Toggle overlay</button>
+                <button style={{ ...btn, textAlign: 'center', ...(bs?.overlay_visible === false ? { background: C.naybg, color: '#ffc4c4', borderColor: 'transparent' } : { background: C.yeabg, color: '#b7f0d8', borderColor: 'transparent' }) }} disabled={!canControl} onClick={() => onAction('toggle-overlay')}>Overlay: {bs?.overlay_visible === false ? 'OFF' : 'ON'}</button>
                 <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl} onClick={() => onAction('show-agenda-branding')}>Agenda branding</button>
               </div>
               {mode !== 'normal' && <div style={{ fontSize: 12, color: '#fde3a7', marginTop: 8 }}>Mode: {mode.replace(/_/g, ' ')}</div>}
