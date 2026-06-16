@@ -126,6 +126,26 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
     }
   }
 
+  const clearAgenda = async () => {
+    const ok = await confirmDialog({
+      title: 'Clear the extracted agenda?',
+      message: 'This removes all imported agenda items so you can re-import from scratch. Only works before the agenda is locked.',
+      confirmLabel: 'Clear agenda',
+      tone: 'danger',
+    })
+    if (!ok) return
+    try {
+      const res = await fetch(`/api/board-meetings/${productionId}/clear-agenda`, { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) { toast(body.error || 'Could not clear the agenda', 'error'); return }
+      setItems([])
+      setPhase('empty')
+      toast('Agenda cleared — import again to start over', 'success')
+    } catch {
+      toast('Could not clear the agenda', 'error')
+    }
+  }
+
   const importFromPortal = async () => {
     if (!portalInput.trim()) { setError('Enter the meeting ID or agenda URL from the portal'); return }
     setError('')
@@ -404,14 +424,24 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Review extracted items. Use arrows to reorder or remove items you do not need.</p>
-            <button
-              type="button"
-              onClick={lockAgenda}
-              disabled={locking || items.length === 0}
-              style={{ fontSize: '14px', padding: '10px 20px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
-            >
-              {locking ? 'Locking…' : 'Lock agenda'}
-            </button>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={clearAgenda}
+                disabled={locking || items.length === 0}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'transparent', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Clear &amp; re-import
+              </button>
+              <button
+                type="button"
+                onClick={lockAgenda}
+                disabled={locking || items.length === 0}
+                style={{ fontSize: '14px', padding: '10px 20px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+              >
+                {locking ? 'Locking…' : 'Lock agenda'}
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {orderedReviewItems.map((it, idx) => {

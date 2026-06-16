@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from '@/lib/toast'
+import BoardPreview from './BoardPreview'
 import type { ControlBundle } from '@/lib/board-meetings/types'
 
 const C = {
@@ -36,31 +37,6 @@ type Props = {
 const btn: React.CSSProperties = { font: 'inherit', fontSize: 13, padding: '8px 13px', borderRadius: 9, border: `1px solid ${C.line2}`, background: 'transparent', color: C.text, cursor: 'pointer' }
 const card: React.CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 13, marginBottom: 12 }
 const h3: React.CSSProperties = { fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: C.accent, fontWeight: 700, margin: '0 0 10px' }
-
-/** Faithful preview of a real board view, scaled to fit its box. */
-function ScaledBoard({ channel, view, label }: { channel: number; view: 'preroll' | 'dais'; label: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState(0.26)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const ro = new ResizeObserver(entries => {
-      const w = entries[0].contentRect.width
-      requestAnimationFrame(() => setScale(w / 1280))
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-  return (
-    <div>
-      <div style={{ fontSize: 10, color: C.dim, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4, fontWeight: 600 }}>{label}</div>
-      <div ref={ref} style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 9, overflow: 'hidden', border: `1px solid ${C.line2}`, background: '#000' }}>
-        <iframe src={`/board/${channel}/${view}`} title={label} scrolling="no"
-          style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 720, border: 0, transformOrigin: 'top left', transform: `scale(${scale})`, pointerEvents: 'none' }} />
-      </div>
-    </div>
-  )
-}
 
 function Step({ state, label, sub }: { state: 'done' | 'now' | 'todo'; label: string; sub: string }) {
   const bg = state === 'done' ? C.yea : state === 'now' ? C.amber : 'transparent'
@@ -219,14 +195,10 @@ export default function PreshowMode({ productionId, bundle, canControl, busy, on
         {/* PREVIEWS + TRANSPORT */}
         <div style={{ padding: 12, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`, minHeight: 480 }}>
           <div style={{ ...h3 }}>What&apos;s showing right now</div>
-          {boardCh ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <ScaledBoard channel={boardCh} view="preroll" label="District screens / stream" />
-              <ScaledBoard channel={boardCh} view="dais" label="Dais display (always meeting view)" />
-            </div>
-          ) : (
-            <div style={{ fontSize: 13, color: '#ffc4c4', background: C.amberbg, padding: '10px 12px', borderRadius: 9 }}>No board channel assigned — assign one in Output channels to preview and take over screens.</div>
-          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <BoardPreview channel={boardCh} view="preroll" label="District screens / stream" />
+            <BoardPreview channel={boardCh} view="dais" label="Dais display (always meeting view)" />
+          </div>
 
           <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
             {playback === 'playing'

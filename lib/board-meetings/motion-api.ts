@@ -184,42 +184,65 @@ export async function openMotion(
   moverPersonId: string | null,
   motionTextOverride?: string | null,
 ) {
+  // A consent-agenda item votes as ONE motion covering the whole block, not a
+  // motion per sub-item. Resolve the item's consent block first.
+  let consentBlock: string | null = null
   if (agendaItemId) {
-    const existingId = await findPrimaryMotionIdForAgendaItem(
-      ctx.service,
-      ctx.boardMeetingId,
-      agendaItemId,
-    )
-    if (existingId) {
-      if (moverPersonId) {
-        await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
-          moved_by_person_id: moverPersonId,
-        })
-      }
-      const trimmedOverride = motionTextOverride?.trim()
-      if (trimmedOverride) {
-        await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
-          motion_text: trimmedOverride,
-        })
-      }
-      await ctx.service
-        .from('meeting_broadcast_state')
-        .update({
-          active_motion_id: existingId,
-          updated_at: new Date().toISOString(),
-          updated_by: ctx.teamUserId,
-        })
-        .eq('board_meeting_id', ctx.boardMeetingId)
-      return { motion_id: existingId }
+    const { data: item } = await ctx.service
+      .from('board_meeting_agenda_items')
+      .select('consent_block')
+      .eq('id', agendaItemId)
+      .maybeSingle()
+    consentBlock = (item?.consent_block as string | null)?.trim() || null
+  }
+
+  // Find a motion to reuse: by consent block (shared across its items) or by item.
+  let existingId: string | null = null
+  if (consentBlock) {
+    const { data: existing } = await ctx.service
+      .from('meeting_motions')
+      .select('id')
+      .eq('board_meeting_id', ctx.boardMeetingId)
+      .eq('consent_block', consentBlock)
+      .neq('status', 'withdrawn')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    existingId = existing?.id ?? null
+  } else if (agendaItemId) {
+    existingId = await findPrimaryMotionIdForAgendaItem(ctx.service, ctx.boardMeetingId, agendaItemId)
+  }
+
+  if (existingId) {
+    if (moverPersonId) {
+      await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
+        moved_by_person_id: moverPersonId,
+      })
     }
+    const trimmedOverride = motionTextOverride?.trim()
+    if (trimmedOverride) {
+      await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
+        motion_text: trimmedOverride,
+      })
+    }
+    await ctx.service
+      .from('meeting_broadcast_state')
+      .update({
+        active_motion_id: existingId,
+        updated_at: new Date().toISOString(),
+        updated_by: ctx.teamUserId,
+      })
+      .eq('board_meeting_id', ctx.boardMeetingId)
+    return { motion_id: existingId }
   }
 
   const trimmedOverride = motionTextOverride?.trim()
-  const motionText =
-    trimmedOverride ||
-    (await suggestedTextForAgendaItem(ctx.service, ctx.boardMeetingId, agendaItemId))
+  const motionText = consentBlock
+    ? trimmedOverride || 'Move to approve the Consent Agenda.'
+    : trimmedOverride || (await suggestedTextForAgendaItem(ctx.service, ctx.boardMeetingId, agendaItemId))
   const motion = await openMotionRecord(ctx.service, ctx.boardMeetingId, ctx.teamUserId, {
     agenda_item_id: agendaItemId,
+    consent_block: consentBlock,
     motion_type: 'main',
     motion_text: motionText,
     moved_by_person_id: moverPersonId,

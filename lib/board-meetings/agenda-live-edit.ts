@@ -6,6 +6,7 @@ export const LIVE_LOCKED_AGENDA_FIELDS = [
   'type',
   'suggested_motion_text',
   'live_status',
+  'consent_block',
 ] as const
 
 export function canEditAgendaWhileLocked(broadcastStatus: string | null | undefined): boolean {

@@ -6,6 +6,7 @@ import { resolveCurrentAgendaItem } from '@/lib/board-meetings/control-meeting-c
 import MotionInline from './MotionInline'
 import ConsoleQR from './ConsoleQR'
 import PreshowMode from './PreshowMode'
+import BoardPreview from './BoardPreview'
 import type { ControlBundle, LowerThirdPerson } from '@/lib/board-meetings/types'
 
 type AttStatus = 'present' | 'remote' | 'absent'
@@ -75,6 +76,9 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
 
   const currentItem = resolveCurrentAgendaItem(bundle.agenda_items, bs?.current_agenda_item_id, bundle.current_agenda_item)
   const currentSort = currentItem ? currentItem.sort_order : -1
+  const onAirLabel = currentItem
+    ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number} — ${currentItem.title}`)
+    : null
 
   const sections = useMemo(() => {
     const map = new Map<number, { title: string; number: number; items: ControlBundle['agenda_items'] }>()
@@ -97,6 +101,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const hasPlaylist = !!bundle.meeting_playlist
   const hasYoutube = !!bundle.production?.livestream_url
   const hasCurrentDocument = (bundle.current_documents || []).some(d => !!d.source_url)
+  const assignedChannelId = bundle.channel_assignments?.[0]?.output_channel_id
+  const boardChannel = bundle.channels?.find(c => c.id === assignedChannelId)?.channel_number ?? null
   const activeQR = bs?.active_qr_url
     ? { url: bs.active_qr_url, label: bs.active_qr_label ?? null, startedAt: bs.active_qr_started_at ?? null, durationSeconds: bs.active_qr_duration_seconds ?? null }
     : null
@@ -152,7 +158,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               </span>
             ) : <span style={{ fontWeight: 700, fontSize: 13, color: '#fde3a7', background: C.amberbg, padding: '6px 13px', borderRadius: 999 }}>PRE-SHOW</span>}
             {elapsedStartedAt && <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 15, fontWeight: 600 }}>{fmtElapsed(nowMs - new Date(elapsedStartedAt).getTime())}</span>}
-            {currentItem && <span style={{ fontSize: 13, color: C.soft }}>On air: <b style={{ color: C.text, fontWeight: 600 }}>Item {currentItem.item_number} — {currentItem.title}</b></span>}
+            {onAirLabel && <span style={{ fontSize: 13, color: C.soft }}>On air: <b style={{ color: C.text, fontWeight: 600 }}>{onAirLabel}</b></span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={() => setAttOpen(true)} style={{ font: 'inherit', cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: 600, color: quorumMet ? '#b7f0d8' : '#ffc4c4', background: quorumMet ? C.yeabg : C.naybg, padding: '6px 12px', borderRadius: 999 }}>
@@ -208,6 +214,38 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                       </div>
                     )
                   }
+                  // Consent agenda: render the whole block as one votable stop with
+                  // the items nested under it. Only render at the first block item.
+                  if (it.consent_block) {
+                    const firstId = sec.items.find(x => x.consent_block === it.consent_block)?.id
+                    if (it.id !== firstId) return null
+                    const blockItems = sec.items.filter(x => x.consent_block === it.consent_block)
+                    const blockCurrent = blockItems.some(x => x.id === bs?.current_agenda_item_id)
+                    const first = blockItems[0], last = blockItems[blockItems.length - 1]
+                    return (
+                      <div key={`consent-${it.consent_block}`} style={{ marginBottom: 4, borderRadius: 9, border: `1px solid ${blockCurrent ? 'rgba(79,157,238,.4)' : C.line}`, background: blockCurrent ? C.accentbg : C.panel, overflow: 'hidden' }}>
+                        <div onClick={() => canControl && onAction('jump-to', { agenda_item_id: first.id })}
+                          style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '8px 9px', cursor: canControl ? 'pointer' : 'default' }}>
+                          <span style={{ fontSize: 12, color: blockCurrent ? '#bcdcff' : C.dim, fontWeight: 600, minWidth: 30 }}>{first.item_number}–{last.item_number}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>Consent Agenda
+                            <span style={{ fontSize: 10, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6 }}>one vote</span>
+                          </span>
+                        </div>
+                        <div style={{ borderTop: `1px solid ${C.line}`, padding: '4px 9px 6px' }}>
+                          {blockItems.map(child => (
+                            <div key={child.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', opacity: child.is_broadcastable ? 1 : 0.45 }}>
+                              <span style={{ fontSize: 11, color: C.dim, minWidth: 24, fontVariantNumeric: 'tabular-nums' }}>{child.item_number}</span>
+                              <span style={{ fontSize: 12, flex: 1, lineHeight: 1.3 }}>{child.title}</span>
+                              {canControl && onPatchAgendaItem && (
+                                <button title="Remove from consent — discuss & vote separately" onClick={e => { e.stopPropagation(); void onPatchAgendaItem(child.id, { consent_block: null }) }}
+                                  style={{ font: 'inherit', fontSize: 10, padding: '2px 7px', borderRadius: 6, border: `1px solid ${C.line2}`, background: 'transparent', color: C.soft, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pull out</button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  }
                   return (
                     <div key={it.id} onClick={() => canControl && onAction('jump-to', { agenda_item_id: it.id })}
                       style={{ display: 'flex', gap: 9, alignItems: 'flex-start', padding: '7px 9px', borderRadius: 9, cursor: canControl ? 'pointer' : 'default', marginBottom: 2, opacity: done || !it.is_broadcastable ? 0.42 : 1, background: live ? C.accentbg : 'transparent', border: `1px solid ${live ? 'rgba(79,157,238,.4)' : 'transparent'}` }}>
@@ -229,7 +267,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
           <div style={{ padding: 14, minHeight: 600, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 10px', marginBottom: 12 }}>
               <button style={btn} disabled={!canControl || busy} onClick={() => onAction('go-back')}>◀ Prev</button>
-              <div style={{ flex: 1, fontSize: 13 }}>On air: <b style={{ fontWeight: 600 }}>{currentItem ? `Item ${currentItem.item_number} — ${currentItem.title}` : 'Nothing on air'}</b></div>
+              <div style={{ flex: 1, fontSize: 13 }}>On air: <b style={{ fontWeight: 600 }}>{onAirLabel ?? 'Nothing on air'}</b></div>
               <button style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl || busy} onClick={() => onAction('advance')}>Next item ▶</button>
             </div>
 
@@ -300,14 +338,9 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 <span>On air now</span>
                 <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} onClick={() => window.open(`/control/${productionId}/program`, 'board-program', 'width=1280,height=720')}>Pop to Monitor 2 ↗</button>
               </h3>
-              <div style={{ aspectRatio: '16 / 9', background: '#000', border: `1px solid ${C.line2}`, borderRadius: 10, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
-                <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 90% at 50% 0%,#10233f 0%,#060c16 70%)' }} />
-                {activeLt && (
-                  <div style={{ position: 'relative', margin: '0 0 14px 14px', background: 'rgba(8,14,26,.86)', borderLeft: `3px solid ${C.accent}`, padding: '6px 11px', borderRadius: '0 6px 6px 0', maxWidth: '78%' }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{activeLt.display_name}</div>
-                    {activeLt.primary_title && <div style={{ fontSize: 10, color: C.soft }}>{activeLt.primary_title}</div>}
-                  </div>
-                )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <BoardPreview channel={boardChannel} view="live" label="On air (overlay + lower third)" />
+                <BoardPreview channel={boardChannel} view="dais" label="Dais display" />
               </div>
               {(() => {
                 const listening = (bundle.channel_assignments || []).length

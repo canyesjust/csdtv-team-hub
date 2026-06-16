@@ -186,7 +186,7 @@ export async function buildControlSurfaceBundle(
     current_agenda_item,
     items: agenda_items,
     motion_lifecycle,
-    attendance: null,
+    attendance: { records: attendance.records, quorum: attendance.quorum },
     lower_third_active: lowerThirdActive,
     lower_third_people: people || [],
     result_overlay,
