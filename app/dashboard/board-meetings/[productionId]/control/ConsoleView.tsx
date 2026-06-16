@@ -50,8 +50,14 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const isPrepared = status === 'prepared'
   const mode = bs?.mode || 'normal'
   const onBreak = isLive && mode === 'recess'
-  // Pre-show body before the gavel, or when recessed between sessions; Live body otherwise.
-  const isPreshow = !isLive || onBreak
+  // The natural phase: pre-show before the gavel / when recessed, live otherwise.
+  const phase: 'preshow' | 'live' = !isLive || onBreak ? 'preshow' : 'live'
+  // The operator can switch views; the choice sticks until a REAL phase change
+  // (gavel / recess) happens — so clicking an agenda item never bounces the screen.
+  const [viewOverride, setViewOverride] = useState<{ phase: string; view: 'preshow' | 'live' } | null>(null)
+  const view = viewOverride && viewOverride.phase === phase ? viewOverride.view : phase
+  const isPreshow = view === 'preshow'
+  const setView = (v: 'preshow' | 'live') => setViewOverride({ phase, view: v })
   const elapsedStartedAt = bs?.elapsed_started_at ?? null
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [attOpen, setAttOpen] = useState(false)
@@ -139,7 +145,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#05080f', color: C.text, fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: '#05080f', color: C.text, fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', margin: 12 }}>
         {/* TOP BAR */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, padding: '12px 18px', borderBottom: `1px solid ${C.line}`, background: '#0c1220' }}>
@@ -162,9 +168,14 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             {onAirLabel && <span style={{ fontSize: 13, color: C.soft }}>On air: <b style={{ color: C.text, fontWeight: 600 }}>{onAirLabel}</b></span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', border: `1px solid ${C.line2}`, borderRadius: 8, overflow: 'hidden' }}>
+              <button onClick={() => setView('preshow')} style={{ font: 'inherit', fontSize: 12, padding: '6px 11px', border: 'none', cursor: 'pointer', background: isPreshow ? C.accentbg : 'transparent', color: isPreshow ? '#bcdcff' : C.soft, fontWeight: isPreshow ? 600 : 400 }}>Pre-show</button>
+              <button onClick={() => setView('live')} style={{ font: 'inherit', fontSize: 12, padding: '6px 11px', border: 'none', borderLeft: `1px solid ${C.line}`, cursor: 'pointer', background: !isPreshow ? C.accentbg : 'transparent', color: !isPreshow ? '#bcdcff' : C.soft, fontWeight: !isPreshow ? 600 : 400 }}>Agenda / live</button>
+            </div>
             <button onClick={() => setAttOpen(true)} style={{ font: 'inherit', cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: 600, color: quorumMet ? '#b7f0d8' : '#ffc4c4', background: quorumMet ? C.yeabg : C.naybg, padding: '6px 12px', borderRadius: 999 }}>
               Attendance {presentCount} / {att?.records.length ?? 0} ▾
             </button>
+            {isPrepared && !isPreshow && <button onClick={() => onAction('end-preroll')} disabled={!canControl} style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}>Go live (gavel)</button>}
             {isLive && !onBreak && <button onClick={() => onAction('recess')} disabled={!canControl} title="Recess between sessions — returns the screens to pre-roll" style={{ ...btn }}>Back to pre-roll</button>}
             {isLive && <button onClick={() => onAction('end-meeting')} disabled={!canControl} style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }}>End meeting</button>}
           </div>
@@ -217,7 +228,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                   }
                   // Consent agenda: one item that votes as one motion, with each
                   // member listed underneath and a live "pull out" per member.
-                  if (it.consent_block && it.subitems && it.subitems.length > 0) {
+                  if (it.consent_block && Array.isArray(it.subitems) && it.subitems.length > 0) {
                     const subs = it.subitems
                     return (
                       <div key={it.id} style={{ marginBottom: 4, borderRadius: 9, border: `1px solid ${live ? 'rgba(79,157,238,.4)' : C.line}`, background: live ? C.accentbg : C.panel, overflow: 'hidden' }}>

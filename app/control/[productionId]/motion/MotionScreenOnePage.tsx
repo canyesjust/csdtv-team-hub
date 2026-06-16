@@ -74,7 +74,7 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
   return (
     <div style={inline
       ? { background: 'transparent', color: C.text, fontFamily: 'system-ui, sans-serif' }
-      : { minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'system-ui, sans-serif', padding: '18px 22px', boxSizing: 'border-box' }}>
+      : { height: '100%', overflowY: 'auto', background: C.bg, color: C.text, fontFamily: 'system-ui, sans-serif', padding: '18px 22px', boxSizing: 'border-box' }}>
       {!inline && (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div>
