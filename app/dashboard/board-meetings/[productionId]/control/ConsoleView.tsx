@@ -43,6 +43,16 @@ function fmtElapsed(ms: number): string {
   return `${m}:${String(sec).padStart(2, '0')}`
 }
 
+/** Isolated so the elapsed clock ticking each second doesn't re-render the whole console. */
+function ElapsedClock({ startedAt }: { startedAt: string }) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 15, fontWeight: 600 }}>{fmtElapsed(nowMs - new Date(startedAt).getTime())}</span>
+}
+
 export default function ConsoleView({ productionId, bundle, canControl, busy, onAction, onSetAttendance, onMarkStreamStarted, onPatchAgendaItem, onReorderAgenda, onListeningChange, onPullFromConsent }: Props) {
   const bs = bundle.broadcast_state
   const status = bs?.status || bundle.board_meeting.broadcast_status || 'draft'
@@ -57,7 +67,6 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const [view, setView] = useState<'preshow' | 'live'>('live')
   const isPreshow = view === 'preshow'
   const elapsedStartedAt = bs?.elapsed_started_at ?? null
-  const [nowMs, setNowMs] = useState(() => Date.now())
   const [attOpen, setAttOpen] = useState(false)
   const [editAgenda, setEditAgenda] = useState(false)
   const [showPreviews, setShowPreviews] = useState(false)
@@ -73,12 +82,6 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
     ids.splice(toIdx, 0, ids.splice(fromIdx, 1)[0])
     void onReorderAgenda(ids)
   }
-
-  useEffect(() => {
-    if (!elapsedStartedAt) return
-    const id = setInterval(() => setNowMs(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [elapsedStartedAt])
 
   const currentItem = resolveCurrentAgendaItem(bundle.agenda_items, bs?.current_agenda_item_id, bundle.current_agenda_item)
   const currentSort = currentItem ? currentItem.sort_order : -1
@@ -163,7 +166,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 <span style={{ width: 9, height: 9, borderRadius: '50%', background: C.live, display: 'inline-block' }} /> ON AIR
               </span>
             ) : <span style={{ fontWeight: 700, fontSize: 13, color: '#fde3a7', background: C.amberbg, padding: '6px 13px', borderRadius: 999 }}>PRE-SHOW</span>}
-            {elapsedStartedAt && <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 15, fontWeight: 600 }}>{fmtElapsed(nowMs - new Date(elapsedStartedAt).getTime())}</span>}
+            {elapsedStartedAt && <ElapsedClock startedAt={elapsedStartedAt} />}
             {onAirLabel && <span style={{ fontSize: 13, color: C.soft }}>On air: <b style={{ color: C.text, fontWeight: 600 }}>{onAirLabel}</b></span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
