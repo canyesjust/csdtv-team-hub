@@ -70,6 +70,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const [attOpen, setAttOpen] = useState(false)
   const [editAgenda, setEditAgenda] = useState(false)
   const [showPreviews, setShowPreviews] = useState(false)
+  const [showBackupChannels, setShowBackupChannels] = useState(false)
   const dragId = useRef<string | null>(null)
 
   const handleAgendaDrop = (targetId: string) => {
@@ -441,7 +442,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                       : <button style={{ ...btn, flex: 1 }} disabled={!canControl} onClick={() => onAction('playlist-pause')}>Pause</button>}
                   <button style={btn} disabled={!canControl || playback === 'idle'} onClick={() => onAction('playlist-back')}>◀</button>
                   <button style={btn} disabled={!canControl || playback === 'idle'} onClick={() => onAction('playlist-skip')}>▶</button>
-                  <button style={btn} disabled={!canControl || playback === 'idle'} onClick={() => onAction('playlist-end')}>End</button>
+                  <button style={btn} disabled={!canControl} onClick={() => onAction('playlist-end')}>End</button>
                 </div>
               </div>
             )}
@@ -461,12 +462,10 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               />
             </div>
 
-            {/* OUTPUT CHANNELS — interactive */}
-            <div style={cardStyle}>
-              <h3 style={h3}>Output channels</h3>
-              {(bundle.channels || []).map(ch => {
-                const assignment = (bundle.channel_assignments || []).find(a => a.output_channel_id === ch.id)
-                const assigned = !!assignment
+            {/* OUTPUT CHANNELS — interactive; backups collapsed */}
+            {(() => {
+              const channelRow = (ch: ControlBundle['channels'][number]) => {
+                const assigned = (bundle.channel_assignments || []).some(a => a.output_channel_id === ch.id)
                 const listening = !!ch.obs_polling_enabled
                 return (
                   <div key={ch.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 9px', borderRadius: 8, background: C.panel2, border: `1px solid ${C.line}`, marginBottom: 6 }}>
@@ -480,8 +479,25 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                     </label>
                   </div>
                 )
-              })}
-            </div>
+              }
+              const all = bundle.channels || []
+              const mains = all.filter(c => !/backup/i.test(c.channel_name))
+              const backups = all.filter(c => /backup/i.test(c.channel_name))
+              return (
+                <div style={cardStyle}>
+                  <h3 style={h3}>Output channels</h3>
+                  {mains.map(channelRow)}
+                  {backups.length > 0 && (
+                    <>
+                      <button onClick={() => setShowBackupChannels(v => !v)} style={{ ...btn, width: '100%', fontSize: 12, marginTop: 2 }}>
+                        {showBackupChannels ? 'Hide' : 'Show'} {backups.length} backup channel{backups.length > 1 ? 's' : ''}
+                      </button>
+                      {showBackupChannels && <div style={{ marginTop: 6 }}>{backups.map(channelRow)}</div>}
+                    </>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         </div>
         )}
