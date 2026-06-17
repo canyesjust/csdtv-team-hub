@@ -34,7 +34,18 @@ type AgendaItem = {
   jump_url: string | null
 }
 
-type AgendaSection = { number: number; title: string; start_time: string | null; items: AgendaItem[] }
+type AgendaSection = {
+  number: number
+  title: string
+  start_time: string | null
+  items: AgendaItem[]
+  // Lifted to the section when the section is a consent block (one consent motion).
+  consent?: boolean
+  subitems?: AgendaSubitem[]
+  status?: 'completed' | 'current' | 'upcoming' | null
+  offset_seconds?: number | null
+  offset_label?: string | null
+}
 
 export type BoardWatchPayload = {
   generated_at: string
@@ -45,6 +56,7 @@ export type BoardWatchPayload = {
     date: string
     date_long: string
     scheduled_start: string | null
+    scheduled_start_label: string | null
     location: string | null
     broadcast_status: string
     is_live: boolean
@@ -60,6 +72,12 @@ export type BoardWatchPayload = {
     expected_label: string | null
     sections: AgendaSection[]
   }
+  upcoming: {
+    title: string
+    date: string
+    date_long: string
+    date_short: string
+  }[]
   recent: {
     title: string
     date: string
@@ -94,6 +112,11 @@ function denverLong(d: Date): string {
 }
 function denverShort(d: Date): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', year: 'numeric' }).format(d)
+}
+function denverTimeLabel(iso: string | null): string | null {
+  if (!iso) return null
+  const s = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso))
+  return s.replace(/\s*AM$/, ' a.m.').replace(/\s*PM$/, ' p.m.')
 }
 function wholeDaysBetween(fromStr: string, toStr: string): number {
   const a = Date.parse(`${fromStr}T00:00:00Z`)
@@ -186,12 +209,26 @@ function groupSections(
     }
     bySection.get(section)!.push(item)
   }
-  return order.map(n => ({
-    number: n,
-    title: meta.get(n)?.title ?? '',
-    start_time: meta.get(n)?.start_time ?? null,
-    items: bySection.get(n)!,
-  }))
+  return order.map(n => {
+    const items = bySection.get(n)!
+    const section: AgendaSection = {
+      number: n,
+      title: meta.get(n)?.title ?? '',
+      start_time: meta.get(n)?.start_time ?? null,
+      items,
+    }
+    // If this section is a consent block (one consent motion), lift its details to
+    // the section so the public page can render the "Consent Agenda" card directly.
+    const consentItem = items.find(it => it.consent)
+    if (consentItem) {
+      section.consent = true
+      section.subitems = consentItem.subitems
+      section.status = consentItem.status
+      section.offset_seconds = consentItem.offset_seconds
+      section.offset_label = consentItem.offset_label
+    }
+    return section
+  })
 }
 
 async function assembleAgenda(
@@ -397,6 +434,18 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
     }
   })
 
+  // "Coming Up" — future board meetings other than the featured one.
+  const upcoming = meetings
+    .filter(m => m.localDate >= today && !(featured && m.bmId === featured.bmId))
+    .sort((a, b) => a.localDate.localeCompare(b.localDate))
+    .slice(0, 4)
+    .map(m => ({
+      title: m.title,
+      date: m.localDate,
+      date_long: denverLong(new Date(m.startDatetime)),
+      date_short: denverShort(new Date(m.startDatetime)),
+    }))
+
   let featuredOut: BoardWatchPayload['featured'] = null
   let agenda: BoardWatchPayload['agenda'] = {
     available: false,
@@ -415,6 +464,7 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
       date: featured.localDate,
       date_long: denverLong(new Date(featured.startDatetime)),
       scheduled_start: featured.scheduledStart,
+      scheduled_start_label: denverTimeLabel(featured.scheduledStart),
       location: featured.location,
       broadcast_status: featured.broadcastStatus,
       is_live: state === 'live',
@@ -432,6 +482,7 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
     state,
     featured: featuredOut,
     agenda,
+    upcoming,
     recent,
     links: LINKS,
   }

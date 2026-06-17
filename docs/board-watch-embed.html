@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch Board Meetings Live - Canyons School District</title>
+<!--
+  ============================================================================
+  CSDtv  /  Watch Board Meetings Live  (production embed)
+  ----------------------------------------------------------------------------
+  Paste everything between the EMBED markers (the <style>, the
+  <section id="csdtv-watch">, and the <script>) into the WordPress page,
+  inside the existing site wrapper. The gray page background here is only
+  for previewing on its own.
+  Data: one fetch of the hub endpoint below. No Google Sheet. No Diligent
+  call from the browser. The endpoint supplies the next/live meeting, the
+  agenda, the upcoming list, and recent meetings.
+  >>> SET THIS if your endpoint URL is different <<<
+  ENDPOINT = https://www.csdtvstaff.org/api/public/board-watch
+  ============================================================================
+-->
+<style>
+  /* ===== EMBED START (styles) ===== */
+  #csdtv-watch{
+    --blue1:#065687;--blue2:#2791D0;--blue3:#3ABFE8;--yellow:#FBAE42;--csd:#115888;
+    --ink:#1d2733;--slate:#54616e;--line:#e3e8ee;--card:#fff;--live:#e11d2a;
+    font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);line-height:1.55;
+    max-width:1240px;margin:0 auto;padding:28px 24px 48px;-webkit-font-smoothing:antialiased;
+  }
+  #csdtv-watch *{box-sizing:border-box}
+  #csdtv-watch a{color:var(--blue1);text-decoration:none}
+  #csdtv-watch a:hover{text-decoration:underline}
+  #csdtv-watch img{max-width:100%;display:block}
+  #csdtv-watch .cw-head{margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+  #csdtv-watch .cw-head h1{margin:0;font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.01em}
+  #csdtv-watch .cw-head p{margin:8px 0 0;color:var(--slate);font-size:15px;max-width:66ch}
+  #csdtv-watch .cw-grid{display:grid;grid-template-columns:1fr 392px;gap:28px;align-items:start}
+  /* player */
+  #csdtv-watch .cw-player-card{background:#000;border-radius:12px;overflow:hidden;box-shadow:0 14px 40px rgba(17,88,136,.16)}
+  #csdtv-watch .cw-player{position:relative;aspect-ratio:16/9;width:100%;background:#0c1f2e}
+  #csdtv-watch .cw-player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  #csdtv-watch .cw-livebadge{position:absolute;top:16px;left:16px;display:flex;align-items:center;gap:8px;z-index:3;
+    background:var(--live);color:#fff;font-weight:800;font-size:12px;letter-spacing:.08em;padding:6px 11px;border-radius:6px}
+  #csdtv-watch .cw-livebadge .dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:cwpulse 1.6s infinite}
+  @keyframes cwpulse{0%,100%{opacity:1}50%{opacity:.25}}
+  /* meta */
+  #csdtv-watch .cw-meta{background:var(--card);border:1px solid var(--line);border-top:none;border-radius:0 0 12px 12px;
+    padding:18px 20px;box-shadow:0 14px 40px rgba(17,88,136,.05)}
+  #csdtv-watch .cw-chip{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:12px;padding:5px 11px;border-radius:999px}
+  #csdtv-watch .cw-chip.live{background:#fde9ea;color:#b3121f}
+  #csdtv-watch .cw-chip.live .dot{width:7px;height:7px;border-radius:50%;background:var(--live);animation:cwpulse 1.6s infinite}
+  #csdtv-watch .cw-chip.today{background:#fde9ea;color:#b3121f}
+  #csdtv-watch .cw-chip.today .dot{width:7px;height:7px;border-radius:50%;background:var(--live);animation:cwpulse 1.6s infinite}
+  #csdtv-watch .cw-chip.up{background:#eaf4fb;color:var(--blue1)}
+  #csdtv-watch .cw-meta h2{margin:8px 0 4px;font-size:21px}
+  #csdtv-watch .cw-when{color:var(--slate);font-size:14px;margin:0}
+  #csdtv-watch .cw-nowline{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    background:linear-gradient(90deg,#fff5f5,#fdeaea);border:1px solid #f6cccd;border-radius:10px;padding:12px 16px;font-size:14px}
+  #csdtv-watch .cw-nowline b{color:#b3121f}
+  #csdtv-watch .cw-count{margin-top:14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    background:linear-gradient(90deg,#f7fbfe,#eef6fc);border:1px solid #d9e9f5;border-radius:10px;padding:14px 18px}
+  #csdtv-watch .cw-count .num{font-size:42px;font-weight:900;line-height:1;color:var(--csd);min-width:46px;text-align:center}
+  #csdtv-watch .cw-count .lab{font-size:13px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.05em}
+  #csdtv-watch .cw-count .sub{font-size:14px;color:var(--slate);margin-top:2px}
+  #csdtv-watch .cw-count.is-today{background:linear-gradient(90deg,#fff5f5,#fdeaea);border-color:#f6cccd}
+  #csdtv-watch .cw-count.is-today .num{color:var(--live);font-size:22px;min-width:0}
+  #csdtv-watch .cw-count.is-soon{background:linear-gradient(90deg,#fff8ec,#fdeed6);border-color:#f5dcae}
+  #csdtv-watch .cw-count.is-soon .lab{color:#7a5a10;text-transform:none;font-size:15px}
+  #csdtv-watch .cw-soon-ic{min-width:46px;display:flex;align-items:center;justify-content:center;color:#b5840f}
+  #csdtv-watch .cw-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+  #csdtv-watch .cw-btn{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:700;padding:10px 16px;border-radius:8px;border:1px solid transparent;cursor:pointer}
+  #csdtv-watch .cw-btn.primary{background:var(--blue1);color:#fff}
+  #csdtv-watch .cw-btn.primary:hover{background:#054a76;text-decoration:none}
+  #csdtv-watch .cw-btn.ghost{background:#fff;color:var(--blue1);border-color:#cfe0ee}
+  #csdtv-watch .cw-btn.ghost:hover{background:#f2f8fc;text-decoration:none}
+  /* agenda panel */
+  #csdtv-watch .cw-ag{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;max-height:760px}
+  #csdtv-watch .cw-ag-head{padding:14px 16px;background:var(--blue1);color:#fff}
+  #csdtv-watch .cw-ag-head .row1{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  #csdtv-watch .cw-ag-head h3{margin:0;font-size:15px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+  #csdtv-watch .cw-ag-head .follow{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;background:rgba(255,255,255,.16);padding:4px 9px;border-radius:999px}
+  #csdtv-watch .cw-ag-head .follow .dot{width:7px;height:7px;border-radius:50%;background:#ff6b73;animation:cwpulse 1.6s infinite}
+  #csdtv-watch .cw-ag-head .meta{margin-top:6px;font-size:12.5px;opacity:.85}
+  #csdtv-watch .cw-ag-body{overflow-y:auto;padding:6px 0}
+  #csdtv-watch .cw-ag-empty{padding:22px 16px;color:var(--slate);font-size:14px}
+  #csdtv-watch .cw-ag-empty b{color:var(--ink);display:block;font-size:15px;margin-bottom:4px}
+  #csdtv-watch .cw-sec{padding:12px 16px 4px}
+  #csdtv-watch .cw-sec-h{display:flex;align-items:baseline;gap:9px;margin-bottom:6px}
+  #csdtv-watch .cw-sec-n{font-weight:900;color:var(--blue2);font-size:13px;min-width:16px}
+  #csdtv-watch .cw-sec-t{font-weight:800;font-size:14px;color:var(--ink)}
+  #csdtv-watch .cw-sec-time{margin-left:auto;font-size:12px;color:var(--slate);font-weight:600}
+  #csdtv-watch .cw-it{display:flex;gap:10px;padding:8px 16px 8px 41px;align-items:flex-start;position:relative}
+  #csdtv-watch .cw-it .lt{position:absolute;left:18px;top:8px;font-weight:800;font-size:12px;color:var(--slate);width:16px}
+  #csdtv-watch .cw-it .body{flex:1;min-width:0}
+  #csdtv-watch .cw-it .tt{font-size:14px;font-weight:600;color:var(--ink);line-height:1.35}
+  #csdtv-watch .cw-it .pres{font-size:12.5px;color:var(--slate);margin-top:1px}
+  #csdtv-watch .cw-it .doc{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:12px;font-weight:700;color:var(--blue1);background:#eef6fb;padding:3px 8px;border-radius:6px}
+  #csdtv-watch .cw-it .doc:hover{background:#e2eff8;text-decoration:none}
+  #csdtv-watch .cw-it .tc{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;
+    color:var(--slate);background:#f1f5f8;border:1px solid #e3e8ee;border-radius:6px;padding:3px 7px;cursor:pointer;white-space:nowrap}
+  #csdtv-watch .cw-it .tc:hover{background:#e7eef3;color:var(--blue1)}
+  #csdtv-watch .cw-it.completed .tt{color:#46555f}
+  #csdtv-watch .cw-it.current{background:#fff8ec;border-left:3px solid var(--yellow);padding-left:38px}
+  #csdtv-watch .cw-it.current .tt{font-weight:800;color:var(--ink)}
+  #csdtv-watch .cw-it.current .nowtag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:900;color:#b3121f;margin-top:4px}
+  #csdtv-watch .cw-it.current .nowtag .dot{width:7px;height:7px;border-radius:50%;background:var(--live);animation:cwpulse 1.6s infinite}
+  #csdtv-watch .cw-consent{padding:2px 16px 8px 41px}
+  #csdtv-watch .cw-consent .sub{font-size:12.5px;color:var(--slate);padding:3px 0;display:flex;gap:7px}
+  #csdtv-watch .cw-consent .sub .l{font-weight:700;min-width:14px}
+  #csdtv-watch .cw-secdiv{height:1px;background:var(--line);margin:8px 16px 0}
+  #csdtv-watch .cw-ag-foot{border-top:1px solid var(--line);padding:12px 16px;display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--slate)}
+  /* lower row: coming up + recent + channel */
+  #csdtv-watch .cw-below{margin-top:28px;display:grid;grid-template-columns:1fr 1.4fr 280px;gap:28px;align-items:start}
+  #csdtv-watch .cw-panel{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  #csdtv-watch .cw-phead{padding:13px 16px;font-size:13px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#fff;background:var(--csd)}
+  #csdtv-watch .cw-up{display:flex;gap:12px;padding:14px 16px;align-items:center}
+  #csdtv-watch .cw-up + .cw-up{border-top:1px solid var(--line)}
+  #csdtv-watch .cw-cal{flex:0 0 48px;height:52px;border-radius:9px;background:#eef6fb;border:1px solid #d9e9f5;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--blue1)}
+  #csdtv-watch .cw-cal .mo{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+  #csdtv-watch .cw-cal .dy{font-size:19px;font-weight:900;line-height:1}
+  #csdtv-watch .cw-up .ut{font-size:14px;font-weight:700;line-height:1.3}
+  #csdtv-watch .cw-up .ud{font-size:12.5px;color:var(--slate);margin-top:2px}
+  #csdtv-watch .cw-upnote,#csdtv-watch .cw-upempty{padding:14px 16px;font-size:12.5px;color:var(--slate)}
+  #csdtv-watch .cw-upnote{border-top:1px solid var(--line);font-size:12px}
+  #csdtv-watch .cw-rl{display:flex;gap:11px;padding:11px 16px;align-items:center}
+  #csdtv-watch .cw-rl + .cw-rl{border-top:1px solid var(--line)}
+  #csdtv-watch .cw-rl:hover{background:#f7fafc;text-decoration:none}
+  #csdtv-watch .cw-rl .th{position:relative;flex:0 0 104px;aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:#0c1f2e}
+  #csdtv-watch .cw-rl .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #csdtv-watch .cw-rl .vt{font-size:13.5px;font-weight:700;line-height:1.3;color:var(--ink)}
+  #csdtv-watch .cw-rl .vd{font-size:12px;color:var(--slate);margin-top:2px}
+  #csdtv-watch .cw-rl-empty{padding:16px;color:var(--slate);font-size:13.5px}
+  /* branded fallback graphic (no hosted image) */
+  #csdtv-watch .cw-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;text-align:center;padding:6px;
+    background:linear-gradient(150deg,#162844 0%,#0f3a5a 55%,#115888 100%);color:#fff;overflow:hidden}
+  #csdtv-watch .cw-fallback .mtn{position:absolute;bottom:-1px;left:0;right:0;width:100%}
+  #csdtv-watch .cw-fallback .fm{font-weight:900;letter-spacing:.02em;position:relative}
+  #csdtv-watch .cw-fallback .fm span{color:#96b7c8}
+  #csdtv-watch .cw-fallback .fb{font-weight:800;letter-spacing:.09em;opacity:.82;line-height:1.25;position:relative}
+  #csdtv-watch .cw-fallback .fd{font-weight:700;color:#cfe0ee;position:relative}
+  #csdtv-watch .cw-player .cw-fallback .fm{font-size:30px}
+  #csdtv-watch .cw-player .cw-fallback .fb{font-size:13px;margin-top:4px}
+  #csdtv-watch .cw-player .cw-fallback .fd{font-size:15px;margin-top:10px}
+  #csdtv-watch .cw-player .cw-fallback .fnote{font-size:12.5px;color:#9fc0d8;margin-top:4px;position:relative}
+  #csdtv-watch .cw-rl .cw-fallback .fm{font-size:12px}
+  #csdtv-watch .cw-rl .cw-fallback .fb{font-size:7px}
+  #csdtv-watch .cw-rl .cw-fallback .fd{font-size:9px;margin-top:1px}
+  #csdtv-watch .cw-channel{padding:18px 16px;text-align:center}
+  #csdtv-watch .cw-channel .mark{font-weight:900;font-size:22px;color:var(--blue1)}
+  #csdtv-watch .cw-channel .mark span{color:var(--blue2)}
+  #csdtv-watch .cw-channel p{font-size:13px;color:var(--slate);margin:6px 0 14px}
+  #csdtv-watch .cw-channel .cw-btn{width:100%;justify-content:center;background:#c4302b;color:#fff}
+  #csdtv-watch .cw-channel .cw-btn:hover{background:#a82a25;text-decoration:none}
+  #csdtv-watch .cw-skel{animation:cwsk 1.2s ease-in-out infinite;background:#eef2f6;border-radius:6px}
+  @keyframes cwsk{0%,100%{opacity:1}50%{opacity:.5}}
+  @media (max-width:980px){
+    #csdtv-watch .cw-grid{grid-template-columns:1fr}
+    #csdtv-watch .cw-ag{max-height:560px}
+    #csdtv-watch .cw-below{grid-template-columns:1fr 1fr}
+    #csdtv-watch .cw-channel-panel{grid-column:1 / -1}
+  }
+  @media (max-width:620px){
+    #csdtv-watch{padding:20px 16px 40px}
+    #csdtv-watch .cw-head h1{font-size:24px}
+    #csdtv-watch .cw-below{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #csdtv-watch .cw-livebadge .dot,#csdtv-watch .cw-chip .dot,#csdtv-watch .cw-it.current .nowtag .dot,#csdtv-watch .cw-ag-head .follow .dot,#csdtv-watch .cw-skel{animation:none}
+  }
+  /* ===== EMBED END (styles) ===== */
+  body{margin:0;background:#f3f6f9}
+</style>
+</head>
+<body>
+<!-- ===== EMBED START (markup) ===== -->
+<section id="csdtv-watch" aria-label="Watch Board Meetings Live">
+  <div class="cw-head">
+    <h1>Watch Board Meetings Live</h1>
+    <p>Every Canyons Board of Education study session and business meeting is streamed live on CSDtv. Follow the agenda alongside the video to see where the board is in the meeting, then find past meetings and what is coming up.</p>
+  </div>
+  <div class="cw-grid">
+    <section>
+      <div class="cw-player-card">
+        <div class="cw-player" id="cw-player">
+          <div class="cw-fallback"><div class="fm">CSD<span>tv</span></div><div class="fnote">Loading the next board meeting...</div></div>
+        </div>
+      </div>
+      <div class="cw-meta" id="cw-meta">
+        <span class="cw-skel" style="display:inline-block;height:22px;width:120px"></span>
+        <h2 class="cw-skel" style="height:24px;width:60%">&nbsp;</h2>
+        <p class="cw-when cw-skel" style="height:16px;width:40%">&nbsp;</p>
+      </div>
+    </section>
+    <aside>
+      <div class="cw-ag">
+        <div class="cw-ag-head">
+          <div class="row1"><h3>Meeting Agenda</h3><span class="follow" id="cw-follow" style="display:none"><span class="dot"></span>FOLLOWING LIVE</span></div>
+          <div class="meta" id="cw-ag-meta"></div>
+        </div>
+        <div class="cw-ag-body" id="cw-ag-body"><div class="cw-ag-empty">Loading agenda...</div></div>
+        <div class="cw-ag-foot" id="cw-ag-foot" style="display:none"><span id="cw-ag-footnote"></span><a id="cw-ag-diligent" href="#" target="_blank" rel="noopener">Open on Diligent &rsaquo;</a></div>
+      </div>
+    </aside>
+  </div>
+  <div class="cw-below">
+    <div class="cw-panel">
+      <div class="cw-phead">Coming Up</div>
+      <div id="cw-upcoming"><div class="cw-upempty">Loading...</div></div>
+    </div>
+    <div class="cw-panel">
+      <div class="cw-phead">Recent Meetings</div>
+      <div id="cw-recent"><div class="cw-rl-empty">Loading...</div></div>
+    </div>
+    <div class="cw-panel cw-channel-panel">
+      <div class="cw-channel">
+        <div class="mark">CSD<span>tv</span></div>
+        <p>Canyons District's video and streaming service.</p>
+        <a class="cw-btn" id="cw-channel-link" href="https://www.youtube.com/@canyonsdistricttv" target="_blank" rel="noopener">
+          <svg width="20" height="15" viewBox="0 0 24 17" fill="#fff"><path d="M23 2.6A3 3 0 0 0 20.9.5C19 0 12 0 12 0S5 0 3.1.5A3 3 0 0 0 1 2.6 31 31 0 0 0 .5 8.5 31 31 0 0 0 1 14.4a3 3 0 0 0 2.1 2.1C5 17 12 17 12 17s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-5.9 31 31 0 0 0-.5-5.9zM9.5 12V5l6 3.5z"/></svg>
+          Visit the CSDtv Channel
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ===== EMBED END (markup) ===== -->
+<!-- ===== EMBED START (script) ===== -->
+<script>
+(function () {
+  // >>> If your endpoint URL differs, change it here <<<
+  var ENDPOINT = 'https://www.csdtvstaff.org/api/public/board-watch';
+  var DEFAULT_LINKS = {
+    channel: 'https://www.youtube.com/@canyonsdistricttv',
+    schedule: 'https://www.canyonsdistrict.org/leadership/board/board-meetings/?sid=1',
+    public_participation: 'https://www.canyonsdistrict.org/leadership/board/board-meetings/public-participation/',
+    diligent: 'https://canyonsdistrict.community.highbond.com/portal/'
+  };
+  var FALLBACK_TIME = '7:00 p.m.';
+  var MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  var currentYoutubeId = null;
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function el(id){return document.getElementById(id);}
+  function isoParts(iso){var p=String(iso||'').split('-');return {mo:MONTHS[(+p[1]||1)-1]||'',dy:String(+p[2]||'')};}
+  function fallbackGraphic(dateLabel, note) {
+    var mtn='<svg class="mtn" width="100%" height="34" viewBox="0 0 104 30" preserveAspectRatio="none"><path d="M0 30 L20 12 L34 22 L52 4 L70 22 L86 11 L104 24 L104 30 Z" fill="#3ABFE8" opacity=".4"/></svg>';
+    return '<div class="cw-fallback">' + mtn +
+      '<div class="fm">CSD<span>tv</span></div>' +
+      '<div class="fb">BOARD OF EDUCATION MEETING</div>' +
+      (dateLabel ? '<div class="fd">' + esc(dateLabel) + '</div>' : '') +
+      (note ? '<div class="fnote">' + esc(note) + '</div>' : '') + '</div>';
+  }
+  // ---------- player ----------
+  function renderPlayer(featured, state) {
+    var p = el('cw-player');
+    var id = featured && featured.youtube_id;
+    if (id) {
+      currentYoutubeId = id;
+      p.innerHTML = '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(id) +
+        '?rel=0&modestbranding=1" title="' + esc(featured.title) +
+        '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
+    } else {
+      currentYoutubeId = null;
+      var startLabel = (featured && featured.scheduled_start_label) || FALLBACK_TIME;
+      var note = state === 'today' ? 'Stream begins at ' + startLabel
+        : state === 'upcoming' ? 'The stream link will appear before the meeting.'
+        : 'Watch on the CSDtv channel.';
+      p.innerHTML = fallbackGraphic(featured ? featured.date_long : '', note);
+    }
+  }
+  function seekTo(seconds) {
+    if (!currentYoutubeId) return;
+    var p = el('cw-player');
+    p.innerHTML = '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(currentYoutubeId) +
+      '?rel=0&modestbranding=1&autoplay=1&start=' + Math.max(0, parseInt(seconds, 10) || 0) +
+      '" title="Board meeting" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
+    var top = el('csdtv-watch').getBoundingClientRect().top + window.pageYOffset - 16;
+    window.scrollTo({ top: top, behavior: 'smooth' });
+  }
+  // ---------- meta ----------
+  function currentItemLabel(agenda) {
+    if (!agenda || !agenda.sections) return null;
+    for (var s = 0; s < agenda.sections.length; s++) {
+      var items = agenda.sections[s].items || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].status === 'current' || items[i].id === agenda.current_item_id) {
+          var num = (agenda.sections[s].number != null ? agenda.sections[s].number : '') + (items[i].item_number || '');
+          return { num: num, title: items[i].title };
+        }
+      }
+    }
+    return null;
+  }
+  function renderMeta(data) {
+    var f = data.featured || {};
+    var links = data.links || DEFAULT_LINKS;
+    var state = data.state;
+    var loc = f.location || 'Canyons District Office, 9361 S. 300 E., Sandy';
+    var startLabel = f.scheduled_start_label || FALLBACK_TIME;
+    var badge = '', band = '', actions = '';
+    if (state === 'live') {
+      badge = '<span class="cw-chip live"><span class="dot"></span>Meeting in progress</span>';
+      var cur = currentItemLabel(data.agenda);
+      band = '<div class="cw-nowline"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b3121f" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>' +
+        (cur ? 'Now discussing <b>Item ' + esc(cur.num) + ', ' + esc(cur.title) + '</b>' : '<b>Streaming now</b>') + '</span></div>';
+    } else if (state === 'today') {
+      badge = '<span class="cw-chip today"><span class="dot"></span>Meeting today</span>';
+      band = '<div class="cw-count is-today"><div class="num">Today</div><div><div class="lab">Streaming today</div><div class="sub">Press play above when the meeting begins, around ' + esc(startLabel) + '.</div></div></div>';
+    } else if (state === 'upcoming') {
+      badge = '<span class="cw-chip up">Up next</span>';
+      var d = (f.days_until == null) ? '' : f.days_until;
+      var lab = (f.days_until === 1) ? 'day away' : 'days away';
+      band = '<div class="cw-count"><div class="num">' + esc(d) + '</div><div><div class="lab">' + lab + '</div><div class="sub">Next meeting ' + esc(f.date_long) + '</div></div></div>';
+    } else if (state === 'soon') {
+      badge = '<span class="cw-chip up">Latest meeting</span>';
+      band = '<div class="cw-count is-soon"><div class="cw-soon-ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div><div><div class="lab">Next meeting coming soon</div><div class="sub">The next board meeting has not been posted yet. Check the schedule for upcoming dates.</div></div></div>';
+    }
+    if (state === 'soon' || state === 'none') {
+      actions = '<a class="cw-btn primary" href="' + esc(links.schedule) + '" target="_blank" rel="noopener">Meeting Schedule</a>' +
+        '<a class="cw-btn ghost" href="' + esc(links.public_participation) + '" target="_blank" rel="noopener">Public Participation</a>';
+    } else {
+      actions = '<a class="cw-btn primary" href="' + esc(links.diligent) + '" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>View Agenda</a>' +
+        '<a class="cw-btn ghost" href="' + esc(links.public_participation) + '" target="_blank" rel="noopener">Public Participation</a>' +
+        '<a class="cw-btn ghost" href="' + esc(links.schedule) + '" target="_blank" rel="noopener">Meeting Schedule</a>';
+    }
+    el('cw-meta').innerHTML =
+      badge +
+      '<h2>' + esc(f.title || 'Board of Education Meeting') + '</h2>' +
+      '<p class="cw-when">' + esc(f.date_long || '') + (f.date_long ? ' &middot; ' : '') + esc(loc) + '</p>' +
+      band +
+      '<div class="cw-actions">' + actions + '</div>';
+  }
+  // ---------- agenda ----------
+  var PDF = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
+  var PLAY = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l16 9-16 9z"/></svg>';
+  function itemHtml(it, sectionNumber) {
+    var st = it.status || '';
+    var cls = (st === 'completed' || st === 'current') ? st : '';
+    var tc = '';
+    if ((st === 'completed' || st === 'current') && it.offset_seconds != null && it.offset_label) {
+      tc = '<span class="tc" data-sec="' + esc(it.offset_seconds) + '" title="Jump to this point">' + PLAY + esc(it.offset_label) + '</span>';
+    }
+    var body = '<div class="tt">' + esc(it.title) + '</div>';
+    var pres = (it.presenters || []).map(function (p) { return [p.name, p.title].filter(Boolean).join(', '); }).filter(Boolean).join(' and ');
+    if (pres) body += '<div class="pres">' + esc(pres) + '</div>';
+    (it.documents || []).forEach(function (d) {
+      if (d && d.url) body += '<a class="doc" href="' + esc(d.url) + '" target="_blank" rel="noopener">' + PDF + esc(d.title || 'Document') + '</a>';
+    });
+    if (st === 'current') body += '<div class="nowtag"><span class="dot"></span>DISCUSSING NOW</div>';
+    var letter = it.item_number || '';
+    return '<div class="cw-it ' + cls + '" data-id="' + esc(it.id || '') + '"><span class="lt">' + esc(letter) + '</span><div class="body">' + body + '</div>' + tc + '</div>';
+  }
+  function consentHtml(sec) {
+    var st = sec.status || '';
+    var cls = (st === 'completed' || st === 'current') ? st : '';
+    var tc = '';
+    if ((st === 'completed' || st === 'current') && sec.offset_seconds != null && sec.offset_label) {
+      tc = '<span class="tc" data-sec="' + esc(sec.offset_seconds) + '" title="Jump to this point">' + PLAY + esc(sec.offset_label) + '</span>';
+    }
+    var now = (st === 'current') ? '<div class="nowtag"><span class="dot"></span>DISCUSSING NOW</div>' : '';
+    var subs = (sec.subitems || []).map(function (x) {
+      var l = x.item_number || x.l || '';
+      var t = x.title || x.t || '';
+      return '<div class="sub"><span class="l">' + esc(l) + '</span>' + esc(t) + '</div>';
+    }).join('');
+    return '<div class="cw-it ' + cls + '"><span class="lt"></span><div class="body"><div class="tt">Consent Agenda</div><div class="pres">Approved together as one motion</div>' + now + '</div>' + tc + '</div>' +
+      (subs ? '<div class="cw-consent">' + subs + '</div>' : '');
+  }
+  function renderAgenda(data) {
+    var ag = data.agenda || {};
+    var f = data.featured || {};
+    var links = data.links || DEFAULT_LINKS;
+    var startLabel = (f.scheduled_start_label) || FALLBACK_TIME;
+    var body = el('cw-ag-body');
+    var meta = el('cw-ag-meta');
+    var foot = el('cw-ag-foot');
+    var follow = el('cw-follow');
+    follow.style.display = (data.state === 'live') ? 'inline-flex' : 'none';
+    if (!ag.available || !ag.sections || !ag.sections.length) {
+      meta.textContent = f.date_long || '';
+      var msg = ag.expected_label
+        ? '<b>' + esc(ag.expected_label) + '</b>Agendas are posted on Diligent at least 24 hours before each meeting.'
+        : '<b>Agenda coming soon</b>It will appear here once it is posted, usually the Saturday before the meeting.';
+      body.innerHTML = '<div class="cw-ag-empty">' + msg + '</div>';
+      foot.style.display = 'flex';
+      el('cw-ag-footnote').textContent = 'Meetings begin at ' + startLabel;
+      el('cw-ag-diligent').href = ag.diligent_url || links.diligent;
+      return;
+    }
+    meta.textContent = (ag.sections.length) + ' sections' + (f.date_long ? ' · ' + f.date_long : '');
+    var html = ag.sections.map(function (sec, i) {
+      var head = '<div class="cw-sec"><div class="cw-sec-h"><span class="cw-sec-n">' + esc(sec.number) + '</span><span class="cw-sec-t">' + esc(sec.title) + '</span>' +
+        (sec.start_time ? '<span class="cw-sec-time">' + esc(sec.start_time) + '</span>' : '') + '</div></div>';
+      var rows = sec.consent ? consentHtml(sec) : (sec.items || []).map(function (it) { return itemHtml(it, sec.number); }).join('');
+      var div = i < ag.sections.length - 1 ? '<div class="cw-secdiv"></div>' : '';
+      return head + rows + div;
+    }).join('');
+    body.innerHTML = html;
+    foot.style.display = 'flex';
+    el('cw-ag-footnote').textContent = 'Meetings begin at ' + startLabel;
+    el('cw-ag-diligent').href = ag.diligent_url || links.diligent;
+    // wire jump points
+    body.querySelectorAll('.tc').forEach(function (b) {
+      b.addEventListener('click', function () { seekTo(b.getAttribute('data-sec')); });
+    });
+    // scroll current into view
+    var cur = body.querySelector('.cw-it.current');
+    if (cur) body.scrollTop = Math.max(0, cur.offsetTop - 90);
+  }
+  // ---------- coming up + recent ----------
+  function renderUpcoming(list) {
+    var elx = el('cw-upcoming');
+    if (!list || !list.length) { elx.innerHTML = '<div class="cw-upempty">No additional meetings are scheduled yet.</div>'; return; }
+    var rows = list.slice(0, 2).map(function (m) {
+      var d = isoParts(m.date);
+      return '<div class="cw-up"><div class="cw-cal"><span class="mo">' + esc(d.mo) + '</span><span class="dy">' + esc(d.dy) + '</span></div>' +
+        '<div><div class="ut">' + esc(m.title || 'Board Meeting') + '</div><div class="ud">' + esc(m.date_long || m.date_short || '') + '</div></div></div>';
+    }).join('');
+    elx.innerHTML = rows + '<div class="cw-upnote">Stream link and agenda post closer to each meeting.</div>';
+  }
+  function renderRecent(list) {
+    var elx = el('cw-recent');
+    if (!list || !list.length) { elx.innerHTML = '<div class="cw-rl-empty">Past meetings will appear here.</div>'; return; }
+    elx.innerHTML = list.slice(0, 5).map(function (m) {
+      var thumb = m.thumbnail
+        ? '<img src="' + esc(m.thumbnail) + '" alt="" loading="lazy">'
+        : fallbackGraphic(m.date_short || m.date_long || '', '');
+      var href = m.youtube_url || (m.youtube_id ? 'https://www.youtube.com/watch?v=' + m.youtube_id : '#');
+      return '<a class="cw-rl" href="' + esc(href) + '" target="_blank" rel="noopener"><div class="th">' + thumb + '</div>' +
+        '<div><div class="vt">' + esc(m.title || 'Board Meeting') + '</div><div class="vd">' + esc(m.date_short || m.date_long || '') + '</div></div></a>';
+    }).join('');
+  }
+  // ---------- load ----------
+  function failSoft() {
+    el('cw-player').innerHTML = fallbackGraphic('', 'Watch on the CSDtv channel.');
+    el('cw-meta').innerHTML = '<span class="cw-chip up">Board Meetings</span><h2>Board of Education Meetings</h2>' +
+      '<p class="cw-when">Live streams and recordings are available on the CSDtv channel.</p>' +
+      '<div class="cw-actions"><a class="cw-btn primary" href="' + DEFAULT_LINKS.channel + '" target="_blank" rel="noopener">Watch on CSDtv</a>' +
+      '<a class="cw-btn ghost" href="' + DEFAULT_LINKS.schedule + '" target="_blank" rel="noopener">Meeting Schedule</a></div>';
+    el('cw-ag-body').innerHTML = '<div class="cw-ag-empty"><b>Agenda unavailable</b>Agendas are posted on Diligent before each meeting.</div>';
+    el('cw-ag-foot').style.display = 'none';
+    el('cw-upcoming').innerHTML = '<div class="cw-upempty">Schedule is available on the district site.</div>';
+    el('cw-recent').innerHTML = '<div class="cw-rl-empty">Recent meetings are on the CSDtv channel.</div>';
+  }
+  function apply(data) {
+    if (!data || !data.state) { failSoft(); return 300000; }
+    var links = data.links || DEFAULT_LINKS;
+    el('cw-channel-link').href = links.channel || DEFAULT_LINKS.channel;
+    renderPlayer(data.featured, data.state);
+    renderMeta(data);
+    renderAgenda(data);
+    renderUpcoming(data.upcoming);
+    renderRecent(data.recent);
+    return data.state === 'live' ? 30000 : 300000;
+  }
+  function load() {
+    fetch(ENDPOINT, { credentials: 'omit' })
+      .then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); })
+      .then(function (data) { var next = apply(data); setTimeout(load, next); })
+      .catch(function (err) { failSoft(); if (window.console) console.error('CSDtv watch:', err); setTimeout(load, 300000); });
+  }
+  load();
+})();
+</script>
+<!-- ===== EMBED END (script) ===== -->
+</body>
+</html>
