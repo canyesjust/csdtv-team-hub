@@ -347,7 +347,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               </h3>
               {showPreviews ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <BoardPreview channel={boardChannel} view="live" label="On air (overlay + lower third)" />
+                  <BoardPreview channel={boardChannel} view="overlay" label="Overlay (exactly what OBS shows)" />
                   <BoardPreview channel={boardChannel} view="dais" label="Dais display" />
                   <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} onClick={() => setShowPreviews(false)}>Hide previews</button>
                 </div>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dais — suggested motion states</title>
+<style>
+  :root{
+    --bg:#05080f; --panel:#111a2b; --panel2:#16223a; --line:rgba(255,255,255,.08);
+    --line2:rgba(255,255,255,.14); --text:#eaf1fb; --soft:#9fb2d0; --dim:#64748b;
+    --accent:#4f9dee; --accentbg:rgba(79,157,238,.16); --gold:#e7b549;
+    --goldbg:rgba(231,181,73,.12); --yea:#34d399;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#04070d;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:20px}
+  h1{font-size:18px;font-weight:600;margin:0 0 2px}
+  .lead{color:var(--soft);font-size:13px;margin:0 0 14px;max-width:920px;line-height:1.5}
+  .wrap{display:grid;grid-template-columns:330px 1fr;gap:18px;max-width:1200px;align-items:start}
+
+  /* control panel sim */
+  .ctl{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .ctl h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 10px}
+  .lab{font-size:12px;color:var(--soft);margin:12px 0 6px}
+  textarea{width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;color:var(--text);font:inherit;font-size:15px;font-weight:500;padding:11px 13px;resize:vertical;line-height:1.35}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font:inherit;font-size:12px;padding:7px 11px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--text);cursor:pointer}
+  .chip.sel{background:var(--accentbg);border-color:transparent;color:#bcdcff;font-weight:600}
+  .hint{font-size:11px;color:var(--dim);margin-top:10px;line-height:1.5}
+  .reset{margin-top:12px;font:inherit;font-size:12px;padding:7px 12px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--soft);cursor:pointer}
+
+  /* dais display */
+  .daiswrap .dlabel{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;font-weight:600}
+  .dais{aspect-ratio:16/9;background:radial-gradient(130% 100% at 50% 0%,#10233f 0%,#060c16 70%);border:1px solid var(--line2);border-radius:14px;padding:5%;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+  .dnow{font-size:1.3vw;color:var(--soft);text-transform:uppercase;letter-spacing:.1em;margin:0 0 1vh}
+  .dbadgerow{display:flex;align-items:center;gap:12px;margin-bottom:1.4vh}
+  .dbadge{font-size:1.5vw;font-weight:700;color:#06101f;background:var(--accent);padding:.4vh 1.1vw;border-radius:8px}
+  .dtype{font-size:1.1vw;color:var(--gold);border:1px solid var(--gold);padding:.3vh .9vw;border-radius:6px;text-transform:capitalize}
+  .dtitle{font-size:3vw;font-weight:700;line-height:1.15;margin:0}
+
+  /* motion box on dais */
+  .mbox{margin-top:2.4vh;border-left:.45vw solid var(--gold);background:var(--goldbg);border-radius:0 .6vw .6vw 0;padding:1.8vh 2vw;max-width:88%;transition:border-color .25s, background .25s}
+  .mbox.moved{border-left-color:var(--yea);background:rgba(52,211,153,.10)}
+  .mhead{display:flex;align-items:center;gap:.8vw;margin:0 0 .8vh}
+  .mtag{font-size:1.15vw;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+  .mbox.moved .mtag{color:var(--yea)}
+  .mtag-sub{font-size:1vw;color:var(--soft)}
+  .mtext{font-size:2.1vw;font-weight:600;line-height:1.3;margin:0;color:var(--text)}
+  .mmeta{margin:1.2vh 0 0;font-size:1.3vw;color:var(--soft)}
+  .mmeta b{color:var(--text);font-weight:600}
+  .legend{max-width:1200px;margin-top:16px;color:var(--soft);font-size:13px;line-height:1.6}
+  .legend b{color:var(--text)}
+</style>
+</head>
+<body>
+
+<h1>Dais — suggested motion → moved</h1>
+<p class="lead">Type in the motion box on the left (that's your control panel) and the dais updates live. While no one is set as the mover, the dais clearly says <b style="color:var(--gold)">SUGGESTED MOTION</b>. The moment you tap who moved it, it flips to a real motion (gold → green, “Moved by …”). Tap a name to see it change.</p>
+
+<div class="wrap">
+  <!-- CONTROL PANEL (left) -->
+  <div class="ctl">
+    <h3>Control panel · motion</h3>
+    <div class="lab">Motion text (editable)</div>
+    <textarea id="ta" rows="3">Move to approve the 2026–2027 Budget.</textarea>
+    <div class="lab">Moved by</div>
+    <div class="chips" id="movers"></div>
+    <div class="lab">Seconded by</div>
+    <div class="chips" id="seconders"></div>
+    <button class="reset" id="reset">Reset to suggested</button>
+    <div class="hint">Before a mover is chosen, the dais shows it as a suggestion. Editing the text updates the dais immediately. Choosing a mover turns it into the official motion.</div>
+  </div>
+
+  <!-- DAIS (right) -->
+  <div class="daiswrap">
+    <div class="dlabel">Dais display (what the board sees)</div>
+    <div class="dais">
+      <p class="dnow">Now</p>
+      <div class="dbadgerow"><span class="dbadge">8A</span><span class="dtype">action</span></div>
+      <h2 class="dtitle">Approval of the 2026–2027 Budget</h2>
+      <div class="mbox" id="mbox">
+        <div class="mhead">
+          <span class="mtag" id="mtag">Suggested motion</span>
+          <span class="mtag-sub" id="msub">· awaiting a motion from the board</span>
+        </div>
+        <p class="mtext" id="mtext">Move to approve the 2026–2027 Budget.</p>
+        <p class="mmeta" id="mmeta" style="display:none"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <p><b>The flow:</b> <b style="color:var(--gold)">Suggested motion</b> (gold, editable, “awaiting a motion”) → you tap <b>Moved by</b> → it becomes <b style="color:var(--yea)">Motion</b> (green) with “Moved by …”, and the “suggested” wording disappears → tap <b>Seconded by</b> and it shows both → then you open voting (not shown here) → result. If you edit the text while it’s still suggested, the dais updates instantly.</p>
+</div>
+
+<script>
+  var NAMES = ['Oaks','Neibaur','Edtl','Robinson','Tibbitts','Bringhurst']
+  var mover = null, seconder = null
+  var ta = document.getElementById('ta')
+  var mtext = document.getElementById('mtext')
+  var mbox = document.getElementById('mbox')
+  var mtag = document.getElementById('mtag')
+  var msub = document.getElementById('msub')
+  var mmeta = document.getElementById('mmeta')
+
+  function chip(name, kind){
+    var b = document.createElement('button')
+    b.className = 'chip'; b.textContent = name
+    b.onclick = function(){
+      if (kind === 'mover'){ mover = (mover === name ? null : name); if(mover===null) seconder=null }
+      else { if(!mover) return; seconder = (seconder === name ? null : name) }
+      render()
+    }
+    return b
+  }
+  var mc = document.getElementById('movers'), sc = document.getElementById('seconders')
+  NAMES.forEach(function(n){ mc.appendChild(chip(n,'mover')); sc.appendChild(chip(n,'seconder')) })
+
+  ta.addEventListener('input', function(){ mtext.textContent = ta.value })
+  document.getElementById('reset').onclick = function(){ mover=null; seconder=null; render() }
+
+  function render(){
+    mtext.textContent = ta.value
+    Array.from(mc.children).forEach(function(b){ b.classList.toggle('sel', b.textContent===mover) })
+    Array.from(sc.children).forEach(function(b){ b.classList.toggle('sel', b.textContent===seconder); b.style.opacity = mover? 1 : .4 })
+    if (!mover){
+      mbox.classList.remove('moved')
+      mtag.textContent = 'Suggested motion'
+      msub.style.display = ''
+      msub.textContent = '· awaiting a motion from the board'
+      mmeta.style.display = 'none'
+    } else {
+      mbox.classList.add('moved')
+      mtag.textContent = 'Motion'
+      msub.style.display = 'none'
+      mmeta.style.display = ''
+      mmeta.innerHTML = 'Moved by <b>'+mover+'</b>' + (seconder ? ' · Seconded by <b>'+seconder+'</b>' : '')
+    }
+  }
+  render()
+</script>
+</body>
+</html>

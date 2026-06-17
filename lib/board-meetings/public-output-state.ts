@@ -70,6 +70,8 @@ export type PublicAgendaItem = {
   item_number: string
   title: string
   type: string
+  action_requested?: boolean
+  suggested_motion_text?: string | null
   presenters: { name: string; title: string | null }[]
   documents: { title: string; source_url: string | null }[]
 }

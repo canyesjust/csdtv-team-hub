@@ -26,6 +26,8 @@ const C = {
   amberGlow: 'rgba(251, 191, 36, 0.25)',
   blue: '#3b82f6',
   blueGlow: 'rgba(59, 130, 246, 0.3)',
+  purple: '#a78bfa',
+  purpleGlow: 'rgba(167, 139, 250, 0.35)',
   green: '#34d399',
   greenGlow: 'rgba(52, 211, 153, 0.25)',
   red: '#f87171',
@@ -113,6 +115,12 @@ export default function BoardDaisView({
   const voteResult = state.state?.active_vote_result
   const motion = state.state?.active_motion
   const screenName = state.meeting?.title || initialChannelName || `Channel ${channelNumber}`
+  // A motion only becomes "official" on the dais once a mover is set (or it's being
+  // voted). Until then it's still a SUGGESTED motion — using the live motion text if a
+  // draft is open (so control-panel edits show), else the item's saved suggestion.
+  const showVote = !!(voteResult && (voteResult.remaining_seconds ?? 0) > 0)
+  const showLiveMotion = !showVote && !!motion && (!!motion.moved_by_name || motion.status === 'voting')
+  const suggestedMotionText = (motion?.motion_text || item?.suggested_motion_text || '').trim()
 
   return (
     <DaisShell {...shellProps}>
@@ -163,17 +171,17 @@ export default function BoardDaisView({
             ) : item ? (
               <div style={nowBlock}>
                 <p style={nowLabel}>Now</p>
-                {motion || (voteResult && (voteResult.remaining_seconds ?? 0) > 0) ? (
+                {showVote || showLiveMotion ? (
                   <>
                     <AgendaContextStrip item={item} variant="dais" />
-                    {voteResult && (voteResult.remaining_seconds ?? 0) > 0 ? (
-                      <VoteResultCard result={voteResult} />
+                    {showVote ? (
+                      <VoteResultCard result={voteResult!} />
                     ) : motion ? (
                       <DaisMotionPanel motion={motion} hero />
                     ) : null}
                   </>
                 ) : (
-                  <DaisAgendaItemHero item={item} />
+                  <DaisAgendaItemHero item={item} suggestedMotionText={suggestedMotionText} />
                 )}
 
                 {(item.documents?.length ?? 0) > 0 && (
@@ -233,7 +241,7 @@ export default function BoardDaisView({
   )
 }
 
-function DaisAgendaItemHero({ item }: { item: PublicAgendaItem }) {
+function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaItem; suggestedMotionText?: string }) {
   return (
     <>
       <div style={itemBadgeRow}>
@@ -249,8 +257,44 @@ function DaisAgendaItemHero({ item }: { item: PublicAgendaItem }) {
           ) : null}
         </p>
       ) : null}
+      {(item.action_requested || item.type === 'action') && (suggestedMotionText || item.suggested_motion_text)?.trim() ? (
+        <div style={proposedMotionBox}>
+          <p style={proposedMotionLabel}>Suggested motion</p>
+          <p style={proposedMotionText}>{(suggestedMotionText || item.suggested_motion_text || '').trim()}</p>
+          <p style={proposedMotionNote}>Awaiting a motion from the board</p>
+        </div>
+      ) : null}
     </>
   )
+}
+
+const proposedMotionBox: React.CSSProperties = {
+  marginTop: '2.2vh',
+  padding: '1.6vh 2vw',
+  borderLeft: '0.4vw solid #3b82f6',
+  background: 'rgba(59,130,246,0.12)',
+  borderRadius: '0 0.5vw 0.5vw 0',
+  maxWidth: '80vw',
+}
+const proposedMotionLabel: React.CSSProperties = {
+  margin: '0 0 0.6vh',
+  fontSize: '1.3vw',
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: '#93b7eb',
+  fontWeight: 700,
+}
+const proposedMotionText: React.CSSProperties = {
+  margin: 0,
+  fontSize: '2vw',
+  fontWeight: 600,
+  lineHeight: 1.3,
+  color: '#eaf0fb',
+}
+const proposedMotionNote: React.CSSProperties = {
+  margin: '0.8vh 0 0',
+  fontSize: '1.1vw',
+  color: '#9fb2d0',
 }
 
 /** Off-screen paint so the browser has fonts/layout ready before Advance. */
@@ -447,8 +491,8 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
     return (
       <MotionCard
         label="Voting open"
-        accent={C.blue}
-        glow={C.blueGlow}
+        accent={C.purple}
+        glow={C.purpleGlow}
         pulse
         hero={hero}
       >
