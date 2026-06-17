@@ -1,0 +1,438 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { buildArchivePayload } from '@/lib/board-meetings/archive-data'
+import {
+  importIcompassAgenda,
+  resolveIcompassMeeting,
+  resolveIcompassAgendaDocId,
+} from '@/lib/board-meetings/icompass-agenda'
+
+// Public, read-only payload that powers the district website's
+// "Watch Board Meetings Live" page. Assembled entirely from data that is already
+// public (meeting dates, the agenda, public YouTube links). No write access, no
+// service keys leave the server, no internal-only fields.
+
+const TZ = 'America/Denver'
+
+export type WatchState = 'live' | 'today' | 'upcoming' | 'soon' | 'none'
+
+type AgendaDoc = { title: string; url: string | null }
+type AgendaPresenter = { name: string; title: string | null }
+type AgendaSubitem = { item_number: string; title: string }
+
+type AgendaItem = {
+  id: string
+  item_number: string | null
+  title: string
+  type: string | null
+  consent: boolean
+  subitems: AgendaSubitem[]
+  presenters: AgendaPresenter[]
+  documents: AgendaDoc[]
+  status: 'completed' | 'current' | 'upcoming' | null
+  offset_seconds: number | null
+  offset_label: string | null
+  jump_url: string | null
+}
+
+type AgendaSection = { number: number; title: string; start_time: string | null; items: AgendaItem[] }
+
+export type BoardWatchPayload = {
+  generated_at: string
+  now: string
+  state: WatchState
+  featured: {
+    title: string
+    date: string
+    date_long: string
+    scheduled_start: string | null
+    location: string | null
+    broadcast_status: string
+    is_live: boolean
+    days_until: number | null
+    youtube_id: string | null
+    youtube_url: string | null
+    production_number: number
+  } | null
+  agenda: {
+    available: boolean
+    current_item_id: string | null
+    diligent_url: string | null
+    expected_label: string | null
+    sections: AgendaSection[]
+  }
+  recent: {
+    title: string
+    date: string
+    date_short: string
+    youtube_id: string | null
+    youtube_url: string | null
+    thumbnail: string | null
+  }[]
+  links: {
+    channel: string
+    schedule: string
+    public_participation: string
+    diligent: string
+  }
+}
+
+const LINKS = {
+  channel: 'https://www.youtube.com/@canyonsdistricttv',
+  schedule: 'https://www.canyonsdistrict.org/leadership/board/board-meetings/?sid=1',
+  public_participation: 'https://www.canyonsdistrict.org/leadership/board/board-meetings/public-participation/',
+  diligent: 'https://canyonsdistrict.community.highbond.com/portal/',
+}
+
+// ---------- date helpers (America/Denver, date-only) ----------
+
+function denverDate(d: Date): string {
+  // YYYY-MM-DD in America/Denver
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
+function denverLong(d: Date): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(d)
+}
+function denverShort(d: Date): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: TZ, month: 'short', day: 'numeric', year: 'numeric' }).format(d)
+}
+function wholeDaysBetween(fromStr: string, toStr: string): number {
+  const a = Date.parse(`${fromStr}T00:00:00Z`)
+  const b = Date.parse(`${toStr}T00:00:00Z`)
+  return Math.round((b - a) / 86_400_000)
+}
+function saturdayBeforeLabel(meetingDateStr: string): string {
+  const base = Date.parse(`${meetingDateStr}T00:00:00Z`)
+  const dow = new Date(base).getUTCDay() // 0 Sun .. 6 Sat
+  const back = dow === 6 ? 7 : dow + 1
+  const sat = new Date(base - back * 86_400_000)
+  const label = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }).format(sat)
+  return `Agenda posts ${label}`
+}
+
+function youtubeId(url: string | null | undefined): string | null {
+  if (!url) return null
+  const m = url.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/)
+  return m ? m[1] : null
+}
+function youtubeUrlFrom(url: string | null | undefined, id: string | null): string | null {
+  if (url) return url
+  return id ? `https://www.youtube.com/watch?v=${id}` : null
+}
+
+// ---------- meeting list ----------
+
+type MeetingRow = {
+  bmId: string
+  productionId: string
+  productionNumber: number
+  title: string
+  startDatetime: string
+  localDate: string
+  location: string | null
+  livestreamUrl: string | null
+  broadcastStatus: string
+  scheduledStart: string | null
+  icompassMeetingId: string | null
+  cancelled: boolean
+}
+
+async function loadBoardMeetings(service: SupabaseClient): Promise<MeetingRow[]> {
+  const { data: bms } = await service
+    .from('board_meetings')
+    .select('id, production_id, broadcast_status, scheduled_public_start, icompass_meeting_id')
+  if (!bms?.length) return []
+
+  const prodIds = bms.map(b => b.production_id).filter(Boolean)
+  const { data: prods } = await service
+    .from('productions')
+    .select('id, production_number, title, start_datetime, event_location, filming_location, livestream_url, status')
+    .in('id', prodIds)
+  const prodById = new Map((prods || []).map(p => [p.id, p]))
+
+  const rows: MeetingRow[] = []
+  for (const b of bms) {
+    const p = prodById.get(b.production_id)
+    if (!p || !p.start_datetime) continue
+    rows.push({
+      bmId: b.id,
+      productionId: p.id,
+      productionNumber: p.production_number,
+      title: p.title,
+      startDatetime: p.start_datetime,
+      localDate: denverDate(new Date(p.start_datetime)),
+      location: p.event_location || p.filming_location || null,
+      livestreamUrl: p.livestream_url ?? null,
+      broadcastStatus: (b.broadcast_status as string) || 'none',
+      scheduledStart: (b.scheduled_public_start as string | null) ?? null,
+      icompassMeetingId: (b.icompass_meeting_id as string | null) ?? null,
+      cancelled: b.broadcast_status === 'cancelled' || p.status === 'Cancelled',
+    })
+  }
+  return rows
+}
+
+// ---------- agenda assembly ----------
+
+function groupSections(
+  entries: { section: number; item: AgendaItem }[],
+  meta: Map<number, { title: string; start_time: string | null }>,
+): AgendaSection[] {
+  const order: number[] = []
+  const bySection = new Map<number, AgendaItem[]>()
+  for (const { section, item } of entries) {
+    if (!bySection.has(section)) {
+      bySection.set(section, [])
+      order.push(section)
+    }
+    bySection.get(section)!.push(item)
+  }
+  return order.map(n => ({
+    number: n,
+    title: meta.get(n)?.title ?? '',
+    start_time: meta.get(n)?.start_time ?? null,
+    items: bySection.get(n)!,
+  }))
+}
+
+async function assembleAgenda(
+  service: SupabaseClient,
+  featured: MeetingRow,
+  youtubeUrl: string | null,
+): Promise<BoardWatchPayload['agenda']> {
+  const archive = await buildArchivePayload(service, featured.productionNumber)
+  const storedAgenda = (archive && !archive.not_board_meeting ? archive.agenda : []) as unknown as Array<{
+    id: string
+    section_number: number
+    section_title: string
+    item_number: string
+    title: string
+    type: string
+    consent_block: string | null
+    started_at_offset_seconds: number | null
+    started_at_human: string | null
+    presenters: { name: string; title: string | null }[]
+    documents: { title: string; filename: string; source_url: string | null }[]
+  }>
+
+  const diligentUrl = featured.icompassMeetingId
+    ? await diligentDocUrl(featured.icompassMeetingId)
+    : null
+
+  // (a) Stored agenda items — full data with offsets + live status.
+  if (storedAgenda.length > 0) {
+    const [{ data: subRows }, { data: bstate }] = await Promise.all([
+      service.from('board_meeting_agenda_items').select('id, subitems').eq('board_meeting_id', featured.bmId),
+      service.from('meeting_broadcast_state').select('current_agenda_item_id').eq('board_meeting_id', featured.bmId).maybeSingle(),
+    ])
+    const subMap = new Map<string, AgendaSubitem[]>()
+    for (const r of subRows || []) {
+      const subs = Array.isArray(r.subitems) ? (r.subitems as AgendaSubitem[]) : []
+      subMap.set(r.id as string, subs)
+    }
+
+    const isLive = featured.broadcastStatus === 'live'
+    const isArchived = featured.broadcastStatus === 'archived'
+    const currentId = isLive ? ((bstate?.current_agenda_item_id as string | null) ?? null) : null
+    const currentIndex = currentId ? storedAgenda.findIndex(a => a.id === currentId) : -1
+
+    const sectionMeta = new Map<number, { title: string; start_time: string | null }>()
+    const entries = storedAgenda.map((a, i) => {
+      if (!sectionMeta.has(a.section_number)) sectionMeta.set(a.section_number, { title: a.section_title, start_time: null })
+      let status: AgendaItem['status'] = null
+      if (isLive && currentIndex >= 0) status = i < currentIndex ? 'completed' : i === currentIndex ? 'current' : 'upcoming'
+      else if (isArchived) status = 'completed'
+      const offset = a.started_at_offset_seconds
+      const showJump = offset != null && (status === 'completed' || status === 'current')
+      const item: AgendaItem = {
+        id: a.id,
+        item_number: a.item_number,
+        title: a.title,
+        type: a.type,
+        consent: !!a.consent_block,
+        subitems: subMap.get(a.id) || [],
+        presenters: a.presenters,
+        documents: a.documents.map(d => ({ title: d.title, url: d.source_url })),
+        status,
+        offset_seconds: showJump ? offset : null,
+        offset_label: showJump ? a.started_at_human : null,
+        jump_url: showJump && youtubeUrl ? `${youtubeUrl}&t=${offset}` : null,
+      }
+      return { section: a.section_number, item }
+    })
+
+    return {
+      available: true,
+      current_item_id: currentId,
+      diligent_url: diligentUrl,
+      expected_label: null,
+      sections: groupSections(entries, sectionMeta),
+    }
+  }
+
+  // (b) Live Diligent fetch — raw sections/items, no offsets or status.
+  if (featured.icompassMeetingId) {
+    const resolved = resolveIcompassMeeting(featured.icompassMeetingId)
+    if (resolved) {
+      try {
+        const parsed = await importIcompassAgenda(resolved.baseUrl, resolved.meetingId)
+        if (parsed && parsed.agenda_items.length > 0) {
+          const sectionMeta = new Map<number, { title: string; start_time: string | null }>()
+          for (const s of parsed.sections || []) {
+            sectionMeta.set(s.number, { title: s.title, start_time: s.start_time ?? null })
+          }
+          const entries = parsed.agenda_items.map(a => {
+            if (!sectionMeta.has(a.section_number)) sectionMeta.set(a.section_number, { title: a.section_title, start_time: null })
+            const item: AgendaItem = {
+              id: `${a.section_number}-${a.item_number}`,
+              item_number: a.item_number,
+              title: a.title,
+              type: a.type,
+              consent: !!a.consent_block,
+              subitems: (a.subitems as AgendaSubitem[] | undefined) || [],
+              presenters: (a.presenters || []).map(p => ({ name: p.name, title: p.title ?? null })),
+              documents: (a.documents || []).map(d => ({ title: d.title, url: null })),
+              status: null,
+              offset_seconds: null,
+              offset_label: null,
+              jump_url: null,
+            }
+            return { section: a.section_number, item }
+          })
+          return {
+            available: true,
+            current_item_id: null,
+            diligent_url: diligentUrl,
+            expected_label: null,
+            sections: groupSections(entries, sectionMeta),
+          }
+        }
+      } catch {
+        // fall through to unavailable
+      }
+    }
+  }
+
+  // (c) No agenda yet.
+  return {
+    available: false,
+    current_item_id: null,
+    diligent_url: diligentUrl,
+    expected_label: saturdayBeforeLabel(featured.localDate),
+    sections: [],
+  }
+}
+
+async function diligentDocUrl(icompassMeetingId: string): Promise<string | null> {
+  const resolved = resolveIcompassMeeting(icompassMeetingId)
+  if (!resolved) return null
+  try {
+    const docId = await resolveIcompassAgendaDocId(resolved.baseUrl, resolved.meetingId)
+    return docId != null ? `${resolved.baseUrl.replace(/\/+$/, '')}/document/${docId}` : null
+  } catch {
+    return null
+  }
+}
+
+// ---------- main ----------
+
+export async function buildBoardWatchPayload(service: SupabaseClient): Promise<BoardWatchPayload> {
+  const nowIso = new Date().toISOString()
+  const today = denverDate(new Date())
+  const meetings = await loadBoardMeetings(service)
+
+  let state: WatchState = 'none'
+  let featured: MeetingRow | null = null
+
+  const live = meetings.filter(m => m.broadcastStatus === 'live')
+  if (live.length > 0) {
+    state = 'live'
+    featured = live.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime))[0]
+  } else {
+    const upcoming = meetings
+      .filter(m => m.localDate >= today)
+      .sort((a, b) => a.localDate.localeCompare(b.localDate))
+    if (upcoming.length > 0) {
+      featured = upcoming[0]
+      state = featured.localDate === today ? 'today' : 'upcoming'
+    } else {
+      const past = meetings
+        .filter(m => m.localDate < today)
+        .sort((a, b) => b.localDate.localeCompare(a.localDate))
+      if (past.length > 0) {
+        featured = past[0]
+        state = 'soon'
+      }
+    }
+  }
+
+  // Recent list — past board meetings, newest first, excluding the featured one
+  // when it's the most-recent-past ("soon" state).
+  const recentRows = meetings
+    .filter(m => m.localDate < today && !(state === 'soon' && featured && m.bmId === featured.bmId))
+    .sort((a, b) => b.localDate.localeCompare(a.localDate))
+    .slice(0, 6)
+
+  const recentThumbs = new Map<string, string | null>()
+  if (recentRows.length > 0) {
+    const prodIds = recentRows.map(r => r.productionId)
+    const { data: vids } = await service
+      .from('videos')
+      .select('production_id, youtube_thumbnail')
+      .in('production_id', prodIds)
+    for (const v of (vids as Array<{ production_id: string | null; youtube_thumbnail: string | null }> | null) || []) {
+      if (v.production_id && !recentThumbs.has(v.production_id)) recentThumbs.set(v.production_id, v.youtube_thumbnail ?? null)
+    }
+  }
+
+  const recent = recentRows.map(m => {
+    const id = youtubeId(m.livestreamUrl)
+    const thumb = recentThumbs.get(m.productionId) || (id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null)
+    return {
+      title: m.title,
+      date: m.localDate,
+      date_short: denverShort(new Date(m.startDatetime)),
+      youtube_id: id,
+      youtube_url: youtubeUrlFrom(m.livestreamUrl, id),
+      thumbnail: thumb,
+    }
+  })
+
+  let featuredOut: BoardWatchPayload['featured'] = null
+  let agenda: BoardWatchPayload['agenda'] = {
+    available: false,
+    current_item_id: null,
+    diligent_url: null,
+    expected_label: null,
+    sections: [],
+  }
+
+  if (featured) {
+    const id = youtubeId(featured.livestreamUrl)
+    const ytUrl = youtubeUrlFrom(featured.livestreamUrl, id)
+    const daysUntil = state === 'today' || state === 'upcoming' ? Math.max(0, wholeDaysBetween(today, featured.localDate)) : null
+    featuredOut = {
+      title: featured.title,
+      date: featured.localDate,
+      date_long: denverLong(new Date(featured.startDatetime)),
+      scheduled_start: featured.scheduledStart,
+      location: featured.location,
+      broadcast_status: featured.broadcastStatus,
+      is_live: state === 'live',
+      days_until: daysUntil,
+      youtube_id: id,
+      youtube_url: ytUrl,
+      production_number: featured.productionNumber,
+    }
+    agenda = await assembleAgenda(service, featured, ytUrl)
+  }
+
+  return {
+    generated_at: nowIso,
+    now: nowIso,
+    state,
+    featured: featuredOut,
+    agenda,
+    recent,
+    links: LINKS,
+  }
+}

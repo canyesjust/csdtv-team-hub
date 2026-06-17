@@ -51,6 +51,26 @@ function decodeHtml(raw: string): string {
 type IcompassDocument = { Id: number; DocumentType: number; Type: number; Name: string }
 
 /**
+ * Resolve the agenda document id for an iCompass meeting (DocumentType 1, else the
+ * first document). Used both to render the agenda and to build the public
+ * `/document/{docId}` link. Returns null if the meeting has no documents.
+ */
+export async function resolveIcompassAgendaDocId(
+  baseUrl: string,
+  meetingId: number | string,
+): Promise<number | null> {
+  const root = baseUrl.replace(/\/+$/, '')
+  const docsRes = await fetch(`${root}/Services/MeetingsService.svc/meetings/${meetingId}/meetingDocuments`, {
+    headers: { Accept: 'application/json' },
+  })
+  if (!docsRes.ok) return null
+  const data = (await docsRes.json()) as { Documents?: IcompassDocument[] }
+  const documents = data.Documents ?? []
+  const agendaDoc = documents.find(d => d.DocumentType === 1) ?? documents[0]
+  return agendaDoc?.Id ?? null
+}
+
+/**
  * Fetch the rendered agenda HTML for an iCompass meeting.
  * `baseUrl` e.g. "https://canyonsdistrict.community.highbond.com", `meetingId` e.g. 478.
  * DocumentType 1 = the agenda; we render it via /document/{id}.
@@ -60,17 +80,11 @@ export async function fetchIcompassAgendaHtml(
   meetingId: number | string,
 ): Promise<{ html: string; docId: number } | null> {
   const root = baseUrl.replace(/\/+$/, '')
-  const docsRes = await fetch(`${root}/Services/MeetingsService.svc/meetings/${meetingId}/meetingDocuments`, {
-    headers: { Accept: 'application/json' },
-  })
-  if (!docsRes.ok) return null
-  const data = (await docsRes.json()) as { Documents?: IcompassDocument[] }
-  const documents = data.Documents ?? []
-  const agendaDoc = documents.find(d => d.DocumentType === 1) ?? documents[0]
-  if (!agendaDoc) return null
-  const htmlRes = await fetch(`${root}/document/${agendaDoc.Id}`)
+  const docId = await resolveIcompassAgendaDocId(baseUrl, meetingId)
+  if (docId == null) return null
+  const htmlRes = await fetch(`${root}/document/${docId}`)
   if (!htmlRes.ok) return null
-  return { html: await htmlRes.text(), docId: agendaDoc.Id }
+  return { html: await htmlRes.text(), docId }
 }
 
 function parsePresenters(afterDash: string): ExtractedAgendaPresenter[] {
