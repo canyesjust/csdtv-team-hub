@@ -151,7 +151,7 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
             <div style={{ fontSize: 12, color: C.soft, marginBottom: 7 }}>Moved by</div>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
               {members.map(m => (
-                <button key={m.id} type="button" style={chip(motion?.mover_id === m.id)} onClick={() => onAction('set-mover', { person_id: m.id })}>{m.display_name}</button>
+                <button key={m.id} type="button" style={chip(motion?.mover_id === m.id)} onClick={() => onAction('set-mover', { person_id: motion?.mover_id === m.id ? null : m.id })}>{m.display_name}</button>
               ))}
             </div>
           </div>
@@ -159,7 +159,7 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
             <div style={{ fontSize: 12, color: C.soft, marginBottom: 7 }}>Seconded by</div>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
               {members.map(m => (
-                <button key={m.id} type="button" style={chip(motion?.seconder_id === m.id)} onClick={() => onAction('set-seconder', { person_id: m.id })}>{m.display_name}</button>
+                <button key={m.id} type="button" style={chip(motion?.seconder_id === m.id)} onClick={() => onAction('set-seconder', { person_id: motion?.seconder_id === m.id ? null : m.id })}>{m.display_name}</button>
               ))}
             </div>
           </div>

@@ -113,7 +113,14 @@ export function applyVoteToBundle(
 export function applyVoiceVoteDefaults(bundle: MotionScreenBundle): MotionScreenBundle {
   const votes: Record<string, VoteRecord> = { ...bundle.votes }
   for (const m of bundle.voting_members) {
-    votes[m.id] = { vote: 'yea', attendance: 'present', recorded_at: null }
+    // Respect attendance: absent (or left-early) members stay absent and are NOT
+    // defaulted to yea. Present/remote members default to yea.
+    const att = bundle.votes[m.id]?.attendance ?? 'present'
+    if (att === 'absent') {
+      votes[m.id] = { vote: 'absent', attendance: 'absent', recorded_at: null }
+    } else {
+      votes[m.id] = { vote: 'yea', attendance: att, recorded_at: null }
+    }
   }
   const memberIds = bundle.voting_members.map(m => m.id)
   const active = bundle.active_motion

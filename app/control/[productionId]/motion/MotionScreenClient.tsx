@@ -79,7 +79,9 @@ export default function MotionScreenClient({ productionId, initialBundle, inline
   }
 
   const markLocalMutation = useCallback((action?: string) => {
-    const ms = action === 'record-vote' ? LOCAL_SUPPRESS_MS : 2000
+    // Hold the optimistic state long enough that a background reload can't wipe an
+    // open vote / mover / seconder before the server commits them.
+    const ms = LOCAL_SUPPRESS_MS
     suppressRefreshUntilRef.current = Date.now() + ms
   }, [])
 
