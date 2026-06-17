@@ -1124,21 +1124,16 @@ export async function buildPublicMotionPayload(
     }
   }
 
-  // While the vote is open, build a live per-member roster so the dais can show
-  // each board member's status (Pending / Yea / Nay / Abstain / Absent) and update
-  // it as the operator records votes — before the result is pushed.
+  // While the vote is open, the dais shows each board member as PENDING (absent
+  // members greyed). Actual Aye/Nay/Abstain votes are NEVER revealed on the dais
+  // during voting — the operator records them privately on the control surface and
+  // they appear publicly only when the result is pushed (the VoteResultCard).
   let liveVotes: { person_name: string; vote: string | null }[] | null = null
   if (motion.status === 'voting') {
     const attendance = await loadAttendance(service, boardMeetingId)
-    const { data: castVotes } = await service
-      .from('meeting_motion_votes')
-      .select('person_id, vote')
-      .eq('motion_id', motion.id)
-      .is('superseded_by_vote_id', null)
-    const voteMap = new Map((castVotes || []).map(v => [v.person_id, v.vote]))
     liveVotes = attendance.records.map(r => ({
       person_name: r.name,
-      vote: r.status === 'absent' ? 'absent' : voteMap.get(r.person_id) ?? null,
+      vote: r.status === 'absent' ? 'absent' : null,
     }))
   }
 

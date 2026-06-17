@@ -220,11 +220,22 @@ export async function openMotion(
         moved_by_person_id: moverPersonId,
       })
     }
+    // Do NOT overwrite an existing motion's text with the suggested override here.
+    // The motion already carries the operator's edited/published wording; picking a
+    // mover must not reset it to the old suggested text. Only apply the override if
+    // the existing motion has no text yet.
     const trimmedOverride = motionTextOverride?.trim()
     if (trimmedOverride) {
-      await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
-        motion_text: trimmedOverride,
-      })
+      const { data: existingMotion } = await ctx.service
+        .from('meeting_motions')
+        .select('motion_text')
+        .eq('id', existingId)
+        .maybeSingle()
+      if (!((existingMotion?.motion_text as string | null) || '').trim()) {
+        await updateMotion(ctx.service, ctx.boardMeetingId, existingId, ctx.teamUserId, {
+          motion_text: trimmedOverride,
+        })
+      }
     }
     await ctx.service
       .from('meeting_broadcast_state')
@@ -306,16 +317,24 @@ export async function publishMotionText(
     clearLockedAgendaCache(ctx.boardMeetingId)
   }
 
+  // Resolve which motion to update: the active one, or failing that the motion
+  // tied to this agenda item (the console auto-creates one when an item goes on
+  // air). This makes "Update on screen" reliably reach the motion record.
   const { data: state } = await ctx.service
     .from('meeting_broadcast_state')
     .select('active_motion_id')
     .eq('board_meeting_id', ctx.boardMeetingId)
     .maybeSingle()
 
-  if (state?.active_motion_id) {
+  let motionId = state?.active_motion_id ?? null
+  if (!motionId && opts.agendaItemId) {
+    motionId = await findPrimaryMotionIdForAgendaItem(ctx.service, ctx.boardMeetingId, opts.agendaItemId)
+  }
+
+  if (motionId) {
     // Only updates if the motion is in an editable state; ignore if not.
     try {
-      await updateMotion(ctx.service, ctx.boardMeetingId, state.active_motion_id, ctx.teamUserId, {
+      await updateMotion(ctx.service, ctx.boardMeetingId, motionId, ctx.teamUserId, {
         motion_text: text,
       })
     } catch {
