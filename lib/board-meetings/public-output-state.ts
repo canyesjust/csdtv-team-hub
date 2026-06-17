@@ -181,6 +181,26 @@ export async function loadAgendaItemExtras(
   return loadItemExtras(service, itemId)
 }
 
+/**
+ * Fresh read of an agenda item's suggested motion text, bypassing the in-memory
+ * locked-agenda cache. Returns `undefined` if the column doesn't exist or on error
+ * (so callers leave the existing value alone), otherwise the current value.
+ * This is what makes "Update on screen" reliably reach the dais even though the
+ * locked agenda is cached per server instance.
+ */
+export async function loadAgendaItemSuggestedText(
+  service: SupabaseClient,
+  itemId: string,
+): Promise<string | null | undefined> {
+  const { data, error } = await service
+    .from('board_meeting_agenda_items')
+    .select('suggested_motion_text')
+    .eq('id', itemId)
+    .maybeSingle()
+  if (error) return undefined
+  return (data?.suggested_motion_text as string | null | undefined) ?? null
+}
+
 async function buildVoteResultOverlay(
   service: SupabaseClient,
   boardMeetingId: string,
@@ -295,8 +315,12 @@ export async function buildPublicChannelState(
 
   let current_item: PublicAgendaItem | null = null
   if (agendaNav.current_item) {
-    const extras = await loadItemExtras(service, agendaNav.current_item.id)
+    const [extras, freshSuggested] = await Promise.all([
+      loadItemExtras(service, agendaNav.current_item.id),
+      loadAgendaItemSuggestedText(service, agendaNav.current_item.id),
+    ])
     current_item = { ...agendaNav.current_item, ...extras }
+    if (freshSuggested !== undefined) current_item.suggested_motion_text = freshSuggested
   }
 
   const agenda_preview_items = toAgendaItemSummaries(items)

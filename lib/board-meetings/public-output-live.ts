@@ -10,6 +10,7 @@ import {
   tickMeetingPlaylist,
 } from '@/lib/board-meetings/playlist-playback'
 import { resolveOutputPollIntervalMs } from '@/lib/board-meetings/output-polling'
+import { loadAgendaItemSuggestedText } from '@/lib/board-meetings/public-output-state'
 import type {
   PublicAgendaItem,
   PublicChannelState,
@@ -192,6 +193,14 @@ export async function buildPublicChannelLivePatch(
   const current_item: PublicAgendaItem | null = agendaNav.current_item
     ? { ...agendaNav.current_item, presenters: [], documents: [] }
     : null
+
+  // The locked-agenda nav is cached per server instance, so a just-published
+  // "Update on screen" edit may not be reflected. Read the current item's
+  // suggested motion text fresh so the dais updates reliably.
+  if (current_item) {
+    const freshSuggested = await loadAgendaItemSuggestedText(service, current_item.id)
+    if (freshSuggested !== undefined) current_item.suggested_motion_text = freshSuggested
+  }
 
   const upcoming_items = agendaNav.upcoming_items.map(i => ({
     id: i.id,
