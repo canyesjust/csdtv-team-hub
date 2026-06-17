@@ -513,12 +513,12 @@ function LiveVoteRoster({ votes }: { votes: { person_name: string; vote: string 
   return (
     <div
       style={{
-        marginTop: '20px',
-        paddingTop: '16px',
+        marginTop: '14px',
+        paddingTop: '12px',
         borderTop: `1px solid ${C.glassBorder}`,
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
-        gap: '6px 24px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '2px 24px',
       }}
     >
       {votes.map((v, i) => {
@@ -529,10 +529,10 @@ function LiveVoteRoster({ votes }: { votes: { person_name: string; vote: string 
         return (
           <div
             key={`${v.person_name}-${i}`}
-            style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '4px 0', opacity: absent ? 0.55 : 1 }}
+            style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '3px 0', opacity: absent ? 0.55 : 1 }}
           >
-            <span style={{ fontSize: '18px', color: dimmed ? C.textDim : C.text }}>{v.person_name}</span>
-            <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: d.color }}>{d.label}</span>
+            <span style={{ fontSize: '16px', color: dimmed ? C.textDim : C.text }}>{v.person_name}</span>
+            <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: d.color }}>{d.label}</span>
           </div>
         )
       })}
@@ -563,18 +563,18 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
         text={result.motion_text}
         baseStyle={{ margin: '0 0 18px', fontWeight: 500, color: C.text, lineHeight: 1.4, letterSpacing: '-0.01em', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
         maxFontPx={26}
-        minFontPx={13}
-        maxHeightVh={20}
+        minFontPx={11}
+        maxHeightVh={24}
       />
       {members.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '6px 24px', borderTop: `1px solid ${C.glassBorder}`, paddingTop: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '2px 24px', borderTop: `1px solid ${C.glassBorder}`, paddingTop: '12px' }}>
           {members.map((v, i) => {
             const d = VOTE_DISPLAY[v.vote] ?? { label: v.vote, color: C.textSoft }
             const dimmed = v.vote === 'absent' || v.vote === 'recused'
             return (
-              <div key={`${v.person_name}-${i}`} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '4px 0', opacity: dimmed ? 0.55 : 1 }}>
-                <span style={{ fontSize: '18px', color: dimmed ? C.textDim : C.text }}>{v.person_name}</span>
-                <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: d.color }}>{d.label}</span>
+              <div key={`${v.person_name}-${i}`} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '3px 0', opacity: dimmed ? 0.55 : 1 }}>
+                <span style={{ fontSize: '16px', color: dimmed ? C.textDim : C.text }}>{v.person_name}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: d.color }}>{d.label}</span>
               </div>
             )
           })}
@@ -598,13 +598,17 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
     wordBreak: 'break-word',
     overflowWrap: 'anywhere',
   }
+  // During voting the live roster also needs room, so the motion gets less height
+  // (and shrinks smaller) than when it's on the floor alone. Low min font ensures
+  // even a very long, multi-clause motion still fits fully on screen.
+  const motionMaxVh = isVoting ? 34 : hero ? 54 : 40
   const motionFit = text ? (
     <AutoFitText
       text={text}
       baseStyle={motionBase}
       maxFontPx={hero ? 34 : 26}
-      minFontPx={14}
-      maxHeightVh={hero ? 40 : 32}
+      minFontPx={11}
+      maxHeightVh={motionMaxVh}
     />
   ) : null
 
