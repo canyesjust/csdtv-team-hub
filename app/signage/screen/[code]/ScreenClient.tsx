@@ -581,10 +581,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
 
   const loadFeed = useCallback(async () => {
     try {
-      const res = await fetch(
-        `/api/signage/screen/${encodeURIComponent(code)}/feed?t=${Date.now()}`,
-        { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } },
-      )
+      const res = await fetch(`/api/signage/screen/${encodeURIComponent(code)}/feed`)
       if (!res.ok) return
       const data = (await res.json()) as ScreenFeed
       if (data.offline) {

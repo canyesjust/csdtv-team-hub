@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { parseOutlookIcal } from '@/lib/outlook-ical-parse'
+import { SIGNAGE_ICAL_CACHE_HEADERS } from '@/lib/signage/public-api-cache'
 
 const ICAL_URL = process.env.OUTLOOK_ICAL_URL || ''
 
@@ -12,7 +13,10 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
   if (!ICAL_URL) {
-    return NextResponse.json({ events: [] as ReturnType<typeof parseOutlookIcal> })
+    return NextResponse.json(
+      { events: [] as ReturnType<typeof parseOutlookIcal> },
+      { headers: SIGNAGE_ICAL_CACHE_HEADERS },
+    )
   }
 
   try {
@@ -22,7 +26,7 @@ export async function GET() {
     }
     const text = await res.text()
     const events = parseOutlookIcal(text)
-    return NextResponse.json({ events })
+    return NextResponse.json({ events }, { headers: SIGNAGE_ICAL_CACHE_HEADERS })
   } catch {
     return NextResponse.json({ error: 'Calendar sync failed' }, { status: 500 })
   }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { SIGNAGE_AREAS_CACHE_HEADERS } from '@/lib/signage/public-api-cache'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 export const dynamic = 'force-dynamic'
@@ -24,5 +25,5 @@ export async function GET() {
     return { id: a.id, name: a.name, site_name: siteName || null, screen_count: counts.get(a.id) || 0 }
   })
 
-  return NextResponse.json({ areas })
+  return NextResponse.json({ areas }, { headers: SIGNAGE_AREAS_CACHE_HEADERS })
 }

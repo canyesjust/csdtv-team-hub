@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { SIGNAGE_FEED_CACHE_HEADERS } from '@/lib/signage/public-api-cache'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { buildScreenFeed } from '@/lib/signage/build-screen-feed'
 
@@ -22,7 +23,5 @@ export async function GET(
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 
-  return NextResponse.json(result.feed, {
-    headers: { 'Cache-Control': 'no-store' },
-  })
+  return NextResponse.json(result.feed, { headers: SIGNAGE_FEED_CACHE_HEADERS })
 }

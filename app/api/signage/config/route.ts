@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { SIGNAGE_CONFIG_CACHE_HEADERS } from '@/lib/signage/public-api-cache'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import {
   isOutlookIcalConfigured,
@@ -19,8 +20,11 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({
-    outlookEnabled,
-    outlookConfigured: configured,
-  })
+  return NextResponse.json(
+    {
+      outlookEnabled,
+      outlookConfigured: configured,
+    },
+    { headers: SIGNAGE_CONFIG_CACHE_HEADERS },
+  )
 }
