@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/service'
 import { loadAttendance } from '@/lib/board-meetings/attendance-control'
 import { resolveBoardMeetingRouteContext } from '@/lib/board-meetings/meeting-api'
-import { getCachedBoardMemberPeople } from '@/lib/board-meetings/control-meeting-cache'
+import { getCachedBoardMemberPeople, clearLockedAgendaCache } from '@/lib/board-meetings/control-meeting-cache'
 import {
   cancelMotionThread,
   confirmOpenDiscussion,
@@ -295,11 +295,15 @@ export async function publishMotionText(
   const now = new Date().toISOString()
 
   if (opts.agendaItemId) {
-    await ctx.service
+    const { error } = await ctx.service
       .from('board_meeting_agenda_items')
       .update({ suggested_motion_text: text, updated_at: now })
       .eq('id', opts.agendaItemId)
       .eq('board_meeting_id', ctx.boardMeetingId)
+    if (error && !/suggested_motion_text/.test(error.message)) throw new Error(error.message)
+    // The locked-agenda cache holds suggested_motion_text; without clearing it the
+    // dais keeps showing the old text even though the DB is updated.
+    clearLockedAgendaCache(ctx.boardMeetingId)
   }
 
   const { data: state } = await ctx.service

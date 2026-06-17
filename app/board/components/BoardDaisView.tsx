@@ -248,7 +248,7 @@ function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaI
         <span style={itemBadge}>{item.item_number}</span>
         {item.type ? <span style={typePill}>{item.type.replace('_', ' ')}</span> : null}
       </div>
-      <h1 style={itemTitle}>{item.title}</h1>
+      <h1 style={daisTitleStyle(item.title)}>{item.title}</h1>
       {item.presenters?.[0] ? (
         <p style={presenterLine}>
           <span style={presenterName}>{item.presenters[0].name}</span>
@@ -871,6 +871,18 @@ const itemTitle: React.CSSProperties = {
   lineHeight: 1.06,
   letterSpacing: '-0.03em',
   color: C.text,
+}
+
+/** Scale the agenda title down for longer titles so it doesn't crowd out the
+ *  suggested-motion box on the dais. Short titles stay large and bold. */
+function daisTitleStyle(title: string): React.CSSProperties {
+  const len = (title || '').length
+  const fontSize =
+    len <= 55 ? 'clamp(34px, 4.6vw, 58px)'
+    : len <= 95 ? 'clamp(30px, 3.6vw, 46px)'
+    : len <= 150 ? 'clamp(26px, 2.9vw, 38px)'
+    : 'clamp(22px, 2.4vw, 32px)'
+  return { ...itemTitle, fontSize, lineHeight: len > 95 ? 1.12 : 1.06 }
 }
 
 const presenterLine: React.CSSProperties = { margin: '0 0 8px', fontSize: 'clamp(18px, 2vw, 26px)', lineHeight: 1.35 }

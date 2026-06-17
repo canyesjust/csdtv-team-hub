@@ -119,40 +119,6 @@ function incrementTally(tally: VoteTally, vote: VoteValue) {
   else if (vote === 'recused') tally.recused++
 }
 
-function decrementTally(tally: VoteTally, vote: VoteValue) {
-  if (vote === 'yea') tally.yea = Math.max(0, tally.yea - 1)
-  else if (vote === 'nay') tally.nay = Math.max(0, tally.nay - 1)
-  else if (vote === 'abstain') tally.abstain = Math.max(0, tally.abstain - 1)
-  else if (vote === 'absent') tally.absent = Math.max(0, tally.absent - 1)
-  else if (vote === 'recused') tally.recused = Math.max(0, tally.recused - 1)
-}
-
-function tallyFromMotionRow(motion: {
-  tally_yea?: number | null
-  tally_nay?: number | null
-  tally_abstain?: number | null
-  tally_absent?: number | null
-  tally_recused?: number | null
-}): VoteTally {
-  return {
-    yea: motion.tally_yea ?? 0,
-    nay: motion.tally_nay ?? 0,
-    abstain: motion.tally_abstain ?? 0,
-    absent: motion.tally_absent ?? 0,
-    recused: motion.tally_recused ?? 0,
-  }
-}
-
-function applyVoteTallyDelta(tally: VoteTally, prior: VoteValue | null, next: VoteValue): VoteTally {
-  const out = { ...tally }
-  if (prior && prior !== next) {
-    decrementTally(out, prior)
-    incrementTally(out, next)
-  } else if (!prior) {
-    incrementTally(out, next)
-  }
-  return out
-}
 
 /** Tally for UI / motion row — unrecorded eligible members default to yea (matches motion screen). */
 export async function computeMotionVoteTallyForDisplay(
@@ -556,24 +522,18 @@ export async function openVote(
     .eq('id', motionId)
 
   if (voteMode === 'voice') {
-    const attendance = await loadAttendance(service, boardMeetingId)
-    const at = new Date()
-    const eligible = attendance.records.filter(r =>
-      isEligibleToVote(r.status, at, r.arrived_at, r.left_at),
-    )
-    if (eligible.length > 0) {
-      await Promise.all(
-        eligible.map(r => upsertActiveMotionVote(service, motionId, r.person_id, 'yea', operatorId)),
-      )
-    }
+    // Do NOT pre-record AYE votes. The dais shows each member as "Pending" until the
+    // operator actually records them; missing eligible members still default to AYE
+    // at tally/finalize time, so a unanimous voice vote passes with no taps.
+    const displayTally = await computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId)
     await service
       .from('meeting_motions')
       .update({
-        tally_yea: eligible.length,
-        tally_nay: 0,
-        tally_abstain: 0,
-        tally_absent: 0,
-        tally_recused: 0,
+        tally_yea: displayTally.yea,
+        tally_nay: displayTally.nay,
+        tally_abstain: displayTally.abstain,
+        tally_absent: displayTally.absent,
+        tally_recused: displayTally.recused,
         updated_at: now,
       })
       .eq('id', motionId)
@@ -626,16 +586,9 @@ export async function recordMotionVote(
   const now = new Date()
   const nowIso = now.toISOString()
 
-  const [motion, att, priorVoteRow] = await Promise.all([
+  const [motion, att] = await Promise.all([
     loadMotionForVote(service, motionId, boardMeetingId),
     loadAttendanceForPerson(service, boardMeetingId, personId),
-    service
-      .from('meeting_motion_votes')
-      .select('vote')
-      .eq('motion_id', motionId)
-      .eq('person_id', personId)
-      .is('superseded_by_vote_id', null)
-      .maybeSingle(),
   ])
 
   if (!motion) throw new Error('Motion not found')
@@ -651,40 +604,27 @@ export async function recordMotionVote(
     vote = 'absent'
   }
 
-  const priorVote = (priorVoteRow.data?.vote as VoteValue | undefined) ?? null
-  const tally = applyVoteTallyDelta(tallyFromMotionRow(motion), priorVote, vote)
-
   const statusToVoting = motion.status === 'open_for_discussion'
-  const [, motionUpdate] = await Promise.all([
-    upsertActiveMotionVote(service, motionId, personId, vote, operatorId),
-    service
-      .from('meeting_motions')
-      .update({
-        ...(statusToVoting ? { status: 'voting' } : {}),
-        tally_yea: tally.yea,
-        tally_nay: tally.nay,
-        tally_abstain: tally.abstain,
-        tally_absent: tally.absent,
-        tally_recused: tally.recused,
-        updated_at: nowIso,
-      })
-      .eq('id', motionId),
-  ])
-  if (motionUpdate.error) throw new Error(motionUpdate.error.message)
+  await upsertActiveMotionVote(service, motionId, personId, vote, operatorId)
 
-  void computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId).then(fullTally => {
-    void service
-      .from('meeting_motions')
-      .update({
-        tally_yea: fullTally.yea,
-        tally_nay: fullTally.nay,
-        tally_abstain: fullTally.abstain,
-        tally_absent: fullTally.absent,
-        tally_recused: fullTally.recused,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', motionId)
-  })
+  // Recompute from the actual recorded rows + attendance defaults (missing eligible
+  // members default to AYE, absent to absent). This keeps the stored tally correct
+  // even though we no longer pre-fill AYE rows when voting opens.
+  const tally = await computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId)
+
+  const { error: motionUpdateError } = await service
+    .from('meeting_motions')
+    .update({
+      ...(statusToVoting ? { status: 'voting' } : {}),
+      tally_yea: tally.yea,
+      tally_nay: tally.nay,
+      tally_abstain: tally.abstain,
+      tally_absent: tally.absent,
+      tally_recused: tally.recused,
+      updated_at: nowIso,
+    })
+    .eq('id', motionId)
+  if (motionUpdateError) throw new Error(motionUpdateError.message)
 
   void logMeetingEvent(service, boardMeetingId, 'vote_recorded_incremental', operatorId, {
     motion_id: motionId,
@@ -709,13 +649,10 @@ async function finalizeMotionFromVotes(
   if (motion.status === 'passed' || motion.status === 'failed') return
 
   const attendance = await loadAttendance(service, boardMeetingId)
-  const { data: activeVotes } = await service
-    .from('meeting_motion_votes')
-    .select('vote')
-    .eq('motion_id', motionId)
-    .is('superseded_by_vote_id', null)
-
-  const tally = computeTally(activeVotes || [])
+  // Default missing eligible members to AYE (and absent members to absent) so a
+  // voice vote with no per-person taps still resolves correctly now that we no
+  // longer pre-fill AYE rows when voting opens.
+  const tally = await computeMotionVoteTallyForDisplay(service, motionId, boardMeetingId)
   const { result } = computeMotionResult(tally, attendance.quorum.threshold)
   const finalStatus = result === 'passed' ? 'passed' : 'failed'
   const voteTime = new Date().toISOString()
