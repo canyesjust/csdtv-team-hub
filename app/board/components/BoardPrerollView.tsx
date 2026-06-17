@@ -92,6 +92,21 @@ export default function BoardPrerollView({
     else if (playlist.playback_state === 'playing') audio.play().catch(() => {})
   }, [playlist])
 
+  // Pre-roll is an OBS source layered ABOVE the program video, so the page itself is
+  // transparent — the pre-roll panels supply their own solid background. The moment
+  // the meeting goes live we render nothing, so the video underneath shows through.
+  useEffect(() => {
+    const { documentElement: html, body } = document
+    for (const el of [html, body]) el.style.setProperty('background', 'transparent', 'important')
+    body.style.setProperty('margin', '0', 'important')
+    return () => {
+      for (const el of [html, body]) el.style.removeProperty('background')
+      body.style.removeProperty('margin')
+    }
+  }, [])
+
+  if (state?.meeting?.broadcast_status === 'live') return null
+
   if (!state?.active) {
     const screenName = state?.channel_name || initialChannelName || `Channel ${channelNumber}`
     if (state?.show_channel_ident) {

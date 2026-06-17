@@ -940,6 +940,49 @@ export async function reopenMotion(
   await logMeetingEvent(service, boardMeetingId, 'motion_reopened', operatorId, { motion_id: motionId })
 }
 
+/**
+ * Reset a motion so the board can re-do it: clears recorded votes + result, returns
+ * it to open-for-discussion (editable + re-votable), and dismisses the result overlay.
+ */
+export async function resetMotion(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  motionId: string,
+  operatorId: string,
+) {
+  const motion = await loadMotion(service, motionId, boardMeetingId)
+  if (!motion) throw new Error('Motion not found')
+
+  await service.from('meeting_motion_votes').delete().eq('motion_id', motionId)
+
+  await service
+    .from('meeting_motions')
+    .update({
+      status: 'open_for_discussion',
+      result: null,
+      tally_yea: 0,
+      tally_nay: 0,
+      tally_abstain: 0,
+      tally_absent: 0,
+      tally_recused: 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', motionId)
+    .eq('board_meeting_id', boardMeetingId)
+
+  await service
+    .from('meeting_broadcast_state')
+    .update({
+      active_motion_id: motionId,
+      active_vote_result_motion_id: null,
+      vote_result_started_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('board_meeting_id', boardMeetingId)
+
+  await logMeetingEvent(service, boardMeetingId, 'motion_reset', operatorId, { motion_id: motionId })
+}
+
 const CLOSED_MOTION_STATUSES_DB = ['withdrawn', 'tabled', 'superseded', 'replaced'] as const
 
 export async function listMotionsEnriched(
@@ -1135,11 +1178,30 @@ export async function buildPublicVoteResultPayload(
     .eq('motion_id', motionId)
     .is('superseded_by_vote_id', null)
 
-  const personIds = (votes || []).map(v => v.person_id)
-  const { data: people } = personIds.length
-    ? await service.from('lower_third_people').select('id, display_name').in('id', personIds)
-    : { data: [] }
-  const pmap = new Map((people || []).map(p => [p.id, p.display_name]))
+  const voteMap = new Map((votes || []).map(v => [v.person_id, v.vote]))
+
+  // Show EVERY board member on the result, in board order. Members who did not
+  // cast a vote (e.g. absent) are surfaced as 'absent' so the dais/overlay can
+  // grey them out instead of dropping them entirely.
+  const attendance = await loadAttendance(service, boardMeetingId)
+  let resultVotes: { person_name: string; vote: string }[]
+  if (attendance.records.length > 0) {
+    resultVotes = attendance.records.map(r => ({
+      person_name: r.name,
+      vote: voteMap.get(r.person_id) || 'absent',
+    }))
+  } else {
+    // Fallback: no attendance roster — list only those who actually voted.
+    const personIds = (votes || []).map(v => v.person_id)
+    const { data: people } = personIds.length
+      ? await service.from('lower_third_people').select('id, display_name').in('id', personIds)
+      : { data: [] }
+    const pmap = new Map((people || []).map(p => [p.id, p.display_name]))
+    resultVotes = (votes || []).map(v => ({
+      person_name: pmap.get(v.person_id) || 'Unknown',
+      vote: v.vote,
+    }))
+  }
 
   return {
     motion_id: motion.id,
@@ -1152,10 +1214,7 @@ export async function buildPublicVoteResultPayload(
       absent: motion.tally_absent ?? 0,
       recused: motion.tally_recused ?? 0,
     },
-    votes: (votes || []).map(v => ({
-      person_name: pmap.get(v.person_id) || 'Unknown',
-      vote: v.vote,
-    })),
+    votes: resultVotes,
     remaining_seconds: remainingSeconds,
     held: opts?.held ?? false,
     started_at: opts?.started_at,

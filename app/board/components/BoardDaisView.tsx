@@ -467,9 +467,10 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '6px 24px', borderTop: `1px solid ${C.glassBorder}`, paddingTop: '14px' }}>
           {members.map((v, i) => {
             const d = VOTE_DISPLAY[v.vote] ?? { label: v.vote, color: C.textSoft }
+            const dimmed = v.vote === 'absent' || v.vote === 'recused'
             return (
-              <div key={`${v.person_name}-${i}`} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '4px 0' }}>
-                <span style={{ fontSize: '18px', color: C.text }}>{v.person_name}</span>
+              <div key={`${v.person_name}-${i}`} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '4px 0', opacity: dimmed ? 0.55 : 1 }}>
+                <span style={{ fontSize: '18px', color: dimmed ? C.textDim : C.text }}>{v.person_name}</span>
                 <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: d.color }}>{d.label}</span>
               </div>
             )

@@ -1,6 +1,7 @@
 'use client'
 
 import type { MotionScreenBundle, VoteValue } from '@/lib/board-meetings/motion-types'
+import { confirmDialog } from '@/lib/confirm'
 
 const C = {
   bg: '#0b1320',
@@ -127,12 +128,31 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
           <span style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent }}>
             {motion?.motion_type === 'substitute' || motion?.motion_type === 'amendment' ? 'Amendment / substitute motion' : 'Motion'}
           </span>
-          {motion && !isVoting && motion.motion_type === 'main' && bundle.current_agenda_item?.id && (
-            <button type="button" onClick={() => onAction('propose-substitute', { agenda_item_id: bundle.current_agenda_item!.id })}
-              style={{ fontSize: 12, padding: '5px 11px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.accent, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Amend / substitute
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: 7 }}>
+            {motion && (isVoting || motion.status === 'voting' || motion.status === 'passed' || motion.status === 'failed' || motion.status === 'closed' || motion.status === 'voted') && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await confirmDialog({
+                    title: 'Reset this motion?',
+                    message: 'Clears the recorded vote and returns the motion to discussion so the board can re-do it. Mover, seconder, and motion text are kept.',
+                    confirmLabel: 'Reset motion',
+                    tone: 'danger',
+                  })
+                  if (ok) onAction('reset')
+                }}
+                style={{ fontSize: 12, padding: '5px 11px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.soft, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Reset / re-do
+              </button>
+            )}
+            {motion && !isVoting && motion.motion_type === 'main' && bundle.current_agenda_item?.id && (
+              <button type="button" onClick={() => onAction('propose-substitute', { agenda_item_id: bundle.current_agenda_item!.id })}
+                style={{ fontSize: 12, padding: '5px 11px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.accent, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Amend / substitute
+              </button>
+            )}
+          </div>
         </div>
         {bundle.parent_motion && (
           <div style={{ fontSize: 12, color: C.abstain, background: C.abstainBg, padding: '7px 11px', borderRadius: 8, marginBottom: 10 }}>

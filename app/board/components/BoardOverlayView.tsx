@@ -228,6 +228,8 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
   const passed = result.result === 'passed'
   const yeaNames = result.votes.filter(v => v.vote === 'yea').map(v => v.person_name)
   const nayNames = result.votes.filter(v => v.vote === 'nay').map(v => v.person_name)
+  const abstainNames = result.votes.filter(v => v.vote === 'abstain').map(v => v.person_name)
+  const absentNames = result.votes.filter(v => v.vote === 'absent' || v.vote === 'recused').map(v => v.person_name)
   const motionText = fitMotionText(result.motion_text)
   return (
     <div
@@ -253,6 +255,10 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px', lineHeight: 1.35 }}>
         <div><strong>Yea:</strong> {yeaNames.join(', ') || '—'}</div>
         <div><strong>Nay:</strong> {nayNames.join(', ') || '—'}</div>
+        {abstainNames.length > 0 && <div><strong>Abstain:</strong> {abstainNames.join(', ')}</div>}
+        {absentNames.length > 0 && (
+          <div style={{ opacity: 0.5 }}><strong>Absent:</strong> {absentNames.join(', ')}</div>
+        )}
       </div>
     </div>
   )
