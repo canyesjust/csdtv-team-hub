@@ -11,7 +11,7 @@ import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
-import { AgendaContextStrip, fitMotionText, motionTextFitStyle } from '@/app/board/components/MotionFloorGraphics'
+import { AgendaContextStrip, fitMotionText } from '@/app/board/components/MotionFloorGraphics'
 import { CANYONS_LOGO_SRC } from '@/app/board/branding-assets'
 
 const C = {
@@ -292,7 +292,18 @@ function AutoFitText({
   }, [text, maxFontPx, minFontPx, maxHeightVh])
 
   return (
-    <div ref={ref} style={{ ...baseStyle, fontSize: `${fontPx}px`, maxHeight: `${maxHeightVh}vh`, overflow: 'hidden' }}>
+    <div
+      ref={ref}
+      style={{
+        ...baseStyle,
+        fontSize: `${fontPx}px`,
+        maxHeight: `${maxHeightVh}vh`,
+        overflow: 'hidden',
+        // Preserve the line breaks the operator typed so multi-line / itemized
+        // motions read as separate lines on the dais instead of one run-on block.
+        whiteSpace: 'pre-line',
+      }}
+    >
       {text}
     </div>
   )
@@ -305,7 +316,7 @@ function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaI
         <span style={itemBadge}>{item.item_number}</span>
         {item.type ? <span style={typePill}>{item.type.replace('_', ' ')}</span> : null}
       </div>
-      <AutoFitText text={item.title} baseStyle={itemTitle} maxFontPx={58} minFontPx={22} maxHeightVh={40} />
+      <AutoFitText text={item.title} baseStyle={itemTitle} maxFontPx={44} minFontPx={20} maxHeightVh={22} />
       {item.presenters?.[0] ? (
         <p style={presenterLine}>
           <span style={presenterName}>{item.presenters[0].name}</span>
@@ -317,7 +328,7 @@ function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaI
       {(item.action_requested || item.type === 'action') && (suggestedMotionText || item.suggested_motion_text)?.trim() ? (
         <div style={proposedMotionBox}>
           <p style={proposedMotionLabel}>Suggested motion</p>
-          <AutoFitText text={(suggestedMotionText || item.suggested_motion_text || '').trim()} baseStyle={proposedMotionText} maxFontPx={40} minFontPx={16} maxHeightVh={26} />
+          <AutoFitText text={(suggestedMotionText || item.suggested_motion_text || '').trim()} baseStyle={proposedMotionText} maxFontPx={40} minFontPx={12} maxHeightVh={46} />
           <p style={proposedMotionNote}>Awaiting a motion from the board</p>
         </div>
       ) : null}
@@ -548,9 +559,13 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
       <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent }}>
         {passed ? 'Motion passed' : 'Motion failed'} · {result.tally.yea}–{result.tally.nay}
       </p>
-      <p style={{ ...motionTextFitStyle(result.motion_text, 'dais'), margin: '0 0 18px', color: C.text }}>
-        {result.motion_text}
-      </p>
+      <AutoFitText
+        text={result.motion_text}
+        baseStyle={{ margin: '0 0 18px', fontWeight: 500, color: C.text, lineHeight: 1.4, letterSpacing: '-0.01em', wordBreak: 'break-word', overflowWrap: 'anywhere' }}
+        maxFontPx={26}
+        minFontPx={13}
+        maxHeightVh={20}
+      />
       {members.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '6px 24px', borderTop: `1px solid ${C.glassBorder}`, paddingTop: '14px' }}>
           {members.map((v, i) => {
@@ -574,7 +589,24 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
   const hasMover = !!motion.moved_by_name
   const hasSeconder = !!motion.seconded_by_name
   const text = fitMotionText(motion)
-  const textStyle = motionTextFitStyle(text, hero ? 'dais-hero' : 'dais')
+  const motionBase: React.CSSProperties = {
+    margin: '0 0 6px',
+    fontWeight: hero ? 600 : 500,
+    color: C.text,
+    lineHeight: 1.4,
+    letterSpacing: '-0.01em',
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+  }
+  const motionFit = text ? (
+    <AutoFitText
+      text={text}
+      baseStyle={motionBase}
+      maxFontPx={hero ? 34 : 26}
+      minFontPx={14}
+      maxHeightVh={hero ? 40 : 32}
+    />
+  ) : null
 
   if (isVoting) {
     return (
@@ -585,7 +617,7 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
         pulse
         hero={hero}
       >
-        {text ? <p style={textStyle}>{text}</p> : null}
+        {motionFit}
         {hasMover && hasSeconder && (
           <p style={motionMeta}>
             <span style={metaHighlight}>{motion.moved_by_name}</span>
@@ -611,7 +643,7 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
   if (!hasSeconder) {
     return (
       <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow} hero={hero}>
-        {text ? <p style={textStyle}>{text}</p> : null}
+        {motionFit}
         <p style={motionMeta}>
           <span style={metaDim}>Moved by </span>
           <span style={metaHighlight}>{motion.moved_by_name}</span>
@@ -623,7 +655,7 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
 
   return (
     <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow} hero={hero}>
-      {text ? <p style={textStyle}>{text}</p> : null}
+      {motionFit}
       <p style={motionMeta}>
         <span style={metaHighlight}>{motion.moved_by_name}</span>
         <span style={metaDim}> · seconded by </span>
