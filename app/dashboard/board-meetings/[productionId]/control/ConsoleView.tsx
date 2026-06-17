@@ -8,6 +8,7 @@ import ConsoleQR from './ConsoleQR'
 import PreshowMode from './PreshowMode'
 import BoardPreview from './BoardPreview'
 import ConsoleLowerThirdOther from './ConsoleLowerThirdOther'
+import { playBell } from '@/lib/play-bell'
 import type { ControlBundle, LowerThirdPerson } from '@/lib/board-meetings/types'
 
 type AttStatus = 'present' | 'remote' | 'absent'
@@ -73,6 +74,32 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const [showPreviews, setShowPreviews] = useState(false)
   const [showBackupChannels, setShowBackupChannels] = useState(false)
   const dragId = useRef<string | null>(null)
+
+  // Auto-scroll the agenda list so the current live item sits near the top — the
+  // operator shouldn't have to scroll down to find what's on air.
+  const agendaScrollRef = useRef<HTMLDivElement | null>(null)
+  const liveItemRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const c = agendaScrollRef.current
+    const el = liveItemRef.current
+    if (!c || !el) return
+    c.scrollTo({ top: Math.max(0, el.offsetTop - 8), behavior: 'smooth' })
+  }, [bs?.current_agenda_item_id, editAgenda])
+
+  // Ring a bell on the operator console exactly when the active timer hits zero.
+  const at = bundle.active_timer as { started_at?: string | null; duration_seconds?: number | null; ended_at?: string | null } | null
+  const atStarted = at?.started_at ?? null
+  const atDuration = at?.duration_seconds ?? null
+  const atEnded = at?.ended_at ?? null
+  useEffect(() => {
+    if (!atStarted || !atDuration || atEnded) return
+    const delay = new Date(atStarted).getTime() + atDuration * 1000 - Date.now()
+    if (delay <= 0) return // already elapsed (e.g. page reload after it ended) — don't ring
+    const id = setTimeout(() => playBell(), delay)
+    return () => clearTimeout(id)
+  }, [atStarted, atDuration, atEnded])
+
+  const [timerMin, setTimerMin] = useState(3)
 
   const handleAgendaDrop = (targetId: string) => {
     const from = dragId.current
@@ -214,6 +241,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               )}
             </div>
             {editAgenda && <div style={{ fontSize: 11, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>Drag on-air items to reorder. Skip removes from the broadcast; table/postpone marks an item.</div>}
+            <div ref={agendaScrollRef} style={{ position: 'relative', maxHeight: 'calc(100vh - 170px)', overflowY: 'auto' }}>
             {sections.map(sec => (
               <div key={sec.number}>
                 <div style={{ fontSize: 11, color: C.dim, textTransform: 'uppercase', letterSpacing: '.06em', margin: '12px 0 5px', fontWeight: 600 }}>{sec.number} · {sec.title}</div>
@@ -246,7 +274,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                   if (it.consent_block && Array.isArray(it.subitems) && it.subitems.length > 0) {
                     const subs = it.subitems
                     return (
-                      <div key={it.id} style={{ marginBottom: 4, borderRadius: 9, border: `1px solid ${live ? 'rgba(79,157,238,.4)' : C.line}`, background: live ? C.accentbg : C.panel, overflow: 'hidden' }}>
+                      <div key={it.id} ref={live ? liveItemRef : undefined} style={{ marginBottom: 4, borderRadius: 9, border: `1px solid ${live ? 'rgba(79,157,238,.4)' : C.line}`, background: live ? C.accentbg : C.panel, overflow: 'hidden' }}>
                         <div onClick={() => canControl && onAction('jump-to', { agenda_item_id: it.id })}
                           style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '8px 9px', cursor: canControl ? 'pointer' : 'default' }}>
                           <span style={{ fontSize: 12, color: live ? '#bcdcff' : C.dim, fontWeight: 600, minWidth: 30 }}>{it.item_number}</span>
@@ -270,7 +298,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                     )
                   }
                   return (
-                    <div key={it.id} onClick={() => canControl && onAction('jump-to', { agenda_item_id: it.id })}
+                    <div key={it.id} ref={live ? liveItemRef : undefined} onClick={() => canControl && onAction('jump-to', { agenda_item_id: it.id })}
                       style={{ display: 'flex', gap: 9, alignItems: 'flex-start', padding: '7px 9px', borderRadius: 9, cursor: canControl ? 'pointer' : 'default', marginBottom: 2, opacity: done || !it.is_broadcastable ? 0.42 : 1, background: live ? C.accentbg : 'transparent', border: `1px solid ${live ? 'rgba(79,157,238,.4)' : 'transparent'}` }}>
                       <span style={{ fontSize: 12, color: live ? '#bcdcff' : C.dim, fontWeight: 600, minWidth: 30, fontVariantNumeric: 'tabular-nums' }}>{it.item_number}</span>
                       <span style={{ fontSize: 13, lineHeight: 1.3 }}>
@@ -284,6 +312,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 })}
               </div>
             ))}
+            </div>
           </div>
 
           {/* CENTER */}
@@ -436,25 +465,42 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                   <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl || !bs?.active_vote_result_motion_id} onClick={() => onAction('dismiss-result')}>Clear from screen</button>
                 </div>
               </div>
-              {(templates.length > 0 || timer) && (
-                <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10 }}>
-                  {timer ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontSize: 13 }}>Timer: <b>{timer.label}</b></span>
-                      <div style={{ display: 'flex', gap: 5 }}>
-                        <button style={{ ...btn, fontSize: 12, padding: '5px 9px' }} disabled={!canControl} onClick={() => onAction('end-timer')}>End</button>
-                        <button style={{ ...btn, fontSize: 12, padding: '5px 9px' }} disabled={!canControl} onClick={() => onAction('cancel-timer')}>Cancel</button>
+              <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10 }}>
+                {timer ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 13 }}>Timer: <b>{timer.label}</b></span>
+                    <div style={{ display: 'flex', gap: 5 }}>
+                      <button style={{ ...btn, fontSize: 12, padding: '5px 9px' }} disabled={!canControl} onClick={() => onAction('end-timer')}>End</button>
+                      <button style={{ ...btn, fontSize: 12, padding: '5px 9px' }} disabled={!canControl} onClick={() => onAction('cancel-timer')}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {templates.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        {templates.map(t => (
+                          <button key={t.id} style={{ ...btn, fontSize: 12, padding: '6px 10px' }} disabled={!canControl} onClick={() => onAction('start-timer', { template_id: t.id })}>{t.name}</button>
+                        ))}
                       </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: C.soft }}>Timer for this item:</span>
+                      <input
+                        type="number" min={1} max={120} value={timerMin}
+                        onChange={e => setTimerMin(Math.max(1, Math.min(120, Number(e.target.value) || 1)))}
+                        style={{ width: 50, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 7, color: C.text, fontSize: 13, padding: '5px 7px', fontFamily: 'inherit' }}
+                      />
+                      <span style={{ fontSize: 12, color: C.soft }}>min</span>
+                      <button
+                        style={{ ...btn, fontSize: 12, padding: '6px 10px', background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}
+                        disabled={!canControl}
+                        onClick={() => onAction('start-timer', { duration_seconds: timerMin * 60, label: currentItem?.title || 'Timer', show_on_dais: true })}
+                      >Start + bell</button>
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {templates.map(t => (
-                        <button key={t.id} style={{ ...btn, fontSize: 12, padding: '6px 10px' }} disabled={!canControl} onClick={() => onAction('start-timer', { template_id: t.id })}>{t.name}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                    <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Counts down on the dais and rings a bell when time’s up.</div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* PRE-ROLL */}

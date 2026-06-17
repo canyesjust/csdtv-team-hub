@@ -8,6 +8,7 @@ import { useAgendaItemCache } from '@/app/board/hooks/useAgendaItemCache'
 import { useElementFullscreen } from '@/app/board/hooks/useElementFullscreen'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
+import { playBell } from '@/lib/play-bell'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
@@ -74,6 +75,17 @@ export default function BoardDaisView({
   useEffect(() => {
     if (wantAutoFullscreen && fullscreen.supported) setAutoFsPrompt(true)
   }, [wantAutoFullscreen, fullscreen.supported])
+
+  // Ring a bell in the room when the active timer reaches zero.
+  const timerStartedAt = state?.timer?.started_at ?? null
+  const timerDuration = state?.timer?.duration_seconds ?? null
+  useEffect(() => {
+    if (!timerStartedAt || !timerDuration) return
+    const delay = new Date(timerStartedAt).getTime() + timerDuration * 1000 - Date.now()
+    if (delay <= 0) return
+    const id = setTimeout(() => playBell(), delay)
+    return () => clearTimeout(id)
+  }, [timerStartedAt, timerDuration])
 
   const elapsed = useMemo(() => {
     if (!state?.elapsed_started_at) return 0

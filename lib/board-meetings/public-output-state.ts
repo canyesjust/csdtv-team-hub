@@ -142,6 +142,7 @@ export type PublicChannelState = {
     label: string
     duration_seconds: number
     remaining_seconds: number
+    started_at?: string | null
     show_on_broadcast: boolean
     show_on_speaker_monitor: boolean
     show_on_dais: boolean
@@ -380,6 +381,7 @@ export async function buildPublicChannelState(
         label: timer.label || 'Timer',
         duration_seconds: timer.duration_seconds,
         remaining_seconds: Math.max(0, timer.duration_seconds - elapsed),
+        started_at: timer.started_at,
         show_on_broadcast: timer.show_on_broadcast,
         show_on_speaker_monitor: timer.show_on_speaker_monitor,
         show_on_dais: timer.show_on_dais,

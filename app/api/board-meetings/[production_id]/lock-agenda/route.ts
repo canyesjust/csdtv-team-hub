@@ -32,13 +32,26 @@ export async function POST(
   try {
     const bm = await ensureBoardMeetingRow(service, production_id)
 
+    // Locking the agenda promotes a draft meeting to "prepared" (ready to go live),
+    // but must NEVER downgrade a meeting that's already live (or archived/cancelled).
+    // Re-locking during a live meeting previously knocked it out of live, so on
+    // refresh it read "prepared" and the Go-live button reappeared.
+    const { data: current } = await service
+      .from('board_meetings')
+      .select('broadcast_status')
+      .eq('id', bm.id)
+      .maybeSingle()
+    const cur = current?.broadcast_status as string | undefined
+    const keepStatus = cur === 'live' || cur === 'archived' || cur === 'cancelled'
+    const nextBroadcastStatus = keepStatus ? cur! : 'prepared'
+
     const { error } = await service
       .from('board_meetings')
       .update({
         agenda_locked: true,
         agenda_locked_at: new Date().toISOString(),
         agenda_locked_by: teamUser.id,
-        broadcast_status: 'prepared',
+        broadcast_status: nextBroadcastStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', bm.id)

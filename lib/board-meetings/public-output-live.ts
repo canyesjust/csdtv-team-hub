@@ -223,6 +223,7 @@ export async function buildPublicChannelLivePatch(
         label: timer.label || 'Timer',
         duration_seconds: timer.duration_seconds,
         remaining_seconds: Math.max(0, timer.duration_seconds - elapsed),
+        started_at: timer.started_at,
         show_on_broadcast: timer.show_on_broadcast,
         show_on_speaker_monitor: timer.show_on_speaker_monitor,
         show_on_dais: timer.show_on_dais,
