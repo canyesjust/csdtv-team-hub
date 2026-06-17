@@ -253,7 +253,7 @@ function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
         {result.tally.yea} — {result.tally.nay}
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px', lineHeight: 1.35 }}>
-        <div><strong>Yea:</strong> {yeaNames.join(', ') || '—'}</div>
+        <div><strong>Aye:</strong> {yeaNames.join(', ') || '—'}</div>
         <div><strong>Nay:</strong> {nayNames.join(', ') || '—'}</div>
         {abstainNames.length > 0 && <div><strong>Abstain:</strong> {abstainNames.join(', ')}</div>}
         {absentNames.length > 0 && (

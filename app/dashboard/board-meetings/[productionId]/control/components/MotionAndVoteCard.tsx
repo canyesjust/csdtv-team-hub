@@ -221,7 +221,7 @@ function StateC({ overlay, onHold, onDismiss }: { overlay: ResultOverlayState; o
         <span style={{ fontSize: 13, fontWeight: 500, color: fg }}>{heading}</span>
       </div>
       <div style={{ fontSize: 11, color: fg, opacity: 0.8, marginBottom: 8 }}>
-        {yeas} yea · {nays} nay · {abs} abs
+        {yeas} aye · {nays} nay · {abs} abs
       </div>
       <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 999, overflow: 'hidden', marginBottom: 10 }}>
         <div style={{ width: `${progressPct}%`, height: '100%', background: fg, transition: 'width 1s linear' }} />

@@ -304,6 +304,8 @@ export default function MotionScreenClient({ productionId, initialBundle, inline
             body as Record<string, unknown> | undefined,
             pendingMotionTextRef.current,
           )
+        } else if (action === 'publish-text') {
+          url = `/api/board-meetings/${productionId}/motion/publish-text`
         } else if (action === 'result-hold') {
           url = `/api/board-meetings/${productionId}/motion/result/hold`
         } else if (action === 'result-dismiss') {

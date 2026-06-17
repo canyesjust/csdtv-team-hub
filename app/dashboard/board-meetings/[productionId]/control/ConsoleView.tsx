@@ -7,6 +7,7 @@ import MotionInline from './MotionInline'
 import ConsoleQR from './ConsoleQR'
 import PreshowMode from './PreshowMode'
 import BoardPreview from './BoardPreview'
+import ConsoleLowerThirdOther from './ConsoleLowerThirdOther'
 import type { ControlBundle, LowerThirdPerson } from '@/lib/board-meetings/types'
 
 type AttStatus = 'present' | 'remote' | 'absent'
@@ -102,6 +103,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const people = bundle.lower_third_people || []
   const boardPeople = people.filter(p => p.category === 'board_member')
   const staffPeople = people.filter(p => p.category === 'staff')
+  const lowerThirdShownIds = new Set([...boardPeople, ...staffPeople].map(p => p.id))
   const activeLt = bundle.lower_third_active
   const position = bs?.lower_third_position ?? 'left'
 
@@ -168,6 +170,16 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               </span>
             ) : <span style={{ fontWeight: 700, fontSize: 13, color: '#fde3a7', background: C.amberbg, padding: '6px 13px', borderRadius: 999 }}>PRE-SHOW</span>}
             {elapsedStartedAt && <ElapsedClock startedAt={elapsedStartedAt} />}
+            {isLive && (
+              <button
+                onClick={() => onAction('reset-elapsed')}
+                disabled={!canControl}
+                title="Restart the elapsed clock from now"
+                style={{ font: 'inherit', fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.line2}`, background: 'transparent', color: C.soft, cursor: 'pointer' }}
+              >
+                {elapsedStartedAt ? 'Reset' : 'Start clock'}
+              </button>
+            )}
             {onAirLabel && <span style={{ fontSize: 13, color: C.soft }}>On air: <b style={{ color: C.text, fontWeight: 600 }}>{onAirLabel}</b></span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -305,6 +317,13 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                   ))}
                 </div>
               </>}
+
+              <ConsoleLowerThirdOther
+                excludeIds={lowerThirdShownIds}
+                activeId={activeLt?.person_id ?? null}
+                canControl={canControl}
+                onPick={setLt}
+              />
 
               <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'stretch' }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 9, background: activeLt ? C.livebg : C.panel2, border: `1px solid ${activeLt ? 'rgba(255,93,93,.35)' : C.line}` }}>

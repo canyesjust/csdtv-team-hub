@@ -280,6 +280,49 @@ export async function setText(ctx: MotionActionContext, motionId: string, text: 
   })
 }
 
+/**
+ * "Update on screen" (Option C): publish the operator's edited motion / suggested
+ * text to the public displays. Writes the agenda item's suggested_motion_text (so
+ * the pre-mover "Suggested motion" box on the dais reflects it) AND, if a motion is
+ * already on the floor, the live motion text. The operator types into a local draft
+ * with no per-keystroke writes; this is the single commit point.
+ */
+export async function publishMotionText(
+  ctx: MotionActionContext,
+  opts: { text: string; agendaItemId?: string | null },
+) {
+  const text = (opts.text ?? '').trim()
+  const now = new Date().toISOString()
+
+  if (opts.agendaItemId) {
+    await ctx.service
+      .from('board_meeting_agenda_items')
+      .update({ suggested_motion_text: text, updated_at: now })
+      .eq('id', opts.agendaItemId)
+      .eq('board_meeting_id', ctx.boardMeetingId)
+  }
+
+  const { data: state } = await ctx.service
+    .from('meeting_broadcast_state')
+    .select('active_motion_id')
+    .eq('board_meeting_id', ctx.boardMeetingId)
+    .maybeSingle()
+
+  if (state?.active_motion_id) {
+    // Only updates if the motion is in an editable state; ignore if not.
+    try {
+      await updateMotion(ctx.service, ctx.boardMeetingId, state.active_motion_id, ctx.teamUserId, {
+        motion_text: text,
+      })
+    } catch {
+      // Motion not in an editable state (e.g. already voted) — the agenda
+      // suggested text update above still applies.
+    }
+  }
+
+  return { ok: true }
+}
+
 export async function setVoteType(
   ctx: MotionActionContext,
   motionId: string,

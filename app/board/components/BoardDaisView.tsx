@@ -434,7 +434,7 @@ function StatusHero({ label, accent }: { label: string; accent: string }) {
 }
 
 const VOTE_DISPLAY: Record<string, { label: string; color: string }> = {
-  yea: { label: 'Yea', color: C.green },
+  yea: { label: 'Aye', color: C.green },
   nay: { label: 'Nay', color: C.red },
   abstain: { label: 'Abstain', color: C.amber },
   absent: { label: 'Absent', color: C.textDim },

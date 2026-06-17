@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { MotionScreenBundle, VoteValue } from '@/lib/board-meetings/motion-types'
 import { confirmDialog } from '@/lib/confirm'
 import { decideMotion } from '@/lib/board-meetings/vote-math'
@@ -23,7 +24,7 @@ const C = {
 }
 
 const VOTE_META: Record<string, { label: string; color: string; bg: string }> = {
-  yea: { label: 'Yea', color: C.yea, bg: C.yeaBg },
+  yea: { label: 'Aye', color: C.yea, bg: C.yeaBg },
   nay: { label: 'Nay', color: C.nay, bg: C.nayBg },
   abstain: { label: 'Abstain', color: C.abstain, bg: C.abstainBg },
   absent: { label: 'Absent', color: C.dim, bg: 'transparent' },
@@ -71,6 +72,25 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
   )
   const carried = decision.result === 'passed'
   const quorumMet = decision.quorumMet
+
+  // Option C: the operator types into a LOCAL draft. Nothing reaches the dais /
+  // overlay until "Update on screen" is clicked. draftText === null means "not
+  // editing — mirror the published text live"; once they type, the draft holds
+  // their edit and is compared against the published value to show a pending badge.
+  const publishedText = (motion?.text ?? bundle.suggested_motion_text ?? '')
+  const [draftText, setDraftText] = useState<string | null>(null)
+  const textValue = draftText ?? publishedText
+  const textDirty = draftText !== null && draftText.trim() !== publishedText.trim()
+  const onTextChange = (v: string) => {
+    setDraftText(v)
+    // Pre-mover there's no motion record yet; keep the local pending text in sync so
+    // opening the motion uses the latest wording even if not yet published.
+    if (!motion) onAction('set-text', { text: v })
+  }
+  const publishText = () => {
+    onAction('publish-text', { text: textValue, agenda_item_id: bundle.current_agenda_item_id })
+    setDraftText(null)
+  }
 
   const chip = (selected: boolean): React.CSSProperties => ({
     fontSize: 15, padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
@@ -168,11 +188,28 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
           </div>
         )}
         <textarea
-          value={motion?.text ?? bundle.suggested_motion_text ?? ''}
-          onChange={e => onAction('set-text', { text: e.target.value })}
+          value={textValue}
+          onChange={e => onTextChange(e.target.value)}
           rows={2}
-          style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, color: C.text, fontSize: 18, fontWeight: 500, padding: '12px 14px', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.35 }}
+          style={{ width: '100%', boxSizing: 'border-box', background: C.panel2, border: `1px solid ${textDirty ? C.accent : C.line}`, borderRadius: 10, color: C.text, fontSize: 18, fontWeight: 500, padding: '12px 14px', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.35 }}
         />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
+          <span style={{ fontSize: 12, color: textDirty ? C.accent : C.dim }}>
+            {textDirty ? 'Edited — not on screen yet' : 'Showing what’s on screen'}
+          </span>
+          <button
+            type="button"
+            onClick={publishText}
+            disabled={busy || !textDirty}
+            style={{
+              fontSize: 13, fontWeight: 600, padding: '7px 14px', borderRadius: 9, border: 'none',
+              background: textDirty ? C.accent : C.line, color: textDirty ? '#06101f' : C.soft,
+              cursor: textDirty ? 'pointer' : 'default', fontFamily: 'inherit',
+            }}
+          >
+            Update on screen
+          </button>
+        </div>
 
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 16 }}>
           <div style={{ flex: 1, minWidth: 280 }}>
@@ -197,11 +234,11 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
       <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: C.accent }}>
-            Vote {isVoting && <span style={{ textTransform: 'none', letterSpacing: 0, color: C.soft }}>· everyone is a yea; tap to mark nay or abstain</span>}
+            Vote {isVoting && <span style={{ textTransform: 'none', letterSpacing: 0, color: C.soft }}>· everyone is an aye; tap to mark nay or abstain</span>}
           </div>
           {isVoting && (
             <div style={{ fontSize: 14, fontWeight: 500 }}>
-              <span style={{ color: C.yea }}>{yea} yea</span> · <span style={{ color: C.nay }}>{nay} nay</span> · <span style={{ color: C.abstain }}>{abstain} abstain</span>
+              <span style={{ color: C.yea }}>{yea} aye</span> · <span style={{ color: C.nay }}>{nay} nay</span> · <span style={{ color: C.abstain }}>{abstain} abstain</span>
             </div>
           )}
         </div>

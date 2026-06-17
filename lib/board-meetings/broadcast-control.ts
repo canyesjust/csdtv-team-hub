@@ -242,6 +242,16 @@ export async function endPrerollAndStartMeeting(
     .update({ broadcast_status: 'live', live_started_at: now, updated_at: now })
     .eq('id', boardMeetingId)
 
+  // Start the meeting elapsed clock at the gavel so the dais / displays count up
+  // from go-live. (Only set it if it isn't already running, so re-confirming
+  // go-live doesn't reset the clock.)
+  if (!state.elapsed_started_at) {
+    await service
+      .from('meeting_broadcast_state')
+      .update({ elapsed_started_at: now, updated_at: now, updated_by: operatorId })
+      .eq('board_meeting_id', boardMeetingId)
+  }
+
   await stopPlaylistOnGoLive(service, boardMeetingId)
 
   if (!state.current_agenda_item_id && first) {
