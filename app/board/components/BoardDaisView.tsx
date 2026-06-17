@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { PublicAgendaItem } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import BoardOutputDebugStrip from '@/app/board/components/BoardOutputDebugStrip'
@@ -241,6 +241,63 @@ export default function BoardDaisView({
   )
 }
 
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+
+/**
+ * Renders text at the largest font size (between min and max px) that still fits
+ * within maxHeightVh of the viewport and the container width. Re-fits whenever the
+ * text or window size changes, so long agenda titles and suggested motions shrink
+ * to fit the dais instead of overflowing.
+ */
+function AutoFitText({
+  text,
+  baseStyle,
+  maxFontPx,
+  minFontPx,
+  maxHeightVh,
+}: {
+  text: string
+  baseStyle: React.CSSProperties
+  maxFontPx: number
+  minFontPx: number
+  maxHeightVh: number
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [fontPx, setFontPx] = useState(maxFontPx)
+
+  useIsoLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const fit = () => {
+      const maxH = (window.innerHeight * maxHeightVh) / 100
+      let lo = minFontPx
+      let hi = maxFontPx
+      let best = minFontPx
+      while (lo <= hi) {
+        const mid = Math.floor((lo + hi) / 2)
+        el.style.fontSize = `${mid}px`
+        if (el.scrollHeight <= maxH && el.scrollWidth <= el.clientWidth + 1) {
+          best = mid
+          lo = mid + 1
+        } else {
+          hi = mid - 1
+        }
+      }
+      el.style.fontSize = `${best}px`
+      setFontPx(best)
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [text, maxFontPx, minFontPx, maxHeightVh])
+
+  return (
+    <div ref={ref} style={{ ...baseStyle, fontSize: `${fontPx}px`, maxHeight: `${maxHeightVh}vh`, overflow: 'hidden' }}>
+      {text}
+    </div>
+  )
+}
+
 function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaItem; suggestedMotionText?: string }) {
   return (
     <>
@@ -248,7 +305,7 @@ function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaI
         <span style={itemBadge}>{item.item_number}</span>
         {item.type ? <span style={typePill}>{item.type.replace('_', ' ')}</span> : null}
       </div>
-      <h1 style={daisTitleStyle(item.title)}>{item.title}</h1>
+      <AutoFitText text={item.title} baseStyle={itemTitle} maxFontPx={58} minFontPx={22} maxHeightVh={40} />
       {item.presenters?.[0] ? (
         <p style={presenterLine}>
           <span style={presenterName}>{item.presenters[0].name}</span>
@@ -260,7 +317,7 @@ function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaI
       {(item.action_requested || item.type === 'action') && (suggestedMotionText || item.suggested_motion_text)?.trim() ? (
         <div style={proposedMotionBox}>
           <p style={proposedMotionLabel}>Suggested motion</p>
-          <p style={proposedMotionText}>{(suggestedMotionText || item.suggested_motion_text || '').trim()}</p>
+          <AutoFitText text={(suggestedMotionText || item.suggested_motion_text || '').trim()} baseStyle={proposedMotionText} maxFontPx={40} minFontPx={16} maxHeightVh={26} />
           <p style={proposedMotionNote}>Awaiting a motion from the board</p>
         </div>
       ) : null}
@@ -873,17 +930,6 @@ const itemTitle: React.CSSProperties = {
   color: C.text,
 }
 
-/** Scale the agenda title down for longer titles so it doesn't crowd out the
- *  suggested-motion box on the dais. Short titles stay large and bold. */
-function daisTitleStyle(title: string): React.CSSProperties {
-  const len = (title || '').length
-  const fontSize =
-    len <= 55 ? 'clamp(34px, 4.6vw, 58px)'
-    : len <= 95 ? 'clamp(30px, 3.6vw, 46px)'
-    : len <= 150 ? 'clamp(26px, 2.9vw, 38px)'
-    : 'clamp(22px, 2.4vw, 32px)'
-  return { ...itemTitle, fontSize, lineHeight: len > 95 ? 1.12 : 1.06 }
-}
 
 const presenterLine: React.CSSProperties = { margin: '0 0 8px', fontSize: 'clamp(18px, 2vw, 26px)', lineHeight: 1.35 }
 const presenterName: React.CSSProperties = { color: C.text, fontWeight: 600 }
