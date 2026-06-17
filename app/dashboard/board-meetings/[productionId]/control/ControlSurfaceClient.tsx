@@ -732,6 +732,16 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         return
       }
 
+      if (action === 'reshow-result') {
+        const res = await dispatchControlSurfaceAction(productionId, 'reshow-result', payload)
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          toast((d as { error?: string }).error || 'No result to show', 'error')
+        }
+        refreshInBackground()
+        return
+      }
+
       if (MOTION_ACTIONS.has(action) || action.startsWith('motion/')) {
         const path = action.startsWith('motion/') ? action.slice('motion/'.length) : action
         const result = await postMotion(path, payload)

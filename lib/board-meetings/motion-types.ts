@@ -75,6 +75,12 @@ export type PublicActiveMotion = {
   parent_motion_text: string | null
   /** Reserved — public outputs show tallies only on pushed vote-result graphics. */
   tally?: VoteTally
+  /**
+   * Live per-member roster, only populated while status === 'voting'. Lets the
+   * dais show each board member's vote as it's recorded (null = pending), before
+   * the operator pushes the final result. Absent members show vote 'absent'.
+   */
+  live_votes?: { person_name: string; vote: string | null }[] | null
 }
 export type PublicActiveVoteResult = {
   motion_id: string

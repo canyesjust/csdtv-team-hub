@@ -2,6 +2,7 @@
 
 import type { MotionScreenBundle, VoteValue } from '@/lib/board-meetings/motion-types'
 import { confirmDialog } from '@/lib/confirm'
+import { decideMotion } from '@/lib/board-meetings/vote-math'
 
 const C = {
   bg: '#0b1320',
@@ -61,8 +62,15 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
   const present = members.filter(m => attendanceOf(m.id) !== 'absent')
   let yea = 0, nay = 0, abstain = 0
   present.forEach(m => { const v = voteOf(m.id); if (v === 'yea') yea++; else if (v === 'nay') nay++; else if (v === 'abstain') abstain++; })
-  const carried = yea * 2 > present.length
-  const quorumMet = present.length >= bundle.quorum_size
+  // Use the shared Robert's Rules engine so this matches exactly what gets pushed
+  // to screen. Abstentions are NOT counted against the motion — a simple majority
+  // is yea > nay among the votes actually cast.
+  const decision = decideMotion(
+    { yea, nay, abstain, absent: members.length - present.length },
+    { quorumThreshold: bundle.quorum_size },
+  )
+  const carried = decision.result === 'passed'
+  const quorumMet = decision.quorumMet
 
   const chip = (selected: boolean): React.CSSProperties => ({
     fontSize: 15, padding: '8px 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
@@ -232,6 +240,7 @@ export default function MotionScreenOnePage({ bundle, busy, error, onAction, onM
               <div style={{ fontSize: 18, fontWeight: 600 }}>
                 Result: <span style={{ color: carried ? C.yea : C.nay }}>{carried ? 'Carried' : 'Failed'}</span>
                 <span style={{ fontSize: 14, fontWeight: 400, color: C.soft }}> &nbsp;{yea}–{nay}{abstain ? ` · ${abstain} abstain` : ''}</span>
+                {!quorumMet && <span style={{ fontSize: 13, fontWeight: 600, color: C.nay, marginLeft: 8 }}>· No quorum</span>}
               </div>
               <button type="button" disabled={busy} onClick={onPushResult} style={{ fontSize: 16, fontWeight: 600, padding: '12px 22px', borderRadius: 12, border: 'none', background: carried ? C.yea : C.nay, color: '#06101f', cursor: 'pointer', fontFamily: 'inherit' }}>
                 Push result to screen

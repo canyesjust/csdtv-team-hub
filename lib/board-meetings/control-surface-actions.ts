@@ -15,6 +15,13 @@ export async function dispatchControlSurfaceAction(
     case 'dismiss-result':
       return fetch(`/api/board-meetings/${productionId}/motion/result/dismiss`, { method: 'POST' })
 
+    case 'reshow-result':
+      return fetch(`/api/board-meetings/${productionId}/motion/result/reshow`, {
+        method: 'POST',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      })
+
     default:
       if (action.startsWith('motion/')) {
         const path = action.slice('motion/'.length)

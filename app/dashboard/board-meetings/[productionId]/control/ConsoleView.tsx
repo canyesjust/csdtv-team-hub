@@ -408,6 +408,15 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl} onClick={() => onAction('show-agenda-branding')}>Agenda branding</button>
               </div>
               {mode !== 'normal' && <div style={{ fontSize: 12, color: '#fde3a7', marginTop: 8 }}>Mode: {mode.replace(/_/g, ' ')}</div>}
+              <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10 }}>
+                <div style={{ fontSize: 12, color: C.soft, marginBottom: 6 }}>
+                  Vote result: <b style={{ color: bs?.active_vote_result_motion_id ? '#b7f0d8' : C.text }}>{bs?.active_vote_result_motion_id ? 'ON SCREEN' : 'not showing'}</b>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+                  <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl} onClick={() => onAction('reshow-result')}>Show last result</button>
+                  <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl || !bs?.active_vote_result_motion_id} onClick={() => onAction('dismiss-result')}>Clear from screen</button>
+                </div>
+              </div>
               {(templates.length > 0 || timer) && (
                 <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10 }}>
                   {timer ? (

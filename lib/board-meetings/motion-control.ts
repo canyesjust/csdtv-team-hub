@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logMeetingEvent } from '@/lib/board-meetings/broadcast-control'
+import { decideMotion } from '@/lib/board-meetings/vote-math'
 import {
   computeQuorum,
   ensureDefaultAttendance,
@@ -189,10 +190,11 @@ export function computeMotionResult(
   tally: VoteTally,
   quorumThreshold: number,
 ): { result: MotionResult; quorum_met_at_vote: boolean } {
-  const deciding = tally.yea + tally.nay
-  const quorum_met_at_vote = deciding >= quorumThreshold
-  const passed = quorum_met_at_vote && tally.yea > tally.nay
-  return { result: passed ? 'passed' : 'failed', quorum_met_at_vote }
+  // Delegate to the shared Robert's Rules engine so the operator surface and the
+  // broadcast side can never disagree. Quorum counts everyone present (including
+  // abstainers), not just the Yea/Nay votes cast.
+  const decision = decideMotion(tally, { quorumThreshold })
+  return { result: decision.result, quorum_met_at_vote: decision.quorumMet }
 }
 
 export function getVoteResultRemainingSeconds(bstate: {
@@ -257,7 +259,10 @@ async function showVoteResult(
       active_vote_result_motion_id: motionId,
       vote_result_started_at: now,
       vote_result_duration_seconds: durationSeconds,
-      vote_result_held: false,
+      // Hold the result on screen indefinitely. It now stays up until the operator
+      // moves to another agenda item (setCurrentItem clears it) or dismisses it
+      // manually — it does NOT auto-disappear after a timer.
+      vote_result_held: true,
       active_motion_id: null,
       updated_at: now,
       updated_by: operatorId,
@@ -346,6 +351,57 @@ export async function dismissVoteResult(
       ended_early: true,
     })
   }
+}
+
+/**
+ * Put a vote result back up on screen. Re-displays the resolved motion for the
+ * current agenda item, or the most recently resolved motion if that can't be
+ * determined. Used by the "Show result again" control.
+ */
+export async function reshowVoteResult(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  opts?: { motionId?: string | null },
+) {
+  let motionId = opts?.motionId ?? null
+
+  if (!motionId) {
+    const { data: state } = await service
+      .from('meeting_broadcast_state')
+      .select('current_agenda_item_id')
+      .eq('board_meeting_id', boardMeetingId)
+      .maybeSingle()
+    const itemId = state?.current_agenda_item_id
+    if (itemId) {
+      const { findPrimaryMotionIdForAgendaItem } = await import('@/lib/board-meetings/agenda-motions-sync')
+      const candidate = await findPrimaryMotionIdForAgendaItem(service, boardMeetingId, itemId)
+      if (candidate) {
+        const { data: m } = await service
+          .from('meeting_motions')
+          .select('status')
+          .eq('id', candidate)
+          .maybeSingle()
+        if (m && (m.status === 'passed' || m.status === 'failed')) motionId = candidate
+      }
+    }
+  }
+
+  if (!motionId) {
+    const { data: recent } = await service
+      .from('meeting_motions')
+      .select('id')
+      .eq('board_meeting_id', boardMeetingId)
+      .in('status', ['passed', 'failed'])
+      .order('resolved_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    motionId = recent?.id ?? null
+  }
+
+  if (!motionId) throw new Error('No resolved motion to show')
+  await showVoteResult(service, boardMeetingId, motionId, operatorId)
+  return { motion_id: motionId }
 }
 
 export async function openMotion(
@@ -1131,6 +1187,24 @@ export async function buildPublicMotionPayload(
     }
   }
 
+  // While the vote is open, build a live per-member roster so the dais can show
+  // each board member's status (Pending / Yea / Nay / Abstain / Absent) and update
+  // it as the operator records votes — before the result is pushed.
+  let liveVotes: { person_name: string; vote: string | null }[] | null = null
+  if (motion.status === 'voting') {
+    const attendance = await loadAttendance(service, boardMeetingId)
+    const { data: castVotes } = await service
+      .from('meeting_motion_votes')
+      .select('person_id, vote')
+      .eq('motion_id', motion.id)
+      .is('superseded_by_vote_id', null)
+    const voteMap = new Map((castVotes || []).map(v => [v.person_id, v.vote]))
+    liveVotes = attendance.records.map(r => ({
+      person_name: r.name,
+      vote: r.status === 'absent' ? 'absent' : voteMap.get(r.person_id) ?? null,
+    }))
+  }
+
   return {
     id: motion.id,
     motion_text: motion.motion_text,
@@ -1141,6 +1215,7 @@ export async function buildPublicMotionPayload(
     is_consent_block: !!motion.consent_block,
     consent_block_label: consentBlockLabel,
     parent_motion_text: parentText,
+    live_votes: liveVotes,
   }
 }
 

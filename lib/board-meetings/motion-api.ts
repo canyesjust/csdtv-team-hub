@@ -13,6 +13,7 @@ import {
   openVote as openMotionVote,
   pushVoteResult,
   recordMotionVote,
+  reshowVoteResult,
   setMotionVoteType,
   updateMotion,
   withdrawMotion,
@@ -355,4 +356,8 @@ export async function holdResult(ctx: MotionActionContext) {
 
 export async function dismissResult(ctx: MotionActionContext) {
   await dismissVoteResult(ctx.service, ctx.boardMeetingId, ctx.teamUserId)
+}
+
+export async function reshowResult(ctx: MotionActionContext, motionId?: string | null) {
+  return reshowVoteResult(ctx.service, ctx.boardMeetingId, ctx.teamUserId, { motionId })
 }

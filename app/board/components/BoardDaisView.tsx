@@ -441,6 +441,37 @@ const VOTE_DISPLAY: Record<string, { label: string; color: string }> = {
   recused: { label: 'Recused', color: C.textDim },
 }
 
+function LiveVoteRoster({ votes }: { votes: { person_name: string; vote: string | null }[] }) {
+  return (
+    <div
+      style={{
+        marginTop: '20px',
+        paddingTop: '16px',
+        borderTop: `1px solid ${C.glassBorder}`,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+        gap: '6px 24px',
+      }}
+    >
+      {votes.map((v, i) => {
+        const pending = v.vote === null
+        const absent = v.vote === 'absent' || v.vote === 'recused'
+        const dimmed = pending || absent
+        const d = v.vote ? VOTE_DISPLAY[v.vote] ?? { label: v.vote, color: C.textSoft } : { label: 'Pending', color: C.amber }
+        return (
+          <div
+            key={`${v.person_name}-${i}`}
+            style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px', padding: '4px 0', opacity: absent ? 0.55 : 1 }}
+          >
+            <span style={{ fontSize: '18px', color: dimmed ? C.textDim : C.text }}>{v.person_name}</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: d.color }}>{d.label}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
   const passed = result.result === 'passed'
   const accent = passed ? C.green : C.red
@@ -504,6 +535,9 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
             <span style={metaDim}> seconded by </span>
             <span style={metaHighlight}>{motion.seconded_by_name}</span>
           </p>
+        )}
+        {motion.live_votes && motion.live_votes.length > 0 && (
+          <LiveVoteRoster votes={motion.live_votes} />
         )}
       </MotionCard>
     )

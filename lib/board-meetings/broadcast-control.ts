@@ -185,6 +185,12 @@ export async function setCurrentItem(
     current_agenda_item_id: itemId,
     active_motion_id: activeMotionId,
     agenda_branding_hold: false,
+    // Moving to an agenda item clears any vote result that was held on screen.
+    // (Results stay up until this happens — they do not auto-disappear.)
+    active_vote_result_motion_id: null,
+    vote_result_started_at: null,
+    vote_result_duration_seconds: null,
+    vote_result_held: false,
     updated_at: new Date().toISOString(),
     updated_by: operatorId,
   }
