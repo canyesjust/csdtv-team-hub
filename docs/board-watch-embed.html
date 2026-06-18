@@ -35,7 +35,8 @@
   #csdtv-watch .cw-head h1{margin:0;font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.01em}
   #csdtv-watch .cw-head p{margin:8px 0 0;color:var(--slate);font-size:15px;max-width:66ch}
   #csdtv-watch .cw-grid{display:grid;grid-template-columns:1fr 392px;gap:28px;align-items:start}
-  #csdtv-watch .cw-grid.cw-no-agenda{grid-template-columns:1fr}
+  #csdtv-watch #cw-side-stack{display:flex;flex-direction:column;gap:28px}
+  #csdtv-watch .cw-below.cw-below-channel-only{grid-template-columns:minmax(0,320px);justify-content:center}
   /* player */
   #csdtv-watch .cw-player-card{background:#000;border-radius:12px;overflow:hidden;box-shadow:0 14px 40px rgba(17,88,136,.16)}
   #csdtv-watch .cw-player{position:relative;aspect-ratio:16/9;width:100%;background:#0c1f2e}
@@ -192,27 +193,30 @@
         <p class="cw-when cw-skel" style="height:16px;width:40%">&nbsp;</p>
       </div>
     </section>
-    <aside id="cw-agenda-aside">
-      <div class="cw-ag">
-        <div class="cw-ag-head">
-          <div class="row1"><h3>Meeting Agenda</h3><span class="follow" id="cw-follow" style="display:none"><span class="dot"></span>FOLLOWING LIVE</span></div>
-          <div class="meta" id="cw-ag-meta"></div>
+    <aside id="cw-right">
+      <div id="cw-agenda-wrap">
+        <div class="cw-ag">
+          <div class="cw-ag-head">
+            <div class="row1"><h3>Meeting Agenda</h3><span class="follow" id="cw-follow" style="display:none"><span class="dot"></span>FOLLOWING LIVE</span></div>
+            <div class="meta" id="cw-ag-meta"></div>
+          </div>
+          <div class="cw-ag-body" id="cw-ag-body"><div class="cw-ag-empty">Loading agenda...</div></div>
+          <div class="cw-ag-foot" id="cw-ag-foot" style="display:none"><span id="cw-ag-footnote"></span><a id="cw-ag-diligent" href="#" target="_blank" rel="noopener">Open on Diligent &rsaquo;</a></div>
         </div>
-        <div class="cw-ag-body" id="cw-ag-body"><div class="cw-ag-empty">Loading agenda...</div></div>
-        <div class="cw-ag-foot" id="cw-ag-foot" style="display:none"><span id="cw-ag-footnote"></span><a id="cw-ag-diligent" href="#" target="_blank" rel="noopener">Open on Diligent &rsaquo;</a></div>
       </div>
+      <div id="cw-side-stack"></div>
     </aside>
   </div>
-  <div class="cw-below">
-    <div class="cw-panel">
+  <div class="cw-below" id="cw-below">
+    <div class="cw-panel" id="cw-upcoming-panel">
       <div class="cw-phead">Coming Up</div>
       <div id="cw-upcoming"><div class="cw-upempty">Loading...</div></div>
     </div>
-    <div class="cw-panel">
+    <div class="cw-panel" id="cw-recent-panel">
       <div class="cw-phead">Recent Meetings</div>
       <div id="cw-recent"><div class="cw-rl-empty">Loading...</div></div>
     </div>
-    <div class="cw-panel cw-channel-panel">
+    <div class="cw-panel cw-channel-panel" id="cw-channel-panel">
       <div class="cw-channel">
         <div class="mark">CSD<span>tv</span></div>
         <p>Canyons District's video and streaming service.</p>
@@ -368,11 +372,30 @@
     return '<div class="cw-it ' + cls + '"><span class="lt"></span><div class="body"><div class="pres">Approved together as one motion</div>' + now + '</div>' + tc + '</div>' +
       (subs ? '<div class="cw-consent">' + subs + '</div>' : '');
   }
-  function setAgendaVisible(show) {
-    var aside = el('cw-agenda-aside');
-    var grid = el('cw-grid');
-    if (aside) aside.style.display = show ? '' : 'none';
-    if (grid) grid.classList.toggle('cw-no-agenda', !show);
+  // When the agenda is locked it occupies the right column and the Coming Up /
+  // Recent lists drop below the embed. When there's no agenda, those lists move
+  // up into the right column (Coming Up on top, Recent below it).
+  function layoutForAgenda(show) {
+    var agendaWrap = el('cw-agenda-wrap');
+    var sideStack = el('cw-side-stack');
+    var below = el('cw-below');
+    var up = el('cw-upcoming-panel');
+    var rec = el('cw-recent-panel');
+    var channel = el('cw-channel-panel');
+    if (!agendaWrap || !sideStack || !below || !up || !rec) return;
+    if (show) {
+      agendaWrap.style.display = '';
+      sideStack.style.display = 'none';
+      below.insertBefore(up, channel);
+      below.insertBefore(rec, channel);
+      below.classList.remove('cw-below-channel-only');
+    } else {
+      agendaWrap.style.display = 'none';
+      sideStack.style.display = '';
+      sideStack.appendChild(up);
+      sideStack.appendChild(rec);
+      below.classList.add('cw-below-channel-only');
+    }
   }
   function renderAgenda(data) {
     var ag = data.agenda || {};
@@ -386,10 +409,10 @@
     follow.style.display = (data.state === 'live') ? 'inline-flex' : 'none';
     // Only show the agenda panel once an agenda has actually been posted in the hub.
     if (!ag.available || !ag.sections || !ag.sections.length) {
-      setAgendaVisible(false);
+      layoutForAgenda(false);
       return;
     }
-    setAgendaVisible(true);
+    layoutForAgenda(true);
     meta.textContent = (ag.sections.length) + ' sections' + (f.date_long ? ' · ' + f.date_long : '');
     var html = ag.sections.map(function (sec, i) {
       var head = '<div class="cw-sec"><div class="cw-sec-h"><span class="cw-sec-n">' + esc(sec.number) + '</span><span class="cw-sec-t">' + esc(sec.title) + '</span>' +
@@ -440,7 +463,7 @@
       '<p class="cw-when">Live streams and recordings are available on the CSDtv channel.</p>' +
       '<div class="cw-actions"><a class="cw-btn primary" href="' + DEFAULT_LINKS.channel + '" target="_blank" rel="noopener">Watch on CSDtv</a>' +
       '<a class="cw-btn ghost" href="' + DEFAULT_LINKS.schedule + '" target="_blank" rel="noopener">Meeting Schedule</a></div>';
-    setAgendaVisible(false);
+    layoutForAgenda(false);
     el('cw-upcoming').innerHTML = '<div class="cw-upempty">Schedule is available on the district site.</div>';
     el('cw-recent').innerHTML = '<div class="cw-rl-empty">Recent meetings are on the CSDtv channel.</div>';
   }
