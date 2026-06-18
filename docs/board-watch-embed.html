@@ -36,7 +36,6 @@
   #csdtv-watch .cw-head p{margin:8px 0 0;color:var(--slate);font-size:15px;max-width:66ch}
   #csdtv-watch .cw-grid{display:grid;grid-template-columns:1fr 392px;gap:28px;align-items:start}
   #csdtv-watch #cw-side-stack{display:flex;flex-direction:column;gap:28px}
-  #csdtv-watch .cw-below.cw-below-channel-only{grid-template-columns:minmax(0,320px);justify-content:center}
   /* player */
   #csdtv-watch .cw-player-card{background:#000;border-radius:12px;overflow:hidden;box-shadow:0 14px 40px rgba(17,88,136,.16)}
   #csdtv-watch .cw-player{position:relative;aspect-ratio:16/9;width:100%;background:#0c1f2e}
@@ -382,19 +381,24 @@
     var up = el('cw-upcoming-panel');
     var rec = el('cw-recent-panel');
     var channel = el('cw-channel-panel');
-    if (!agendaWrap || !sideStack || !below || !up || !rec) return;
+    if (!agendaWrap || !sideStack || !below || !up || !rec || !channel) return;
     if (show) {
+      // Agenda in the right column; the three cards sit in the row below.
       agendaWrap.style.display = '';
       sideStack.style.display = 'none';
-      below.insertBefore(up, channel);
-      below.insertBefore(rec, channel);
-      below.classList.remove('cw-below-channel-only');
+      below.style.display = '';
+      below.appendChild(up);
+      below.appendChild(rec);
+      below.appendChild(channel);
     } else {
+      // No agenda: stack Coming Up, Recent, and the CSDtv card in the right column;
+      // remove the empty row below entirely (no lone floating card).
       agendaWrap.style.display = 'none';
       sideStack.style.display = '';
       sideStack.appendChild(up);
       sideStack.appendChild(rec);
-      below.classList.add('cw-below-channel-only');
+      sideStack.appendChild(channel);
+      below.style.display = 'none';
     }
   }
   function renderAgenda(data) {

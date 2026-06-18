@@ -11,6 +11,7 @@ import type { AgendaItemUI, BoardMeetingRecord } from '@/lib/board-meetings/type
 import type { AgendaDiffEntry } from '@/lib/board-meetings/agenda-diff'
 import MeetingPlaylistSection from './MeetingPlaylistSection'
 import PublicAgendaUrlCard from './PublicAgendaUrlCard'
+import AgendaWatchPreview from './AgendaWatchPreview'
 
 type Phase = 'loading' | 'empty' | 'extracting' | 'review' | 'locked' | 'diff' | 'readonly'
 
@@ -32,6 +33,14 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const [isNarrow, setIsNarrow] = useState(false)
   const [reorderingId, setReorderingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+  const toggleExpand = (id: string) =>
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -88,6 +97,27 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const orderedReviewItems = useMemo(() => {
     return [...items].sort((a, b) => a.sort_order - b.sort_order)
   }, [items])
+
+  const indexById = useMemo(
+    () => new Map(orderedReviewItems.map((it, i) => [it.id, i])),
+    [orderedReviewItems],
+  )
+  const reviewSections = useMemo(() => {
+    const order: number[] = []
+    const map = new Map<number, { number: number; title: string; items: AgendaItemUI[] }>()
+    for (const it of orderedReviewItems) {
+      if (!map.has(it.section_number)) {
+        map.set(it.section_number, { number: it.section_number, title: it.section_title, items: [] })
+        order.push(it.section_number)
+      }
+      map.get(it.section_number)!.items.push(it)
+    }
+    return order.map(n => map.get(n)!)
+  }, [orderedReviewItems])
+  const needsReviewCount = useMemo(
+    () => orderedReviewItems.filter(i => i.needs_review).length,
+    [orderedReviewItems],
+  )
 
   const uploadPdf = async (file: File, reupload = false) => {
     if (file.type && file.type !== 'application/pdf') {
@@ -423,7 +453,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-            <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Review extracted items. Use arrows to reorder or remove items you do not need.</p>
+            <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Click an item to edit it. Flagged items are highlighted. The preview shows the public view.</p>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button
                 type="button"
@@ -443,133 +473,105 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
               </button>
             </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {orderedReviewItems.map((it, idx) => {
-              const itemId = it.id
-              const busy = reorderingId === itemId || deletingId === itemId
-              const canMoveUp = idx > 0
-              const canMoveDown = idx < orderedReviewItems.length - 1
-              const actionBtn: React.CSSProperties = {
-                fontSize: '12px',
-                padding: '6px 10px',
-                minHeight: '36px',
-                borderRadius: '8px',
-                background: 'transparent',
-                color: text,
-                border: `0.5px solid ${border}`,
-                cursor: busy ? 'wait' : 'pointer',
-                fontFamily: 'inherit',
-              }
-              return (
-                <div
-                  key={it.id || `${it.item_number}-${idx}`}
-                  style={{
-                    padding: '14px',
-                    background: it.needs_review ? (dark ? 'rgba(232,160,32,0.08)' : '#fff8eb') : cardBg,
-                    border: `0.5px solid ${it.needs_review ? 'rgba(232,160,32,0.35)' : border}`,
-                    borderRadius: '10px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
-                    <div style={{ fontSize: '12px', color: muted }}>
-                      §{it.section_number} {it.section_title} · {it.item_number}
-                      {it.needs_review && <span style={{ color: '#e8a020', marginLeft: '8px' }}>Needs review</span>}
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        title="Move up"
-                        disabled={!canMoveUp || busy || !itemId}
-                        onClick={() => itemId && moveItem(itemId, 'up')}
-                        style={{ ...actionBtn, opacity: canMoveUp && itemId ? 1 : 0.4 }}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        title="Move down"
-                        disabled={!canMoveDown || busy || !itemId}
-                        onClick={() => itemId && moveItem(itemId, 'down')}
-                        style={{ ...actionBtn, opacity: canMoveDown && itemId ? 1 : 0.4 }}
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        title="Remove item"
-                        disabled={busy || !itemId}
-                        onClick={() => itemId && deleteItem(itemId)}
-                        style={{ ...actionBtn, color: '#ef4444', opacity: itemId ? 1 : 0.4 }}
-                      >
-                        {deletingId === itemId ? '…' : 'Remove'}
-                      </button>
-                    </div>
-                  </div>
-                  <input
-                    value={it.title}
-                    onChange={e => updateItemById(itemId, { title: e.target.value })}
-                    onBlur={() => {
-                      const current = items.find(x => x.id === itemId)
-                      if (current) saveItemPatch(current)
-                    }}
-                    style={{ ...inputStyle, marginBottom: '8px', fontWeight: 600 }}
-                  />
-                  <label style={{ display: 'block', fontSize: '12px', color: muted, marginBottom: '4px' }}>
-                    Suggested motion text (optional)
-                  </label>
-                  <textarea
-                    value={it.suggested_motion_text ?? ''}
-                    placeholder="e.g. Move to approve the consent agenda as presented"
-                    rows={2}
-                    onChange={e =>
-                      updateItemById(itemId, {
-                        suggested_motion_text: e.target.value || null,
-                      })
-                    }
-                    onBlur={() => {
-                      const current = items.find(x => x.id === itemId)
-                      if (current) saveItemPatch(current)
-                    }}
-                    style={{
-                      ...inputStyle,
-                      marginBottom: '8px',
-                      resize: 'vertical',
-                      minHeight: '52px',
-                      fontWeight: 400,
-                    }}
-                  />
-                  {it.review_notes && <p style={{ fontSize: '12px', color: '#e8a020', margin: '0 0 8px' }}>{it.review_notes}</p>}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-                    <select
-                      value={it.type}
-                      onChange={e => {
-                        const nextType = e.target.value
-                        updateItemById(itemId, { type: nextType })
-                        saveItemPatch({ ...it, type: nextType })
-                      }}
-                      style={inputStyle}
-                    >
-                      <option value="procedural">Procedural</option>
-                      <option value="information">Information</option>
-                      <option value="action">Action</option>
-                      <option value="recognition">Recognition</option>
-                    </select>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: muted, minHeight: '44px' }}>
-                      <input
-                        type="checkbox"
-                        checked={it.is_broadcastable}
-                        onChange={e => {
-                          const checked = e.target.checked
-                          updateItemById(itemId, { is_broadcastable: checked })
-                          saveItemPatch({ ...it, is_broadcastable: checked })
-                        }}
-                      />
-                      Broadcastable
-                    </label>
-                  </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px', gap: '20px', alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
+            {needsReviewCount > 0 && (
+              <div style={{ fontSize: '13px', color: '#9a6a00', background: dark ? 'rgba(232,160,32,0.12)' : '#fff8eb', border: '0.5px solid rgba(232,160,32,0.4)', borderRadius: '8px', padding: '8px 12px' }}>
+                {needsReviewCount} item{needsReviewCount === 1 ? '' : 's'} flagged to review — highlighted below.
+              </div>
+            )}
+            {reviewSections.map(sec => (
+              <div key={sec.number}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: muted, textTransform: 'uppercase', letterSpacing: '.05em', margin: '0 0 6px' }}>
+                  {sec.number} · {sec.title}
                 </div>
-              )
-            })}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {sec.items.map(it => {
+                    const itemId = it.id
+                    const idx = itemId ? indexById.get(itemId) ?? -1 : -1
+                    const open = !!itemId && expandedIds.has(itemId)
+                    const busy = reorderingId === itemId || deletingId === itemId
+                    const canMoveUp = idx > 0
+                    const canMoveDown = idx >= 0 && idx < orderedReviewItems.length - 1
+                    const isAction = it.type === 'action' || it.action_requested
+                    const isConsent = !!it.consent_block
+                    const actionBtn: React.CSSProperties = { fontSize: '12px', padding: '6px 9px', minHeight: '34px', borderRadius: '8px', background: 'transparent', color: text, border: `0.5px solid ${border}`, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit' }
+                    const tag = (label: string, bg: string, fg: string) => (
+                      <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '5px', background: bg, color: fg, textTransform: 'uppercase', letterSpacing: '.03em', flexShrink: 0 }}>{label}</span>
+                    )
+                    return (
+                      <div key={it.id || `${it.item_number}-${idx}`} style={{ border: `0.5px solid ${it.needs_review ? 'rgba(232,160,32,0.5)' : border}`, borderRadius: '9px', background: it.needs_review ? (dark ? 'rgba(232,160,32,0.08)' : '#fff8eb') : cardBg, overflow: 'hidden' }}>
+                        <div onClick={() => itemId && toggleExpand(itemId)} style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 11px', cursor: itemId ? 'pointer' : 'default' }}>
+                          <span style={{ color: muted, fontSize: '11px', width: '12px', flexShrink: 0 }}>{open ? '▾' : '▸'}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: muted, minWidth: '22px', flexShrink: 0 }}>{it.item_number}</span>
+                          <span style={{ fontSize: '13.5px', color: text, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: it.needs_review ? 600 : 400 }}>{isConsent ? 'Consent Agenda' : it.title}</span>
+                          {isConsent && tag('consent', dark ? 'rgba(123,97,255,0.18)' : '#efeaff', '#6a4ad0')}
+                          {isAction && tag('action', dark ? 'rgba(232,160,32,0.18)' : '#fdebc8', '#9a6a00')}
+                          {!it.is_broadcastable && tag('hidden', 'transparent', muted)}
+                          {it.needs_review && <span title="Needs review" style={{ color: '#e8a020', fontSize: '12px', flexShrink: 0 }}>●</span>}
+                        </div>
+                        {open && (
+                          <div style={{ padding: '0 11px 12px', borderTop: `0.5px solid ${border}` }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', margin: '8px 0' }}>
+                              <button type="button" title="Move up" disabled={!canMoveUp || busy || !itemId} onClick={() => itemId && moveItem(itemId, 'up')} style={{ ...actionBtn, opacity: canMoveUp && itemId ? 1 : 0.4 }}>↑</button>
+                              <button type="button" title="Move down" disabled={!canMoveDown || busy || !itemId} onClick={() => itemId && moveItem(itemId, 'down')} style={{ ...actionBtn, opacity: canMoveDown && itemId ? 1 : 0.4 }}>↓</button>
+                              <button type="button" title="Remove item" disabled={busy || !itemId} onClick={() => itemId && deleteItem(itemId)} style={{ ...actionBtn, color: '#ef4444' }}>{deletingId === itemId ? '…' : 'Remove'}</button>
+                            </div>
+                            <input
+                              value={it.title}
+                              onChange={e => updateItemById(itemId, { title: e.target.value })}
+                              onBlur={() => { const c = items.find(x => x.id === itemId); if (c) saveItemPatch(c) }}
+                              style={{ ...inputStyle, marginBottom: '8px', fontWeight: 600 }}
+                            />
+                            {isConsent && Array.isArray(it.subitems) && (it.subitems as { item_number?: string; title?: string }[]).length > 0 && (
+                              <div style={{ marginBottom: '8px', padding: '8px 10px', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px' }}>
+                                <div style={{ fontSize: '11px', color: muted, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 700, marginBottom: '4px' }}>
+                                  Consent items ({(it.subitems as unknown[]).length}) — voted together
+                                </div>
+                                {(it.subitems as { item_number?: string; title?: string }[]).map((s, si) => (
+                                  <div key={si} style={{ fontSize: '12.5px', color: text, padding: '2px 0', display: 'flex', gap: '7px' }}>
+                                    <span style={{ fontWeight: 700, color: muted, minWidth: '16px' }}>{s.item_number || ''}</span>
+                                    <span>{s.title || ''}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {isAction && (
+                              <>
+                                <label style={{ display: 'block', fontSize: '12px', color: muted, marginBottom: '4px' }}>Suggested motion text (optional)</label>
+                                <textarea
+                                  value={it.suggested_motion_text ?? ''}
+                                  placeholder="e.g. Move to approve the consent agenda as presented"
+                                  rows={2}
+                                  onChange={e => updateItemById(itemId, { suggested_motion_text: e.target.value || null })}
+                                  onBlur={() => { const c = items.find(x => x.id === itemId); if (c) saveItemPatch(c) }}
+                                  style={{ ...inputStyle, marginBottom: '8px', resize: 'vertical', minHeight: '52px', fontWeight: 400 }}
+                                />
+                              </>
+                            )}
+                            {it.review_notes && <p style={{ fontSize: '12px', color: '#e8a020', margin: '0 0 8px' }}>{it.review_notes}</p>}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+                              <select value={it.type} onChange={e => { const nt = e.target.value; updateItemById(itemId, { type: nt }); saveItemPatch({ ...it, type: nt }) }} style={inputStyle}>
+                                <option value="procedural">Procedural</option>
+                                <option value="information">Information</option>
+                                <option value="action">Action</option>
+                                <option value="recognition">Recognition</option>
+                              </select>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: muted, minHeight: '44px' }} title="When on, this item appears on the dais, the broadcast overlay, and the public website agenda. Turn it off to keep an internal item off-screen.">
+                                <input type="checkbox" checked={it.is_broadcastable} onChange={e => { const c = e.target.checked; updateItemById(itemId, { is_broadcastable: c }); saveItemPatch({ ...it, is_broadcastable: c }) }} />
+                                Show on screen &amp; public agenda
+                              </label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <AgendaWatchPreview items={orderedReviewItems} />
           </div>
         </div>
       )}
