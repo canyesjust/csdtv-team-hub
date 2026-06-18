@@ -28,7 +28,7 @@ export async function GET(
 
   const { data: prod } = await service
     .from('productions')
-    .select('production_number, livestream_url, title')
+    .select('production_number, livestream_url, title, start_datetime, event_date')
     .eq('id', production_id)
     .maybeSingle()
 

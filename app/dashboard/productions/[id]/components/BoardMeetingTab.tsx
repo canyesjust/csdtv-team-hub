@@ -22,6 +22,28 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const [portalInput, setPortalInput] = useState('')
   const [meeting, setMeeting] = useState<BoardMeetingRecord | null>(null)
   const [productionNumber, setProductionNumber] = useState<number | null>(null)
+  const [meetingTitle, setMeetingTitle] = useState<string | null>(null)
+  const [meetingDate, setMeetingDate] = useState<string | null>(null)
+  // Guidance for new users: per-phase "next step" tips (collapsible for pros) and a
+  // one-time "how it works" intro card. Both remembered in localStorage.
+  const [showTips, setShowTips] = useState(true)
+  const [introSeen, setIntroSeen] = useState(true)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('csdtv-bm-tips') === '0') setShowTips(false)
+      setIntroSeen(localStorage.getItem('csdtv-bm-intro-seen') === '1')
+    } catch { /* ignore */ }
+  }, [])
+  const toggleTips = () =>
+    setShowTips(v => {
+      const next = !v
+      try { localStorage.setItem('csdtv-bm-tips', next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  const dismissIntro = () => {
+    setIntroSeen(true)
+    try { localStorage.setItem('csdtv-bm-intro-seen', '1') } catch { /* ignore */ }
+  }
   const [items, setItems] = useState<AgendaItemUI[]>([])
   const [error, setError] = useState('')
   const [locking, setLocking] = useState(false)
@@ -81,6 +103,8 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
     setMeeting(body.board_meeting)
     if (body.board_meeting?.icompass_meeting_id) setPortalInput(String(body.board_meeting.icompass_meeting_id))
     setProductionNumber(body.production?.production_number ?? null)
+    setMeetingTitle(body.production?.title ?? null)
+    setMeetingDate(body.production?.start_datetime ?? body.production?.event_date ?? null)
     const loaded: AgendaItemUI[] = (body.items || []).map((it: AgendaItemUI & { presenters?: { name: string; title?: string | null }[] }) => ({
       ...it,
       presenters: (it.presenters || []).map(p => ({ name: p.name, title: p.title })),
@@ -118,6 +142,15 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
     () => orderedReviewItems.filter(i => i.needs_review).length,
     [orderedReviewItems],
   )
+  const reviewSummary = useMemo(() => {
+    const shown = orderedReviewItems.filter(i => i.is_broadcastable !== false)
+    return {
+      total: shown.length,
+      actions: shown.filter(i => i.type === 'action' || i.action_requested).length,
+      consent: shown.filter(i => i.consent_block).length,
+      hidden: orderedReviewItems.length - shown.length,
+    }
+  }, [orderedReviewItems])
 
   const uploadPdf = async (file: File, reupload = false) => {
     if (file.type && file.type !== 'application/pdf') {
@@ -410,8 +443,92 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
     </label>
   )
 
+  const bcStatus = meeting?.broadcast_status
+  const stepIndex =
+    phase === 'readonly' || bcStatus === 'live' ? 4
+    : meeting?.agenda_locked ? 3
+    : (phase === 'review' || items.length > 0) ? 2
+    : 1
+  const STEP_LABELS = ['Import', 'Review', 'Lock', 'Live']
+  const meetingDateLong = meetingDate
+    ? new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(meetingDate))
+    : null
+
+  // One friendly "what do I do now / what's next" line per phase, for new operators.
+  const guide: { step: string; text: string } | null =
+    phase === 'empty'
+      ? { step: 'Step 1 · Import', text: 'Paste the meeting’s agenda URL or its ID below and press Import. This pulls the agenda from the board portal — nothing is shown to the public yet.' }
+      : phase === 'review'
+      ? { step: 'Step 2 · Review & lock', text: 'Click any item to check or edit it, and fix anything highlighted amber. When it looks right, press “Lock agenda” at the bottom — locking is what publishes it to the dais and the public website.' }
+      : phase === 'diff'
+      ? { step: 'Review changes', text: 'The portal agenda changed. Review the differences below, uncheck anything you don’t want, then apply the update.' }
+      : phase === 'locked' && bcStatus === 'live'
+      ? { step: 'Live', text: 'The meeting is on air. Run it from the Control Surface — nothing more to do on this page.' }
+      : phase === 'locked'
+      ? { step: 'Step 3 · Broadcast', text: 'The agenda is locked and now public. On meeting day, open the Control Surface (button below) to run the broadcast. Use “Unlock” only if the agenda needs changes.' }
+      : phase === 'readonly'
+      ? { step: 'Done', text: 'This meeting is finished and archived. The agenda and recording stay public — there’s nothing to change here.' }
+      : null
+
+  const tipLink: React.CSSProperties = { background: 'transparent', border: 'none', color: '#1e6cb5', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap', padding: 0 }
+
   return (
     <div>
+      {(meetingTitle || meetingDate) && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+            <span style={{ fontSize: '17px', fontWeight: 700, color: text }}>{meetingTitle || 'Board meeting'}</span>
+            {meetingDateLong && <span style={{ fontSize: '13px', color: muted }}>{meetingDateLong}</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {STEP_LABELS.map((label, i) => {
+              const n = i + 1
+              const done = n < stepIndex || phase === 'readonly'
+              const active = n === stepIndex && phase !== 'readonly'
+              const bg = done ? '#1e6cb5' : active ? 'rgba(30,108,181,0.14)' : 'transparent'
+              const fg = done ? '#fff' : active ? '#1e6cb5' : muted
+              return (
+                <span key={label} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, padding: '5px 11px', borderRadius: '999px', background: bg, color: fg, border: done || active ? 'none' : `0.5px solid ${border}` }}>
+                    <span style={{ fontSize: '11px', opacity: 0.85 }}>{done ? '✓' : n}</span>{label}
+                  </span>
+                  {n < STEP_LABELS.length && <span style={{ width: '14px', height: '1px', background: border, margin: '0 2px' }} />}
+                </span>
+              )
+            })}
+            {phase === 'readonly' && <span style={{ fontSize: '12px', color: muted, marginLeft: '4px' }}>· Archived</span>}
+            {!showTips && guide && (
+              <button type="button" onClick={toggleTips} style={{ ...tipLink, marginLeft: 'auto' }}>Show tips</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!introSeen && (
+        <div style={{ marginBottom: '16px', padding: '14px 16px', background: 'rgba(30,108,181,0.08)', border: '0.5px solid rgba(30,108,181,0.35)', borderRadius: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '10px' }}>
+            <strong style={{ fontSize: '14px', color: text }}>New here? How a board meeting works</strong>
+            <button type="button" onClick={dismissIntro} style={tipLink}>Got it</button>
+          </div>
+          <ol style={{ margin: '8px 0 0', paddingLeft: '20px', color: muted, fontSize: '13px', lineHeight: 1.7 }}>
+            <li><strong style={{ color: text }}>Import</strong> the agenda from the board portal (or a PDF).</li>
+            <li><strong style={{ color: text }}>Review</strong> the items, then <strong style={{ color: text }}>Lock</strong> the agenda — this publishes it to the dais screen and the public website.</li>
+            <li>On meeting day, open the <strong style={{ color: text }}>Control Surface</strong> to run the live broadcast (gavel in, motions, votes, lower thirds).</li>
+          </ol>
+          <p style={{ margin: '8px 0 0', fontSize: '12px', color: muted }}>The step tracker above always shows where this meeting is. Tips on each screen tell you what to do next.</p>
+        </div>
+      )}
+
+      {showTips && guide && (
+        <div style={{ marginBottom: '16px', padding: '12px 14px', background: 'rgba(30,108,181,0.06)', borderLeft: '3px solid #1e6cb5', borderRadius: '0 8px 8px 0', display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e6cb5', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{guide.step}</div>
+            <div style={{ fontSize: '13.5px', color: text, lineHeight: 1.5 }}>{guide.text}</div>
+          </div>
+          <button type="button" onClick={toggleTips} style={tipLink}>Hide tips</button>
+        </div>
+      )}
+
       {error && (
         <div style={{ padding: '12px 14px', marginBottom: '12px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: '14px' }}>
           {error}
@@ -453,7 +570,14 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-            <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Click an item to edit it. Flagged items are highlighted. The preview shows the public view.</p>
+            <div>
+              <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Click an item to edit it. Flagged items are highlighted. The preview shows the public view.</p>
+              <p style={{ margin: '4px 0 0', color: text, fontSize: '13px', fontWeight: 600 }}>
+                Goes public when locked: {reviewSummary.total} item{reviewSummary.total === 1 ? '' : 's'} · {reviewSummary.actions} action{reviewSummary.actions === 1 ? '' : 's'}
+                {reviewSummary.consent > 0 ? ` · ${reviewSummary.consent} consent` : ''}
+                {reviewSummary.hidden > 0 ? <span style={{ color: muted, fontWeight: 400 }}>{` · ${reviewSummary.hidden} hidden`}</span> : ''}
+              </p>
+            </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button
                 type="button"
@@ -634,14 +758,8 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             </div>
           )}
           <MeetingPlaylistSection productionId={productionId} />
-          <div>
-            {items.map(it => (
-              <div key={it.id} style={{ padding: '12px 14px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '8px' }}>
-                <span style={{ fontSize: '12px', color: muted }}>{it.item_number}</span>
-                <span style={{ fontSize: '14px', color: text, fontWeight: 500, marginLeft: '8px' }}>{it.title}</span>
-                {!it.is_broadcastable && <span style={{ marginLeft: '8px', fontSize: '11px', color: '#e8a020' }}>Not broadcastable</span>}
-              </div>
-            ))}
+          <div style={{ marginTop: '16px', maxWidth: '440px' }}>
+            <AgendaWatchPreview items={items} />
           </div>
         </div>
       )}
