@@ -109,23 +109,22 @@ export default function MeetingFocusDashboard({
   const itemCount = items.length
   const reviewCount = items.filter(i => i.needs_review).length
   const broadcastableCount = items.filter(i => i.is_broadcastable).length
-  const latestItemUpdate = items.reduce<string | null>((max, it) => {
-    const u = it.updated_at
-    if (!u) return max
-    if (!max || u > max) return u
-    return max
-  }, null)
 
   const status = bm?.broadcast_status ?? 'none'
   const statusLabel = STATUS_LABELS[status] ?? status
   const canControl = bm && ['prepared', 'live'].includes(bm.broadcast_status)
 
-  const statCell = (label: string, value: string) => (
-    <div>
-      <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: muted }}>
-        {label}
-      </p>
-      <p style={{ margin: '4px 0 0', fontSize: '14px', color: text, lineHeight: 1.35 }}>{value}</p>
+  const statusPill = (() => {
+    if (status === 'live') return { bg: '#b3261e', fg: '#fff' }
+    if (status === 'prepared') return { bg: 'var(--status-info-bg, rgba(31,108,180,0.15))', fg: 'var(--brand-primary-strong, #1f6cb4)' }
+    if (status === 'archived') return { bg: 'var(--surface-2)', fg: muted }
+    return { bg: 'var(--surface-2)', fg: muted }
+  })()
+
+  const metric = (label: string, value: string, accent?: string) => (
+    <div style={{ background: 'var(--surface-2)', borderRadius: '8px', padding: '12px 14px' }}>
+      <p style={{ margin: 0, fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: muted }}>{label}</p>
+      <p style={{ margin: '4px 0 0', fontSize: '20px', fontWeight: 600, color: accent || text, lineHeight: 1.2 }}>{value}</p>
     </div>
   )
 
@@ -141,9 +140,12 @@ export default function MeetingFocusDashboard({
       <div style={{ padding: '16px 18px', borderBottom: `0.5px solid ${border}` }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'var(--brand-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Working meeting
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'var(--brand-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Working meeting
+              </p>
+              <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: '999px', background: statusPill.bg, color: statusPill.fg }}>{statusLabel}</span>
+            </div>
             <h2 style={{ margin: '6px 0 4px', fontSize: '20px', fontWeight: 700, color: text, lineHeight: 1.25 }}>
               #{row.production_number} {row.title}
             </h2>
@@ -209,36 +211,23 @@ export default function MeetingFocusDashboard({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', padding: '16px 18px', borderBottom: `0.5px solid ${border}` }}>
-        <div>
-          <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, color: text }}>Status</p>
-          <div style={{ display: 'grid', gap: '12px' }}>
-            {statCell('Broadcast', statusLabel)}
-            {statCell('Production', row.status || '—')}
-          </div>
-        </div>
-        <div>
-          <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, color: text }}>Agenda</p>
-          {detailLoading ? (
-            <p style={{ margin: 0, fontSize: '13px', color: muted }}>Loading agenda…</p>
-          ) : (
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {statCell('Items', itemCount > 0 ? `${itemCount} total · ${broadcastableCount} on air` : 'No items yet')}
-              {statCell(
-                'Locked',
-                bm?.agenda_locked
-                  ? `Yes · ${formatWhen(bm.agenda_locked_at)}`
-                  : 'No',
-              )}
-              {statCell('Extracted', formatWhen(bm?.agenda_extracted_at))}
-              {statCell(
-                'Last agenda change',
-                formatWhen(latestItemUpdate ?? bm?.updated_at),
-              )}
-              {reviewCount > 0 && statCell('Needs review', `${reviewCount} item${reviewCount === 1 ? '' : 's'}`)}
+      <div style={{ padding: '16px 18px', borderBottom: `0.5px solid ${border}` }}>
+        {detailLoading ? (
+          <p style={{ margin: 0, fontSize: '13px', color: muted }}>Loading agenda…</p>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+              {metric('Agenda items', itemCount > 0 ? String(itemCount) : '—')}
+              {metric('On air', itemCount > 0 ? String(broadcastableCount) : '—')}
+              {metric('Needs review', reviewCount > 0 ? String(reviewCount) : 'None', reviewCount > 0 ? '#b45309' : undefined)}
+              {metric('Agenda', bm?.agenda_locked ? 'Locked' : 'Unlocked')}
             </div>
-          )}
-        </div>
+            <p style={{ margin: '12px 0 0', fontSize: '12px', color: muted }}>
+              Production: {row.status || '—'}
+              {bm?.agenda_locked ? ` · agenda locked ${formatWhen(bm.agenda_locked_at)}` : ''}
+            </p>
+          </>
+        )}
       </div>
 
       {!detailLoading && items.length > 0 && (

@@ -56,6 +56,30 @@ function ElapsedClock({ startedAt }: { startedAt: string }) {
   return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 15, fontWeight: 600 }}>{fmtElapsed(nowMs - new Date(startedAt).getTime())}</span>
 }
 
+/** Inline live countdown for the operator: ticks locally, with a colour-staged progress bar. */
+function LiveCountdown({ startedAt, durationSeconds }: { startedAt: string; durationSeconds: number }) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 250)
+    return () => clearInterval(id)
+  }, [])
+  const remaining = durationSeconds - (nowMs - new Date(startedAt).getTime()) / 1000
+  const isUp = remaining <= 0
+  const rc = Math.max(0, remaining)
+  const pct = durationSeconds > 0 ? Math.max(0, Math.min(1, rc / durationSeconds)) : 0
+  const color = isUp || rc <= 15 ? '#f87171' : rc <= 30 ? '#fbbf24' : '#34d399'
+  return (
+    <div>
+      <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 30, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: isUp ? '#f87171' : '#eaf1fb' }}>
+        {fmtElapsed(rc * 1000)}{isUp ? ' · time up' : ''}
+      </div>
+      <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,.12)', overflow: 'hidden', marginTop: 8 }}>
+        <div style={{ width: `${pct * 100}%`, height: '100%', background: color, borderRadius: 999, transition: 'width .25s linear' }} />
+      </div>
+    </div>
+  )
+}
+
 export default function ConsoleView({ productionId, bundle, canControl, busy, onAction, onSetAttendance, onConfirmAttendance, onMarkStreamStarted, onPatchAgendaItem, onReorderAgenda, onListeningChange, onPullFromConsent }: Props) {
   const bs = bundle.broadcast_state
   const status = bs?.status || bundle.board_meeting.broadcast_status || 'draft'
@@ -105,6 +129,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   }, [atStarted, atDuration, atEnded])
 
   const [timerMin, setTimerMin] = useState(3)
+  const [timerOpen, setTimerOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   // End-meeting checklist — a deliberate stop so screens/outputs are never left on.
@@ -526,6 +551,50 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               </div>
             </div>
 
+            {/* TIMER — inline, expandable, for the current item (patron comments, reports, etc.) */}
+            <div style={cardStyle}>
+              <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Timer</span>
+                {!timer && !timerOpen && <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} disabled={!canControl} onClick={() => setTimerOpen(true)}>+ Set a timer</button>}
+              </h3>
+              {timer && atStarted && atDuration ? (
+                <>
+                  <div style={{ fontSize: 12, color: C.soft, marginBottom: 6 }}>{timer.label || 'Timer'}</div>
+                  <LiveCountdown startedAt={atStarted} durationSeconds={atDuration} />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button style={{ ...btn, flex: 1 }} disabled={!canControl} onClick={() => onAction('end-timer')}>Done</button>
+                    <button style={btn} disabled={!canControl} onClick={() => onAction('cancel-timer')}>Cancel</button>
+                  </div>
+                </>
+              ) : timerOpen ? (
+                <>
+                  <div style={{ fontSize: 12, color: C.soft, marginBottom: 8, lineHeight: 1.5 }}>
+                    How long for <b style={{ color: C.text }}>{currentItem ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number}`) : 'this item'}</b>? Counts down on the dais and rings when it ends.
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                    {[2, 3, 5, 10].map(m => (
+                      <button key={m} style={{ ...btn, fontSize: 12, padding: '6px 11px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: m * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>{m} min</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <input type="number" min={1} max={120} value={timerMin} onChange={e => setTimerMin(Math.max(1, Math.min(120, Number(e.target.value) || 1)))} style={{ width: 54, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 7, color: C.text, fontSize: 13, padding: '5px 7px', fontFamily: 'inherit' }} />
+                    <span style={{ fontSize: 12, color: C.soft }}>min</span>
+                    <button style={{ ...btn, fontSize: 12, padding: '6px 11px', background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: timerMin * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>Start + bell</button>
+                    <button style={{ ...btn, fontSize: 12, padding: '6px 11px' }} onClick={() => setTimerOpen(false)}>Cancel</button>
+                  </div>
+                  {templates.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      {templates.map(t => (
+                        <button key={t.id} style={{ ...btn, fontSize: 11, padding: '5px 9px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { template_id: t.id }); setTimerOpen(false) }}>{t.name}</button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ fontSize: 12, color: C.dim }}>No timer running. Use “Set a timer” for patron comments, reports, or any timed item.</div>
+              )}
+            </div>
+
             {/* MOTION — full vote workflow, inline */}
             <div style={cardStyle}>
               <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between' }}>
@@ -598,7 +667,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
 
             {/* MODES & TIMERS */}
             <div style={cardStyle}>
-              <h3 style={h3}>Modes &amp; timers</h3>
+              <h3 style={h3}>Modes</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
                 <button style={{ ...btn, textAlign: 'center', ...(mode === 'recess' ? { background: C.amberbg, color: '#fde3a7', borderColor: 'transparent' } : {}) }} disabled={!canControl} onClick={() => onAction(mode === 'recess' ? 'clear-mode' : 'recess', mode === 'recess' ? undefined : { message: 'Recess' })}>Recess</button>
                 <button style={{ ...btn, textAlign: 'center', ...(mode === 'technical_difficulties' ? { background: C.amberbg, color: '#fde3a7', borderColor: 'transparent' } : {}) }} disabled={!canControl} onClick={() => onAction(mode === 'technical_difficulties' ? 'clear-mode' : 'technical-difficulties')}>Technical difficulties</button>
@@ -614,42 +683,6 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                   <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl} onClick={() => onAction('reshow-result')}>Show last result</button>
                   <button style={{ ...btn, textAlign: 'center' }} disabled={!canControl || !bs?.active_vote_result_motion_id} onClick={() => onAction('dismiss-result')}>Clear from screen</button>
                 </div>
-              </div>
-              <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 10, paddingTop: 10 }}>
-                {timer ? (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontSize: 13 }}>Timer: <b>{timer.label}</b></span>
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      <button style={{ ...btn, fontSize: 12, padding: '5px 9px' }} disabled={!canControl} onClick={() => onAction('end-timer')}>End</button>
-                      <button style={{ ...btn, fontSize: 12, padding: '5px 9px' }} disabled={!canControl} onClick={() => onAction('cancel-timer')}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {templates.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                        {templates.map(t => (
-                          <button key={t.id} style={{ ...btn, fontSize: 12, padding: '6px 10px' }} disabled={!canControl} onClick={() => onAction('start-timer', { template_id: t.id })}>{t.name}</button>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 12, color: C.soft }}>Timer for this item:</span>
-                      <input
-                        type="number" min={1} max={120} value={timerMin}
-                        onChange={e => setTimerMin(Math.max(1, Math.min(120, Number(e.target.value) || 1)))}
-                        style={{ width: 50, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 7, color: C.text, fontSize: 13, padding: '5px 7px', fontFamily: 'inherit' }}
-                      />
-                      <span style={{ fontSize: 12, color: C.soft }}>min</span>
-                      <button
-                        style={{ ...btn, fontSize: 12, padding: '6px 10px', background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}
-                        disabled={!canControl}
-                        onClick={() => onAction('start-timer', { duration_seconds: timerMin * 60, label: currentItem?.title || 'Timer', show_on_dais: true })}
-                      >Start + bell</button>
-                    </div>
-                    <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Counts down on the dais and rings a bell when time’s up.</div>
-                  </>
-                )}
               </div>
             </div>
 

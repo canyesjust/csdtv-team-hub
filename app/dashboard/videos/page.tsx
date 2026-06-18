@@ -93,7 +93,7 @@ export default function VideosPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
     const [videosRes, userRes] = await Promise.all([
-      supabase.from('videos').select('id, title, description, video_type, status, production_id, school_department, school_year, visibility, date_filmed, date_published, thumbnail_url, created_by, created_at, updated_at, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, needs_review, youtube_tags, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }),
+      supabase.from('videos').select('id, title, description, video_type, status, production_id, school_department, school_year, visibility, date_filmed, date_published, thumbnail_url, created_by, created_at, updated_at, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, needs_review, youtube_tags, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }).limit(1000),
       resolveEffectiveTeamRow<TeamMember>(supabase, 'id, name, role'),
     ])
     setVideos((videosRes.data as unknown as Video[]) || [])

@@ -250,7 +250,7 @@ export default function BoardDaisView({
               <div style={upNextCard}>
                 <p style={upNextLabel}>Up next</p>
                 <div style={upNextList}>
-                  {state.upcoming_items.slice(0, 2).map(u => (
+                  {state.upcoming_items.slice(0, 6).map(u => (
                     <div key={u.id} style={upNextRow}>
                       <span style={upNextNum}>{u.item_number}</span>
                       <span style={upNextTitle}>{u.title}</span>
@@ -561,6 +561,8 @@ function DaisFullScreenTimer({ startedAt, durationSeconds, label }: { startedAt:
         animation: isUp ? 'dais-timer-flash 0.9s steps(1, end) infinite' : undefined,
       }}
     >
+      {/* Keep the district branding on screen even while the timer is up. */}
+      <img src={CANYONS_LOGO_SRC} alt="Canyons School District" style={{ position: 'absolute', top: '28px', left: '36px', height: '40px', width: 'auto', objectFit: 'contain', opacity: 0.95 }} />
       {label && (
         <div style={{ fontFamily: font, fontSize: 'min(6vh, 4vw)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: isUp ? '#fecaca' : C.textSoft }}>
           {label}
@@ -972,7 +974,7 @@ const mainGrid: React.CSSProperties = {
   minHeight: 0,
 }
 
-const heroCol: React.CSSProperties = { minWidth: 0 }
+const heroCol: React.CSSProperties = { minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }
 
 const nowBlock: React.CSSProperties = {
   marginTop: '4px',
@@ -1111,45 +1113,45 @@ const timerBig: React.CSSProperties = {
 }
 
 const upNextCard: React.CSSProperties = {
-  marginTop: 'auto',
-  padding: '14px 16px',
+  flex: 1,
+  minHeight: 0,
+  overflow: 'hidden',
+  padding: '16px 18px',
   borderRadius: '12px',
-  background: 'rgba(255, 255, 255, 0.02)',
+  background: C.glass,
   border: `1px solid ${C.glassBorder}`,
-  opacity: 0.85,
 }
 
 const upNextLabel: React.CSSProperties = {
   margin: 0,
-  fontSize: '10px',
+  fontSize: '12px',
   fontWeight: 700,
-  letterSpacing: '0.12em',
+  letterSpacing: '0.14em',
   textTransform: 'uppercase',
-  color: C.textDim,
+  color: C.amber,
 }
 
 const upNextList: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '6px',
-  marginTop: '10px',
+  gap: '10px',
+  marginTop: '12px',
 }
 
 const upNextRow: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '2px',
-  padding: '8px 10px',
-  borderRadius: '8px',
+  gap: '3px',
+  padding: '2px 0',
   background: 'transparent',
   border: 'none',
 }
-const upNextNum: React.CSSProperties = { fontSize: '10px', fontWeight: 600, color: C.textDim, fontFamily: mono }
+const upNextNum: React.CSSProperties = { fontSize: '12px', fontWeight: 600, color: C.textDim, fontFamily: mono }
 const upNextTitle: React.CSSProperties = {
-  fontSize: '13px',
-  color: C.textSoft,
-  lineHeight: 1.35,
-  fontWeight: 400,
+  fontSize: '16px',
+  color: C.text,
+  lineHeight: 1.3,
+  fontWeight: 500,
   display: '-webkit-box',
   WebkitLineClamp: 2,
   WebkitBoxOrient: 'vertical',

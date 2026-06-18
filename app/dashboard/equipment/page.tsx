@@ -161,7 +161,7 @@ export default function EquipmentPage() {
     if (userData) setUser(userData)
 
     const [eqRes, catRes, kitRes, loanRes] = await Promise.all([
-      supabase.from('equipment').select('*').order('asset_tag'),
+      supabase.from('equipment').select('*').order('asset_tag').limit(1000),
       supabase.from('equipment_categories').select('*').order('sort_order'),
       supabase.from('equipment_kits').select('*, items:equipment_kit_items(equipment_id, equipment(*))').order('name'),
       supabase.from('equipment_loans').select('*, equipment(*), kit:equipment_kits(*), checked_out_by_user:team!equipment_loans_checked_out_by_fkey(name)').is('checked_in_at', null).order('checked_out_at', { ascending: false }),
