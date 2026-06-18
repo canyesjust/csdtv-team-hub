@@ -168,6 +168,16 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const activeLt = bundle.lower_third_active
   const position = bs?.lower_third_position ?? 'left'
 
+  // Keep the lower-third panel short: Board + "On this agenda" stay open, but
+  // Staff and any other groups start collapsed (operator can expand them).
+  const lowerThirdInitRef = useRef(false)
+  useEffect(() => {
+    if (lowerThirdInitRef.current || groupedPeople.length === 0) return
+    lowerThirdInitRef.current = true
+    const nonBoard = groupedPeople.map(([l]) => l).filter(l => l !== 'Board')
+    if (nonBoard.length) setCollapsedGroups(new Set(nonBoard))
+  }, [groupedPeople])
+
   const timer = bundle.active_timer
   const templates = bundle.timer_templates || []
   const playback = bundle.playlist_state?.playback_state || 'idle'
@@ -483,8 +493,9 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             {/* LOWER THIRD */}
             <div style={cardStyle}>
               <h3 style={h3}>Lower third</h3>
+              {groupedPeople.filter(([l]) => l === 'Board').map(([label, members]) => groupBlock(label, members))}
               {groupBlock('On this agenda', agendaPeople, true)}
-              {groupedPeople.map(([label, members]) => groupBlock(label, members))}
+              {groupedPeople.filter(([l]) => l !== 'Board').map(([label, members]) => groupBlock(label, members))}
 
               <ConsoleLowerThirdOther
                 excludeIds={lowerThirdShownIds}

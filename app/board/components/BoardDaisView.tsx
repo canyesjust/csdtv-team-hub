@@ -339,13 +339,24 @@ function AutoFitText({
 }
 
 function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaItem; suggestedMotionText?: string }) {
+  const isAction = !!(item.action_requested || item.type === 'action')
+  const motionText = (suggestedMotionText || item.suggested_motion_text || '').trim()
   return (
     <>
       <div style={itemBadgeRow}>
         <span style={itemBadge}>{item.item_number}</span>
         {item.type ? <span style={typePill}>{item.type.replace('_', ' ')}</span> : null}
       </div>
-      <AutoFitText text={item.title} baseStyle={itemTitle} maxFontPx={44} minFontPx={20} maxHeightVh={22} />
+      {/* On an action item the suggested motion is the star, so the title is
+          smaller above it. On other items the title is the main thing. Both
+          auto-fit so long or short text always fills the space without overflow. */}
+      <AutoFitText
+        text={item.title}
+        baseStyle={itemTitle}
+        maxFontPx={isAction ? 30 : 50}
+        minFontPx={isAction ? 16 : 20}
+        maxHeightVh={isAction ? 15 : 32}
+      />
       {item.presenters?.[0] ? (
         <p style={presenterLine}>
           <span style={presenterName}>{item.presenters[0].name}</span>
@@ -354,11 +365,17 @@ function DaisAgendaItemHero({ item, suggestedMotionText }: { item: PublicAgendaI
           ) : null}
         </p>
       ) : null}
-      {(item.action_requested || item.type === 'action') && (suggestedMotionText || item.suggested_motion_text)?.trim() ? (
+      {isAction ? (
         <div style={proposedMotionBox}>
           <p style={proposedMotionLabel}>Suggested motion</p>
-          <AutoFitText text={(suggestedMotionText || item.suggested_motion_text || '').trim()} baseStyle={proposedMotionText} maxFontPx={40} minFontPx={12} maxHeightVh={46} />
-          <p style={proposedMotionNote}>Awaiting a motion from the board</p>
+          {motionText ? (
+            <>
+              <AutoFitText text={motionText} baseStyle={proposedMotionText} maxFontPx={52} minFontPx={14} maxHeightVh={50} />
+              <p style={proposedMotionNote}>Awaiting a motion from the board</p>
+            </>
+          ) : (
+            <div style={{ ...proposedMotionText, fontStyle: 'italic', color: C.textSoft, fontSize: 'clamp(26px, 3.4vw, 44px)' }}>Will accept a motion</div>
+          )}
         </div>
       ) : null}
     </>
