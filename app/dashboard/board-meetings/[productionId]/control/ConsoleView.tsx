@@ -31,7 +31,7 @@ type Props = {
 const C = {
   bg: '#0a0f1a', panel: '#111a2b', panel2: '#16223a',
   line: 'rgba(255,255,255,.08)', line2: 'rgba(255,255,255,.14)',
-  text: '#eaf1fb', soft: '#9fb2d0', dim: '#64748b',
+  text: '#eaf1fb', soft: '#9fb2d0', dim: '#8a9cbb',
   accent: '#4f9dee', accentbg: 'rgba(79,157,238,.16)',
   live: '#ff5d5d', livebg: 'rgba(255,93,93,.16)',
   yea: '#34d399', yeabg: 'rgba(52,211,153,.16)',
@@ -235,9 +235,9 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
     return (
       <div key={label} style={{ marginBottom: 8 }}>
         <button type="button" onClick={() => toggleGroup(label)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 0', font: 'inherit', textAlign: 'left' }}>
-          <span style={{ fontSize: 9, color: C.dim, width: 8 }}>{collapsed ? '▸' : '▾'}</span>
-          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: accent ? '#bcdcff' : C.dim, fontWeight: 600 }}>{label}</span>
-          <span style={{ fontSize: 10, color: C.dim }}>· {members.length}</span>
+          <span style={{ fontSize: 11, color: C.dim, width: 8 }}>{collapsed ? '▸' : '▾'}</span>
+          <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: accent ? '#bcdcff' : C.dim, fontWeight: 600 }}>{label}</span>
+          <span style={{ fontSize: 11, color: C.dim }}>· {members.length}</span>
         </button>
         {!collapsed && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
@@ -275,7 +275,6 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             <div style={{ fontSize: 15, fontWeight: 600 }}>{bundle.meeting?.title || 'Board Meeting'}</div>
             <div style={{ fontSize: 12, color: C.dim, display: 'flex', gap: 12 }}>
               <Link href="/dashboard/board-meetings" style={{ color: C.dim }}>← Board Meetings</Link>
-              <Link href={`/control/${productionId}?v=1`} style={{ color: C.dim }}>Classic view</Link>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -297,7 +296,6 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 {elapsedStartedAt ? 'Reset' : 'Start clock'}
               </button>
             )}
-            {onAirLabel && <span style={{ fontSize: 13, color: C.soft }}>On air: <b style={{ color: C.text, fontWeight: 600 }}>{onAirLabel}</b></span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ display: 'flex', border: `1px solid ${C.line2}`, borderRadius: 8, overflow: 'hidden' }}>
@@ -316,8 +314,6 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             >
               {needRoll ? '⚠ Take attendance ▾' : `Attendance ${presentCount} / ${att?.records.length ?? 0} ✓`}
             </button>
-            {isPrepared && !isPreshow && <button onClick={() => { void onAction('end-preroll'); setView('live') }} disabled={!canControl} style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}>Go live (gavel)</button>}
-            {isLive && !onBreak && <button onClick={() => { void onAction('recess'); setView('preshow') }} disabled={!canControl} title="Recess between sessions — returns the screens to pre-roll" style={{ ...btn }}>Back to pre-roll</button>}
             {isLive && <button onClick={() => setEndOpen(true)} disabled={!canControl} style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }}>End meeting</button>}
           </div>
         </div>
@@ -392,8 +388,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             <div ref={agendaScrollRef} style={{ position: 'relative', maxHeight: 'calc(100vh - 170px)', overflowY: 'auto' }}>
             {isLive && (
               <div style={{ position: 'sticky', top: 0, zIndex: 3, background: C.panel, borderRadius: 8, borderLeft: `3px solid ${C.accent}`, border: `1px solid ${C.line2}`, borderLeftWidth: 3, borderLeftColor: C.accent, padding: '7px 10px', marginBottom: 6 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', color: '#bcdcff', textTransform: 'uppercase' }}>On air now</div>
-                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{onAirLabel ?? 'Nothing on air'}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#bcdcff', textTransform: 'uppercase' }}>On air now</div>
+                <div style={{ fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{onAirLabel ?? 'Nothing on air'}</div>
               </div>
             )}
             {sections.map(sec => (
@@ -433,7 +429,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                           style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '8px 9px', cursor: canControl ? 'pointer' : 'default' }}>
                           <span style={{ fontSize: 12, color: live ? '#bcdcff' : C.dim, fontWeight: 600, minWidth: 30 }}>{it.item_number}</span>
                           <span style={{ fontSize: 13, fontWeight: 600 }}>Consent Agenda
-                            <span style={{ fontSize: 10, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6 }}>one vote · {subs.length} items</span>
+                            <span style={{ fontSize: 11, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6 }}>one vote · {subs.length} items</span>
                           </span>
                         </div>
                         <div style={{ borderTop: `1px solid ${C.line}`, padding: '4px 9px 6px' }}>
@@ -443,7 +439,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                               <span style={{ fontSize: 12, flex: 1, lineHeight: 1.3 }}>{s.title}</span>
                               {canControl && onPullFromConsent && (
                                 <button title="Remove from consent — discuss & vote separately" onClick={e => { e.stopPropagation(); void onPullFromConsent(it.id, s.item_number) }}
-                                  style={{ font: 'inherit', fontSize: 10, padding: '2px 7px', borderRadius: 6, border: `1px solid ${C.line2}`, background: 'transparent', color: C.soft, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pull out</button>
+                                  style={{ font: 'inherit', fontSize: 11, padding: '2px 7px', borderRadius: 6, border: `1px solid ${C.line2}`, background: 'transparent', color: C.soft, cursor: 'pointer', whiteSpace: 'nowrap' }}>Pull out</button>
                               )}
                             </div>
                           ))}
@@ -457,9 +453,9 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                       <span style={{ fontSize: 12, color: live ? '#bcdcff' : C.dim, fontWeight: 600, minWidth: 30, fontVariantNumeric: 'tabular-nums' }}>{it.item_number}</span>
                       <span style={{ fontSize: 13, lineHeight: 1.3 }}>
                         {it.title}
-                        {(it.type === 'action' || it.action_requested) && <span style={{ fontSize: 10, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6 }}>action</span>}
-                        {it.live_status && <span style={{ fontSize: 10, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6, textTransform: 'capitalize' }}>{it.live_status}</span>}
-                        {!it.is_broadcastable && <span style={{ fontSize: 10, color: C.dim, marginLeft: 6 }}>skipped</span>}
+                        {(it.type === 'action' || it.action_requested) && <span style={{ fontSize: 11, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6 }}>action</span>}
+                        {it.live_status && <span style={{ fontSize: 11, color: C.amber, background: C.amberbg, padding: '1px 6px', borderRadius: 5, marginLeft: 6, textTransform: 'capitalize' }}>{it.live_status}</span>}
+                        {!it.is_broadcastable && <span style={{ fontSize: 11, color: C.dim, marginLeft: 6 }}>skipped</span>}
                       </span>
                     </div>
                   )
@@ -473,7 +469,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
           <div style={{ padding: 14, minHeight: 600, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 10px', marginBottom: 12 }}>
               <button style={btn} disabled={!canControl || busy} onClick={() => onAction('go-back')}>◀ Prev</button>
-              <div style={{ flex: 1, fontSize: 13 }}>On air: <b style={{ fontWeight: 600 }}>{onAirLabel ?? 'Nothing on air'}</b></div>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={onAirLabel ?? undefined}>On air: <b style={{ color: C.text, fontWeight: 600 }}>{currentItem ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number}`) : 'Nothing on air'}</b></div>
               <button style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl || busy} onClick={() => onAction('advance')}>Next item ▶</button>
             </div>
             {isLive && <div style={{ fontSize: 11, color: C.dim, margin: '-6px 0 12px', textAlign: 'center' }}>Keys: <b style={{ color: C.soft }}>←</b> prev · <b style={{ color: C.soft }}>→</b> next · <b style={{ color: C.soft }}>C</b> clear lower third</div>}
@@ -501,7 +497,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 9, background: activeLt ? C.livebg : C.panel2, border: `1px solid ${activeLt ? 'rgba(255,93,93,.35)' : C.line}` }}>
                   {activeLt ? (
                     <div>
-                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', color: '#ffb3b3' }}>● ON AIR</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#ffb3b3' }}>● ON AIR</span>
                       <div style={{ fontWeight: 700, fontSize: 14 }}>{activeLt.display_name}</div>
                       {activeLt.primary_title && <div style={{ fontSize: 11, color: C.soft }}>{activeLt.primary_title}</div>}
                     </div>
@@ -509,7 +505,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                   {activeLt && <button style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }} disabled={!canControl} onClick={() => onAction('clear-lower-third')}>Clear</button>}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 96 }}>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, fontWeight: 600 }}>Position</div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, fontWeight: 600 }}>Position</div>
                   <div style={{ display: 'flex', gap: 5 }}>
                     {(['left', 'center', 'right'] as const).map(pos => (
                       <button key={pos} style={{ ...chip(position === pos), flex: 1, textAlign: 'center', padding: '6px 0' }} disabled={!canControl} onClick={() => onAction('set-lower-third-position', { position: pos })}>{pos[0].toUpperCase()}</button>
@@ -537,8 +533,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
 
             <div style={cardStyle}>
               <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between' }}>
-                <span>On air now</span>
-                <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} onClick={() => window.open(`/control/${productionId}/program`, 'board-program', 'width=1280,height=720')}>Pop to Monitor 2 ↗</button>
+                <span>Previews</span>
+                <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} title="Open the program output in a separate window for a second monitor" onClick={() => window.open(`/control/${productionId}/program`, 'board-program', 'width=1280,height=720')}>Pop to Monitor 2 ↗</button>
               </h3>
               {showPreviews ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

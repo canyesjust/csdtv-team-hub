@@ -1,6 +1,6 @@
 -- Schema doctor: READ-ONLY. Run in Supabase SQL editor.
 -- Returns the tables/columns the code expects that are MISSING from your DB.
--- Zero rows = you are fully migrated. Each row tells you what to add.
+-- Zero rows = fully migrated.
 with expected_tables(t) as (values
 ('board_bell_settings'),
 ('board_meeting_agenda_documents'),
@@ -65,6 +65,7 @@ expected_cols(t,c) as (values
 ('equipment','power_output_amperage'),
 ('equipment','power_output_polarity'),
 ('equipment','power_output_voltage'),
+('lower_third_people','group_label'),
 ('meeting_broadcast_state','active_lower_third_person_id'),
 ('meeting_broadcast_state','active_motion_id'),
 ('meeting_broadcast_state','active_qr_duration_seconds'),
@@ -73,6 +74,7 @@ expected_cols(t,c) as (values
 ('meeting_broadcast_state','active_qr_url'),
 ('meeting_broadcast_state','active_vote_result_motion_id'),
 ('meeting_broadcast_state','agenda_branding_hold'),
+('meeting_broadcast_state','attendance_recorded_at'),
 ('meeting_broadcast_state','elapsed_started_at'),
 ('meeting_broadcast_state','lower_third_position'),
 ('meeting_broadcast_state','vote_result_duration_seconds'),
@@ -84,11 +86,6 @@ expected_cols(t,c) as (values
 ('meeting_motions','tally_nay'),
 ('meeting_motions','tally_recused'),
 ('meeting_motions','tally_yea'),
-('school_brand_colors','city'),
-('school_brand_colors','link_url'),
-('school_brand_colors','mascot_name'),
-('school_brand_colors','text_color'),
-('school_brand_colors','title_i'),
 ('schools','city'),
 ('schools','link_url'),
 ('schools','mascot_name'),
@@ -139,11 +136,6 @@ missing_cols as (
   select 'missing column' as issue, ec.t as table_name, ec.c as column_name
   from expected_cols ec
   where to_regclass('public.'||ec.t) is not null
-    and not exists (
-      select 1 from information_schema.columns
-      where table_schema='public' and table_name=ec.t and column_name=ec.c
-    )
+    and not exists (select 1 from information_schema.columns where table_schema='public' and table_name=ec.t and column_name=ec.c)
 )
-select * from missing_tables
-union all select * from missing_cols
-order by 1,2,3;
+select * from missing_tables union all select * from missing_cols order by 1,2,3;

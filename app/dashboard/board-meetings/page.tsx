@@ -64,7 +64,7 @@ function BoardMeetingsPageContent() {
     <div>
       <h1 style={{ fontSize: '22px', fontWeight: 600, color: text, margin: '0 0 4px' }}>Board Meetings</h1>
       <p style={{ fontSize: '14px', color: muted, margin: '0 0 20px' }}>
-        Agenda extraction, media library, playlists, people, output channels, board email, and voting records.
+        Agenda extraction, media library, the pre-roll playlist, people, output channels, and board email.
       </p>
 
       <div
@@ -80,7 +80,7 @@ function BoardMeetingsPageContent() {
       >
         {tabBtn('meetings', 'Meetings')}
         {tabBtn('people', 'People')}
-        {tabBtn('channels', 'Output Channels')}
+        {tabBtn('channels', 'Output channels')}
         {tabBtn('media', 'Media')}
         {tabBtn('templates', 'Templates')}
         {tabBtn('qr', 'QR codes')}

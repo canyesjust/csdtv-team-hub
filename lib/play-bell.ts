@@ -68,9 +68,17 @@ export function playBell(opts?: { choice?: BellChoice; customUrl?: string | null
   try {
     const choice = opts?.choice ?? 'classic'
     if (choice === 'custom' && opts?.customUrl) {
+      // Play the uploaded sound three times, like a stage-timer "time's up" cue.
       const audio = new Audio(opts.customUrl)
       audio.volume = 1
-      void audio.play().catch(() => { /* blocked until a user gesture — ignore */ })
+      let plays = 0
+      const playOnce = () => {
+        plays++
+        audio.currentTime = 0
+        void audio.play().catch(() => { /* blocked until a user gesture — ignore */ })
+      }
+      audio.addEventListener('ended', () => { if (plays < 3) playOnce() })
+      playOnce()
       return
     }
     playSynth(choice === 'custom' ? 'classic' : choice)

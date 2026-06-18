@@ -76,6 +76,8 @@ The hub works well for *preparation* (importing/locking the agenda, people, publ
 
 **Overlay transparency.** The overlay page must have a transparent body so OBS composites it over the camera. Build every graphic as a "show/hide/update" with enter/exit animations.
 
+**Timer end sound.** Keep chimes as plain static audio files in a `/chimes` (or `/sounds`) folder — that's exactly how stagetimer does it (e.g. it serves `…/spa-assets/chimes/bell-1x.mp3`). Preload the selected file on boot (`new Audio(url)` held in memory, or decode into a Web Audio buffer) so there's no delay. Browsers block audio until the first user gesture, so unlock it on the operator's first click (or an explicit "enable sound" step on the output page) — otherwise `.play()` silently no-ops. When the local countdown hits 0, **play the file three times** (replay on the `ended` event, three total) for an unmistakable "time's up" cue. Use the station's own recorded sound or a CC0/royalty-free file — don't host another product's asset.
+
 ---
 
 ## 4. The graphics the app must produce ("scenes")

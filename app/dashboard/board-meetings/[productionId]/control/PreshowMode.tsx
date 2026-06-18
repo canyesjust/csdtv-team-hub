@@ -8,7 +8,7 @@ import type { ControlBundle } from '@/lib/board-meetings/types'
 const C = {
   bg: '#0a0f1a', panel: '#111a2b', panel2: '#16223a',
   line: 'rgba(255,255,255,.08)', line2: 'rgba(255,255,255,.14)',
-  text: '#eaf1fb', soft: '#9fb2d0', dim: '#64748b',
+  text: '#eaf1fb', soft: '#9fb2d0', dim: '#8a9cbb',
   accent: '#4f9dee', accentbg: 'rgba(79,157,238,.16)',
   amber: '#fbbf24', amberbg: 'rgba(251,191,36,.15)',
   yea: '#34d399', yeabg: 'rgba(52,211,153,.16)', gold: '#e7b549',
@@ -46,7 +46,7 @@ function Step({ state, label, sub }: { state: 'done' | 'now' | 'todo'; label: st
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderLeft: `1px solid ${C.line}` }}>
       <span style={{ width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, background: bg, color: fg, border: state === 'todo' ? `1px solid ${C.line2}` : 'none' }}>{state === 'done' ? '✓' : state === 'now' ? '●' : ' '}</span>
-      <div><div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div><div style={{ fontSize: 10, color: C.soft }}>{sub}</div></div>
+      <div><div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div><div style={{ fontSize: 11, color: C.soft }}>{sub}</div></div>
     </div>
   )
 }
@@ -178,14 +178,14 @@ export default function PreshowMode({ productionId, bundle, canControl, busy, on
             return (
               <div key={it.id}
                 style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 8px', borderRadius: 8, border: `1px solid ${cur ? 'rgba(79,157,238,.5)' : C.line}`, background: cur ? C.accentbg : C.panel, marginBottom: 5 }}>
-                <span style={{ width: 42, height: 26, borderRadius: 4, background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: C.soft, flexShrink: 0, textTransform: 'uppercase' }}>{it.item_type.replace('info_card_', '').slice(0, 6)}</span>
+                <span style={{ width: 42, height: 26, borderRadius: 4, background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: C.soft, flexShrink: 0, textTransform: 'uppercase' }}>{it.item_type.replace('info_card_', '').slice(0, 6)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {it.label}
-                    {cur && <span style={{ fontSize: 9, color: '#bcdcff', marginLeft: 5 }}>on now</span>}
-                    {held && <span style={{ fontSize: 9, color: '#fde3a7', marginLeft: 5 }}>held</span>}
+                    {cur && <span style={{ fontSize: 11, color: '#bcdcff', marginLeft: 5 }}>on now</span>}
+                    {held && <span style={{ fontSize: 11, color: '#fde3a7', marginLeft: 5 }}>held</span>}
                   </div>
-                  <div style={{ fontSize: 10, color: C.dim }}>{it.duration_seconds ? `${it.duration_seconds}s` : 'auto'}</div>
+                  <div style={{ fontSize: 11, color: C.dim }}>{it.duration_seconds ? `${it.duration_seconds}s` : 'auto'}</div>
                 </div>
                 <button onClick={e => { e.stopPropagation(); void toggleFullscreen(it) }} title="Full-screen this item"
                   style={{ font: 'inherit', fontSize: 12, padding: '2px 6px', borderRadius: 6, border: 'none', background: fs ? C.amberbg : 'transparent', color: fs ? '#fde3a7' : C.dim, cursor: 'pointer' }}>⛶</button>
@@ -240,20 +240,6 @@ export default function PreshowMode({ productionId, bundle, canControl, busy, on
             )}
           </div>
 
-          <div style={card}>
-            <h3 style={h3}>Pre-show checklist</h3>
-            {[
-              ['Stream live', stepStream, streamStarted ? new Date(streamStarted).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'not yet'],
-              ['Screens taken over', stepScreens, takeoverMode],
-              ['Pre-roll playing', stepPlaying, playback],
-              ['Board channel', !!boardCh, boardCh ? `Ch ${boardCh}` : 'none'],
-            ].map(([label, ok, detail]) => (
-              <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0' }}>
-                <span style={{ color: C.soft }}>{label as string}</span>
-                <span style={{ color: ok ? C.yea : C.amber, fontWeight: 600 }}>{ok ? '✓ ' : '• '}{detail as string}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>

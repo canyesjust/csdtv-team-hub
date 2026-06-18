@@ -432,7 +432,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
         fontSize: '14px',
         padding: '10px 18px',
         borderRadius: '10px',
-        background: '#1e6cb5',
+        background: 'var(--brand-primary)',
         color: '#fff',
         fontWeight: 500,
         minHeight: '44px',
@@ -470,7 +470,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       ? { step: 'Done', text: 'This meeting is finished and archived. The agenda and recording stay public — there’s nothing to change here.' }
       : null
 
-  const tipLink: React.CSSProperties = { background: 'transparent', border: 'none', color: '#1e6cb5', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap', padding: 0 }
+  const tipLink: React.CSSProperties = { background: 'transparent', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap', padding: 0 }
 
   return (
     <div>
@@ -485,8 +485,8 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
               const n = i + 1
               const done = n < stepIndex || phase === 'readonly'
               const active = n === stepIndex && phase !== 'readonly'
-              const bg = done ? '#1e6cb5' : active ? 'rgba(30,108,181,0.14)' : 'transparent'
-              const fg = done ? '#fff' : active ? '#1e6cb5' : muted
+              const bg = done ? 'var(--brand-primary)' : active ? 'rgba(30,108,181,0.14)' : 'transparent'
+              const fg = done ? '#fff' : active ? 'var(--brand-primary)' : muted
               return (
                 <span key={label} style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, padding: '5px 11px', borderRadius: '999px', background: bg, color: fg, border: done || active ? 'none' : `0.5px solid ${border}` }}>
@@ -519,10 +519,10 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
         </div>
       )}
 
-      {showTips && guide && (
-        <div style={{ marginBottom: '16px', padding: '12px 14px', background: 'rgba(30,108,181,0.06)', borderLeft: '3px solid #1e6cb5', borderRadius: '0 8px 8px 0', display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
+      {showTips && guide && introSeen && (
+        <div style={{ marginBottom: '16px', padding: '12px 14px', background: 'rgba(30,108,181,0.06)', borderLeft: '3px solid var(--brand-primary)', borderRadius: '0 8px 8px 0', display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e6cb5', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{guide.step}</div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--brand-primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{guide.step}</div>
             <div style={{ fontSize: '13.5px', color: text, lineHeight: 1.5 }}>{guide.text}</div>
           </div>
           <button type="button" onClick={toggleTips} style={tipLink}>Hide tips</button>
@@ -547,7 +547,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
               placeholder="Agenda URL or meeting ID (e.g. 478)"
               style={{ flex: 1, minWidth: '220px', height: '44px', padding: '0 12px', borderRadius: '10px', border: `1px solid ${border}`, background: 'transparent', color: text, fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' }}
             />
-            <button type="button" onClick={() => void importFromPortal()} style={{ fontSize: '14px', padding: '0 18px', height: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+            <button type="button" onClick={() => void importFromPortal()} style={{ fontSize: '14px', padding: '0 18px', height: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
               Import agenda
             </button>
           </div>
@@ -591,7 +591,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                 type="button"
                 onClick={lockAgenda}
                 disabled={locking || items.length === 0}
-                style={{ fontSize: '14px', padding: '10px 20px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                style={{ fontSize: '14px', padding: '10px 20px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
               >
                 {locking ? 'Locking…' : 'Lock agenda'}
               </button>
@@ -745,7 +745,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
               <Link
                 href={`/control/${productionId}`}
-                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center' }}
               >
                 Open control surface
               </Link>
@@ -786,7 +786,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                 type="button"
                 onClick={reopenMeeting}
                 disabled={reopening}
-                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
               >
                 {reopening ? 'Reopening…' : 'Reopen meeting'}
               </button>
@@ -854,7 +854,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
           <button
             type="button"
             onClick={applyDiff}
-            style={{ fontSize: '14px', padding: '10px 20px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+            style={{ fontSize: '14px', padding: '10px 20px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
           >
             Apply changes
           </button>

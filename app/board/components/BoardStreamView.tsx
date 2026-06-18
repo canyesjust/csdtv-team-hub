@@ -73,7 +73,7 @@ export default function BoardStreamView({
             <div style={{ background: C.panel, borderLeft: `4px solid ${C.amber}`, borderRadius: 8, padding: '16px 18px', marginBottom: 18 }}>
               <div style={{ fontSize: 11, color: C.amber, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 6 }}>On now</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                <span style={{ fontSize: 14, color: C.dim, fontWeight: 600 }}>{item.item_number}</span>
+                <span style={{ fontSize: 14, color: C.soft, fontWeight: 600 }}>{item.item_number}</span>
                 <span style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.25 }}>{item.title}</span>
               </div>
               {item.presenters?.[0] && (
@@ -91,7 +91,7 @@ export default function BoardStreamView({
               <div style={{ fontSize: 11, color: C.dim, letterSpacing: '0.14em', textTransform: 'uppercase', margin: '4px 0 8px' }}>Up next</div>
               {upcoming.slice(0, 6).map(u => (
                 <div key={u.id} style={{ display: 'flex', gap: 10, padding: '7px 0', borderTop: `1px solid ${C.line}` }}>
-                  <span style={{ fontSize: 13, color: C.dim, fontWeight: 600, minWidth: 28 }}>{u.item_number}</span>
+                  <span style={{ fontSize: 13, color: C.soft, fontWeight: 600, minWidth: 28 }}>{u.item_number}</span>
                   <span style={{ fontSize: 14, color: C.soft, lineHeight: 1.3 }}>{u.title}</span>
                 </div>
               ))}
