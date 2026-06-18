@@ -103,7 +103,9 @@ export async function buildArchivePayload(service: SupabaseClient, productionNum
   const recessCount = (events || []).filter(e => e.event_type === 'recess').length
 
   const agendaBase = items.map(it => {
-    const offset = firstAdvanceByItem.get(it.id)
+    // A saved manual override always wins over the auto-detected offset.
+    const override = typeof it.video_offset_seconds === 'number' ? it.video_offset_seconds : null
+    const offset = override ?? firstAdvanceByItem.get(it.id)
     return {
       id: it.id,
       section_number: it.section_number,

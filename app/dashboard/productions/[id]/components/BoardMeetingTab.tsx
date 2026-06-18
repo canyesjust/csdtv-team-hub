@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import GenerateChaptersButton from '@/app/dashboard/board-meetings/[productionId]/components/GenerateChaptersButton'
+import EditTimestampsButton from '@/app/dashboard/board-meetings/[productionId]/components/EditTimestampsButton'
 import { useTheme } from '@/lib/theme'
 import { confirmDialog } from '@/lib/confirm'
 import Loader from '../../../components/Loader'
@@ -780,6 +781,7 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                 </Link>
               )}
               <GenerateChaptersButton productionId={productionId} />
+              <EditTimestampsButton productionId={productionId} />
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
               <button

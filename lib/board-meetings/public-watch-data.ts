@@ -81,6 +81,7 @@ export type BoardWatchPayload = {
     title: string
     date: string
     date_short: string
+    production_number: number
     youtube_id: string | null
     youtube_url: string | null
     thumbnail: string | null
@@ -426,6 +427,7 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
       title: m.title,
       date: m.localDate,
       date_short: denverShort(new Date(m.startDatetime)),
+      production_number: m.productionNumber,
       youtube_id: id,
       youtube_url: youtubeUrlFrom(m.livestreamUrl, id),
       thumbnail: thumb,

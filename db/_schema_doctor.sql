@@ -53,6 +53,7 @@ with expected_tables(t) as (values
 expected_cols(t,c) as (values
 ('board_meeting_agenda_items','live_status'),
 ('board_meeting_agenda_items','suggested_motion_text'),
+('board_meeting_agenda_items','video_offset_seconds'),
 ('board_meeting_presenters','affiliation'),
 ('board_meetings','live_started_at'),
 ('board_meetings','public_agenda_url'),
