@@ -373,7 +373,15 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
   const live = meetings.filter(m => m.broadcastStatus === 'live')
   if (live.length > 0) {
     state = 'live'
-    featured = live.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime))[0]
+    // Prefer a live meeting actually dated TODAY; otherwise the most recently dated
+    // one. This stops a meeting that was left in "live" (never properly ended) from
+    // hijacking the public page — or, worse, overriding today's real meeting.
+    featured = live.sort((a, b) => {
+      const aToday = a.localDate === today ? 1 : 0
+      const bToday = b.localDate === today ? 1 : 0
+      if (aToday !== bToday) return bToday - aToday
+      return b.startDatetime.localeCompare(a.startDatetime)
+    })[0]
   } else {
     const upcoming = meetings
       .filter(m => m.localDate >= today)

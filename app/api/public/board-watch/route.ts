@@ -38,10 +38,14 @@ export async function GET(request: Request) {
 
   try {
     const payload = await buildBoardWatchPayload(service)
+    // Live: very fresh (follows the agenda). Today: fresh enough that an already-open
+    // page flips to live within ~30s of the gavel. Otherwise: relax to 5 minutes.
     const cache =
       payload.state === 'live'
         ? 's-maxage=15, stale-while-revalidate=30'
-        : 's-maxage=300, stale-while-revalidate=600'
+        : payload.state === 'today'
+          ? 's-maxage=30, stale-while-revalidate=60'
+          : 's-maxage=300, stale-while-revalidate=600'
     return NextResponse.json(payload, {
       status: 200,
       headers: { ...cors, 'Cache-Control': cache },
