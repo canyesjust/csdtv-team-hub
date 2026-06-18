@@ -35,6 +35,7 @@
   #csdtv-watch .cw-head h1{margin:0;font-size:30px;line-height:1.15;font-weight:800;letter-spacing:-.01em}
   #csdtv-watch .cw-head p{margin:8px 0 0;color:var(--slate);font-size:15px;max-width:66ch}
   #csdtv-watch .cw-grid{display:grid;grid-template-columns:1fr 392px;gap:28px;align-items:start}
+  #csdtv-watch .cw-grid.cw-no-agenda{grid-template-columns:1fr}
   /* player */
   #csdtv-watch .cw-player-card{background:#000;border-radius:12px;overflow:hidden;box-shadow:0 14px 40px rgba(17,88,136,.16)}
   #csdtv-watch .cw-player{position:relative;aspect-ratio:16/9;width:100%;background:#0c1f2e}
@@ -178,7 +179,7 @@
     <h1>Watch Board Meetings Live</h1>
     <p>Every Canyons Board of Education study session and business meeting is streamed live on CSDtv. Follow the agenda alongside the video to see where the board is in the meeting, then find past meetings and what is coming up.</p>
   </div>
-  <div class="cw-grid">
+  <div class="cw-grid" id="cw-grid">
     <section>
       <div class="cw-player-card">
         <div class="cw-player" id="cw-player">
@@ -191,7 +192,7 @@
         <p class="cw-when cw-skel" style="height:16px;width:40%">&nbsp;</p>
       </div>
     </section>
-    <aside>
+    <aside id="cw-agenda-aside">
       <div class="cw-ag">
         <div class="cw-ag-head">
           <div class="row1"><h3>Meeting Agenda</h3><span class="follow" id="cw-follow" style="display:none"><span class="dot"></span>FOLLOWING LIVE</span></div>
@@ -367,6 +368,12 @@
     return '<div class="cw-it ' + cls + '"><span class="lt"></span><div class="body"><div class="pres">Approved together as one motion</div>' + now + '</div>' + tc + '</div>' +
       (subs ? '<div class="cw-consent">' + subs + '</div>' : '');
   }
+  function setAgendaVisible(show) {
+    var aside = el('cw-agenda-aside');
+    var grid = el('cw-grid');
+    if (aside) aside.style.display = show ? '' : 'none';
+    if (grid) grid.classList.toggle('cw-no-agenda', !show);
+  }
   function renderAgenda(data) {
     var ag = data.agenda || {};
     var f = data.featured || {};
@@ -377,17 +384,12 @@
     var foot = el('cw-ag-foot');
     var follow = el('cw-follow');
     follow.style.display = (data.state === 'live') ? 'inline-flex' : 'none';
+    // Only show the agenda panel once an agenda has actually been posted in the hub.
     if (!ag.available || !ag.sections || !ag.sections.length) {
-      meta.textContent = f.date_long || '';
-      var msg = ag.expected_label
-        ? '<b>' + esc(ag.expected_label) + '</b>Agendas are posted on Diligent at least 24 hours before each meeting.'
-        : '<b>Agenda coming soon</b>It will appear here once it is posted, usually the Saturday before the meeting.';
-      body.innerHTML = '<div class="cw-ag-empty">' + msg + '</div>';
-      foot.style.display = 'flex';
-      el('cw-ag-footnote').textContent = 'Meetings begin at ' + startLabel;
-      el('cw-ag-diligent').href = ag.diligent_url || links.diligent;
+      setAgendaVisible(false);
       return;
     }
+    setAgendaVisible(true);
     meta.textContent = (ag.sections.length) + ' sections' + (f.date_long ? ' · ' + f.date_long : '');
     var html = ag.sections.map(function (sec, i) {
       var head = '<div class="cw-sec"><div class="cw-sec-h"><span class="cw-sec-n">' + esc(sec.number) + '</span><span class="cw-sec-t">' + esc(sec.title) + '</span>' +
@@ -438,8 +440,7 @@
       '<p class="cw-when">Live streams and recordings are available on the CSDtv channel.</p>' +
       '<div class="cw-actions"><a class="cw-btn primary" href="' + DEFAULT_LINKS.channel + '" target="_blank" rel="noopener">Watch on CSDtv</a>' +
       '<a class="cw-btn ghost" href="' + DEFAULT_LINKS.schedule + '" target="_blank" rel="noopener">Meeting Schedule</a></div>';
-    el('cw-ag-body').innerHTML = '<div class="cw-ag-empty"><b>Agenda unavailable</b>Agendas are posted on Diligent before each meeting.</div>';
-    el('cw-ag-foot').style.display = 'none';
+    setAgendaVisible(false);
     el('cw-upcoming').innerHTML = '<div class="cw-upempty">Schedule is available on the district site.</div>';
     el('cw-recent').innerHTML = '<div class="cw-rl-empty">Recent meetings are on the CSDtv channel.</div>';
   }

@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildArchivePayload } from '@/lib/board-meetings/archive-data'
 import {
-  importIcompassAgenda,
   resolveIcompassMeeting,
   resolveIcompassAgendaDocId,
 } from '@/lib/board-meetings/icompass-agenda'
@@ -172,6 +171,7 @@ type MeetingRow = {
   broadcastStatus: string
   scheduledStart: string | null
   icompassMeetingId: string | null
+  agendaLocked: boolean
   cancelled: boolean
 }
 
@@ -189,7 +189,7 @@ async function loadBoardMeetings(service: SupabaseClient): Promise<MeetingRow[]>
       .eq('request_type_number', 4),
     service
       .from('board_meetings')
-      .select('id, production_id, broadcast_status, scheduled_public_start, icompass_meeting_id'),
+      .select('id, production_id, broadcast_status, scheduled_public_start, icompass_meeting_id, agenda_locked'),
   ])
   if (!prods?.length) return []
 
@@ -216,6 +216,7 @@ async function loadBoardMeetings(service: SupabaseClient): Promise<MeetingRow[]>
       broadcastStatus: (b?.broadcast_status as string) || 'none',
       scheduledStart: (b?.scheduled_public_start as string | null) ?? null,
       icompassMeetingId: (b?.icompass_meeting_id as string | null) ?? null,
+      agendaLocked: !!b?.agenda_locked,
       cancelled: b?.broadcast_status === 'cancelled' || p.status === 'Cancelled',
     })
   }
@@ -283,8 +284,9 @@ async function assembleAgenda(
     ? await diligentDocUrl(featured.icompassMeetingId)
     : null
 
-  // (a) Stored agenda items — full data with offsets + live status.
-  if (storedAgenda.length > 0 && featured.bmId) {
+  // (a) Locked, imported agenda — only goes public once the agenda is LOCKED in the
+  // hub (an unlocked/draft agenda is still being edited).
+  if (storedAgenda.length > 0 && featured.bmId && featured.agendaLocked) {
     const bmId = featured.bmId
     const [{ data: subRows }, { data: bstate }] = await Promise.all([
       service.from('board_meeting_agenda_items').select('id, subitems').eq('board_meeting_id', bmId),
@@ -335,50 +337,9 @@ async function assembleAgenda(
     }
   }
 
-  // (b) Live Diligent fetch — raw sections/items, no offsets or status.
-  if (featured.icompassMeetingId) {
-    const resolved = resolveIcompassMeeting(featured.icompassMeetingId)
-    if (resolved) {
-      try {
-        const parsed = await importIcompassAgenda(resolved.baseUrl, resolved.meetingId)
-        if (parsed && parsed.agenda_items.length > 0) {
-          const sectionMeta = new Map<number, { title: string; start_time: string | null }>()
-          for (const s of parsed.sections || []) {
-            sectionMeta.set(s.number, { title: s.title, start_time: s.start_time ?? null })
-          }
-          const entries = parsed.agenda_items.map(a => {
-            if (!sectionMeta.has(a.section_number)) sectionMeta.set(a.section_number, { title: a.section_title, start_time: null })
-            const item: AgendaItem = {
-              id: `${a.section_number}-${a.item_number}`,
-              item_number: a.item_number,
-              title: a.title,
-              type: a.type,
-              consent: !!a.consent_block,
-              subitems: (a.subitems as AgendaSubitem[] | undefined) || [],
-              presenters: (a.presenters || []).map(p => ({ name: p.name, title: p.title ?? null })),
-              documents: (a.documents || []).map(d => ({ title: d.title, url: null })),
-              status: null,
-              offset_seconds: null,
-              offset_label: null,
-              jump_url: null,
-            }
-            return { section: a.section_number, item }
-          })
-          return {
-            available: true,
-            current_item_id: null,
-            diligent_url: diligentUrl,
-            expected_label: null,
-            sections: groupSections(entries, sectionMeta),
-          }
-        }
-      } catch {
-        // fall through to unavailable
-      }
-    }
-  }
-
-  // (c) No agenda yet.
+  // (b) No agenda imported into the hub yet → not available. We deliberately do
+  // NOT live-fetch Diligent here: the public page only shows an agenda once it has
+  // been posted/imported in the hub.
   return {
     available: false,
     current_item_id: null,
