@@ -1,4 +1,5 @@
 import './control-surface.css'
+import ConfirmHost from '@/app/dashboard/components/ConfirmHost'
 
 export default function ControlLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,6 +16,10 @@ export default function ControlLayout({ children }: { children: React.ReactNode 
       }}
     >
       {children}
+      {/* Without this, confirmDialog() events in the console/motion screens have
+          no listener — the promise never resolves and confirm-gated actions
+          (e.g. "Reset / re-do" a motion) silently do nothing. */}
+      <ConfirmHost />
     </div>
   )
 }

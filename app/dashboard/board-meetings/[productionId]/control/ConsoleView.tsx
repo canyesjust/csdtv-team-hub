@@ -131,6 +131,10 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const [timerMin, setTimerMin] = useState(3)
   const [timerOpen, setTimerOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Lower-third picker: compact summary by default, expand to the full name list.
+  const [ltExpanded, setLtExpanded] = useState(false)
+  // Dismissible per-phase "next step" guidance for newer operators.
+  const [hintOpen, setHintOpen] = useState(true)
 
   // End-meeting checklist — a deliberate stop so screens/outputs are never left on.
   const [endOpen, setEndOpen] = useState(false)
@@ -169,6 +173,25 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   // comments, board/staff/superintendent reports, recognitions, hearings — or
   // whenever a timer is already running. It stays hidden everywhere else.
   const timedItem = !!currentItem && /\b(comment|comments|report|reports|recognition|public input|hearing|testimony)\b/i.test(`${currentItem.title} ${currentItem.type ?? ''}`)
+  const isActionItem = !!currentItem && (currentItem.type === 'action' || currentItem.action_requested)
+
+  // Plain-language "what to do next" for the current phase. Sentence continues
+  // after "Next step — " so it starts lower-case.
+  const hintText = !isLive ? null
+    : !currentItem ? 'nothing is on air yet. Click an agenda item on the left to put it on screen.'
+    : isActionItem ? 'this is an action item. In the Motion box set who moved and who seconded, then open the vote. After it passes or fails, show the result, then go to the next item.'
+    : timedItem ? 'someone is speaking. Pick the speaker’s name below to show their lower third, and add a timer to keep them on time.'
+    : 'pick a name below to show a lower third when someone speaks. Click “Next item” when the board moves on.'
+
+  // The picker defaults open on talk items (its the main tool there) and collapsed
+  // on action items (where the motion is the focus). The operator can still toggle.
+  const ltAutoKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    const key = `${currentItem?.id ?? 'none'}:${isActionItem ? 'a' : 't'}`
+    if (ltAutoKeyRef.current === key) return
+    ltAutoKeyRef.current = key
+    setLtExpanded(!isActionItem)
+  }, [currentItem?.id, isActionItem])
 
   const sections = useMemo(() => {
     const map = new Map<number, { title: string; number: number; items: ControlBundle['agenda_items'] }>()
@@ -305,6 +328,107 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
     return 'present'
   }
 
+  // ── Center-stage cards (ordered motion-first on action items, lower-third-first
+  //    on talk items). Defined here so the render stays readable. ──────────────
+  const timerCard = (timer || timedItem) ? (
+    <div style={cardStyle}>
+      <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Timer</span>
+        {!timer && !timerOpen && <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} disabled={!canControl} onClick={() => setTimerOpen(true)}>+ Set a timer</button>}
+      </h3>
+      {timer && atStarted && atDuration ? (
+        <>
+          <div style={{ fontSize: 12, color: C.soft, marginBottom: 6 }}>{timer.label || 'Timer'}</div>
+          <LiveCountdown startedAt={atStarted} durationSeconds={atDuration} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button style={{ ...btn, flex: 1 }} disabled={!canControl} onClick={() => onAction('end-timer')}>Done</button>
+            <button style={btn} disabled={!canControl} onClick={() => onAction('cancel-timer')}>Cancel</button>
+          </div>
+        </>
+      ) : timerOpen ? (
+        <>
+          <div style={{ fontSize: 12, color: C.soft, marginBottom: 8, lineHeight: 1.5 }}>
+            How long for <b style={{ color: C.text }}>{currentItem ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number}`) : 'this item'}</b>? Counts down on the dais and rings when it ends.
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {[2, 3, 5, 10].map(m => (
+              <button key={m} style={{ ...btn, fontSize: 12, padding: '6px 11px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: m * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>{m} min</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <input type="number" min={1} max={120} value={timerMin} onChange={e => setTimerMin(Math.max(1, Math.min(120, Number(e.target.value) || 1)))} style={{ width: 54, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 7, color: C.text, fontSize: 13, padding: '5px 7px', fontFamily: 'inherit' }} />
+            <span style={{ fontSize: 12, color: C.soft }}>min</span>
+            <button style={{ ...btn, fontSize: 12, padding: '6px 11px', background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: timerMin * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>Start + bell</button>
+            <button style={{ ...btn, fontSize: 12, padding: '6px 11px' }} onClick={() => setTimerOpen(false)}>Cancel</button>
+          </div>
+          {templates.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {templates.map(t => (
+                <button key={t.id} style={{ ...btn, fontSize: 11, padding: '5px 9px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { template_id: t.id }); setTimerOpen(false) }}>{t.name}</button>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ fontSize: 12, color: C.dim }}>No timer running. Use “Set a timer” for patron comments, reports, or any timed item.</div>
+      )}
+    </div>
+  ) : null
+
+  const lowerThirdCard = (
+    <div style={cardStyle}>
+      <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Lower third{!isActionItem ? ' · who’s speaking' : ''}</span>
+        <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} onClick={() => setLtExpanded(v => !v)}>{ltExpanded ? 'Done' : (activeLt ? 'Change ▾' : 'Choose ▾')}</button>
+      </h3>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', marginBottom: ltExpanded ? 12 : 0 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 9, background: activeLt ? C.livebg : C.panel2, border: `1px solid ${activeLt ? 'rgba(255,93,93,.35)' : C.line}` }}>
+          {activeLt ? (
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#ffb3b3' }}>● ON AIR</span>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{activeLt.display_name}</div>
+              {activeLt.primary_title && <div style={{ fontSize: 11, color: C.soft }}>{activeLt.primary_title}</div>}
+            </div>
+          ) : <div style={{ fontSize: 13, color: C.dim }}>No lower third on air</div>}
+          {activeLt && <button style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }} disabled={!canControl} onClick={() => onAction('clear-lower-third')}>Clear</button>}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 96 }}>
+          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, fontWeight: 600 }}>Position</div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {(['left', 'center', 'right'] as const).map(pos => (
+              <button key={pos} style={{ ...chip(position === pos), flex: 1, textAlign: 'center', padding: '6px 0' }} disabled={!canControl} onClick={() => onAction('set-lower-third-position', { position: pos })}>{pos[0].toUpperCase()}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {ltExpanded && (
+        <>
+          {groupedPeople.filter(([l]) => l === 'Board').map(([label, members]) => groupBlock(label, members))}
+          {groupBlock('On this agenda', agendaPeople, true)}
+          {groupedPeople.filter(([l]) => l !== 'Board').map(([label, members]) => groupBlock(label, members))}
+          <ConsoleLowerThirdOther
+            excludeIds={lowerThirdShownIds}
+            activeId={activeLt?.person_id ?? null}
+            canControl={canControl}
+            onPick={setLt}
+          />
+        </>
+      )}
+    </div>
+  )
+
+  const motionCard = (
+    <div style={{ ...cardStyle, ...(isActionItem ? { borderColor: 'rgba(79,157,238,.45)' } : {}) }}>
+      <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between' }}>
+        <span>{isActionItem ? 'Motion · live on screen' : 'Motion'}</span>
+        <Link href={`/control/${productionId}/motion`} target="_blank" style={{ fontSize: 11, color: C.accent, textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>Pop out ↗</Link>
+      </h3>
+      {isActionItem
+        ? <MotionInline productionId={productionId} />
+        : <div style={{ fontSize: 13, color: C.soft, lineHeight: 1.5 }}>No action item on air. Take an action item to run a motion.</div>}
+    </div>
+  )
+
   return (
     <div style={{ height: '100%', overflowY: 'auto', background: '#05080f', color: C.text, fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: 16, overflow: 'hidden', margin: 12 }}>
@@ -332,7 +456,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 title="Restart the elapsed clock from now"
                 style={{ font: 'inherit', fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `1px solid ${C.line2}`, background: 'transparent', color: C.soft, cursor: 'pointer' }}
               >
-                {elapsedStartedAt ? 'Reset' : 'Start clock'}
+                {elapsedStartedAt ? 'Reset clock' : 'Start clock'}
               </button>
             )}
           </div>
@@ -504,14 +628,13 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             </div>
           </div>
 
-          {/* CENTER */}
+          {/* CENTER — live stage */}
           <div style={{ padding: 14, minHeight: 600, borderLeft: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 10px', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 10px', marginBottom: 10 }}>
               <button style={btn} disabled={!canControl || busy} onClick={() => onAction('go-back')}>◀ Prev</button>
               <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={onAirLabel ?? undefined}>On air: <b style={{ color: C.text, fontWeight: 600 }}>{currentItem ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number}`) : 'Nothing on air'}</b></div>
               <button style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl || busy} onClick={() => onAction('advance')}>Next item ▶</button>
             </div>
-            {isLive && <div style={{ fontSize: 11, color: C.dim, margin: '-6px 0 12px', textAlign: 'center' }}>Keys: <b style={{ color: C.soft }}>←</b> prev · <b style={{ color: C.soft }}>→</b> next · <b style={{ color: C.soft }}>C</b> clear lower third</div>}
 
             {isPrepared && canControl && (
               <button onClick={() => onAction('end-preroll')} disabled={busy} style={{ width: '100%', padding: 14, border: 'none', borderRadius: 10, background: C.accent, color: '#06101f', font: 'inherit', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
@@ -519,103 +642,38 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               </button>
             )}
 
-            {/* LOWER THIRD */}
-            <div style={cardStyle}>
-              <h3 style={h3}>Lower third</h3>
-              {groupedPeople.filter(([l]) => l === 'Board').map(([label, members]) => groupBlock(label, members))}
-              {groupBlock('On this agenda', agendaPeople, true)}
-              {groupedPeople.filter(([l]) => l !== 'Board').map(([label, members]) => groupBlock(label, members))}
-
-              <ConsoleLowerThirdOther
-                excludeIds={lowerThirdShownIds}
-                activeId={activeLt?.person_id ?? null}
-                canControl={canControl}
-                onPick={setLt}
-              />
-
-              <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'stretch' }}>
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 12px', borderRadius: 9, background: activeLt ? C.livebg : C.panel2, border: `1px solid ${activeLt ? 'rgba(255,93,93,.35)' : C.line}` }}>
-                  {activeLt ? (
-                    <div>
-                      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#ffb3b3' }}>● ON AIR</span>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{activeLt.display_name}</div>
-                      {activeLt.primary_title && <div style={{ fontSize: 11, color: C.soft }}>{activeLt.primary_title}</div>}
-                    </div>
-                  ) : <div style={{ fontSize: 13, color: C.dim }}>No lower third on air</div>}
-                  {activeLt && <button style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }} disabled={!canControl} onClick={() => onAction('clear-lower-third')}>Clear</button>}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 96 }}>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, fontWeight: 600 }}>Position</div>
-                  <div style={{ display: 'flex', gap: 5 }}>
-                    {(['left', 'center', 'right'] as const).map(pos => (
-                      <button key={pos} style={{ ...chip(position === pos), flex: 1, textAlign: 'center', padding: '6px 0' }} disabled={!canControl} onClick={() => onAction('set-lower-third-position', { position: pos })}>{pos[0].toUpperCase()}</button>
-                    ))}
-                  </div>
-                </div>
+            {/* NEXT STEP — plain-language guidance, dismissible */}
+            {isLive && hintText && (hintOpen ? (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: C.accentbg, border: '1px solid rgba(79,157,238,.3)', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+                <span style={{ color: C.accent, fontSize: 15, lineHeight: 1.3 }}>→</span>
+                <div style={{ flex: 1, fontSize: 12.5, color: '#cfe2fb', lineHeight: 1.45 }}><b style={{ color: '#eaf1fb' }}>Next step</b> — {hintText}</div>
+                <button onClick={() => setHintOpen(false)} title="Hide tips" style={{ font: 'inherit', background: 'transparent', border: 'none', color: C.soft, cursor: 'pointer', fontSize: 13, padding: '0 2px' }}>✕</button>
               </div>
-            </div>
+            ) : (
+              <button onClick={() => setHintOpen(true)} style={{ ...btn, fontSize: 11, padding: '4px 9px', marginBottom: 10 }}>Show step help</button>
+            ))}
 
-            {/* TIMER — only on timed items (comments, reports, recognitions…) or while one runs. */}
-            {(timer || timedItem) && (
-            <div style={cardStyle}>
-              <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>Timer</span>
-                {!timer && !timerOpen && <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} disabled={!canControl} onClick={() => setTimerOpen(true)}>+ Set a timer</button>}
-              </h3>
-              {timer && atStarted && atDuration ? (
-                <>
-                  <div style={{ fontSize: 12, color: C.soft, marginBottom: 6 }}>{timer.label || 'Timer'}</div>
-                  <LiveCountdown startedAt={atStarted} durationSeconds={atDuration} />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <button style={{ ...btn, flex: 1 }} disabled={!canControl} onClick={() => onAction('end-timer')}>Done</button>
-                    <button style={btn} disabled={!canControl} onClick={() => onAction('cancel-timer')}>Cancel</button>
-                  </div>
-                </>
-              ) : timerOpen ? (
-                <>
-                  <div style={{ fontSize: 12, color: C.soft, marginBottom: 8, lineHeight: 1.5 }}>
-                    How long for <b style={{ color: C.text }}>{currentItem ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number}`) : 'this item'}</b>? Counts down on the dais and rings when it ends.
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                    {[2, 3, 5, 10].map(m => (
-                      <button key={m} style={{ ...btn, fontSize: 12, padding: '6px 11px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: m * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>{m} min</button>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <input type="number" min={1} max={120} value={timerMin} onChange={e => setTimerMin(Math.max(1, Math.min(120, Number(e.target.value) || 1)))} style={{ width: 54, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 7, color: C.text, fontSize: 13, padding: '5px 7px', fontFamily: 'inherit' }} />
-                    <span style={{ fontSize: 12, color: C.soft }}>min</span>
-                    <button style={{ ...btn, fontSize: 12, padding: '6px 11px', background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: timerMin * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>Start + bell</button>
-                    <button style={{ ...btn, fontSize: 12, padding: '6px 11px' }} onClick={() => setTimerOpen(false)}>Cancel</button>
-                  </div>
-                  {templates.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                      {templates.map(t => (
-                        <button key={t.id} style={{ ...btn, fontSize: 11, padding: '5px 9px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { template_id: t.id }); setTimerOpen(false) }}>{t.name}</button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ fontSize: 12, color: C.dim }}>No timer running. Use “Set a timer” for patron comments, reports, or any timed item.</div>
-              )}
-            </div>
+            {isLive && <div style={{ fontSize: 11, color: C.dim, margin: '-2px 0 12px', textAlign: 'center' }}>Keys: <b style={{ color: C.soft }}>←</b> prev · <b style={{ color: C.soft }}>→</b> next · <b style={{ color: C.soft }}>C</b> clear lower third</div>}
+
+            {/* Motion leads on action items; the lower-third picker leads on talk items. */}
+            {isActionItem ? (
+              <>
+                {motionCard}
+                {timerCard}
+                {lowerThirdCard}
+              </>
+            ) : (
+              <>
+                {lowerThirdCard}
+                {timerCard}
+                {motionCard}
+              </>
             )}
-
-            {/* MOTION — full vote workflow, inline */}
-            <div style={cardStyle}>
-              <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between' }}>
-                <span>Motion</span>
-                <Link href={`/control/${productionId}/motion`} target="_blank" style={{ fontSize: 11, color: C.accent, textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>Pop out ↗</Link>
-              </h3>
-              {currentItem && (currentItem.type === 'action' || currentItem.action_requested)
-                ? <MotionInline productionId={productionId} />
-                : <div style={{ fontSize: 13, color: C.soft, lineHeight: 1.5 }}>No action item on air. Take an action item to run a motion.</div>}
-            </div>
           </div>
 
           {/* RIGHT RAIL */}
           <div style={{ padding: 14, minHeight: 600 }}>
-            <div style={{ ...h3 }}>Confidence + controls</div>
+            <div style={{ ...h3 }}>Status</div>
 
             <div style={cardStyle}>
               <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between' }}>
@@ -656,7 +714,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                       since {new Date(bundle.board_meeting.stream_started_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · this is video 0:00 for chapters
                     </div>
                   </div>
-                  <button style={btn} disabled={!onMarkStreamStarted} onClick={() => onMarkStreamStarted?.(true)}>Reset</button>
+                  <button style={btn} disabled={!onMarkStreamStarted} title="Reset the chapter 0:00 mark" onClick={() => onMarkStreamStarted?.(true)}>Restart 0:00</button>
                 </div>
               ) : (
                 <>
@@ -670,6 +728,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 </>
               )}
             </div>
+
+            <div style={{ ...h3, marginTop: 18 }}>On-air controls</div>
 
             {/* MODES & TIMERS */}
             <div style={cardStyle}>
