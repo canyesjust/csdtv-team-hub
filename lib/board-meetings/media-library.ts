@@ -7,9 +7,13 @@ const VIDEO_MIMES = new Set(['video/mp4', 'video/quicktime'])
 const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const AUDIO_MIMES = new Set(['audio/mpeg', 'audio/wav', 'audio/x-wav'])
 
-export const MAX_VIDEO_BYTES = 500 * 1024 * 1024
-export const MAX_IMAGE_BYTES = 25 * 1024 * 1024
-export const MAX_AUDIO_BYTES = 50 * 1024 * 1024
+// Large files upload directly to storage (signed URL), not through the serverless
+// function, so these can be generous. NOTE: the Supabase bucket also has its own
+// per-file size limit — raise "media-library" bucket limit in the Supabase
+// dashboard to match (Storage → media-library → Settings → File size limit).
+export const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB
+export const MAX_IMAGE_BYTES = 50 * 1024 * 1024       // 50 MB
+export const MAX_AUDIO_BYTES = 200 * 1024 * 1024      // 200 MB
 
 /** Public object URL with path segments encoded (spaces, etc.). */
 export function mediaPublicUrl(_service: SupabaseClient, storagePath: string): string {
@@ -42,17 +46,17 @@ export function validateMediaUpload(
 ): string | null {
   if (assetType === 'video' || assetType === 'bumper') {
     if (!VIDEO_MIMES.has(mimeType)) return 'Video must be MP4 or MOV'
-    if (sizeBytes > MAX_VIDEO_BYTES) return 'Video must be 500 MB or smaller'
+    if (sizeBytes > MAX_VIDEO_BYTES) return 'Video must be 2 GB or smaller'
     return null
   }
   if (assetType === 'image') {
     if (!IMAGE_MIMES.has(mimeType)) return 'Image must be JPEG, PNG, or WebP'
-    if (sizeBytes > MAX_IMAGE_BYTES) return 'Image must be 25 MB or smaller'
+    if (sizeBytes > MAX_IMAGE_BYTES) return 'Image must be 50 MB or smaller'
     return null
   }
   if (assetType === 'audio_bed') {
     if (!AUDIO_MIMES.has(mimeType)) return 'Audio bed must be MP3 or WAV'
-    if (sizeBytes > MAX_AUDIO_BYTES) return 'Audio bed must be 50 MB or smaller'
+    if (sizeBytes > MAX_AUDIO_BYTES) return 'Audio bed must be 200 MB or smaller'
     return null
   }
   return 'Invalid asset type'

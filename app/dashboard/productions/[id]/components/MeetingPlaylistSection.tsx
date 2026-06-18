@@ -56,8 +56,8 @@ export default function MeetingPlaylistSection({ productionId }: { productionId:
 
   return (
     <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: `0.5px solid ${border}` }}>
-      <h3 style={{ margin: '0 0 8px', fontSize: '16px', color: text }}>Pre-roll playlist</h3>
-      <p style={{ margin: '0 0 16px', fontSize: '13px', color: muted }}>Build or apply a playlist for the pre-show broadcast on assigned channels.</p>
+      <h3 style={{ margin: '0 0 8px', fontSize: '16px', color: text }}>Pre-roll playlist <span style={{ fontSize: '12px', fontWeight: 400, color: muted }}>· shared by all meetings</span></h3>
+      <p style={{ margin: '0 0 16px', fontSize: '13px', color: muted }}>This is the one station pre-roll that loops on the screens before every meeting goes live. Changes here apply to all meetings.</p>
 
       {!hasPlaylist ? (
         <div>

@@ -53,7 +53,8 @@ export type PlaylistItemRow = {
 
 export type MeetingPlaylistRow = {
   id: string
-  board_meeting_id: string
+  /** null = the single global pre-roll playlist shared by all meetings. */
+  board_meeting_id: string | null
   derived_from_template_id: string | null
   music_bed_id: string | null
   loop_behavior: LoopBehavior

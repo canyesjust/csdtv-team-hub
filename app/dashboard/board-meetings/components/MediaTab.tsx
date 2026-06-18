@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import FilePickButton from '@/components/FilePickButton'
 import Loader from '../../components/Loader'
+import { createBrowserClient } from '@/lib/supabase/client'
 import { toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/confirm'
 import type { MediaAssetRow } from '@/lib/board-meetings/playlist-types'
@@ -51,7 +52,8 @@ function probeImage(file: File): Promise<{ width: number; height: number }> {
 function formatBytes(n: number | null) {
   if (!n) return '—'
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 export default function MediaTab() {
@@ -111,27 +113,49 @@ export default function MediaTab() {
     if (!uploadFile) return
     setUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', uploadFile)
-      fd.append('asset_type', uploadType)
-      fd.append('name', uploadName.trim() || uploadFile.name)
-      fd.append('tags', uploadTags)
-      if (uploadType === 'video' || uploadType === 'bumper') {
-        const meta = await probeVideo(uploadFile)
-        fd.append('duration_seconds', String(meta.duration_seconds))
-        fd.append('width', String(meta.width))
-        fd.append('height', String(meta.height))
-      } else if (uploadType === 'image') {
-        const meta = await probeImage(uploadFile)
-        fd.append('width', String(meta.width))
-        fd.append('height', String(meta.height))
-      }
-      const res = await fetch('/api/media-assets/upload', { method: 'POST', body: fd })
-      const body = await res.json()
-      if (!res.ok) {
-        toast(body.error || 'Upload failed', 'error')
-        return
-      }
+      // Read width/height/duration from the file before uploading.
+      let meta: { duration_seconds?: number; width?: number; height?: number } = {}
+      if (uploadType === 'video' || uploadType === 'bumper') meta = await probeVideo(uploadFile)
+      else if (uploadType === 'image') meta = await probeImage(uploadFile)
+
+      const mime = uploadFile.type || 'application/octet-stream'
+
+      // 1. Ask the server for a signed upload URL.
+      const signRes = await fetch('/api/media-assets/sign-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_type: uploadType, filename: uploadFile.name, mime, size_bytes: uploadFile.size }),
+      })
+      const sign = await signRes.json()
+      if (!signRes.ok) { toast(sign.error || 'Upload failed', 'error'); return }
+
+      // 2. Upload the file straight to storage — no serverless size limit.
+      const supabase = createBrowserClient()
+      const { error: upErr } = await supabase.storage
+        .from(sign.bucket)
+        .uploadToSignedUrl(sign.path, sign.token, uploadFile, { contentType: mime })
+      if (upErr) { toast(upErr.message || 'Upload failed', 'error'); return }
+
+      // 3. Record the asset.
+      const finRes = await fetch('/api/media-assets/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: sign.path,
+          asset_type: uploadType,
+          name: uploadName.trim() || uploadFile.name,
+          filename: uploadFile.name,
+          mime,
+          size_bytes: uploadFile.size,
+          tags: uploadTags.split(',').map(t => t.trim()).filter(Boolean),
+          duration_seconds: meta.duration_seconds,
+          width: meta.width,
+          height: meta.height,
+        }),
+      })
+      const fin = await finRes.json()
+      if (!finRes.ok) { toast(fin.error || 'Upload failed', 'error'); return }
+
       toast('Asset uploaded', 'success')
       setUploadOpen(false)
       setUploadFile(null)

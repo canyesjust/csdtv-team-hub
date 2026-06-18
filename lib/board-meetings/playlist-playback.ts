@@ -5,11 +5,8 @@ import {
   isInfoCardType,
   isMediaItemType,
   type AssetType,
-  type LoopBehavior,
   type MeetingPlaylistRow,
-  type PlaybackState,
   type PlaylistItemRow,
-  type PlaylistItemType,
   type PublicPlaylistCurrentItem,
   type PublicPlaylistState,
 } from '@/lib/board-meetings/playlist-types'
@@ -20,14 +17,19 @@ type PlaylistBundle = {
   assets: Map<string, { storage_path: string; asset_type: AssetType; duration_seconds: number | null; name: string }>
 }
 
+/**
+ * There is now ONE global pre-roll playlist (board_meeting_id IS NULL) shared by
+ * every meeting. The boardMeetingId param is kept for call-site compatibility but
+ * ignored — all meetings resolve to the same global playlist.
+ */
 export async function loadMeetingPlaylistBundle(
   service: SupabaseClient,
-  boardMeetingId: string,
+  _boardMeetingId?: string | null,
 ): Promise<PlaylistBundle | null> {
   const { data: playlist } = await service
     .from('meeting_playlists')
     .select('*')
-    .eq('board_meeting_id', boardMeetingId)
+    .is('board_meeting_id', null)
     .maybeSingle()
 
   if (!playlist) return null
@@ -110,7 +112,7 @@ export async function tickMeetingPlaylist(
   if (!shouldPlaylistRun(playlist, broadcastStatus, mode)) return bundle
 
   const now = Date.now()
-  let pl = { ...playlist }
+  const pl = { ...playlist }
 
   if (pl.replace_now_asset_id && pl.replace_now_started_at) {
     const dur = pl.replace_now_duration_seconds ?? 15
@@ -144,7 +146,7 @@ export async function tickMeetingPlaylist(
         updated_at: new Date().toISOString(),
       })
       .eq('id', pl.id)
-    return (await loadMeetingPlaylistBundle(service, pl.board_meeting_id))!
+    return (await loadMeetingPlaylistBundle(service))!
   }
 
   if (pl.playback_state !== 'playing') return bundle
@@ -197,7 +199,7 @@ export async function tickMeetingPlaylist(
       .eq('id', pl.id)
   }
 
-  return (await loadMeetingPlaylistBundle(service, pl.board_meeting_id))!
+  return (await loadMeetingPlaylistBundle(service))!
 }
 
 export async function buildPublicPlaylistPayload(
@@ -295,13 +297,13 @@ async function getBoardMeetingId(service: SupabaseClient, productionId: string):
   return data.id
 }
 
-async function ensurePlaylist(service: SupabaseClient, productionId: string): Promise<PlaylistBundle> {
-  const bmId = await getBoardMeetingId(service, productionId)
-  let bundle = await loadMeetingPlaylistBundle(service, bmId)
+/** Resolve (or create) the single global pre-roll playlist. productionId is ignored. */
+async function ensurePlaylist(service: SupabaseClient, _productionId?: string): Promise<PlaylistBundle> {
+  let bundle = await loadMeetingPlaylistBundle(service)
   if (!bundle) {
     const { data, error } = await service
       .from('meeting_playlists')
-      .insert({ board_meeting_id: bmId })
+      .insert({ board_meeting_id: null, playback_state: 'playing', play_during_recess: true })
       .select('*')
       .single()
     if (error || !data) throw new Error(error?.message || 'Could not create playlist')
@@ -310,12 +312,12 @@ async function ensurePlaylist(service: SupabaseClient, productionId: string): Pr
   return bundle
 }
 
+/** Replace the single global pre-roll playlist's items from a template. productionId is ignored. */
 export async function applyTemplateToMeeting(
   service: SupabaseClient,
-  productionId: string,
+  _productionId: string,
   templateId: string,
 ): Promise<PlaylistBundle> {
-  const bmId = await getBoardMeetingId(service, productionId)
   const { data: template } = await service.from('playlist_templates').select('*').eq('id', templateId).single()
   if (!template) throw new Error('Template not found')
 
@@ -325,15 +327,17 @@ export async function applyTemplateToMeeting(
     .eq('template_id', templateId)
     .order('sort_order', { ascending: true })
 
-  await service.from('meeting_playlists').delete().eq('board_meeting_id', bmId)
+  await service.from('meeting_playlists').delete().is('board_meeting_id', null)
 
   const { data: playlist, error: plErr } = await service
     .from('meeting_playlists')
     .insert({
-      board_meeting_id: bmId,
+      board_meeting_id: null,
       derived_from_template_id: templateId,
       music_bed_id: template.default_music_bed_id,
       loop_behavior: template.loop_behavior,
+      playback_state: 'playing',
+      play_during_recess: true,
     })
     .select('*')
     .single()
@@ -355,7 +359,7 @@ export async function applyTemplateToMeeting(
     if (error) throw new Error(error.message)
   }
 
-  return (await loadMeetingPlaylistBundle(service, bmId))!
+  return (await loadMeetingPlaylistBundle(service))!
 }
 
 export async function playlistPlay(service: SupabaseClient, productionId: string) {

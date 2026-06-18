@@ -176,8 +176,8 @@ export default function PreshowMode({ productionId, bundle, canControl, busy, on
             const held = it.id === heldItemId
             const fs = !!it.info_card_config?.full_screen
             return (
-              <div key={it.id} onClick={() => canControl && playlistAct('jump-to', { item_id: it.id })}
-                style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 8px', borderRadius: 8, border: `1px solid ${cur ? 'rgba(79,157,238,.5)' : C.line}`, background: cur ? C.accentbg : C.panel, marginBottom: 5, cursor: canControl ? 'pointer' : 'default' }}>
+              <div key={it.id}
+                style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 8px', borderRadius: 8, border: `1px solid ${cur ? 'rgba(79,157,238,.5)' : C.line}`, background: cur ? C.accentbg : C.panel, marginBottom: 5 }}>
                 <span style={{ width: 42, height: 26, borderRadius: 4, background: C.panel2, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: C.soft, flexShrink: 0, textTransform: 'uppercase' }}>{it.item_type.replace('info_card_', '').slice(0, 6)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -202,17 +202,12 @@ export default function PreshowMode({ productionId, bundle, canControl, busy, on
             <BoardPreview channel={boardCh} view="dais" label="Dais display (always meeting view)" />
           </div>
 
-          <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
-            {playback === 'playing'
-              ? <button style={{ ...btn, flex: 1, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl} onClick={() => playlistAct('pause')}>Pause</button>
-              : <button style={{ ...btn, flex: 1, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl} onClick={() => playlistAct('play')}>{playback === 'paused' ? 'Resume' : 'Play'}</button>}
-            <button style={btn} disabled={!canControl || playback === 'idle'} onClick={() => playlistAct('back')}>◀ Back</button>
-            <button style={btn} disabled={!canControl || playback === 'idle'} onClick={() => playlistAct('skip')}>Skip ▶</button>
+          <div style={{ display: 'flex', gap: 7, marginTop: 12, alignItems: 'center' }}>
             {heldItemId
-              ? <button style={btn} disabled={!canControl} onClick={() => playlistAct('release-hold')}>Release</button>
-              : <button style={btn} disabled={!canControl || playback === 'idle'} onClick={() => playlistAct('hold')}>Hold</button>}
+              ? <button style={{ ...btn, flex: 1, background: C.accent, color: '#06101f', border: 'none', fontWeight: 700 }} disabled={!canControl} onClick={() => playlistAct('release-hold')}>▶ Resume playlist</button>
+              : <button style={{ ...btn, flex: 1, fontWeight: 600 }} disabled={!canControl} onClick={() => playlistAct('hold')}>⏸ Hold on this item</button>}
           </div>
-          <div style={{ fontSize: 11, color: C.dim, marginTop: 8, lineHeight: 1.5 }}>Click a playlist item to jump to it. ⛶ marks an item full-screen. {onBreak ? 'Resume the meeting from the launch bar when the next session begins.' : 'The dais always shows the meeting view, even when the public screens are on pre-roll.'}</div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 8, lineHeight: 1.5 }}>The pre-roll plays and loops on its own. <b style={{ color: C.soft }}>Hold</b> freezes the current item on screen; <b style={{ color: C.soft }}>Resume</b> continues the loop. ⛶ marks an item full-screen. {onBreak ? 'Resume the meeting from the launch bar when the next session begins.' : 'The dais always shows the meeting view, even when the public screens are on pre-roll.'}</div>
         </div>
 
         {/* SIGNAGE + CHECKLIST */}
