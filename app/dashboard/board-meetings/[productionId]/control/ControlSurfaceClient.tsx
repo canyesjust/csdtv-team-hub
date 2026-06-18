@@ -273,6 +273,27 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     return () => clearInterval(interval)
   }, [resultOverlay?.active, resultOverlay?.held])
 
+  // Heartbeat: while the console is open during a meeting, keep the district-screen
+  // takeover "fresh" (ping every 60s). If this surface closes, pings stop and the
+  // screens auto-return to normal — a fail-safe against a takeover left on after
+  // the meeting ends. The ping is a no-op unless a takeover is actually active.
+  const liveStatus = bundle?.broadcast_state?.status || bundle?.board_meeting?.broadcast_status
+  useEffect(() => {
+    if (liveStatus !== 'prepared' && liveStatus !== 'live') return
+    let stop = false
+    const ping = () => {
+      if (stop) return
+      fetch('/api/signage/board-takeover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'keepalive' }),
+      }).catch(() => { /* ignore */ })
+    }
+    ping()
+    const id = setInterval(ping, 60_000)
+    return () => { stop = true; clearInterval(id) }
+  }, [liveStatus])
+
   const motionIds = useMemo(() => {
     const ids = new Set<string>()
     const activeId = bundle?.motion_lifecycle?.active_motion?.id

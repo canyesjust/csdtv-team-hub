@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireManagerApi } from '@/lib/signage/server-auth'
+import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,11 +16,26 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => ({}))
+  const action = String(body.action || '')
+
+  // Keep-alive: the control surface pings this while it's open so the takeover
+  // stays "fresh." If pings stop (console closed / operator forgot), the screen
+  // feed treats the takeover as stale and screens return to normal on their own.
+  // It only bumps a timestamp on an already-active takeover, so any authenticated
+  // team member (e.g. an intern running the console) is allowed to send it.
+  if (action === 'keepalive') {
+    const teamUser = await getAuthenticatedTeamUser()
+    if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const svc = getServiceSupabaseClient()
+    if (!svc) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    await svc.from('signage_board_takeover').update({ heartbeat_at: now() }).eq('id', 1).eq('active', true)
+    return NextResponse.json({ success: true })
+  }
+
   const auth = await requireManagerApi()
   if ('error' in auth) return auth.error
   const { service } = auth
-  const body = await request.json().catch(() => ({}))
-  const action = String(body.action || '')
 
   if (action === 'off') {
     const { error } = await service.from('signage_board_takeover').update({ active: false, updated_at: now() }).eq('id', 1)
@@ -34,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   if (action === 'preroll') {
     const { error } = await service.from('signage_board_takeover').update({
-      active: true, mode: 'preroll', board_channel_number: channel, label, updated_at: now(),
+      active: true, mode: 'preroll', board_channel_number: channel, label, updated_at: now(), heartbeat_at: now(),
     }).eq('id', 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ success: true })
@@ -56,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
     const { error } = await service.from('signage_board_takeover').update({
       active: true, mode: 'live', board_channel_number: channel, youtube_url: youtube,
-      label: label || prodRes.data?.title || null, updated_at: now(),
+      label: label || prodRes.data?.title || null, updated_at: now(), heartbeat_at: now(),
     }).eq('id', 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ success: true, youtube_url: youtube })

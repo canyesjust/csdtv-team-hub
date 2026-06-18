@@ -315,12 +315,50 @@ export async function endMeeting(
     .update({
       elapsed_started_at: null,
       agenda_branding_hold: false,
+      active_timer_id: null,
       updated_at: new Date().toISOString(),
       updated_by: operatorId,
     })
     .eq('board_meeting_id', boardMeetingId)
 
+  // Return the district signage screens to normal. The takeover is a single
+  // global row; only clear it if it's pointed at one of this meeting's channels
+  // (or if we can't tell — ending a meeting should never leave screens stuck).
+  await clearBoardTakeoverForChannels(service, channelIds)
+
   await logMeetingEvent(service, boardMeetingId, 'end_meeting', operatorId)
+}
+
+/**
+ * Turn off the district-signage takeover when a meeting ends, so screens can
+ * never be left stuck on a finished meeting's pre-roll or stream.
+ */
+async function clearBoardTakeoverForChannels(
+  service: SupabaseClient,
+  channelIds: string[],
+) {
+  const { data: tk } = await service
+    .from('signage_board_takeover')
+    .select('active, board_channel_number')
+    .eq('id', 1)
+    .maybeSingle()
+  if (!tk?.active) return
+
+  let matches = true
+  if (tk.board_channel_number != null && channelIds.length > 0) {
+    const { data: chNums } = await service
+      .from('output_channels')
+      .select('channel_number')
+      .in('id', channelIds)
+    const nums = (chNums || []).map(c => c.channel_number)
+    matches = nums.includes(tk.board_channel_number)
+  }
+  if (matches) {
+    await service
+      .from('signage_board_takeover')
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq('id', 1)
+  }
 }
 
 /** Start or reset the meeting elapsed clock (independent of go-live). */

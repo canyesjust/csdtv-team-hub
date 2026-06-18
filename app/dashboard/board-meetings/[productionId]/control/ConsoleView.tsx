@@ -101,6 +101,23 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
 
   const [timerMin, setTimerMin] = useState(3)
 
+  // End-meeting checklist — a deliberate stop so screens/outputs are never left on.
+  const [endOpen, setEndOpen] = useState(false)
+  const [ckYouTube, setCkYouTube] = useState(false)
+  const [ckRecording, setCkRecording] = useState(false)
+  const [ending, setEnding] = useState(false)
+  const confirmEnd = async () => {
+    setEnding(true)
+    try {
+      await onAction('end-meeting')
+      setEndOpen(false)
+      setCkYouTube(false)
+      setCkRecording(false)
+    } finally {
+      setEnding(false)
+    }
+  }
+
   const handleAgendaDrop = (targetId: string) => {
     const from = dragId.current
     dragId.current = null
@@ -219,9 +236,58 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             </button>
             {isPrepared && !isPreshow && <button onClick={() => { void onAction('end-preroll'); setView('live') }} disabled={!canControl} style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}>Go live (gavel)</button>}
             {isLive && !onBreak && <button onClick={() => { void onAction('recess'); setView('preshow') }} disabled={!canControl} title="Recess between sessions — returns the screens to pre-roll" style={{ ...btn }}>Back to pre-roll</button>}
-            {isLive && <button onClick={() => onAction('end-meeting')} disabled={!canControl} style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }}>End meeting</button>}
+            {isLive && <button onClick={() => setEndOpen(true)} disabled={!canControl} style={{ ...btn, color: '#ffc4c4', borderColor: 'rgba(255,93,93,.4)' }}>End meeting</button>}
           </div>
         </div>
+
+        {endOpen && (
+          <div
+            onClick={() => !ending && setEndOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(3,6,12,.66)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+          >
+            <div onClick={e => e.stopPropagation()} style={{ width: 'min(460px, 100%)', background: C.panel, border: `1px solid ${C.line2}`, borderRadius: 14, padding: 22, color: C.text }}>
+              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>End the meeting?</div>
+              <div style={{ fontSize: 13, color: C.soft, lineHeight: 1.5, marginBottom: 16 }}>
+                Before ending, confirm these — the hub can&apos;t do them for you:
+              </div>
+
+              {[
+                ['ck-yt', ckYouTube, setCkYouTube, 'I stopped the YouTube livestream in YouTube Studio.'],
+                ['ck-rec', ckRecording, setCkRecording, 'The recording is saved / stopped.'],
+              ].map(([key, checked, set, label]) => {
+                const isChecked = checked as boolean
+                const setter = set as (v: boolean) => void
+                return (
+                  <label key={key as string} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '9px 11px', marginBottom: 8, borderRadius: 9, border: `1px solid ${isChecked ? 'rgba(52,211,153,.4)' : C.line2}`, background: isChecked ? C.yeabg : 'transparent', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={isChecked} onChange={e => setter(e.target.checked)} style={{ marginTop: 2, width: 16, height: 16, accentColor: C.yea, cursor: 'pointer' }} />
+                    <span style={{ fontSize: 13.5, lineHeight: 1.45 }}>{label as string}</span>
+                  </label>
+                )
+              })}
+
+              <div style={{ fontSize: 12, color: C.soft, lineHeight: 1.55, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 9, padding: '10px 12px', marginTop: 4, marginBottom: 18 }}>
+                When you confirm, the hub will automatically:
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                  <li>Return the district screens to normal signage</li>
+                  <li>Stop the dais &amp; overlay from listening</li>
+                  <li>Clear any timer, motion, or vote graphic</li>
+                  <li>Archive the meeting</li>
+                </ul>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button onClick={() => setEndOpen(false)} disabled={ending} style={{ ...btn }}>Cancel</button>
+                <button
+                  onClick={() => void confirmEnd()}
+                  disabled={ending || !ckYouTube || !ckRecording}
+                  style={{ ...btn, background: (ckYouTube && ckRecording) ? C.live : 'transparent', color: (ckYouTube && ckRecording) ? '#fff' : '#7d8ba3', border: 'none', fontWeight: 700, cursor: (ckYouTube && ckRecording && !ending) ? 'pointer' : 'not-allowed' }}
+                >
+                  {ending ? 'Ending…' : 'End meeting'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!canControl && (
           <p style={{ margin: 0, padding: '10px 18px', background: C.amberbg, color: '#fde3a7', fontSize: 13 }}>Lock the agenda before using broadcast controls.</p>

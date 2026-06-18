@@ -194,9 +194,15 @@ export async function buildScreenFeed(
   }
 
   // Board meeting takeover — only screens that opted in follow the board meeting.
+  // Fail-safe: a takeover is only honored while its heartbeat is fresh. The
+  // control surface pings the heartbeat while it's open; if the operator forgets
+  // to turn the takeover off, the heartbeat goes stale and screens return to
+  // normal on their own (instead of staying stuck on the pre-roll all day).
+  const TAKEOVER_STALE_MS = 10 * 60 * 1000
   let board_takeover: ScreenFeed['board_takeover'] = undefined
   const tk = takeoverRes.data
-  if (tk?.active && screen.board_takeover_enabled) {
+  const takeoverFresh = !!tk?.heartbeat_at && (Date.now() - new Date(tk.heartbeat_at).getTime() < TAKEOVER_STALE_MS)
+  if (tk?.active && takeoverFresh && screen.board_takeover_enabled) {
     const audio = !!screen.board_takeover_audio
     if (tk.mode === 'preroll' && tk.board_channel_number) {
       board_takeover = { mode: 'preroll', url: `/board/${tk.board_channel_number}/preroll`, audio, label: tk.label ?? null }

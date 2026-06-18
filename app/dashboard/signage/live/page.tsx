@@ -34,6 +34,25 @@ export default function SignageLivePage() {
     }).catch(() => {})
   }, [])
 
+  // Keep a takeover started/managed from this page "fresh" while the page is open
+  // (matches the control-surface heartbeat). If this page is closed and nothing
+  // else is pinging, the takeover self-clears within minutes — a fail-safe so the
+  // district screens can't get stuck on a forgotten takeover.
+  useEffect(() => {
+    if (!bt?.active) return
+    let stop = false
+    const ping = () => {
+      if (stop) return
+      fetch('/api/signage/board-takeover', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'keepalive' }),
+      }).catch(() => {})
+    }
+    ping()
+    const id = setInterval(ping, 60_000)
+    return () => { stop = true; clearInterval(id) }
+  }, [bt?.active])
+
   const btPost = async (action: 'preroll' | 'live' | 'off') => {
     setBtSaving(true)
     const res = await fetch('/api/signage/board-takeover', {
