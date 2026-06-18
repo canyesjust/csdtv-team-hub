@@ -338,19 +338,14 @@ function ProductionsPageContent() {
     let teamList: TeamMember[] = []
 
     if (userRes?.data && isStudentInternRole(userRes.data.role)) {
-      const uid = userRes.data.id
-      const [{ data: memRows }, tplRes] = await Promise.all([
-        supabase.from('production_members').select('production_id').eq('user_id', uid),
+      // Student Interns now have full access to all productions (role-based), so
+      // they load the entire list like everyone else — no membership filter.
+      const [{ data }, tplRes] = await Promise.all([
+        supabase.from('productions').select(PRODUCTION_LIST_SELECT),
         supabase.from('email_templates').select('*').order('sort_order'),
       ])
       setEmailTemplates((tplRes.data as EmailTemplate[]) || [])
-      const ids = [...new Set((memRows || []).map(m => m.production_id).filter(Boolean))] as string[]
-      if (ids.length === 0) {
-        prodsData = []
-      } else {
-        const { data } = await supabase.from('productions').select(PRODUCTION_LIST_SELECT).in('id', ids)
-        prodsData = data as Production[] | null
-      }
+      prodsData = data as Production[] | null
       teamList = []
     } else {
       const [pRes, tRes, tplRes] = await Promise.all([

@@ -25,7 +25,6 @@ import { ZoneHeader } from '../../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
 import { escapeHtml, sanitizeEmailSubject } from '@/lib/escape-html'
 import { isProductionTabVisible } from '@/lib/dashboard-access'
-import { isStudentInternRole } from '@/lib/roles'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import { hubRequestProductionComplete, hubRequestProductionInProgress } from '@/lib/production-status-requests'
 import { NEUTRAL_BRAND_HEX, promptBrandHexesFromRow, resolveSchoolFromPicker, schoolCodesMatch } from '@/lib/thumbnail-school-brand'
@@ -302,20 +301,8 @@ export default function ProductionDetailPage() {
 
     const prodUUID = prodRes.data.id
 
-    const meRow = await resolveEffectiveTeamRow<{ id: string; role: string }>(supabase, 'id, role')
-    if (meRow && isStudentInternRole(meRow.role)) {
-      const { data: memRow } = await supabase
-        .from('production_members')
-        .select('id')
-        .eq('production_id', prodUUID)
-        .eq('user_id', meRow.id)
-        .maybeSingle()
-      if (!memRow) {
-        setLoading(false)
-        router.replace('/dashboard/productions')
-        return
-      }
-    }
+    // Student Interns now have full access to every production (role-based), so
+    // there's no longer a membership gate here — anyone on the team can open it.
     setProduction(normalizeProductionDatetimeFields(prodRes.data as Production))
     setUuid(prodUUID)
     setTeamNotes(prodRes.data.team_notes || '')

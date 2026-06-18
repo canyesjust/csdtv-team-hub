@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchTaskAssignments, mergeAssigneeIds } from '@/lib/task-assignments'
-import { isStudentInternRole } from '@/lib/roles'
 import {
   buildStudentInternTasksOrFilter,
   loadStudentInternTaskAssignmentIds,
@@ -137,7 +136,10 @@ export async function loadTasksDashboardData(
   user: TasksDashboardUser,
 ): Promise<TasksDashboardPayload> {
   const uid = user.id
-  const isStu = isStudentInternRole(user.role)
+  // Student Interns now have full access to all productions and their tasks
+  // (role-based), so they load the same complete data set as staff. The scoped
+  // branch below stays for any future membership-restricted role; none today.
+  const isStu: boolean = false
 
   let openTasks: TasksDashboardTask[] = []
   let doneTasks: TasksDashboardTask[] = []
