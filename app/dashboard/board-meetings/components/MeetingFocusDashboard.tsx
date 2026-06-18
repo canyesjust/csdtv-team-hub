@@ -170,7 +170,7 @@ export default function MeetingFocusDashboard({
               </Link>
             )}
             <Link
-              href={`/dashboard/productions/${row.production_number}?tab=boardmeeting`}
+              href={`/dashboard/board-meetings/${row.id}/agenda`}
               style={{
                 fontSize: '13px',
                 fontWeight: 600,

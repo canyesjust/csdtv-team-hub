@@ -17,12 +17,49 @@ import { loadControlUtilities } from '@/lib/board-meetings/control-utilities'
 import type {
   ActiveMotion,
   ControlBundle,
+  LowerThirdPerson,
   MotionLifecycleState,
   ResultOverlayState,
 } from '@/lib/board-meetings/types'
 import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
+
+const AGENDA_PERSON_SELECT =
+  'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active, group_label'
+
+/** People named in this meeting's agenda (resolved presenters), for quick picks. */
+async function loadAgendaPeople(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  cachedPeople: LowerThirdPerson[],
+): Promise<LowerThirdPerson[]> {
+  const { data: pres } = await service
+    .from('board_meeting_presenters')
+    .select('person_id, sort_order, board_meeting_agenda_items!inner(board_meeting_id)')
+    .eq('board_meeting_agenda_items.board_meeting_id', boardMeetingId)
+    .not('person_id', 'is', null)
+    .order('sort_order', { ascending: true })
+
+  const ids: string[] = []
+  for (const p of pres || []) {
+    const id = (p as { person_id: string | null }).person_id
+    if (id && !ids.includes(id)) ids.push(id)
+  }
+  if (ids.length === 0) return []
+
+  const byId = new Map(cachedPeople.map(p => [p.id, p]))
+  const missing = ids.filter(id => !byId.has(id))
+  if (missing.length > 0) {
+    const { data } = await service
+      .from('lower_third_people')
+      .select(AGENDA_PERSON_SELECT)
+      .in('id', missing)
+      .eq('is_active', true)
+    for (const p of (data || []) as LowerThirdPerson[]) byId.set(p.id, p)
+  }
+  return ids.map(id => byId.get(id)).filter((p): p is LowerThirdPerson => !!p)
+}
 
 export type BuildControlBundleOptions = {
   /** Faster path: skip full playlist items and defer heavy utilities payload. */
@@ -124,6 +161,8 @@ export async function buildControlSurfaceBundle(
       : Promise.resolve([]),
   ])
 
+  const agenda_people = await loadAgendaPeople(service, bm.id, people)
+
   const liveEvent = liveEvents?.[0]
   const modeEndsAt =
     state?.mode_started_at && state.mode_duration_seconds
@@ -189,6 +228,7 @@ export async function buildControlSurfaceBundle(
     attendance: { records: attendance.records, quorum: attendance.quorum },
     lower_third_active: lowerThirdActive,
     lower_third_people: people || [],
+    agenda_people,
     result_overlay,
     playlist_state,
     channel_assignments: (assignments || []).map(a => ({

@@ -449,6 +449,27 @@ function DaisShell({
 }) {
   const { isFullscreen, supported, toggle, setContainer } = fullscreen
 
+  // The full-screen toggle is an operator control, not part of the broadcast — so
+  // it auto-hides when idle (it was sitting on top of the LIVE pill and title).
+  // It reappears on mouse movement when the operator actually needs it.
+  const [controlsVisible, setControlsVisible] = useState(true)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    const show = () => {
+      setControlsVisible(true)
+      clearTimeout(timer)
+      timer = setTimeout(() => setControlsVisible(false), 3000)
+    }
+    show()
+    window.addEventListener('mousemove', show)
+    window.addEventListener('touchstart', show)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('mousemove', show)
+      window.removeEventListener('touchstart', show)
+    }
+  }, [])
+
   return (
     <div
       ref={setContainer}
@@ -478,6 +499,9 @@ function DaisShell({
           style={{
             ...fullscreenBtn,
             ...(isFullscreen ? fullscreenBtnActive : {}),
+            opacity: controlsVisible ? 1 : 0,
+            pointerEvents: controlsVisible ? 'auto' : 'none',
+            transition: 'opacity 0.4s ease',
           }}
           aria-label={isFullscreen ? 'Exit full screen' : 'Enter full screen'}
           title={isFullscreen ? 'Exit full screen (Esc)' : 'Full screen'}
@@ -791,7 +815,7 @@ const inner: React.CSSProperties = {
 
 const fullscreenBtn: React.CSSProperties = {
   position: 'absolute',
-  top: 20,
+  bottom: 20,
   right: 20,
   zIndex: 60,
   padding: '10px 18px',

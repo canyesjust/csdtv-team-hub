@@ -97,10 +97,15 @@ export function resolveChapterT0Ms(
 export async function generateYouTubeChapters(
   service: SupabaseClient,
   productionId: string,
-  opts: { nudgeSeconds?: number } = {},
+  opts: { nudgeSeconds?: number; welcomeOffsetSeconds?: number | null } = {},
 ): Promise<{ chapters_text: string; line_count: number; warnings: string[]; stream_anchored: boolean; nudge_seconds: number }> {
   const warnings: string[] = []
   const nudgeSeconds = Math.round(opts.nudgeSeconds ?? 0)
+  // Post-meeting anchor: the operator watches the recording and enters the video
+  // time when the "Welcome" / first agenda item appeared. We then place every
+  // chapter relative to that, ignoring the imperfect go-live/stream timestamps.
+  const welcomeMode = typeof opts.welcomeOffsetSeconds === 'number' && opts.welcomeOffsetSeconds >= 0
+  const welcomeOffset = welcomeMode ? Math.round(opts.welcomeOffsetSeconds as number) : 0
 
   const { data: bm } = await service.from('board_meetings').select('*').eq('production_id', productionId).maybeSingle()
   if (!bm) throw new Error('Board meeting not found')
@@ -127,13 +132,14 @@ export async function generateYouTubeChapters(
 
   const eventRows = (events || []) as MeetingEventRow[]
 
-  let { t0Ms, warnings: t0Warnings, anchoredToStream } = resolveChapterT0Ms(eventRows, {
+  const { t0Ms: t0Initial, warnings: t0Warnings, anchoredToStream } = resolveChapterT0Ms(eventRows, {
     streamStartedAt: bm.stream_started_at ?? null,
     liveStartedAt: bm.live_started_at ?? null,
     elapsedStartedAt: bstate?.elapsed_started_at ?? null,
     scheduledPublicStart: bm.scheduled_public_start,
     productionStartDatetime: productionStart,
   })
+  let t0Ms = t0Initial
   warnings.push(...t0Warnings)
 
   if (bm.broadcast_status === 'live') {
@@ -175,7 +181,7 @@ export async function generateYouTubeChapters(
     deduped.push({ ...entry, title })
   }
 
-  const zeroTitle = anchoredToStream ? 'Pre-meeting' : 'Welcome'
+  const zeroTitle = welcomeMode ? 'Welcome' : anchoredToStream ? 'Pre-meeting' : 'Welcome'
   if (deduped[0].offsetSeconds > 0) {
     deduped.unshift({ offsetSeconds: 0, title: zeroTitle, itemId: '__welcome__' })
   } else {
@@ -205,9 +211,19 @@ export async function generateYouTubeChapters(
     }
   }
 
-  // Apply the operator's fine-alignment nudge, keep the first chapter pinned to 0:00,
-  // and preserve YouTube's minimum 10s spacing after shifting.
-  if (nudgeSeconds !== 0) {
+  if (welcomeMode) {
+    // Anchor the whole list to where "Welcome" actually appears in the video.
+    // The gaps between items (from the event log) stay intact; we just slide the
+    // first content chapter to the entered time and add a 0:00 pre-meeting chapter.
+    for (const c of distinct) c.offsetSeconds += welcomeOffset
+    if (welcomeOffset >= 10) {
+      distinct.unshift({ offsetSeconds: 0, title: 'Pre-meeting', itemId: '__pre__' })
+    } else {
+      distinct[0].offsetSeconds = 0
+    }
+  } else if (nudgeSeconds !== 0) {
+    // Fine-alignment nudge: keep the first chapter pinned to 0:00 and preserve
+    // YouTube's minimum 10s spacing after shifting.
     for (const c of distinct) c.offsetSeconds = Math.max(0, c.offsetSeconds + nudgeSeconds)
     distinct[0].offsetSeconds = 0
     for (let i = 1; i < distinct.length; i++) {
@@ -217,8 +233,8 @@ export async function generateYouTubeChapters(
     }
   }
 
-  if (!anchoredToStream) {
-    warnings.push('Tip: record "Stream started" at the start of your stream so 0:00 matches the video exactly.')
+  if (!welcomeMode && !anchoredToStream) {
+    warnings.push('Tip: enter the time "Welcome" appears in the video (below) to line every chapter up exactly.')
   }
 
   const lines = distinct.map(c => `${formatOffsetSeconds(c.offsetSeconds)} ${c.title}`)

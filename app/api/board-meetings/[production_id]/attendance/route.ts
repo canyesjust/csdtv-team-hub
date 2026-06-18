@@ -11,11 +11,21 @@ export async function POST(
 ) {
   const { production_id } = await params
   return withControlContext(production_id, async ({ service, boardMeetingId }) => {
-    const body = await request.json().catch(() => ({})) as { person_id?: string; status?: string }
+    const body = await request.json().catch(() => ({})) as { person_id?: string; status?: string; confirm?: boolean }
+    const nowIso = new Date().toISOString()
+
+    // Touching attendance at all (a status change, or an explicit "Mark taken")
+    // records that roll has been taken, which clears the console's reminder.
+    await service
+      .from('meeting_broadcast_state')
+      .update({ attendance_recorded_at: nowIso })
+      .eq('board_meeting_id', boardMeetingId)
+
+    if (body.confirm) return NextResponse.json({ success: true })
+
     if (!body.person_id || !body.status || !VALID.has(body.status)) {
       return controlError('person_id and a valid status are required')
     }
-    const nowIso = new Date().toISOString()
     const patch: Record<string, unknown> = { status: body.status }
     if (body.status === 'absent' || body.status === 'left_early') patch.left_at = nowIso
     if (body.status === 'arrived_late') patch.arrived_at = nowIso

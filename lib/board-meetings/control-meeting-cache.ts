@@ -13,7 +13,7 @@ let boardMembersForAttendanceCache: LowerThirdPerson[] | null = null
 let priorityLowerThirdPeopleCache: LowerThirdPerson[] | null = null
 
 const PEOPLE_SELECT =
-  'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active'
+  'id, display_name, primary_title, affiliation, photo_path, alternate_titles, category, officer_position, is_active, group_label'
 
 const PRIORITY_LOWER_THIRD_CATEGORIES = ['board_member', 'staff'] as const
 
@@ -51,11 +51,12 @@ export function warmLockedAgendaCache(boardMeetingId: string, items: ControlAgen
 export async function getCachedBoardMemberPeople(service: SupabaseClient): Promise<LowerThirdPerson[]> {
   if (priorityLowerThirdPeopleCache) return priorityLowerThirdPeopleCache
 
+  // Quick-pick people: board + staff, plus anyone you've tagged into a group.
   const { data } = await service
     .from('lower_third_people')
     .select(PEOPLE_SELECT)
     .eq('is_active', true)
-    .in('category', PRIORITY_LOWER_THIRD_CATEGORIES as unknown as string[])
+    .or('category.in.(board_member,staff),group_label.not.is.null')
     .order('display_name')
 
   priorityLowerThirdPeopleCache = (data || []) as LowerThirdPerson[]
@@ -130,7 +131,7 @@ export async function resolveAgendaNavigation(
     }
   }
 
-  let currentIdx = broadcastable_items.findIndex(i => i.id === currentAgendaItemId)
+  const currentIdx = broadcastable_items.findIndex(i => i.id === currentAgendaItemId)
   let current_item: ControlAgendaItem | null =
     currentIdx >= 0 ? broadcastable_items[currentIdx] : null
 

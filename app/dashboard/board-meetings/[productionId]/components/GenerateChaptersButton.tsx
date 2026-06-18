@@ -9,6 +9,18 @@ const nudgeBtn: React.CSSProperties = {
   color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'inherit',
 }
 
+function parseTimecode(s: string): number | null {
+  const t = s.trim()
+  if (!t) return null
+  if (/^\d+$/.test(t)) return Number(t) // plain seconds
+  const parts = t.split(':').map(p => p.trim())
+  if (parts.some(p => !/^\d+$/.test(p))) return null
+  const nums = parts.map(Number)
+  if (nums.length === 2) return nums[0] * 60 + nums[1]
+  if (nums.length === 3) return nums[0] * 3600 + nums[1] * 60 + nums[2]
+  return null
+}
+
 export default function GenerateChaptersButton({ productionId }: { productionId: string }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -16,11 +28,14 @@ export default function GenerateChaptersButton({ productionId }: { productionId:
   const [warnings, setWarnings] = useState<string[]>([])
   const [nudge, setNudge] = useState(0)
   const [streamAnchored, setStreamAnchored] = useState(true)
+  const [welcome, setWelcome] = useState('')
 
-  const generate = async (nudgeSeconds = nudge) => {
+  const generate = async (nudgeSeconds = nudge, welcomeStr = welcome) => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/board-meetings/${productionId}/generate-chapters?nudge=${nudgeSeconds}`)
+      const welcomeSec = parseTimecode(welcomeStr)
+      const welcomeParam = welcomeSec != null ? `&welcome=${welcomeSec}` : ''
+      const res = await fetch(`/api/board-meetings/${productionId}/generate-chapters?nudge=${nudgeSeconds}${welcomeParam}`)
       const body = await res.json()
       if (!res.ok) {
         toast(body.error || 'Generation failed', 'error')
@@ -98,24 +113,45 @@ export default function GenerateChaptersButton({ productionId }: { productionId:
             onClick={e => e.stopPropagation()}
           >
             <h3 style={{ margin: '0 0 12px' }}>YouTube chapters</h3>
+            <div style={{ margin: '0 0 14px', padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-2)', border: '0.5px solid var(--border-subtle)' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                When does “Welcome” appear in the video?
+              </label>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  value={welcome}
+                  onChange={e => setWelcome(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') void generate(nudge, welcome) }}
+                  placeholder="m:ss  (e.g. 2:15)"
+                  style={{ width: '120px', padding: '8px 10px', borderRadius: '7px', border: '0.5px solid var(--border-subtle)', background: 'var(--surface-1)', color: 'var(--text-primary)', fontSize: '14px', fontFamily: 'ui-monospace, monospace' }}
+                />
+                <button type="button" onClick={() => void generate(nudge, welcome)} disabled={loading} style={{ ...nudgeBtn, fontWeight: 600 }}>Apply</button>
+                {welcome && <button type="button" onClick={() => { setWelcome(''); void generate(nudge, '') }} disabled={loading} style={nudgeBtn}>Clear</button>}
+              </div>
+              <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                Watch the recording, find the moment the board welcomes everyone, and enter that timestamp. Every chapter lines up from there — no need to match the go-live exactly.
+              </p>
+            </div>
             {warnings.map((w, i) => (
               <p key={i} style={{ margin: '0 0 8px', fontSize: '13px', color: '#e8a020' }}>{w}</p>
             ))}
             {text ? (
               <>
-                {!streamAnchored && (
+                {!streamAnchored && !welcome && (
                   <p style={{ margin: '0 0 8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Not anchored to a recorded stream start — use the nudge below to line 0:00 up to your video, or click “Stream started” next meeting.
+                    Not anchored to a recorded stream start — enter the “Welcome” time above to line everything up, or nudge below.
                   </p>
                 )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 10px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Nudge all chapters:</span>
-                  <button type="button" onClick={() => applyNudge(-30)} disabled={loading} style={nudgeBtn}>−30s</button>
-                  <button type="button" onClick={() => applyNudge(-5)} disabled={loading} style={nudgeBtn}>−5s</button>
-                  <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '52px', textAlign: 'center' }}>{nudge >= 0 ? `+${nudge}` : nudge}s</span>
-                  <button type="button" onClick={() => applyNudge(5)} disabled={loading} style={nudgeBtn}>+5s</button>
-                  <button type="button" onClick={() => applyNudge(30)} disabled={loading} style={nudgeBtn}>+30s</button>
-                </div>
+                {!welcome && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 10px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Nudge all chapters:</span>
+                    <button type="button" onClick={() => applyNudge(-30)} disabled={loading} style={nudgeBtn}>−30s</button>
+                    <button type="button" onClick={() => applyNudge(-5)} disabled={loading} style={nudgeBtn}>−5s</button>
+                    <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '52px', textAlign: 'center' }}>{nudge >= 0 ? `+${nudge}` : nudge}s</span>
+                    <button type="button" onClick={() => applyNudge(5)} disabled={loading} style={nudgeBtn}>+5s</button>
+                    <button type="button" onClick={() => applyNudge(30)} disabled={loading} style={nudgeBtn}>+30s</button>
+                  </div>
+                )}
                 <textarea
                   value={text}
                   onChange={e => setText(e.target.value)}

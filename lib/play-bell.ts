@@ -2,12 +2,13 @@
 // optional custom uploaded sound. Best-effort: if the browser blocks audio (no
 // user gesture yet) it simply no-ops.
 
-export type BellChoice = 'classic' | 'soft' | 'triad' | 'ding' | 'custom'
+export type BellChoice = 'classic' | 'soft' | 'triad' | 'ding' | 'beeps' | 'custom'
 
 export const BELL_OPTIONS: { value: Exclude<BellChoice, 'custom'>; label: string; description: string }[] = [
   { value: 'classic', label: 'Classic', description: 'Three bright strikes' },
   { value: 'soft', label: 'Soft', description: 'One warm, gentle tone' },
   { value: 'triad', label: 'Chime', description: 'Rising three-note chime' },
+  { value: 'beeps', label: 'Beeps', description: 'Clean triple beep (stage-timer style)' },
   { value: 'ding', label: 'Ding', description: 'Single clear ding' },
 ]
 
@@ -45,6 +46,9 @@ function playSynth(choice: Exclude<BellChoice, 'custom'>) {
     strike(ac, t, [523.25], 0.22, 1.1)
   } else if (choice === 'ding') {
     strike(ac, t, [987.77], 0.26, 0.8)
+  } else if (choice === 'beeps') {
+    // Clean, even triple beep — the crisp "time's up" cue stage timers use.
+    for (let s = 0; s < 3; s++) strike(ac, t + s * 0.26, [988], 0.26, 0.16)
   } else if (choice === 'triad') {
     strike(ac, t, [523.25], 0.24, 0.5)
     strike(ac, t + 0.18, [659.25], 0.24, 0.5)

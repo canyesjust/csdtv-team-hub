@@ -20,7 +20,7 @@ export async function PATCH(
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   const fields = [
     'display_name', 'primary_title', 'affiliation', 'photo_path', 'alternate_titles',
-    'category', 'officer_position', 'is_active',
+    'category', 'officer_position', 'is_active', 'group_label',
   ] as const
   for (const f of fields) {
     if (body[f] !== undefined) patch[f] = body[f]

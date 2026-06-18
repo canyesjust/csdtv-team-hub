@@ -61,6 +61,7 @@ export async function POST(request: Request) {
       alternate_titles: body.alternate_titles || null,
       category,
       officer_position: body.officer_position?.trim() || null,
+      group_label: body.group_label?.trim() || null,
       is_active: body.is_active !== false,
       created_by: teamUser.id,
     })

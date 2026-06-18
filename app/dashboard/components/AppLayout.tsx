@@ -317,8 +317,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       return (
         pathname === href ||
         pathname.startsWith(`${href}/`) ||
-        pathname === '/dashboard/board-update' ||
-        pathname === '/dashboard/voting-records'
+        pathname === '/dashboard/board-update'
       )
     }
     return pathname.startsWith(href)

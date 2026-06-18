@@ -59,6 +59,7 @@ export type LowerThirdPerson = {
   category: string
   officer_position: string | null
   is_active: boolean
+  group_label?: string | null
 }
 
 export type OutputChannel = {
@@ -184,6 +185,8 @@ export type ControlBundle = {
     live_started_at?: string | null
     /** Operator-controlled meeting clock — not tied to go-live. */
     elapsed_started_at?: string | null
+    /** Set when roll has been taken; until then the console nags to take attendance. */
+    attendance_recorded_at?: string | null
     current_agenda_item_id?: string | null
     agenda_overlay_visible?: boolean
     active_qr_url?: string | null
@@ -215,6 +218,8 @@ export type ControlBundle = {
     primary_title: string | null
   } | null
   lower_third_people: LowerThirdPerson[]
+  /** People named in THIS meeting's agenda (resolved presenters), for quick picks. */
+  agenda_people: LowerThirdPerson[]
   result_overlay: ResultOverlayState | null
   playlist_state: {
     playback_state: string

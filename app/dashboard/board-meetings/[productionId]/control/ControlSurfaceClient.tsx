@@ -46,6 +46,12 @@ const OPTIMISTIC_ACTIONS = new Set([
   'clear-elapsed',
 ])
 
+// Changing the current agenda item also changes the motion/suggested-motion that
+// belongs to it. The optimistic patch only moves the agenda pointer, so after the
+// server commits we refresh live state to pull the new item's motion lifecycle —
+// otherwise the control surface lags the dais by a poll cycle.
+const AGENDA_CHANGE_ACTIONS = new Set(['jump-to', 'advance', 'go-back'])
+
 type ControlPostResult = { ok: true; data: Record<string, unknown> } | { ok: false }
 
 type BroadcastState = NonNullable<ControlBundle['broadcast_state']>
@@ -642,6 +648,9 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           if (epochAtSend !== optimisticEpochRef.current) return
           if (result.ok) {
             applyServerHints(action, result.data)
+            // Pull the new item's motion lifecycle right after commit so the
+            // control surface doesn't trail the dais by a poll cycle.
+            if (AGENDA_CHANGE_ACTIONS.has(action)) void loadLive()
             return
           }
           onFailure()
@@ -944,6 +953,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         const present = records.filter(r => r.status !== 'absent' && r.status !== 'left_early').length
         return {
           ...prev,
+          broadcast_state: patchBroadcastState(prev.broadcast_state, { attendance_recorded_at: new Date().toISOString() }),
           attendance: {
             records,
             quorum: {
@@ -967,6 +977,17 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     },
     [productionId, loadLive],
   )
+
+  // "Mark attendance taken" — clears the console reminder even if everyone is present.
+  const onConfirmAttendance = useCallback(async () => {
+    setBundle(prev => (prev ? { ...prev, broadcast_state: patchBroadcastState(prev.broadcast_state, { attendance_recorded_at: new Date().toISOString() }) } : prev))
+    const res = await fetch(`/api/board-meetings/${productionId}/attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: true }),
+    })
+    if (!res.ok) void loadLive()
+  }, [productionId, loadLive])
 
   const reorderAgendaByIds = useCallback(
     async (orderedBroadcastableIds: string[]) => {
@@ -1049,6 +1070,7 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         canControl={canControl}
         onAction={onAction}
         onSetAttendance={onSetAttendance}
+        onConfirmAttendance={onConfirmAttendance}
         onMarkStreamStarted={onMarkStreamStarted}
         onPatchAgendaItem={async (itemId, patch) => { await patchAgendaItem(itemId, patch) }}
         onReorderAgenda={reorderAgendaByIds}

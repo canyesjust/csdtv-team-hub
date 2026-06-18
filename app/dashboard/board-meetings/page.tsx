@@ -11,12 +11,12 @@ import MediaTab from './components/MediaTab'
 import TemplatesTab from './components/TemplatesTab'
 import QRCodesTab from './components/QRCodesTab'
 import BoardUpdateTab from './components/BoardUpdateTab'
-import VotingRecordsTab from './components/VotingRecordsTab'
 import BellTab from './components/BellTab'
+import CleanupTab from './components/CleanupTab'
 
-type Tab = 'meetings' | 'people' | 'channels' | 'media' | 'templates' | 'qr' | 'email' | 'voting' | 'bell'
+type Tab = 'meetings' | 'people' | 'channels' | 'media' | 'templates' | 'qr' | 'email' | 'bell' | 'cleanup'
 
-const VALID_TABS: Tab[] = ['meetings', 'people', 'channels', 'media', 'templates', 'qr', 'email', 'voting', 'bell']
+const VALID_TABS: Tab[] = ['meetings', 'people', 'channels', 'media', 'templates', 'qr', 'email', 'bell', 'cleanup']
 
 function BoardMeetingsPageContent() {
   const { theme } = useTheme()
@@ -85,8 +85,8 @@ function BoardMeetingsPageContent() {
         {tabBtn('templates', 'Templates')}
         {tabBtn('qr', 'QR codes')}
         {tabBtn('email', 'Board email')}
-        {tabBtn('voting', 'Voting records')}
         {tabBtn('bell', 'Timer bell')}
+        {tabBtn('cleanup', 'Cleanup')}
       </div>
 
       {tab === 'meetings' && <MeetingsTab />}
@@ -96,8 +96,8 @@ function BoardMeetingsPageContent() {
       {tab === 'templates' && <TemplatesTab />}
       {tab === 'qr' && <QRCodesTab />}
       {tab === 'email' && <BoardUpdateTab />}
-      {tab === 'voting' && <VotingRecordsTab />}
       {tab === 'bell' && <BellTab />}
+      {tab === 'cleanup' && <CleanupTab />}
     </div>
   )
 }

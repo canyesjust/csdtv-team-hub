@@ -3,7 +3,7 @@ import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './anno
 import { clampDisplaySeconds, sanitizeSignageHtml } from './content-display'
 import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
 import { signageLiveMatchesScreen } from './live-targeting'
-import { normalizeSignageStreamUrl, youtubeEmbedUrlFromStreamUrl } from './stream-url'
+import { normalizeSignageStreamUrl } from './stream-url'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
@@ -206,9 +206,9 @@ export async function buildScreenFeed(
     const audio = !!screen.board_takeover_audio
     if (tk.mode === 'preroll' && tk.board_channel_number) {
       board_takeover = { mode: 'preroll', url: `/board/${tk.board_channel_number}/preroll`, audio, label: tk.label ?? null }
-    } else if (tk.mode === 'live' && tk.youtube_url) {
-      const embed = youtubeEmbedUrlFromStreamUrl(tk.youtube_url, { controls: false, captions: true, muted: !audio })
-      if (embed) board_takeover = { mode: 'live', url: embed, audio, label: tk.label ?? null }
+    } else if (tk.mode === 'live' && tk.youtube_url && tk.board_channel_number) {
+      // Stream + live agenda sidebar (the page reads the YouTube URL from board state).
+      board_takeover = { mode: 'live', url: `/board/${tk.board_channel_number}/stream?audio=${audio ? 1 : 0}`, audio, label: tk.label ?? null }
     }
   }
 

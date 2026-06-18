@@ -21,6 +21,7 @@ const emptyForm = {
   affiliation: '',
   category: 'presenter',
   officer_position: '',
+  group_label: '',
   is_active: true,
   photo_path: '',
 }
@@ -111,6 +112,7 @@ export default function PeopleTab() {
       affiliation: p.affiliation || '',
       category: p.category,
       officer_position: p.officer_position || '',
+      group_label: p.group_label || '',
       is_active: p.is_active,
       photo_path: p.photo_path || '',
     })
@@ -144,6 +146,7 @@ export default function PeopleTab() {
       affiliation: form.affiliation.trim() || null,
       category: form.category,
       officer_position: form.officer_position.trim() || null,
+      group_label: form.group_label.trim() || null,
       is_active: form.is_active,
       photo_path: form.photo_path || null,
     }
@@ -325,6 +328,18 @@ export default function PeopleTab() {
               {form.category === 'board_member' && (
                 <input value={form.officer_position} onChange={e => setForm({ ...form, officer_position: e.target.value })} placeholder="Officer position (optional)" style={inputStyle} />
               )}
+              <input
+                value={form.group_label}
+                onChange={e => setForm({ ...form, group_label: e.target.value })}
+                placeholder="Group (e.g. Board, Leadership, Principals) — optional"
+                list="lower-third-group-suggestions"
+                style={inputStyle}
+              />
+              <datalist id="lower-third-group-suggestions">
+                {[...new Set(people.map(p => p.group_label).filter(Boolean))].map(g => (
+                  <option key={g as string} value={g as string} />
+                ))}
+              </datalist>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: muted, minHeight: '44px' }}>
                 <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} style={{ width: '16px', height: '16px' }} />
                 Active

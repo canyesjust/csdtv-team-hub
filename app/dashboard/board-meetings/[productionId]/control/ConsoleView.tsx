@@ -20,6 +20,7 @@ type Props = {
   busy: boolean
   onAction: (action: string, body?: unknown) => Promise<void>
   onSetAttendance?: (personId: string, status: AttStatus) => void | Promise<void>
+  onConfirmAttendance?: () => void | Promise<void>
   onMarkStreamStarted?: (clear: boolean) => void | Promise<void>
   onPatchAgendaItem?: (itemId: string, patch: Partial<ControlBundle['agenda_items'][number]>) => void | Promise<void>
   onReorderAgenda?: (orderedBroadcastableIds: string[]) => void | Promise<void>
@@ -55,7 +56,7 @@ function ElapsedClock({ startedAt }: { startedAt: string }) {
   return <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 15, fontWeight: 600 }}>{fmtElapsed(nowMs - new Date(startedAt).getTime())}</span>
 }
 
-export default function ConsoleView({ productionId, bundle, canControl, busy, onAction, onSetAttendance, onMarkStreamStarted, onPatchAgendaItem, onReorderAgenda, onListeningChange, onPullFromConsent }: Props) {
+export default function ConsoleView({ productionId, bundle, canControl, busy, onAction, onSetAttendance, onConfirmAttendance, onMarkStreamStarted, onPatchAgendaItem, onReorderAgenda, onListeningChange, onPullFromConsent }: Props) {
   const bs = bundle.broadcast_state
   const status = bs?.status || bundle.board_meeting.broadcast_status || 'draft'
   const isLive = status === 'live'
@@ -104,6 +105,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   }, [atStarted, atDuration, atEnded])
 
   const [timerMin, setTimerMin] = useState(3)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   // End-meeting checklist — a deliberate stop so screens/outputs are never left on.
   const [endOpen, setEndOpen] = useState(false)
@@ -149,9 +151,20 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   }, [bundle.agenda_items])
 
   const people = bundle.lower_third_people || []
-  const boardPeople = people.filter(p => p.category === 'board_member')
-  const staffPeople = people.filter(p => p.category === 'staff')
-  const lowerThirdShownIds = new Set([...boardPeople, ...staffPeople].map(p => p.id))
+  const agendaPeople = bundle.agenda_people || []
+  // Group curated people by their Group label (falling back to board/staff/other).
+  const groupedPeople: [string, LowerThirdPerson[]][] = (() => {
+    const map = new Map<string, LowerThirdPerson[]>()
+    for (const p of people) {
+      const key = p.group_label?.trim() || (p.category === 'board_member' ? 'Board' : p.category === 'staff' ? 'Staff' : 'Other')
+      const arr = map.get(key)
+      if (arr) arr.push(p)
+      else map.set(key, [p])
+    }
+    const rank = (k: string) => (k === 'Board' ? 0 : k === 'Staff' ? 8 : k === 'Other' ? 9 : 1)
+    return [...map.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0]))
+  })()
+  const lowerThirdShownIds = new Set([...people, ...agendaPeople].map(p => p.id))
   const activeLt = bundle.lower_third_active
   const position = bs?.lower_third_position ?? 'left'
 
@@ -171,15 +184,71 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const presentCount = att?.quorum.present_count ?? 0
   const threshold = att?.quorum.threshold ?? 0
   const quorumMet = att?.quorum.quorum_met ?? false
+  const attendanceRecorded = !!bs?.attendance_recorded_at
+  const needRoll = !attendanceRecorded && (isLive || isPrepared)
 
-  const setLt = (p: LowerThirdPerson) =>
-    onAction('set-lower-third', { person_id: p.id, person: p, position })
+  // Nudge the operator to take attendance once, right at go-live.
+  const rollPromptedRef = useRef(false)
+  useEffect(() => {
+    if (isLive && !attendanceRecorded && !rollPromptedRef.current) {
+      rollPromptedRef.current = true
+      setAttOpen(true)
+    }
+  }, [isLive, attendanceRecorded])
+
+  // Click a name to put it on air; click the name that's already on air to clear it.
+  const setLt = (p: LowerThirdPerson) => {
+    if (activeLt?.person_id === p.id) onAction('clear-lower-third')
+    else onAction('set-lower-third', { person_id: p.id, person: p, position })
+  }
+
+  // Keyboard shortcuts for the live operator: → next item, ← previous item,
+  // C clears the lower third. Ignored while typing in a field or modal.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!canControl || !isLive) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      if (e.key === 'ArrowRight') { e.preventDefault(); void onAction('advance') }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); void onAction('go-back') }
+      else if ((e.key === 'c' || e.key === 'C') && activeLt) { e.preventDefault(); void onAction('clear-lower-third') }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [canControl, isLive, activeLt, onAction])
 
   const chip = (sel: boolean): React.CSSProperties => ({
     font: 'inherit', fontSize: 12, padding: '7px 11px', borderRadius: 999, cursor: 'pointer',
     border: `1px solid ${sel ? 'transparent' : C.line2}`, background: sel ? C.accentbg : 'transparent',
     color: sel ? '#bcdcff' : C.text, fontWeight: sel ? 600 : 400,
   })
+  const toggleGroup = (k: string) => setCollapsedGroups(s => {
+    const n = new Set(s)
+    if (n.has(k)) n.delete(k); else n.add(k)
+    return n
+  })
+  const groupBlock = (label: string, members: LowerThirdPerson[], accent = false) => {
+    if (members.length === 0) return null
+    const collapsed = collapsedGroups.has(label)
+    return (
+      <div key={label} style={{ marginBottom: 8 }}>
+        <button type="button" onClick={() => toggleGroup(label)} style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 0', font: 'inherit', textAlign: 'left' }}>
+          <span style={{ fontSize: 9, color: C.dim, width: 8 }}>{collapsed ? '▸' : '▾'}</span>
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: accent ? '#bcdcff' : C.dim, fontWeight: 600 }}>{label}</span>
+          <span style={{ fontSize: 10, color: C.dim }}>· {members.length}</span>
+        </button>
+        {!collapsed && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+            {members.map(p => (
+              <button key={p.id} style={chip(activeLt?.person_id === p.id)} disabled={!canControl} onClick={() => setLt(p)}>{p.display_name}</button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
   const editChip = (on: boolean): React.CSSProperties => ({
     font: 'inherit', fontSize: 11, padding: '4px 9px', borderRadius: 7, cursor: 'pointer',
     border: `1px solid ${on ? 'transparent' : C.line2}`, background: on ? C.amberbg : 'transparent',
@@ -235,8 +304,17 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               <button onClick={() => setView('preshow')} style={{ font: 'inherit', fontSize: 12, padding: '6px 11px', border: 'none', cursor: 'pointer', background: isPreshow ? C.accentbg : 'transparent', color: isPreshow ? '#bcdcff' : C.soft, fontWeight: isPreshow ? 600 : 400 }}>Pre-show</button>
               <button onClick={() => setView('live')} style={{ font: 'inherit', fontSize: 12, padding: '6px 11px', border: 'none', borderLeft: `1px solid ${C.line}`, cursor: 'pointer', background: !isPreshow ? C.accentbg : 'transparent', color: !isPreshow ? '#bcdcff' : C.soft, fontWeight: !isPreshow ? 600 : 400 }}>Agenda / live</button>
             </div>
-            <button onClick={() => setAttOpen(true)} style={{ font: 'inherit', cursor: 'pointer', border: 'none', fontSize: 12, fontWeight: 600, color: quorumMet ? '#b7f0d8' : '#ffc4c4', background: quorumMet ? C.yeabg : C.naybg, padding: '6px 12px', borderRadius: 999 }}>
-              Attendance {presentCount} / {att?.records.length ?? 0} ▾
+            <button
+              onClick={() => setAttOpen(true)}
+              title={needRoll ? 'Roll has not been taken yet — click to take attendance' : undefined}
+              style={{
+                font: 'inherit', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 999,
+                border: needRoll ? '1px solid #f5b53f' : 'none',
+                color: needRoll ? '#1a1305' : quorumMet ? '#b7f0d8' : '#ffc4c4',
+                background: needRoll ? '#f5b53f' : quorumMet ? C.yeabg : C.naybg,
+              }}
+            >
+              {needRoll ? '⚠ Take attendance ▾' : `Attendance ${presentCount} / ${att?.records.length ?? 0} ✓`}
             </button>
             {isPrepared && !isPreshow && <button onClick={() => { void onAction('end-preroll'); setView('live') }} disabled={!canControl} style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }}>Go live (gavel)</button>}
             {isLive && !onBreak && <button onClick={() => { void onAction('recess'); setView('preshow') }} disabled={!canControl} title="Recess between sessions — returns the screens to pre-roll" style={{ ...btn }}>Back to pre-roll</button>}
@@ -312,6 +390,12 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             </div>
             {editAgenda && <div style={{ fontSize: 11, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>Drag on-air items to reorder. Skip removes from the broadcast; table/postpone marks an item.</div>}
             <div ref={agendaScrollRef} style={{ position: 'relative', maxHeight: 'calc(100vh - 170px)', overflowY: 'auto' }}>
+            {isLive && (
+              <div style={{ position: 'sticky', top: 0, zIndex: 3, background: C.panel, borderRadius: 8, borderLeft: `3px solid ${C.accent}`, border: `1px solid ${C.line2}`, borderLeftWidth: 3, borderLeftColor: C.accent, padding: '7px 10px', marginBottom: 6 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', color: '#bcdcff', textTransform: 'uppercase' }}>On air now</div>
+                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{onAirLabel ?? 'Nothing on air'}</div>
+              </div>
+            )}
             {sections.map(sec => (
               <div key={sec.number}>
                 <div style={{ fontSize: 11, color: C.dim, textTransform: 'uppercase', letterSpacing: '.06em', margin: '12px 0 5px', fontWeight: 600 }}>{sec.number} · {sec.title}</div>
@@ -392,6 +476,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               <div style={{ flex: 1, fontSize: 13 }}>On air: <b style={{ fontWeight: 600 }}>{onAirLabel ?? 'Nothing on air'}</b></div>
               <button style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl || busy} onClick={() => onAction('advance')}>Next item ▶</button>
             </div>
+            {isLive && <div style={{ fontSize: 11, color: C.dim, margin: '-6px 0 12px', textAlign: 'center' }}>Keys: <b style={{ color: C.soft }}>←</b> prev · <b style={{ color: C.soft }}>→</b> next · <b style={{ color: C.soft }}>C</b> clear lower third</div>}
 
             {isPrepared && canControl && (
               <button onClick={() => onAction('end-preroll')} disabled={busy} style={{ width: '100%', padding: 14, border: 'none', borderRadius: 10, background: C.accent, color: '#06101f', font: 'inherit', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
@@ -402,20 +487,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             {/* LOWER THIRD */}
             <div style={cardStyle}>
               <h3 style={h3}>Lower third</h3>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, fontWeight: 600, margin: '0 0 6px' }}>Board members</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {boardPeople.map(p => (
-                  <button key={p.id} style={chip(activeLt?.person_id === p.id)} disabled={!canControl} onClick={() => setLt(p)}>{p.display_name}</button>
-                ))}
-              </div>
-              {staffPeople.length > 0 && <>
-                <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, fontWeight: 600, margin: '10px 0 6px' }}>Frequent staff</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {staffPeople.map(p => (
-                    <button key={p.id} style={chip(activeLt?.person_id === p.id)} disabled={!canControl} onClick={() => setLt(p)}>{p.display_name}</button>
-                  ))}
-                </div>
-              </>}
+              {groupBlock('On this agenda', agendaPeople, true)}
+              {groupedPeople.map(([label, members]) => groupBlock(label, members))}
 
               <ConsoleLowerThirdOther
                 excludeIds={lowerThirdShownIds}
@@ -679,9 +752,17 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 )
               })}
             </div>
-            <div style={{ padding: '14px 18px', borderTop: `1px solid ${C.line}`, fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: C.soft }}>{presentCount} present of {att?.records.length ?? 0}</span>
-              <span style={{ color: quorumMet ? C.yea : C.nay, fontWeight: 600 }}>{quorumMet ? 'Quorum met' : 'No quorum'} · need {threshold}</span>
+            <div style={{ padding: '14px 18px', borderTop: `1px solid ${C.line}` }}>
+              <div style={{ fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ color: C.soft }}>{presentCount} present of {att?.records.length ?? 0}</span>
+                <span style={{ color: quorumMet ? C.yea : C.nay, fontWeight: 600 }}>{quorumMet ? 'Quorum met' : 'No quorum'} · need {threshold}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                {needRoll && onConfirmAttendance && (
+                  <button onClick={() => { void onConfirmAttendance() }} disabled={!canControl} style={{ ...btn, background: C.accent, color: '#06101f', border: 'none', fontWeight: 700 }}>Mark attendance taken</button>
+                )}
+                <button onClick={() => setAttOpen(false)} style={btn}>Done</button>
+              </div>
             </div>
           </div>
         </>

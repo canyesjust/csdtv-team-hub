@@ -4,7 +4,7 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 export const dynamic = 'force-dynamic'
 
-const VALID = new Set(['classic', 'soft', 'triad', 'ding', 'custom'])
+const VALID = new Set(['classic', 'soft', 'triad', 'ding', 'beeps', 'custom'])
 
 // Public: the dais/console (and the public output pages) read which bell to play.
 export async function GET() {
