@@ -165,6 +165,10 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const onAirLabel = currentItem
     ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number} — ${currentItem.title}`)
     : null
+  // The timer only belongs on items that are actually timed — patron/public
+  // comments, board/staff/superintendent reports, recognitions, hearings — or
+  // whenever a timer is already running. It stays hidden everywhere else.
+  const timedItem = !!currentItem && /\b(comment|comments|report|reports|recognition|public input|hearing|testimony)\b/i.test(`${currentItem.title} ${currentItem.type ?? ''}`)
 
   const sections = useMemo(() => {
     const map = new Map<number, { title: string; number: number; items: ControlBundle['agenda_items'] }>()
@@ -551,7 +555,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
               </div>
             </div>
 
-            {/* TIMER — inline, expandable, for the current item (patron comments, reports, etc.) */}
+            {/* TIMER — only on timed items (comments, reports, recognitions…) or while one runs. */}
+            {(timer || timedItem) && (
             <div style={cardStyle}>
               <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Timer</span>
@@ -594,6 +599,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                 <div style={{ fontSize: 12, color: C.dim }}>No timer running. Use “Set a timer” for patron comments, reports, or any timed item.</div>
               )}
             </div>
+            )}
 
             {/* MOTION — full vote workflow, inline */}
             <div style={cardStyle}>

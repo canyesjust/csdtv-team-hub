@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PublicChannelState } from '@/lib/board-meetings/public-output-state'
 import { useBoardChannelState } from '@/app/board/hooks/useBoardChannelState'
 import BoardOutputDebugStrip from '@/app/board/components/BoardOutputDebugStrip'
@@ -46,7 +46,7 @@ function OverlayFullScreenMode({ title, message, accent, startedAt, durationSeco
   }
   return (
     <div
-      className="obs-overlay-graphic"
+      className="obs-overlay-graphic gfx-fade is-in"
       style={{
         position: 'fixed', inset: 0, zIndex: 90,
         background: 'radial-gradient(circle at 50% 32%, #15243f 0%, #060b14 72%)',
@@ -60,6 +60,61 @@ function OverlayFullScreenMode({ title, message, accent, startedAt, durationSeco
       {countdown ? (
         <p style={{ margin: 0, fontFamily: 'ui-monospace, monospace', fontSize: 'min(7vh, 5vw)', fontWeight: 700, color: accent, fontVariantNumeric: 'tabular-nums' }}>{countdown}</p>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * Keeps a graphic mounted long enough to play an exit animation when it is
+ * dismissed, instead of cutting it off the screen. The wrapper is a full-stage
+ * transparent layer (see overlay-transparent.css) so the child's own absolute
+ * positioning is preserved while opacity/transform composite over it.
+ *
+ * `animKey` re-triggers the entrance animation when the content changes while
+ * still showing (e.g. swapping from one speaker's lower third to another).
+ */
+const GFX_EXIT_MS = 460
+
+function GraphicReveal({
+  show,
+  variant,
+  animKey,
+  children,
+}: {
+  show: boolean
+  variant: 'lower-third' | 'stack-left' | 'pop' | 'badge'
+  animKey?: string | number | null
+  children: React.ReactNode
+}) {
+  const [rendered, setRendered] = useState(show)
+  const [phase, setPhase] = useState<'in' | 'out'>(show ? 'in' : 'out')
+  // What we actually paint. While shown it tracks the live content; on hide it
+  // freezes the last shown content so the exit animation has something to play.
+  const [held, setHeld] = useState<React.ReactNode>(children)
+  const lastShown = useRef<React.ReactNode>(children)
+
+  // Keep a snapshot of the most recent *shown* content (refs touched only in effects).
+  useEffect(() => {
+    if (show) lastShown.current = children
+  })
+
+  useEffect(() => {
+    if (show) {
+      setHeld(children)
+      setRendered(true)
+      setPhase('in')
+    } else if (rendered) {
+      setHeld(lastShown.current)
+      setPhase('out')
+      const t = setTimeout(() => setRendered(false), GFX_EXIT_MS)
+      return () => clearTimeout(t)
+    }
+  }, [show, rendered, children])
+
+  if (!rendered) return null
+  return (
+    <div key={animKey ?? undefined} className={`gfx-reveal gfx-${variant} ${phase === 'out' ? 'is-out' : 'is-in'}`}>
+      {held}
     </div>
   )
 }
@@ -194,21 +249,36 @@ export default function BoardOverlayView({
             <BoardBrandingSlide variant="overlay-corner" />
           </div>
         </div>
-        {showTimer && timer ? <TimerBadge timer={timer} /> : null}
-        {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
-        {showLowerThird && lowerThird ? (
-          <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
-        ) : null}
+        <GraphicReveal show={!!showTimer && !!timer} variant="badge">
+          {timer ? <TimerBadge timer={timer} /> : null}
+        </GraphicReveal>
+        <GraphicReveal show={!!visibleQr} variant="badge" animKey={visibleQr?.url}>
+          {visibleQr ? <QrOverlay url={visibleQr.url} label={visibleQr.label} /> : null}
+        </GraphicReveal>
+        <GraphicReveal show={!!showLowerThird && !!lowerThird} variant="lower-third" animKey={lowerThird?.person_id}>
+          {lowerThird ? (
+            <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
+          ) : null}
+        </GraphicReveal>
       </>
     )
   }
+
+  const showStack = !!(showVoteResult || (showMotion && !motionIsVoting) || showItem)
+  const stackKey = showVoteResult
+    ? `vote:${voteResult?.result ?? ''}:${voteResult?.tally.yea ?? ''}-${voteResult?.tally.nay ?? ''}`
+    : showMotion && activeMotion
+      ? `motion:${activeMotion.id}:${activeMotion.status}`
+      : showItem && item
+        ? `item:${item.id}`
+        : 'none'
 
   return (
     <>
       {motionIsVoting && activeMotion ? (
         <OverlayVoteSidePanel motion={activeMotion} item={item} />
       ) : null}
-      {(showVoteResult || (showMotion && !motionIsVoting) || showItem) ? (
+      <GraphicReveal show={showStack} variant={showVoteResult ? 'pop' : 'stack-left'} animKey={stackKey}>
         <div style={stackAnchor}>
           {showVoteResult && voteResult ? <VoteResultCard result={voteResult} /> : null}
           {showMotion && activeMotion && !motionIsVoting ? (
@@ -231,12 +301,18 @@ export default function BoardOverlayView({
             </div>
           ) : null}
         </div>
-      ) : null}
-      {showTimer && timer ? <TimerBadge timer={timer} /> : null}
-      {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
-      {showLowerThird && lowerThird ? (
-        <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
-      ) : null}
+      </GraphicReveal>
+      <GraphicReveal show={!!showTimer && !!timer} variant="badge">
+        {timer ? <TimerBadge timer={timer} /> : null}
+      </GraphicReveal>
+      <GraphicReveal show={!!visibleQr} variant="badge" animKey={visibleQr?.url}>
+        {visibleQr ? <QrOverlay url={visibleQr.url} label={visibleQr.label} /> : null}
+      </GraphicReveal>
+      <GraphicReveal show={!!showLowerThird && !!lowerThird} variant="lower-third" animKey={lowerThird?.person_id}>
+        {lowerThird ? (
+          <LowerThirdBanner person={lowerThird} variant="overlay" position={b?.lower_third_position ?? 'left'} />
+        ) : null}
+      </GraphicReveal>
       {debugInfo ? <BoardOutputDebugStrip info={debugInfo} pollMs={state.poll_interval_ms} /> : null}
     </>
   )

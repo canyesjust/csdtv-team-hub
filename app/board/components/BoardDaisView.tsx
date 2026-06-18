@@ -974,7 +974,7 @@ const mainGrid: React.CSSProperties = {
   minHeight: 0,
 }
 
-const heroCol: React.CSSProperties = { minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }
+const heroCol: React.CSSProperties = { minWidth: 0 }
 
 const nowBlock: React.CSSProperties = {
   marginTop: '4px',

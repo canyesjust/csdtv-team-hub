@@ -75,9 +75,10 @@ export default function LowerThirdBanner({
         fontFamily: 'system-ui, sans-serif',
       }}
     >
-      <p style={{ margin: 0, fontSize: layout.nameSize, fontWeight: 700, lineHeight: 1.15 }}>{person.display_name}</p>
+      <p className="lt-name" style={{ margin: 0, fontSize: layout.nameSize, fontWeight: 700, lineHeight: 1.15 }}>{person.display_name}</p>
       {subtitle ? (
         <p
+          className="lt-sub"
           style={{
             margin: '6px 0 0',
             fontSize: layout.subtitleSize,

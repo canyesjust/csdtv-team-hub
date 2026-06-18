@@ -42,3 +42,51 @@ html:has(.broadcast-overlay-root) body {
   opacity: 1 !important;
   isolation: isolate;
 }
+
+/* ============================================================
+   Broadcast graphic reveals — animate graphics IN and OUT so
+   they feel produced rather than just popping on/off.
+   The reveal wrapper is a full-stage transparent layer; the
+   opacity/transform on it composites down over the graphic it
+   wraps (the child's own opacity:1 !important is unaffected).
+   ============================================================ */
+.broadcast-overlay-stage .gfx-reveal {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+.broadcast-overlay-stage .gfx-reveal > * {
+  pointer-events: auto;
+}
+
+/* Easing: a soft "settle" on entrance, a quicker ease on exit. */
+.gfx-lower-third.is-in { animation: gfxRiseIn 600ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.gfx-lower-third.is-out { animation: gfxRiseOut 380ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+.gfx-stack-left.is-in { animation: gfxLeftIn 540ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.gfx-stack-left.is-out { animation: gfxLeftOut 360ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+.gfx-pop.is-in { animation: gfxPopIn 600ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.gfx-pop.is-out { animation: gfxFadeOut 360ms ease both; }
+
+.gfx-badge.is-in { animation: gfxDropIn 500ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.gfx-badge.is-out { animation: gfxFadeOut 320ms ease both; }
+
+.gfx-fade.is-in { animation: gfxFadeIn 520ms ease both; }
+.gfx-fade.is-out { animation: gfxFadeOut 360ms ease both; }
+
+@keyframes gfxRiseIn { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes gfxRiseOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(16px); } }
+@keyframes gfxLeftIn { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes gfxLeftOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-20px); } }
+@keyframes gfxPopIn { 0% { opacity: 0; transform: scale(0.92); } 55% { opacity: 1; } 100% { opacity: 1; transform: scale(1); } }
+@keyframes gfxDropIn { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes gfxFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gfxFadeOut { from { opacity: 1; } to { opacity: 0; } }
+
+/* Lower-third inner text: the bar rises first, then name/subtitle
+   stagger up a beat later — the classic two-stage lower-third reveal. */
+.gfx-lower-third .lt-name { animation: gfxTextUp 560ms 140ms both cubic-bezier(0.16, 1, 0.3, 1); }
+.gfx-lower-third .lt-sub { animation: gfxTextUp 560ms 240ms both cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes gfxTextUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
