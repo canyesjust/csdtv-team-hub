@@ -129,7 +129,8 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   }, [atStarted, atDuration, atEnded])
 
   const [timerMin, setTimerMin] = useState(3)
-  const [timerOpen, setTimerOpen] = useState(false)
+  // Running count of speakers timed in the current comment period (client-local).
+  const [speakerNum, setSpeakerNum] = useState(0)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   // Lower-third picker: compact summary by default, expand to the full name list.
   const [ltExpanded, setLtExpanded] = useState(false)
@@ -191,6 +192,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
     if (ltAutoKeyRef.current === key) return
     ltAutoKeyRef.current = key
     setLtExpanded(!isActionItem)
+    setSpeakerNum(0)
   }, [currentItem?.id, isActionItem])
 
   const sections = useMemo(() => {
@@ -330,47 +332,56 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
 
   // ── Center-stage cards (ordered motion-first on action items, lower-third-first
   //    on talk items). Defined here so the render stays readable. ──────────────
+  const startSpeaker = (next: boolean) => {
+    void onAction('start-timer', {
+      duration_seconds: timerMin * 60,
+      label: currentItem?.title || 'Speaker',
+      show_on_dais: true,
+      show_on_speaker_monitor: false,
+      show_on_broadcast: false,
+    })
+    setSpeakerNum(n => (next ? n + 1 : 1))
+  }
+  const timerRunning = !!(timer && atStarted && atDuration)
   const timerCard = (timer || timedItem) ? (
     <div style={cardStyle}>
       <h3 style={{ ...h3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>Timer</span>
-        {!timer && !timerOpen && <button style={{ ...btn, fontSize: 11, padding: '4px 9px' }} disabled={!canControl} onClick={() => setTimerOpen(true)}>+ Set a timer</button>}
+        <span>Speaking timer</span>
+        {timerRunning && speakerNum > 0 && <span style={{ fontSize: 11, color: C.soft, textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>Speaker {speakerNum} · {timerMin}:00 each</span>}
       </h3>
-      {timer && atStarted && atDuration ? (
+      {timerRunning ? (
         <>
-          <div style={{ fontSize: 12, color: C.soft, marginBottom: 6 }}>{timer.label || 'Timer'}</div>
-          <LiveCountdown startedAt={atStarted} durationSeconds={atDuration} />
+          <div style={{ fontSize: 12, color: C.soft, marginBottom: 6 }}>{timer?.label || 'Speaker'}</div>
+          <LiveCountdown startedAt={atStarted!} durationSeconds={atDuration!} />
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-            <button style={{ ...btn, flex: 1 }} disabled={!canControl} onClick={() => onAction('end-timer')}>Done</button>
-            <button style={btn} disabled={!canControl} onClick={() => onAction('cancel-timer')}>Cancel</button>
+            <button style={{ ...btn, flex: 1, background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl} onClick={() => startSpeaker(true)} title="Reset to the speaker length and start the next person">Next speaker ▶</button>
+            <button style={btn} disabled={!canControl} onClick={() => onAction('extend-timer', { seconds: 60 })} title="Chair granted more time">+1 min</button>
+            <button style={btn} disabled={!canControl} onClick={() => { void onAction('end-timer'); setSpeakerNum(0) }}>Stop</button>
           </div>
+          <div style={{ fontSize: 11, color: C.dim, marginTop: 8, lineHeight: 1.4 }}>Rings and stops at 0:00. “Next speaker” restarts at {timerMin}:00 for the next person.</div>
         </>
-      ) : timerOpen ? (
+      ) : (
         <>
           <div style={{ fontSize: 12, color: C.soft, marginBottom: 8, lineHeight: 1.5 }}>
-            How long for <b style={{ color: C.text }}>{currentItem ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number}`) : 'this item'}</b>? Counts down on the dais and rings when it ends.
+            How long does each speaker get on <b style={{ color: C.text }}>{currentItem ? (currentItem.consent_block ? 'Consent Agenda' : `Item ${currentItem.item_number}`) : 'this item'}</b>? Counts down on the dais and rings at zero.
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-            {[2, 3, 5, 10].map(m => (
-              <button key={m} style={{ ...btn, fontSize: 12, padding: '6px 11px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: m * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>{m} min</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, fontWeight: 600, marginRight: 2 }}>Length</span>
+            {[2, 3, 5].map(m => (
+              <button key={m} style={{ ...chip(timerMin === m), fontSize: 12, padding: '6px 12px' }} disabled={!canControl} onClick={() => setTimerMin(m)}>{m} min</button>
             ))}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <input type="number" min={1} max={120} value={timerMin} onChange={e => setTimerMin(Math.max(1, Math.min(120, Number(e.target.value) || 1)))} style={{ width: 54, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 7, color: C.text, fontSize: 13, padding: '5px 7px', fontFamily: 'inherit' }} />
+            <input type="number" min={1} max={120} value={timerMin} onChange={e => setTimerMin(Math.max(1, Math.min(120, Number(e.target.value) || 1)))} style={{ width: 50, background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 7, color: C.text, fontSize: 13, padding: '5px 7px', fontFamily: 'inherit' }} />
             <span style={{ fontSize: 12, color: C.soft }}>min</span>
-            <button style={{ ...btn, fontSize: 12, padding: '6px 11px', background: C.accent, color: '#06101f', border: 'none', fontWeight: 600 }} disabled={!canControl} onClick={() => { void onAction('start-timer', { duration_seconds: timerMin * 60, label: currentItem?.title || 'Timer', show_on_dais: true }); setTimerOpen(false) }}>Start + bell</button>
-            <button style={{ ...btn, fontSize: 12, padding: '6px 11px' }} onClick={() => setTimerOpen(false)}>Cancel</button>
           </div>
+          <button style={{ width: '100%', padding: 12, border: 'none', borderRadius: 10, background: C.accent, color: '#06101f', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: canControl ? 'pointer' : 'not-allowed' }} disabled={!canControl} onClick={() => startSpeaker(false)}>Start timer · {timerMin}:00</button>
           {templates.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
               {templates.map(t => (
-                <button key={t.id} style={{ ...btn, fontSize: 11, padding: '5px 9px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { template_id: t.id }); setTimerOpen(false) }}>{t.name}</button>
+                <button key={t.id} style={{ ...btn, fontSize: 11, padding: '5px 9px' }} disabled={!canControl} onClick={() => { void onAction('start-timer', { template_id: t.id, show_on_speaker_monitor: false, show_on_broadcast: false }); setSpeakerNum(1) }}>{t.name}</button>
               ))}
             </div>
           )}
         </>
-      ) : (
-        <div style={{ fontSize: 12, color: C.dim }}>No timer running. Use “Set a timer” for patron comments, reports, or any timed item.</div>
       )}
     </div>
   ) : null

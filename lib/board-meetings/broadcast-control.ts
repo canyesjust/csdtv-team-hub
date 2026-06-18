@@ -671,6 +671,43 @@ export async function startTimer(
   return timer
 }
 
+/** Add (or trim) seconds on the running timer — e.g. the chair grants "+1 minute". */
+export async function extendActiveTimer(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  operatorId: string,
+  addSeconds: number,
+) {
+  const state = await ensureBroadcastState(service, boardMeetingId, operatorId)
+  if (!state.active_timer_id) throw new Error('No active timer')
+
+  const { data: timer } = await service
+    .from('meeting_timers')
+    .select('duration_seconds')
+    .eq('id', state.active_timer_id)
+    .maybeSingle()
+  if (!timer) throw new Error('Timer not found')
+
+  const newDuration = Math.max(1, (timer.duration_seconds ?? 0) + addSeconds)
+  await service
+    .from('meeting_timers')
+    .update({ duration_seconds: newDuration })
+    .eq('id', state.active_timer_id)
+
+  // Bump broadcast state so the dais and console repoll and pick up the new length.
+  await service
+    .from('meeting_broadcast_state')
+    .update({ updated_at: new Date().toISOString(), updated_by: operatorId })
+    .eq('board_meeting_id', boardMeetingId)
+
+  await logMeetingEvent(service, boardMeetingId, 'extend_timer', operatorId, {
+    timer_id: state.active_timer_id,
+    add_seconds: addSeconds,
+    duration_seconds: newDuration,
+  })
+  return newDuration
+}
+
 export async function endActiveTimer(
   service: SupabaseClient,
   boardMeetingId: string,
