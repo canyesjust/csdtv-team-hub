@@ -380,10 +380,6 @@ export default function TasksPage() {
   const isStudentInternUser = useMemo(() => isStudentInternRole(currentUser?.role), [currentUser?.role])
 
   useEffect(() => {
-    if (isStudentInternUser) setScope('mine')
-  }, [isStudentInternUser])
-
-  useEffect(() => {
     if (!currentUser || isStudentInternUser) {
       setIntakeActive(false)
       setIntakeCreatedAt(null)
@@ -1360,13 +1356,11 @@ export default function TasksPage() {
           {/* SCOPE / SEARCH ROW */}
           <section style={{ marginBottom: denseMode ? '12px' : '20px' }}>
             <div className="scope-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
-              {!isStudentInternUser && (
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {scopeBtn('mine', 'Mine')}
-                  {scopeBtn('team', 'Team')}
-                  {scopeBtn('unassigned', 'Unassigned')}
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {scopeBtn('mine', 'Mine')}
+                {scopeBtn('team', 'Team')}
+                {scopeBtn('unassigned', 'Unassigned')}
+              </div>
               <div className="search-wrap" style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 12px' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: text, fontFamily: 'inherit' }} />
