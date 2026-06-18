@@ -828,12 +828,6 @@ function ProductionsPageContent() {
 
   const getTypeLabel = (p: Production) => p.request_type_label || p.type || 'Unknown'
   const getTypeColor = (p: Production) => TYPE_COLORS[getTypeLabel(p)] || '#64748b'
-  const isStudentInternUser = useMemo(() => isStudentInternRole(currentUser?.role), [currentUser?.role])
-
-  useEffect(() => {
-    if (isStudentInternUser) setScope('mine')
-  }, [isStudentInternUser])
-
   /** True if staff logged sending the organizer link email (column or activity). */
   const youtubeOrganizerEmailLogged = useCallback(
     (p: Production) => organizerYoutubeEmailLogged(p, organizerYoutubeEmailedIds),
@@ -1369,13 +1363,11 @@ function ProductionsPageContent() {
           {/* SCOPE / SEARCH */}
           <section style={{ marginBottom: '20px' }}>
             <div className="scope-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
-              {!isStudentInternUser && (
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {scopeBtn('all', 'All')}
-                  {scopeBtn('mine', 'Mine')}
-                  {scopeBtn('unassigned', 'Unassigned')}
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {scopeBtn('all', 'All')}
+                {scopeBtn('mine', 'Mine')}
+                {scopeBtn('unassigned', 'Unassigned')}
+              </div>
               <div className="search-wrap" style={{ flex: 1, minWidth: '220px', display: 'flex', alignItems: 'center', gap: '8px', background: cardBg, border: `1px solid ${border}`, borderRadius: '10px', padding: '8px 12px' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search title, organizer, type, number..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '13px', color: text, fontFamily: 'inherit' }} />
