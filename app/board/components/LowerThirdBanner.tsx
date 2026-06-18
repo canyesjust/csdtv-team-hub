@@ -1,5 +1,5 @@
 import type { LowerThirdPosition, PublicActiveLowerThird } from '@/lib/board-meetings/lower-third-control'
-import { overlayPanelStyle, OVERLAY_TEXT_MUTED, OVERLAY_TEXT_PRIMARY } from '@/app/board/overlay-graphics'
+import { overlayPanelStyle, OVERLAY_ACCENT, OVERLAY_TEXT_MUTED, OVERLAY_TEXT_PRIMARY } from '@/app/board/overlay-graphics'
 
 type Variant = 'overlay' | 'live'
 
@@ -59,12 +59,11 @@ export default function LowerThirdBanner({
         bottom: layout.bottom,
         maxWidth: layout.maxWidth,
         padding: layout.padding,
-        borderRadius: isOverlay ? '10px' : '8px',
+        borderRadius: 0,
         ...(isOverlay
           ? overlayPanelStyle({
-              borderLeft: `${layout.borderLeftWidth}px solid #3b82f6`,
+              borderLeft: `${layout.borderLeftWidth}px solid ${OVERLAY_ACCENT}`,
               color: OVERLAY_TEXT_PRIMARY,
-              boxShadow: '0 4px 0 #000',
             })
           : {
               background: 'rgba(255, 255, 255, 0.96)',

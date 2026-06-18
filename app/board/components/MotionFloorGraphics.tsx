@@ -25,7 +25,7 @@ export function AgendaContextStrip({
           Agenda item
         </p>
         <p style={{ margin: 0, fontSize: '15px', fontWeight: 600, lineHeight: 1.35, color: '#94a3b8' }}>
-          <span style={{ fontFamily: 'ui-monospace, monospace', color: '#38bdf8', marginRight: '10px' }}>{item.item_number}</span>
+          <span style={{ fontFamily: 'ui-monospace, monospace', color: '#f5b53f', marginRight: '10px' }}>{item.item_number}</span>
           {item.title}
         </p>
       </div>

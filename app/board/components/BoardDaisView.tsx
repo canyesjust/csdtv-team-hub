@@ -8,34 +8,35 @@ import { useAgendaItemCache } from '@/app/board/hooks/useAgendaItemCache'
 import { useElementFullscreen } from '@/app/board/hooks/useElementFullscreen'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import { formatOffsetSeconds } from '@/lib/board-meetings/time-format'
-import { playBell } from '@/lib/play-bell'
+import { playBell, type BellChoice } from '@/lib/play-bell'
 import BoardBrandingSlide from '@/app/board/components/BoardBrandingSlide'
 import { BoardBlankFullscreen } from '@/app/board/components/BoardBlankOutput'
 import BoardIdleBranding from '@/app/board/components/BoardIdleBranding'
 import { AgendaContextStrip, fitMotionText } from '@/app/board/components/MotionFloorGraphics'
 import { CANYONS_LOGO_SRC } from '@/app/board/branding-assets'
 
+// Flat broadcast-grade palette — Canyons navy + amber, solid panels, no glass/glow.
 const C = {
-  bg0: '#04080f',
-  bg1: '#0a1220',
-  text: '#f1f5f9',
-  textSoft: '#94a3b8',
-  textDim: '#64748b',
-  accent: '#38bdf8',
-  accentGlow: 'rgba(56, 189, 248, 0.35)',
-  amber: '#fbbf24',
-  amberGlow: 'rgba(251, 191, 36, 0.25)',
-  blue: '#3b82f6',
-  blueGlow: 'rgba(59, 130, 246, 0.3)',
+  bg0: '#102441',
+  bg1: '#0c1d38',
+  text: '#f4f7fc',
+  textSoft: '#9bb0d0',
+  textDim: '#7f97bd',
+  accent: '#f5b53f',
+  accentGlow: 'transparent',
+  amber: '#f5b53f',
+  amberGlow: 'transparent',
+  blue: '#4f9fe0',
+  blueGlow: 'transparent',
   purple: '#a78bfa',
-  purpleGlow: 'rgba(167, 139, 250, 0.35)',
+  purpleGlow: 'transparent',
   green: '#34d399',
-  greenGlow: 'rgba(52, 211, 153, 0.25)',
-  red: '#f87171',
-  redGlow: 'rgba(248, 113, 113, 0.25)',
-  glass: 'rgba(255, 255, 255, 0.04)',
-  glassBorder: 'rgba(255, 255, 255, 0.08)',
-  glassHi: 'rgba(255, 255, 255, 0.07)',
+  greenGlow: 'transparent',
+  red: '#f06363',
+  redGlow: 'transparent',
+  glass: '#19315a',
+  glassBorder: 'rgba(255, 255, 255, 0.12)',
+  glassHi: '#1d3a63',
 }
 
 const font = '"SF Pro Display", "Segoe UI", system-ui, -apple-system, sans-serif'
@@ -77,13 +78,17 @@ export default function BoardDaisView({
   }, [wantAutoFullscreen, fullscreen.supported])
 
   // Ring a bell in the room when the active timer reaches zero.
+  const bellRef = useRef<{ choice: BellChoice; customUrl: string | null }>({ choice: 'classic', customUrl: null })
+  useEffect(() => {
+    fetch('/api/board/bell').then(r => r.json()).then(d => { bellRef.current = { choice: d.choice, customUrl: d.custom_url } }).catch(() => {})
+  }, [])
   const timerStartedAt = state?.timer?.started_at ?? null
   const timerDuration = state?.timer?.duration_seconds ?? null
   useEffect(() => {
     if (!timerStartedAt || !timerDuration) return
     const delay = new Date(timerStartedAt).getTime() + timerDuration * 1000 - Date.now()
     if (delay <= 0) return
-    const id = setTimeout(() => playBell(), delay)
+    const id = setTimeout(() => playBell(bellRef.current), delay)
     return () => clearTimeout(id)
   }, [timerStartedAt, timerDuration])
 
@@ -145,11 +150,23 @@ export default function BoardDaisView({
           0% { background-position: 0% 50%; }
           100% { background-position: 200% 50%; }
         }
+        @keyframes dais-timer-flash {
+          0%, 100% { background: #1a0606; }
+          50% { background: #7f1d1d; }
+        }
       `}</style>
 
       <div style={inner}>
         <div style={bgGrid} aria-hidden />
         <div style={bgGlow} aria-hidden />
+
+        {timer && timer.show_on_dais && timer.started_at && timer.duration_seconds > 0 && (
+          <DaisFullScreenTimer
+            startedAt={timer.started_at}
+            durationSeconds={timer.duration_seconds}
+            label={timer.label}
+          />
+        )}
 
         <header style={header}>
           <div style={headerLeft}>
@@ -475,18 +492,57 @@ function DaisShell({
   )
 }
 
+/**
+ * Full-screen countdown that takes over the whole dais when a timer is running.
+ * Counts down locally (every ~120ms) from started_at + duration so it stays
+ * smooth and accurate without waiting on the server. The progress bar runs green,
+ * turns amber at 30s, red at 15s, and the whole screen flashes red once time is up
+ * (until the operator ends the timer from the console).
+ */
+function DaisFullScreenTimer({ startedAt, durationSeconds, label }: { startedAt: string; durationSeconds: number; label: string }) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 120)
+    return () => clearInterval(id)
+  }, [])
+  const remaining = durationSeconds - (nowMs - new Date(startedAt).getTime()) / 1000
+  const isUp = remaining <= 0
+  const remainingClamped = Math.max(0, remaining)
+  const pct = durationSeconds > 0 ? Math.max(0, Math.min(1, remainingClamped / durationSeconds)) : 0
+  const barColor = isUp || remainingClamped <= 15 ? C.red : remainingClamped <= 30 ? C.amber : C.green
+
+  return (
+    <div
+      style={{
+        position: 'absolute', inset: 0, zIndex: 60,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4vh',
+        background: isUp ? '#1a0606' : C.bg0,
+        animation: isUp ? 'dais-timer-flash 0.9s steps(1, end) infinite' : undefined,
+      }}
+    >
+      {label && (
+        <div style={{ fontFamily: font, fontSize: 'min(6vh, 4vw)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: isUp ? '#fecaca' : C.textSoft }}>
+          {label}
+        </div>
+      )}
+      <div style={{ fontFamily: mono, fontSize: 'min(32vh, 20vw)', fontWeight: 700, lineHeight: 0.9, fontVariantNumeric: 'tabular-nums', color: isUp ? '#ffffff' : barColor }}>
+        {formatOffsetSeconds(Math.ceil(remainingClamped))}
+      </div>
+      <div style={{ width: '74vw', height: '1.8vh', borderRadius: 999, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+        <div style={{ width: `${pct * 100}%`, height: '100%', background: barColor, borderRadius: 999, transition: 'width 0.12s linear' }} />
+      </div>
+    </div>
+  )
+}
+
 function GlassCard({ children, accent }: { children: React.ReactNode; accent?: string }) {
   return (
     <div
       style={{
-        padding: '20px 22px',
-        borderRadius: '16px',
+        padding: '18px 20px',
+        borderRadius: '10px',
         background: C.glass,
-        border: `1px solid ${accent ? `${accent}44` : C.glassBorder}`,
-        boxShadow: accent
-          ? `0 0 40px ${accent}18, inset 0 1px 0 rgba(255,255,255,0.06)`
-          : 'inset 0 1px 0 rgba(255,255,255,0.06)',
-        backdropFilter: 'blur(12px)',
+        border: `1px solid ${accent ? `${accent}66` : C.glassBorder}`,
       }}
     >
       {children}
@@ -500,10 +556,12 @@ function StatusHero({ label, accent }: { label: string; accent: string }) {
       style={{
         marginTop: '24px',
         padding: '32px 28px',
-        borderRadius: '20px',
-        background: `linear-gradient(135deg, ${accent}22 0%, transparent 60%)`,
-        border: `1px solid ${accent}55`,
-        boxShadow: `0 0 60px ${accent}22`,
+        borderRadius: '10px',
+        background: C.glass,
+        borderLeft: `4px solid ${accent}`,
+        border: `1px solid ${C.glassBorder}`,
+        borderLeftWidth: '4px',
+        borderLeftColor: accent,
       }}
     >
       <h1 style={{ margin: 0, fontSize: 'clamp(36px, 5vw, 56px)', fontWeight: 700, letterSpacing: '-0.02em', color: C.text }}>
@@ -555,17 +613,16 @@ function LiveVoteRoster({ votes }: { votes: { person_name: string; vote: string 
 function VoteResultCard({ result }: { result: PublicActiveVoteResult }) {
   const passed = result.result === 'passed'
   const accent = passed ? C.green : C.red
-  const glow = passed ? C.greenGlow : C.redGlow
   const members = [...(result.votes ?? [])].sort((a, b) => a.person_name.localeCompare(b.person_name))
   return (
     <div
       style={{
-        marginTop: '28px',
-        padding: '24px 26px',
-        borderRadius: '18px',
-        background: `linear-gradient(145deg, ${glow} 0%, transparent 55%)`,
-        border: `1px solid ${accent}66`,
-        boxShadow: `0 0 48px ${glow}`,
+        marginTop: '24px',
+        padding: '22px 26px',
+        borderRadius: '10px',
+        background: C.glass,
+        border: `1px solid ${C.glassBorder}`,
+        borderLeft: `4px solid ${accent}`,
       }}
     >
       <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: accent }}>
@@ -629,8 +686,6 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
       <MotionCard
         label="Voting open"
         accent={C.purple}
-        glow={C.purpleGlow}
-        pulse
         hero={hero}
       >
         {motionFit}
@@ -650,7 +705,7 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
 
   if (!hasMover) {
     return (
-      <MotionCard label="Motion in progress" accent={C.amber} glow={C.amberGlow} shimmer>
+      <MotionCard label="Motion in progress" accent={C.amber}>
         <p style={formingText}>A motion is being made</p>
       </MotionCard>
     )
@@ -658,7 +713,7 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
 
   if (!hasSeconder) {
     return (
-      <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow} hero={hero}>
+      <MotionCard label="On the floor" accent={C.amber} hero={hero}>
         {motionFit}
         <p style={motionMeta}>
           <span style={metaDim}>Moved by </span>
@@ -670,7 +725,7 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
   }
 
   return (
-    <MotionCard label="On the floor" accent={C.amber} glow={C.amberGlow} hero={hero}>
+    <MotionCard label="On the floor" accent={C.amber} hero={hero}>
       {motionFit}
       <p style={motionMeta}>
         <span style={metaHighlight}>{motion.moved_by_name}</span>
@@ -684,50 +739,26 @@ function DaisMotionPanel({ motion, hero = false }: { motion: PublicActiveMotion;
 function MotionCard({
   label,
   accent,
-  glow,
   children,
-  pulse,
-  shimmer,
   hero,
 }: {
   label: string
   accent: string
-  glow: string
   children: React.ReactNode
-  pulse?: boolean
-  shimmer?: boolean
   hero?: boolean
 }) {
   return (
     <div
       style={{
-        marginTop: hero ? '8px' : '28px',
-        padding: hero ? '30px 32px' : '26px 28px',
-        borderRadius: '18px',
+        marginTop: hero ? '8px' : '24px',
+        padding: hero ? '26px 28px' : '22px 26px',
+        borderRadius: '10px',
         position: 'relative',
-        overflow: 'hidden',
-        background: shimmer
-          ? `linear-gradient(110deg, ${glow} 0%, transparent 40%, ${glow} 80%)`
-          : `linear-gradient(145deg, ${glow} 0%, transparent 50%)`,
-        backgroundSize: shimmer ? '200% 100%' : undefined,
-        animation: shimmer ? 'dais-shimmer 4s ease-in-out infinite' : pulse ? 'dais-pulse 2.5s ease-in-out infinite' : undefined,
-        border: `1px solid ${accent}55`,
-        boxShadow: `0 0 40px ${glow}, inset 0 1px 0 rgba(255,255,255,0.08)`,
+        background: C.glass,
+        border: `1px solid ${C.glassBorder}`,
+        borderLeft: `4px solid ${accent}`,
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: '4px',
-          background: accent,
-          borderRadius: '18px 0 0 18px',
-          boxShadow: `0 0 16px ${accent}`,
-        }}
-        aria-hidden
-      />
       <p style={{ margin: '0 0 14px', fontSize: '12px', fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: accent }}>
         {label}
       </p>
@@ -740,7 +771,7 @@ const shell: React.CSSProperties = {
   minHeight: '100vh',
   display: 'flex',
   flexDirection: 'column',
-  background: `linear-gradient(165deg, ${C.bg0} 0%, ${C.bg1} 45%, #060b14 100%)`,
+  background: C.bg0,
   color: C.text,
   fontFamily: font,
   padding: '28px 36px 36px',
@@ -833,25 +864,11 @@ const autoFsBannerGhost: React.CSSProperties = {
 }
 
 const bgGrid: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  backgroundImage: `
-    linear-gradient(rgba(56, 189, 248, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56, 189, 248, 0.03) 1px, transparent 1px)
-  `,
-  backgroundSize: '48px 48px',
-  maskImage: 'radial-gradient(ellipse 80% 70% at 30% 40%, black 20%, transparent 75%)',
-  pointerEvents: 'none',
+  display: 'none',
 }
 
 const bgGlow: React.CSSProperties = {
-  position: 'absolute',
-  top: '-20%',
-  left: '-10%',
-  width: '55%',
-  height: '60%',
-  background: 'radial-gradient(ellipse, rgba(56, 189, 248, 0.12) 0%, transparent 70%)',
-  pointerEvents: 'none',
+  display: 'none',
 }
 
 const header: React.CSSProperties = {
@@ -860,7 +877,9 @@ const header: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  marginBottom: '28px',
+  paddingBottom: '14px',
+  marginBottom: '24px',
+  borderBottom: `2px solid ${C.accent}`,
 }
 
 const headerLeft: React.CSSProperties = { display: 'flex', alignItems: 'center', minWidth: 0 }
@@ -878,23 +897,20 @@ const livePill: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: '8px',
-  padding: '6px 14px',
-  borderRadius: '999px',
-  background: 'rgba(52, 211, 153, 0.12)',
-  border: '1px solid rgba(52, 211, 153, 0.45)',
-  fontSize: '11px',
-  fontWeight: 800,
-  letterSpacing: '0.14em',
-  color: C.green,
+  padding: '6px 13px',
+  borderRadius: '4px',
+  background: '#b3261e',
+  fontSize: '12px',
+  fontWeight: 500,
+  letterSpacing: '0.12em',
+  color: '#fff',
 }
 
 const liveDot: React.CSSProperties = {
   width: '8px',
   height: '8px',
   borderRadius: '50%',
-  background: C.green,
-  boxShadow: `0 0 10px ${C.green}`,
-  animation: 'dais-pulse 2s ease-in-out infinite',
+  background: '#fff',
 }
 
 const channelTag: React.CSSProperties = {
@@ -919,11 +935,10 @@ const heroCol: React.CSSProperties = { minWidth: 0 }
 
 const nowBlock: React.CSSProperties = {
   marginTop: '4px',
-  padding: '28px 32px 32px',
-  borderRadius: '20px',
-  background: 'linear-gradient(145deg, rgba(56, 189, 248, 0.08) 0%, rgba(255, 255, 255, 0.02) 55%)',
-  border: '1px solid rgba(56, 189, 248, 0.22)',
-  boxShadow: '0 0 48px rgba(56, 189, 248, 0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+  padding: '24px 28px 28px',
+  borderRadius: '10px',
+  background: C.glass,
+  border: `1px solid ${C.glassBorder}`,
 }
 
 const nowLabel: React.CSSProperties = {
@@ -952,9 +967,9 @@ const itemBadge: React.CSSProperties = {
   letterSpacing: '0.08em',
   color: C.accent,
   padding: '6px 14px',
-  borderRadius: '8px',
-  background: 'rgba(56, 189, 248, 0.1)',
-  border: `1px solid rgba(56, 189, 248, 0.35)`,
+  borderRadius: '6px',
+  background: C.glassHi,
+  border: `1px solid ${C.glassBorder}`,
   fontFamily: mono,
 }
 

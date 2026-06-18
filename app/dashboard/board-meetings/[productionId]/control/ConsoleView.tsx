@@ -8,7 +8,7 @@ import ConsoleQR from './ConsoleQR'
 import PreshowMode from './PreshowMode'
 import BoardPreview from './BoardPreview'
 import ConsoleLowerThirdOther from './ConsoleLowerThirdOther'
-import { playBell } from '@/lib/play-bell'
+import { playBell, type BellChoice } from '@/lib/play-bell'
 import type { ControlBundle, LowerThirdPerson } from '@/lib/board-meetings/types'
 
 type AttStatus = 'present' | 'remote' | 'absent'
@@ -87,6 +87,10 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   }, [bs?.current_agenda_item_id, editAgenda])
 
   // Ring a bell on the operator console exactly when the active timer hits zero.
+  const bellRef = useRef<{ choice: BellChoice; customUrl: string | null }>({ choice: 'classic', customUrl: null })
+  useEffect(() => {
+    fetch('/api/board/bell').then(r => r.json()).then(d => { bellRef.current = { choice: d.choice, customUrl: d.custom_url } }).catch(() => {})
+  }, [])
   const at = bundle.active_timer as { started_at?: string | null; duration_seconds?: number | null; ended_at?: string | null } | null
   const atStarted = at?.started_at ?? null
   const atDuration = at?.duration_seconds ?? null
@@ -95,7 +99,7 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
     if (!atStarted || !atDuration || atEnded) return
     const delay = new Date(atStarted).getTime() + atDuration * 1000 - Date.now()
     if (delay <= 0) return // already elapsed (e.g. page reload after it ended) — don't ring
-    const id = setTimeout(() => playBell(), delay)
+    const id = setTimeout(() => playBell(bellRef.current), delay)
     return () => clearTimeout(id)
   }, [atStarted, atDuration, atEnded])
 

@@ -13,28 +13,53 @@ import { overlayShouldShowChannelIdent } from '@/app/board/lib/channel-ident'
 import LowerThirdBanner from '@/app/board/components/LowerThirdBanner'
 import {
   overlayPanelStyle,
-  OVERLAY_PANEL_BG,
   OVERLAY_TEXT_MUTED,
   OVERLAY_TEXT_PRIMARY,
   OVERLAY_TEXT_SUBTLE,
 } from '@/app/board/overlay-graphics'
 import { OverlayMotionCard, OverlayVoteSidePanel, fitMotionText, motionTextFitStyle } from '@/app/board/components/MotionFloorGraphics'
 import { useActivePublicQr } from '@/app/board/hooks/useActivePublicQr'
+import { CANYONS_LOGO_SRC } from '@/app/board/branding-assets'
 
-function ModeBanner({ accent, title, message }: { accent: string; title: string; message: string | null }) {
+/**
+ * Recess / technical-difficulties take over the WHOLE overlay with an opaque
+ * cover, so the program cameras behind the overlay are hidden in OBS. Shows a
+ * countdown when the operator set a recess duration.
+ */
+function OverlayFullScreenMode({ title, message, accent, startedAt, durationSeconds }: {
+  title: string
+  message: string | null
+  accent: string
+  startedAt?: string | null
+  durationSeconds?: number | null
+}) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    if (!startedAt || !durationSeconds) return
+    const id = setInterval(() => setNowMs(Date.now()), 250)
+    return () => clearInterval(id)
+  }, [startedAt, durationSeconds])
+  let countdown: string | null = null
+  if (startedAt && durationSeconds) {
+    const remaining = durationSeconds - (nowMs - new Date(startedAt).getTime()) / 1000
+    if (remaining > 0) countdown = formatOffsetSeconds(Math.ceil(remaining))
+  }
   return (
     <div
       className="obs-overlay-graphic"
-      style={overlayPanelStyle({
-        background: `linear-gradient(135deg, ${accent} 0%, ${OVERLAY_PANEL_BG} 100%)`,
-        padding: '32px 40px',
-        borderRadius: '8px',
-        color: '#fff',
-        maxWidth: '640px',
-      })}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 90,
+        background: 'radial-gradient(circle at 50% 32%, #15243f 0%, #060b14 72%)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '28px', textAlign: 'center',
+      }}
     >
-      <p style={{ margin: 0, fontSize: '32px', fontWeight: 700 }}>{title}</p>
-      {message ? <p style={{ margin: '12px 0 0', fontSize: '18px', color: OVERLAY_TEXT_MUTED }}>{message}</p> : null}
+      <img src={CANYONS_LOGO_SRC} alt="" style={{ height: '9vh', opacity: 0.95 }} />
+      <div style={{ width: '72px', height: '4px', borderRadius: 999, background: accent }} />
+      <p style={{ margin: 0, fontSize: 'min(8vh, 6vw)', fontWeight: 700, color: '#f1f5f9', letterSpacing: '0.01em' }}>{title}</p>
+      {message ? <p style={{ margin: 0, fontSize: 'min(3.4vh, 2.6vw)', color: '#94a3b8', maxWidth: '70vw' }}>{message}</p> : null}
+      {countdown ? (
+        <p style={{ margin: 0, fontFamily: 'ui-monospace, monospace', fontSize: 'min(7vh, 5vw)', fontWeight: 700, color: accent, fontVariantNumeric: 'tabular-nums' }}>{countdown}</p>
+      ) : null}
     </div>
   )
 }
@@ -130,30 +155,23 @@ export default function BoardOverlayView({
   const showLowerThird = !!lowerThird && mode !== 'technical_difficulties'
   if (mode === 'recess') {
     return (
-      <>
-        <div style={stackAnchor}>
-          <ModeBanner accent="#1e4a8a" title="Recess" message={b?.mode_message ?? null} />
-        </div>
-        {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
-        {showLowerThird && lowerThird ? (
-          <LowerThirdBanner
-            person={lowerThird}
-            variant="overlay"
-            position={b?.lower_third_position ?? 'left'}
-          />
-        ) : null}
-      </>
+      <OverlayFullScreenMode
+        title="Recess"
+        message={b?.mode_message ?? "We'll return shortly."}
+        accent="#38bdf8"
+        startedAt={b?.mode_started_at}
+        durationSeconds={b?.mode_duration_seconds}
+      />
     )
   }
 
   if (mode === 'technical_difficulties') {
     return (
-      <>
-        <div style={stackAnchor}>
-          <ModeBanner accent="#8b1a1a" title="Technical Difficulties" message={b?.mode_message ?? null} />
-        </div>
-        {visibleQr && <QrOverlay url={visibleQr.url} label={visibleQr.label} />}
-      </>
+      <OverlayFullScreenMode
+        title="Technical Difficulties"
+        message={b?.mode_message ?? 'Please stand by.'}
+        accent="#f87171"
+      />
     )
   }
 
