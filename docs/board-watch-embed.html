@@ -362,7 +362,9 @@
       var t = x.title || x.t || '';
       return '<div class="sub"><span class="l">' + esc(l) + '</span>' + esc(t) + '</div>';
     }).join('');
-    return '<div class="cw-it ' + cls + '"><span class="lt"></span><div class="body"><div class="tt">Consent Agenda</div><div class="pres">Approved together as one motion</div>' + now + '</div>' + tc + '</div>' +
+    // The section header already reads "Consent Agenda" — don't repeat it as a title.
+    // Render one box: a short note + the jump/now controls, then every consent item.
+    return '<div class="cw-it ' + cls + '"><span class="lt"></span><div class="body"><div class="pres">Approved together as one motion</div>' + now + '</div>' + tc + '</div>' +
       (subs ? '<div class="cw-consent">' + subs + '</div>' : '');
   }
   function renderAgenda(data) {

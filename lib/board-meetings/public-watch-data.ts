@@ -144,8 +144,24 @@ function youtubeUrlFrom(url: string | null | undefined, id: string | null): stri
 
 // ---------- meeting list ----------
 
+// The sandbox test meeting must never surface publicly. Identified by its real id
+// and production number (from db/test_board_meeting_seed.sql), not a title match.
+const SANDBOX_PRODUCTION_ID = '11111111-1111-4111-8111-111111111111'
+const SANDBOX_PRODUCTION_NUMBER = 999999999
+
+// Only expose meetings that have been APPROVED. A production sitting at
+// "Idea/Request" (not yet approved) or "Abandoned" must never appear publicly.
+// (A board-cancelled meeting keeps an approved prod.status — cancellation is
+// tracked on board_meetings.broadcast_status — so it still passes here.)
+const PUBLIC_APPROVED_STATUSES = new Set([
+  'Approved/Scheduled',
+  'In Progress',
+  'Complete Requested',
+  'Complete',
+])
+
 type MeetingRow = {
-  bmId: string
+  bmId: string | null
   productionId: string
   productionNumber: number
   title: string
@@ -159,36 +175,48 @@ type MeetingRow = {
   cancelled: boolean
 }
 
+/**
+ * The board-meeting universe = the same set the hub's Board Meetings tab shows:
+ * `productions` where request_type_number = 4. `board_meetings` is OPTIONAL
+ * enrichment (it only exists once a meeting is set up), never a filter — so
+ * "not started" future meetings are included. Sandbox is excluded by id/number.
+ */
 async function loadBoardMeetings(service: SupabaseClient): Promise<MeetingRow[]> {
-  const { data: bms } = await service
-    .from('board_meetings')
-    .select('id, production_id, broadcast_status, scheduled_public_start, icompass_meeting_id')
-  if (!bms?.length) return []
+  const [{ data: prods }, { data: bms }] = await Promise.all([
+    service
+      .from('productions')
+      .select('id, production_number, title, start_datetime, event_date, event_location, filming_location, livestream_url, status')
+      .eq('request_type_number', 4),
+    service
+      .from('board_meetings')
+      .select('id, production_id, broadcast_status, scheduled_public_start, icompass_meeting_id'),
+  ])
+  if (!prods?.length) return []
 
-  const prodIds = bms.map(b => b.production_id).filter(Boolean)
-  const { data: prods } = await service
-    .from('productions')
-    .select('id, production_number, title, start_datetime, event_location, filming_location, livestream_url, status')
-    .in('id', prodIds)
-  const prodById = new Map((prods || []).map(p => [p.id, p]))
+  const bmByProd = new Map((bms || []).map(b => [b.production_id, b]))
 
   const rows: MeetingRow[] = []
-  for (const b of bms) {
-    const p = prodById.get(b.production_id)
-    if (!p || !p.start_datetime) continue
+  for (const p of prods) {
+    if (p.id === SANDBOX_PRODUCTION_ID || p.production_number === SANDBOX_PRODUCTION_NUMBER) continue
+    // Public = approved meetings only (never expose Idea/Request or Abandoned).
+    if (!PUBLIC_APPROVED_STATUSES.has(((p.status as string | null) || '').trim())) continue
+    // Match the hub's date logic: start_datetime, else event_date.
+    const dateIso = (p.start_datetime as string | null) ?? (p.event_date as string | null) ?? null
+    if (!dateIso) continue // no date — can't place on the public timeline
+    const b = bmByProd.get(p.id) || null
     rows.push({
-      bmId: b.id,
+      bmId: b?.id ?? null,
       productionId: p.id,
       productionNumber: p.production_number,
       title: p.title,
-      startDatetime: p.start_datetime,
-      localDate: denverDate(new Date(p.start_datetime)),
+      startDatetime: dateIso,
+      localDate: denverDate(new Date(dateIso)),
       location: p.event_location || p.filming_location || null,
       livestreamUrl: p.livestream_url ?? null,
-      broadcastStatus: (b.broadcast_status as string) || 'none',
-      scheduledStart: (b.scheduled_public_start as string | null) ?? null,
-      icompassMeetingId: (b.icompass_meeting_id as string | null) ?? null,
-      cancelled: b.broadcast_status === 'cancelled' || p.status === 'Cancelled',
+      broadcastStatus: (b?.broadcast_status as string) || 'none',
+      scheduledStart: (b?.scheduled_public_start as string | null) ?? null,
+      icompassMeetingId: (b?.icompass_meeting_id as string | null) ?? null,
+      cancelled: b?.broadcast_status === 'cancelled' || p.status === 'Cancelled',
     })
   }
   return rows
@@ -256,10 +284,11 @@ async function assembleAgenda(
     : null
 
   // (a) Stored agenda items — full data with offsets + live status.
-  if (storedAgenda.length > 0) {
+  if (storedAgenda.length > 0 && featured.bmId) {
+    const bmId = featured.bmId
     const [{ data: subRows }, { data: bstate }] = await Promise.all([
-      service.from('board_meeting_agenda_items').select('id, subitems').eq('board_meeting_id', featured.bmId),
-      service.from('meeting_broadcast_state').select('current_agenda_item_id').eq('board_meeting_id', featured.bmId).maybeSingle(),
+      service.from('board_meeting_agenda_items').select('id, subitems').eq('board_meeting_id', bmId),
+      service.from('meeting_broadcast_state').select('current_agenda_item_id').eq('board_meeting_id', bmId).maybeSingle(),
     ])
     const subMap = new Map<string, AgendaSubitem[]>()
     for (const r of subRows || []) {
@@ -405,7 +434,7 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
   // Recent list — past board meetings, newest first, excluding the featured one
   // when it's the most-recent-past ("soon" state).
   const recentRows = meetings
-    .filter(m => m.localDate < today && !(state === 'soon' && featured && m.bmId === featured.bmId))
+    .filter(m => m.localDate < today && !(state === 'soon' && featured && m.productionId === featured.productionId))
     .sort((a, b) => b.localDate.localeCompare(a.localDate))
     .slice(0, 6)
 
@@ -436,7 +465,7 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
 
   // "Coming Up" — future board meetings other than the featured one.
   const upcoming = meetings
-    .filter(m => m.localDate >= today && !(featured && m.bmId === featured.bmId))
+    .filter(m => m.localDate >= today && !(featured && m.productionId === featured.productionId))
     .sort((a, b) => a.localDate.localeCompare(b.localDate))
     .slice(0, 4)
     .map(m => ({
