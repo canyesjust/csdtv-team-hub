@@ -132,7 +132,7 @@ const LAYOUTS: LayoutDef[] = [
   { id: 'paired', name: 'Paired rows', kind: 'grid', cCols: 2, cRows: 1, blurb: 'Desks in twos, aisle between pairs.' },
   { id: 'pods4', name: 'Pods of 4', kind: 'grid', cCols: 2, cRows: 2, blurb: '2×2 clusters for group work.' },
   { id: 'pods6', name: 'Pods of 6', kind: 'grid', cCols: 3, cRows: 2, blurb: '3×2 clusters, fewer aisles.' },
-  { id: 'sides_center', name: 'Two sides + center', kind: 'lanes', blurb: 'Columns along the left and right walls plus one down the middle, all facing front.' },
+  { id: 'sides_center', name: 'Two sides + center', kind: 'lanes', blurb: 'Left & right desks face the walls; a center double-column faces inward.' },
   { id: 'u', name: 'Horseshoe', kind: 'u', rings: 1, blurb: 'One ring facing the center.' },
   { id: 'u2', name: 'Double horseshoe', kind: 'u', rings: 2, blurb: 'Two nested rings for larger groups.' },
   { id: 'perim_out', name: 'Perimeter — face walls', kind: 'perim', facing: 'out', blurb: 'Desks along all walls, facing out.' },
@@ -146,7 +146,7 @@ type SpacingApplies = { perim: boolean; front: boolean; aisle: boolean; rowGap: 
 function spacingApplies(layout: LayoutDef): SpacingApplies {
   if (layout.kind === 'grid') return { perim: true, front: true, aisle: true, rowGap: true }
   if (layout.kind === 'u') return { perim: true, front: true, aisle: (layout.rings ?? 1) > 1, rowGap: false }
-  if (layout.kind === 'lanes') return { perim: true, front: true, aisle: false, rowGap: true }
+  if (layout.kind === 'lanes') return { perim: true, front: true, aisle: false, rowGap: false }
   return { perim: true, front: true, aisle: false, rowGap: false }
 }
 
@@ -232,17 +232,30 @@ function buildPerimeter(room: Room, desk: Desk, sp: Sp, facing: 'in' | 'out'): B
 }
 
 function buildLanes(room: Room, desk: Desk, sp: Sp): BuildResult {
-  // Columns flush to the left and right walls plus one centered column, all
-  // facing front. Rows run front-to-back using front clearance + the row-gap rule.
-  const usableL = room.l - sp.front - sp.perim
-  const nRows = Math.max(0, Math.floor((usableL + sp.rowGap) / (desk.d + sp.rowGap)))
-  const colXs = [sp.perim + desk.w / 2, room.w - sp.perim - desk.w / 2]
-  const sideGap = (room.w - 2 * sp.perim - 3 * desk.w) / 2
-  if (sideGap >= 2) colXs.splice(1, 0, room.w / 2) // add the center column only when it fits
+  // Left & right columns sit against the side walls and FACE the wall; two center
+  // columns face inward toward each other. Desks within a column are flush
+  // (touching). Rotated ±90°, a desk spans `desk.d` across and `desk.w` along the run.
+  const runStart = sp.front
+  const usable = room.l - sp.front - sp.perim
+  const step = desk.w // rotated: the desk's width runs front-to-back, flush together
+  const nRows = Math.max(0, Math.floor(usable / step))
+
+  // Columns: {x center, rotation}. rot -90 faces left (west), rot 90 faces right (east).
+  const cols: { x: number; rot: number }[] = [
+    { x: sp.perim + desk.d / 2, rot: -90 },          // left wall — faces the wall (chairs toward center)
+    { x: room.w - sp.perim - desk.d / 2, rot: 90 },  // right wall — faces the wall
+  ]
+  // Inward-facing center pair, fronts meeting at the room centerline, only when it fits.
+  const sideAisle = room.w / 2 - sp.perim - 2 * desk.d
+  if (sideAisle >= 2) {
+    cols.push({ x: room.w / 2 - desk.d / 2, rot: 90 })  // left-center — faces center (east)
+    cols.push({ x: room.w / 2 + desk.d / 2, rot: -90 }) // right-center — faces center (west)
+  }
+
   const desks: Item[] = []
   for (let r = 0; r < nRows; r++) {
-    const cy = sp.front + r * (desk.d + sp.rowGap) + desk.d / 2
-    for (const cx of colXs) desks.push({ cx, cy, w: desk.w, d: desk.d, rot: 0, seats: desk.seats })
+    const cy = runStart + r * step + step / 2
+    for (const c of cols) desks.push({ cx: c.x, cy, w: desk.w, d: desk.d, rot: c.rot, seats: desk.seats })
   }
   desks.sort((a, b) => a.cy - b.cy || a.cx - b.cx)
   return { desks, cap: desks.length }
@@ -582,7 +595,7 @@ export default function ClassroomPlannerPage() {
   const adaRouteVal = ap.aisle
     ? aisle
     : layout.kind === 'lanes'
-      ? (room.w - 2 * perim - 3 * desk.w) / 2
+      ? room.w / 2 - perim - 2 * desk.d
       : Math.min(room.w - 2 * perim - 2 * desk.d, room.l - front - perim - 2 * desk.d)
   const adaRouteLabel = ap.aisle ? 'ADA aisle' : layout.kind === 'lanes' ? 'side aisles' : 'center route'
 
