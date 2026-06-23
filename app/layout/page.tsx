@@ -649,6 +649,49 @@ export default function ClassroomPlannerPage() {
   const seedFromAuto = () => setStudentDesks(autoDesks.map((d) => ({ ...d })))
   const enterManual = () => { seedFromAuto(); setSel(null); setManual(true) }
 
+  const exportImage = () => {
+    const svg = svgRef.current
+    if (!svg || typeof window === 'undefined') return
+    const clone = svg.cloneNode(true) as SVGSVGElement
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    const vb = svg.viewBox.baseVal
+    const vbW = vb && vb.width ? vb.width : room.w + 68
+    const vbH = vb && vb.height ? vb.height : room.l + 68
+    const scale = Math.min(3, Math.max(1, 1600 / vbW)) // crisp output ~1600px wide
+    const outW = Math.round(vbW * scale)
+    const outH = Math.round(vbH * scale)
+    clone.setAttribute('width', String(outW))
+    clone.setAttribute('height', String(outH))
+    const xml = new XMLSerializer().serializeToString(clone)
+    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = outW
+      canvas.height = outH
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { URL.revokeObjectURL(url); return }
+      ctx.fillStyle = '#FFFFFF'
+      ctx.fillRect(0, 0, outW, outH)
+      ctx.drawImage(img, 0, 0, outW, outH)
+      URL.revokeObjectURL(url)
+      canvas.toBlob((blob) => {
+        if (!blob) return
+        const base = (manual ? 'custom' : layout.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+        const dl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = dl
+        a.download = `classroom-${base || 'layout'}-${desks.length}-desks.png`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(dl)
+      }, 'image/png')
+    }
+    img.onerror = () => URL.revokeObjectURL(url)
+    img.src = url
+  }
+
   function clientToInches(cx: number, cy: number) {
     const svg = svgRef.current; if (!svg) return { x: 0, y: 0 }
     const pt = svg.createSVGPoint(); pt.x = cx; pt.y = cy
@@ -926,7 +969,10 @@ export default function ClassroomPlannerPage() {
                 <Check on={showADA} set={setShowADA} label="Accessible seats" />
                 <Check on={showDims} set={setShowDims} label="Measurements" />
               </div>
-              <Btn kind={manual ? 'primary' : 'default'} size="sm" onClick={() => (manual ? setManual(false) : enterManual())}>{manual ? '← Back to auto' : 'Manual arrange'}</Btn>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Btn size="sm" onClick={exportImage}>⤓ Export PNG</Btn>
+                <Btn kind={manual ? 'primary' : 'default'} size="sm" onClick={() => (manual ? setManual(false) : enterManual())}>{manual ? '← Back to auto' : 'Manual arrange'}</Btn>
+              </div>
             </div>
 
             {/* fixtures + edit toolbar (always available) */}
