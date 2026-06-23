@@ -49,7 +49,7 @@ type SelKind = 'desk' | 'teacher' | 'door'
 type Sel = { kind: SelKind; idx: number } | null
 type Box = { l: number; r: number; t: number; b: number }
 type BuildResult = { desks: Item[]; cap: number }
-type LayoutKind = 'grid' | 'u' | 'perim'
+type LayoutKind = 'grid' | 'u' | 'perim' | 'lanes'
 type LayoutDef = {
   id: string
   name: string
@@ -132,11 +132,23 @@ const LAYOUTS: LayoutDef[] = [
   { id: 'paired', name: 'Paired rows', kind: 'grid', cCols: 2, cRows: 1, blurb: 'Desks in twos, aisle between pairs.' },
   { id: 'pods4', name: 'Pods of 4', kind: 'grid', cCols: 2, cRows: 2, blurb: '2×2 clusters for group work.' },
   { id: 'pods6', name: 'Pods of 6', kind: 'grid', cCols: 3, cRows: 2, blurb: '3×2 clusters, fewer aisles.' },
+  { id: 'sides_center', name: 'Two sides + center', kind: 'lanes', blurb: 'Columns along the left and right walls plus one down the middle, all facing front.' },
   { id: 'u', name: 'Horseshoe', kind: 'u', rings: 1, blurb: 'One ring facing the center.' },
   { id: 'u2', name: 'Double horseshoe', kind: 'u', rings: 2, blurb: 'Two nested rings for larger groups.' },
   { id: 'perim_out', name: 'Perimeter — face walls', kind: 'perim', facing: 'out', blurb: 'Desks along all walls, facing out.' },
   { id: 'perim_in', name: 'Perimeter — face center', kind: 'perim', facing: 'in', blurb: 'Desks along all walls, facing in.' },
 ]
+
+// Which spacing rules actually bind for a given arrangement. Front and perimeter
+// clearances apply everywhere; aisle only matters where there's a walking lane
+// (grid columns, or nested horseshoe rings); row gap is grid-only.
+type SpacingApplies = { perim: boolean; front: boolean; aisle: boolean; rowGap: boolean }
+function spacingApplies(layout: LayoutDef): SpacingApplies {
+  if (layout.kind === 'grid') return { perim: true, front: true, aisle: true, rowGap: true }
+  if (layout.kind === 'u') return { perim: true, front: true, aisle: (layout.rings ?? 1) > 1, rowGap: false }
+  if (layout.kind === 'lanes') return { perim: true, front: true, aisle: false, rowGap: true }
+  return { perim: true, front: true, aisle: false, rowGap: false }
+}
 
 /* ---------------- geometry ---------------- */
 
@@ -191,7 +203,8 @@ function buildHorseshoe(room: Room, desk: Desk, sp: Sp, rings: number): BuildRes
 }
 
 function buildPerimeter(room: Room, desk: Desk, sp: Sp, facing: 'in' | 'out'): BuildResult {
-  const iL = sp.perim, iR = room.w - sp.perim, iT = sp.perim, iB = room.l - sp.perim
+  // Front (board) wall honors the front-clearance rule; the other three walls use perimeter.
+  const iL = sp.perim, iR = room.w - sp.perim, iT = sp.front, iB = room.l - sp.perim
   const all: Item[] = []
   const out = facing !== 'in'
   const lineX = (y: number, rot: number) => {
@@ -216,6 +229,23 @@ function buildPerimeter(room: Room, desk: Desk, sp: Sp, facing: 'in' | 'out'): B
     lineY(iR - desk.d / 2, out ? 90 : -90, top, bot)
   }
   return { desks: all, cap: all.length }
+}
+
+function buildLanes(room: Room, desk: Desk, sp: Sp): BuildResult {
+  // Columns flush to the left and right walls plus one centered column, all
+  // facing front. Rows run front-to-back using front clearance + the row-gap rule.
+  const usableL = room.l - sp.front - sp.perim
+  const nRows = Math.max(0, Math.floor((usableL + sp.rowGap) / (desk.d + sp.rowGap)))
+  const colXs = [sp.perim + desk.w / 2, room.w - sp.perim - desk.w / 2]
+  const sideGap = (room.w - 2 * sp.perim - 3 * desk.w) / 2
+  if (sideGap >= 2) colXs.splice(1, 0, room.w / 2) // add the center column only when it fits
+  const desks: Item[] = []
+  for (let r = 0; r < nRows; r++) {
+    const cy = sp.front + r * (desk.d + sp.rowGap) + desk.d / 2
+    for (const cx of colXs) desks.push({ cx, cy, w: desk.w, d: desk.d, rot: 0, seats: desk.seats })
+  }
+  desks.sort((a, b) => a.cy - b.cy || a.cx - b.cx)
+  return { desks, cap: desks.length }
 }
 
 function markADA(desks: Item[]) {
@@ -283,16 +313,18 @@ function FtIn({ ft, inch, setFt, setIn }: { ft: number; inch: number; setFt: (v:
   )
 }
 
-function Slider({ label, value, set, min, max, rec, recLabel, suffix }: { label: string; value: number; set: (v: number) => void; min: number; max: number; rec?: number | null; recLabel?: string; suffix?: string }) {
-  const below = rec != null && value < rec
+function Slider({ label, value, set, min, max, rec, recLabel, suffix, disabled, naNote }: { label: string; value: number; set: (v: number) => void; min: number; max: number; rec?: number | null; recLabel?: string; suffix?: string; disabled?: boolean; naNote?: string }) {
+  const below = !disabled && rec != null && value < rec
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, opacity: disabled ? 0.45 : 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={{ fontSize: 13, color: C.ink }}>{label}</span>
         <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: below ? C.warn : C.ink, fontWeight: 600 }}>{value}{suffix}</span>
       </div>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => set(parseInt(e.target.value))} className="cls-range" />
-      {rec != null && <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5, color: below ? C.warn : C.faint }}>{below ? 'below ' : 'rec '}{recLabel || `${rec}${suffix}`}</span>}
+      <input type="range" min={min} max={max} value={value} disabled={disabled} onChange={(e) => set(parseInt(e.target.value))} className="cls-range" style={disabled ? { cursor: 'not-allowed' } : undefined} />
+      {disabled
+        ? <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5, color: C.faint }}>{naNote || 'not used in this arrangement'}</span>
+        : rec != null && <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5, color: below ? C.warn : C.faint }}>{below ? 'below ' : 'rec '}{recLabel || `${rec}${suffix}`}</span>}
     </div>
   )
 }
@@ -544,6 +576,15 @@ export default function ClassroomPlannerPage() {
   const desk: Desk = { w: deskW, d: deskD, seats: deskSeats }
   const sp: Sp = { aisle, rowGap, front, perim }
   const layout: LayoutDef = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
+  const ap = spacingApplies(layout)
+  // The circulation route to check against the 36" ADA minimum: the aisle where
+  // one exists, otherwise the open central space left between the wall desks.
+  const adaRouteVal = ap.aisle
+    ? aisle
+    : layout.kind === 'lanes'
+      ? (room.w - 2 * perim - 3 * desk.w) / 2
+      : Math.min(room.w - 2 * perim - 2 * desk.d, room.l - front - perim - 2 * desk.d)
+  const adaRouteLabel = ap.aisle ? 'ADA aisle' : layout.kind === 'lanes' ? 'side aisles' : 'center route'
 
   const [manual, setManual] = useState(false)
   const [studentDesks, setStudentDesks] = useState<Item[]>([])
@@ -557,6 +598,7 @@ export default function ClassroomPlannerPage() {
     let res: BuildResult
     if (layout.kind === 'grid') res = buildGrid(room, desk, sp, layout.cCols ?? 1, layout.cRows ?? 1)
     else if (layout.kind === 'perim') res = buildPerimeter(room, desk, sp, layout.facing ?? 'out')
+    else if (layout.kind === 'lanes') res = buildLanes(room, desk, sp)
     else res = buildHorseshoe(room, desk, sp, layout.rings ?? 1)
     const zones = doors.map((dr) => doorClear(dr, room))
     const dk = clearOfDoors(res.desks, zones).map((d) => ({ ...d }))
@@ -757,10 +799,11 @@ export default function ClassroomPlannerPage() {
   const warnings: string[] = []
   if (!manual) {
     if (!fillMax && target > cap) warnings.push(`Only ${cap} desks fit at these settings — ${target - cap} short. Tighten spacing, shrink desks, or lower the count.`)
-    if (aisle < 36) warnings.push("Aisles under 36″ don't meet the ADA wheelchair-route width.")
-    if (rowGap < 24) warnings.push('Under 24″ between rows is tight to walk through.')
-    if (front < 48) warnings.push('Under 48″ at the front leaves little teaching space.')
-    if (perim < 18) warnings.push('Perimeter under 18″ makes wall seats hard to reach.')
+    if (ap.aisle && aisle < 36) warnings.push("Aisles under 36″ don't meet the ADA wheelchair-route width.")
+    if (!ap.aisle && adaRouteVal < 36) warnings.push('The open route between desks is under 36″ — below the ADA wheelchair-route width.')
+    if (ap.rowGap && rowGap < 24) warnings.push('Under 24″ between rows is tight to walk through.')
+    if (ap.front && front < 48) warnings.push('Under 48″ at the front leaves little teaching space.')
+    if (ap.perim && perim < 18) warnings.push('Perimeter under 18″ makes wall seats hard to reach.')
   }
 
   return (
@@ -846,8 +889,8 @@ export default function ClassroomPlannerPage() {
           <Panel title="Spacing">
             {manual && <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 11, padding: '7px 9px', background: C.accentSoft, border: `1px solid ${C.line}`, borderRadius: 5 }}>These shape the <b>auto</b> layout. You&apos;re arranging by hand — drag desks to move them, or switch back to auto.</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <Slider label="Aisle width" value={aisle} set={setAisle} min={0} max={60} rec={36} recLabel="≥ 36″ (ADA route)" suffix="″" />
-              <Slider label="Between rows" value={rowGap} set={setRowGap} min={0} max={60} rec={30} recLabel="≈ 30″ (3 ft)" suffix="″" />
+              <Slider label="Aisle width" value={aisle} set={setAisle} min={0} max={60} rec={36} recLabel="≥ 36″ (ADA route)" suffix="″" disabled={!ap.aisle} naNote={layout.kind === 'u' ? 'only used with 2+ rings' : layout.kind === 'lanes' ? 'auto — set by room width' : 'no walking aisle in this arrangement'} />
+              <Slider label="Between rows" value={rowGap} set={setRowGap} min={0} max={60} rec={30} recLabel="≈ 30″ (3 ft)" suffix="″" disabled={!ap.rowGap} naNote="no front-to-back rows in this arrangement" />
               <Slider label="Front clearance" value={front} set={setFront} min={0} max={144} rec={60} recLabel="60–120″ board to row 1" suffix="″" />
               <Slider label="Perimeter" value={perim} set={setPerim} min={0} max={60} rec={36} recLabel="≈ 36″ at the back" suffix="″" />
             </div>
@@ -860,7 +903,7 @@ export default function ClassroomPlannerPage() {
             <Metric value={manual ? '—' : `${cap}`} label={manual ? 'manual' : 'max capacity'} />
             <Metric value={perStudent} label="sq ft / student" />
             <Metric value={`${adaCount}`} label="accessible" tone={C.amber} />
-            <Metric value={manual ? 'manual' : (aisle >= 36 ? 'pass' : 'tight')} label={manual ? 'spacing' : 'ADA aisle'} tone={manual ? C.muted : (aisle >= 36 ? C.ok : C.warn)} last />
+            <Metric value={manual ? 'manual' : (adaRouteVal >= 36 ? 'pass' : 'tight')} label={manual ? 'spacing' : adaRouteLabel} tone={manual ? C.muted : (adaRouteVal >= 36 ? C.ok : C.warn)} last />
           </div>
 
           <section style={{ background: C.paper, border: `1px solid ${C.line}`, borderRadius: 7 }}>
@@ -893,7 +936,7 @@ export default function ClassroomPlannerPage() {
 
             <div style={{ padding: 12 }}>
               <Plan room={room} desks={desks} teachers={teachers} doors={doors} sp={sp} showADA={showADA} firstAisleX={manual ? null : firstAisleX} firstRowY={manual ? null : firstRowY}
-                manual={manual} showFrontGuide={!manual && layout.kind === 'grid'} showDims={showDims} sel={sel} onItemDown={onItemDown} onBackgroundDown={onBackgroundDown} svgRef={svgRef} />
+                manual={manual} showFrontGuide={!manual && ap.front} showDims={showDims} sel={sel} onItemDown={onItemDown} onBackgroundDown={onBackgroundDown} svgRef={svgRef} />
               <div style={{ display: 'flex', gap: 15, flexWrap: 'wrap', marginTop: 9, fontSize: 11, color: C.muted }}>
                 <Legend color={C.deskFill} edge={C.deskEdge} label="Desk" />
                 <Legend color={C.amberSoft} edge={C.amber} label="Accessible (30×48 clear floor)" />
@@ -984,7 +1027,8 @@ function previewDesks(s: Saved): Item[] {
   const lay = LAYOUTS.find((l) => l.id === s.layoutId) || LAYOUTS[0]
   const res = lay.kind === 'grid' ? buildGrid(room, desk, sp, lay.cCols ?? 1, lay.cRows ?? 1)
     : lay.kind === 'perim' ? buildPerimeter(room, desk, sp, lay.facing ?? 'out')
-      : buildHorseshoe(room, desk, sp, lay.rings ?? 1)
+      : lay.kind === 'lanes' ? buildLanes(room, desk, sp)
+        : buildHorseshoe(room, desk, sp, lay.rings ?? 1)
   const zones = (s.doors || []).map((dr) => doorClear(dr, room))
   const dk = clearOfDoors(res.desks, zones)
   return s.fillMax ? dk : dk.slice(0, Math.min(s.target, dk.length))
