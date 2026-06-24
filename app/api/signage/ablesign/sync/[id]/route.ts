@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AbleSignApiError } from '@/lib/server/ablesign'
 import { syncHubScreenToAbleSign, writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
+import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
 import { requireManagerApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +17,7 @@ export async function POST(
   const { id } = await context.params
   const { data: screen, error: loadError } = await service
     .from('signage_screens')
-    .select('id, code, name, orientation, ablesign_screen_id, ablesign_webapp_id')
+    .select('id, code, name, orientation, ablesign_screen_id, ablesign_webapp_id, site_id')
     .eq('id', id)
     .single()
 
@@ -32,7 +33,8 @@ export async function POST(
   }
 
   try {
-    const result = await syncHubScreenToAbleSign(service, screen)
+    const creds = await getSiteAbleSignCreds(service, screen.site_id)
+    const result = await syncHubScreenToAbleSign(service, screen, creds)
     await writeAbleSignLog(service, {
       screen_id: screen.id,
       action: 'sync',

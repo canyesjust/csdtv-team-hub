@@ -3,6 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase'
+
+const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
+
+function detectFormat(file: File): 'png' | 'jpg' | null {
+  const t = (file.type || '').toLowerCase()
+  if (t === 'image/png') return 'png'
+  if (t === 'image/jpeg') return 'jpg'
+  const n = file.name.toLowerCase()
+  if (n.endsWith('.png')) return 'png'
+  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
+  return null
+}
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type LogoFormat = 'png' | 'jpg'
@@ -89,17 +102,35 @@ export default function ManageSchoolBrandPage() {
 
   const onFile = async (file: File | null) => {
     if (!file) return
+    const format = detectFormat(file)
+    if (!format) { notify('File must be a PNG or JPG', 'error'); if (fileRef.current) fileRef.current.value = ''; return }
+    if (file.size > MAX_BYTES) { notify('File is larger than 20 MB', 'error'); if (fileRef.current) fileRef.current.value = ''; return }
     setBusy('add')
     try {
-      const body = new FormData()
-      body.append('file', file)
-      body.append('code', code)
-      body.append('category', category.trim())
-      body.append('name', name.trim())
-      const res = await fetch('/api/brand/upload', { method: 'POST', body })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Upload failed', 'error')
-      else { notify('Logo uploaded', 'success'); setName(''); await loadDetail() }
+      // 1. Ask the server for a signed upload URL.
+      const signRes = await fetch('/api/brand/upload/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, category: category.trim(), name: name.trim(), format }),
+      })
+      const sign = await signRes.json().catch(() => ({}))
+      if (!signRes.ok) { notify(typeof sign?.error === 'string' ? sign.error : 'Upload failed', 'error'); return }
+
+      // 2. Upload the file directly to storage (no serverless body-size limit).
+      const supabase = createClient()
+      const contentType = format === 'png' ? 'image/png' : 'image/jpeg'
+      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType })
+      if (upErr) { notify(upErr.message || 'Upload failed', 'error'); return }
+
+      // 3. Record (or replace) the logo row.
+      const finRes = await fetch('/api/brand/upload/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, category: category.trim(), name: name.trim(), format, path: sign.path }),
+      })
+      const fin = await finRes.json().catch(() => ({}))
+      if (!finRes.ok) { notify(typeof fin?.error === 'string' ? fin.error : 'Could not save logo', 'error'); return }
+      notify('Logo uploaded', 'success'); setName(''); await loadDetail()
     } catch {
       notify('Upload failed', 'error')
     } finally {

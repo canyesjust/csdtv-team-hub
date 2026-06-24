@@ -4,13 +4,18 @@
  * Hobby plan blocks deployments when vercel.json defines crons.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { AbleSignApiError, listAllScreens } from '@/lib/server/ablesign'
+import { AbleSignApiError, listAllScreens, type AbleSignScreen } from '@/lib/server/ablesign'
 import { deriveAbleSignOnline, writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
+import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
 import { verifySignageCron } from '@/lib/signage/ablesign-cron'
 import { requireManagerApi } from '@/lib/signage/server-auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 export const dynamic = 'force-dynamic'
+
+// Each site can point at its own AbleSign workspace, so we fetch the remote
+// screen list once per distinct site and match heartbeats within that site.
+const DEFAULT_SITE_KEY = '__default__'
 
 async function refreshAbleSignHealth() {
   const service = getServiceSupabaseClient()
@@ -18,21 +23,28 @@ async function refreshAbleSignHealth() {
     return { error: 'Server configuration error', status: 500 as const }
   }
 
-  const [{ data: hubScreens, error: hubError }, ablesignScreens] = await Promise.all([
-    service
-      .from('signage_screens')
-      .select('id, name, ablesign_screen_id')
-      .not('ablesign_screen_id', 'is', null),
-    listAllScreens(),
-  ])
+  const { data: hubScreens, error: hubError } = await service
+    .from('signage_screens')
+    .select('id, name, ablesign_screen_id, site_id')
+    .not('ablesign_screen_id', 'is', null)
 
   if (hubError) {
     return { error: hubError.message, status: 500 as const }
   }
 
-  const byAbleSignId = new Map(
-    ablesignScreens.map(s => [s.id, s]),
-  )
+  // Group linked screens by site, then fetch each site's workspace once.
+  const siteKeys = new Set<string>((hubScreens ?? []).map(h => h.site_id || DEFAULT_SITE_KEY))
+  const remoteBySite = new Map<string, Map<number, AbleSignScreen>>()
+  for (const key of siteKeys) {
+    const creds = key === DEFAULT_SITE_KEY ? {} : await getSiteAbleSignCreds(service, key)
+    try {
+      const screens = await listAllScreens(creds)
+      remoteBySite.set(key, new Map(screens.map(s => [s.id, s])))
+    } catch {
+      // A misconfigured site shouldn't block the rest; treat its screens as offline.
+      remoteBySite.set(key, new Map())
+    }
+  }
 
   const updates: Array<{
     id: string
@@ -41,7 +53,8 @@ async function refreshAbleSignHealth() {
   }> = []
 
   for (const hub of hubScreens ?? []) {
-    const remote = byAbleSignId.get(Number(hub.ablesign_screen_id))
+    const byAbleSignId = remoteBySite.get(hub.site_id || DEFAULT_SITE_KEY)
+    const remote = byAbleSignId?.get(Number(hub.ablesign_screen_id))
     const heartbeat = remote?.heartbeatTime ?? null
     const online = remote
       ? deriveAbleSignOnline(heartbeat, remote.onlineStatus)

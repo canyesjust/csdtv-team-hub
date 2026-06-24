@@ -32,6 +32,15 @@ export type ScreenFeed = {
     center_name: string
     theme: SignageTheme
     colors: { bg: string; panel: string | null; accent: string | null } | null
+    brand_title: string | null
+    brand_subtitle: string | null
+    logo_url: string | null
+  }
+  template?: {
+    show_weather: boolean
+    show_clock: boolean
+    show_ticker: boolean
+    show_visitor_welcome: boolean
   }
   media: FeedMedia[]
   announcements: FeedAnnouncement[]
@@ -56,11 +65,11 @@ function AnnouncementIcon({ icon }: { icon: string }) {
   return <span className="cic-ann-icon" aria-hidden>{announcementIconEmoji(icon)}</span>
 }
 
-function ScreenLogo({ portrait }: { portrait?: boolean }) {
+function ScreenLogo({ portrait, src }: { portrait?: boolean; src?: string | null }) {
   return (
     <div className={`cic-logo${portrait ? ' portrait' : ''}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/cic-logo.png" alt="" onError={e => { e.currentTarget.style.display = 'none' }} />
+      <img src={src || '/cic-logo.png'} alt="" onError={e => { e.currentTarget.style.display = 'none' }} />
     </div>
   )
 }
@@ -73,6 +82,9 @@ function ScreenHeader({
   tempF,
   clock,
   wayfindingHeading,
+  logoUrl,
+  showWeather = true,
+  showClock = true,
 }: {
   portrait?: boolean
   brandTitle: string
@@ -81,22 +93,27 @@ function ScreenHeader({
   tempF: number | null
   clock: string
   wayfindingHeading?: string | null
+  logoUrl?: string | null
+  showWeather?: boolean
+  showClock?: boolean
 }) {
   return (
     <div className={`cic-tvhead${portrait ? ' portrait' : ''}`}>
       <div className={`cic-head-left${portrait ? ' portrait' : ''}`}>
-        <ScreenLogo portrait={portrait} />
+        <ScreenLogo portrait={portrait} src={logoUrl} />
         <div>
           <div className={`cic-brand${portrait ? ' portrait' : ''}`}>{wayfindingHeading ?? brandTitle}</div>
           <div className={`cic-brandsub${portrait ? ' portrait' : ''}`}>{wayfindingHeading ? 'Find your way' : brandSub}</div>
         </div>
       </div>
       <div className="cic-head-right">
-        <div className={`cic-wx${portrait ? ' portrait' : ''}`}>
-          <span aria-hidden>{weatherIcon}</span>
-          {tempF != null && <span>{tempF}&deg;</span>}
-        </div>
-        {!portrait && <div className="cic-clk">{renderClock(clock)}</div>}
+        {showWeather && (
+          <div className={`cic-wx${portrait ? ' portrait' : ''}`}>
+            <span aria-hidden>{weatherIcon}</span>
+            {tempF != null && <span>{tempF}&deg;</span>}
+          </div>
+        )}
+        {!portrait && showClock && <div className="cic-clk">{renderClock(clock)}</div>}
       </div>
     </div>
   )
@@ -109,6 +126,9 @@ function ZonedHeader({
   tempF,
   clock,
   visitor,
+  logoUrl,
+  showWeather = true,
+  showClock = true,
 }: {
   centerName: string
   areaLabel: string
@@ -116,11 +136,14 @@ function ZonedHeader({
   tempF: number | null
   clock: string
   visitor?: FeedVisitor
+  logoUrl?: string | null
+  showWeather?: boolean
+  showClock?: boolean
 }) {
   return (
     <div className="cic-tvhead cic-zhead">
       <div className="cic-zhead-id">
-        <ScreenLogo />
+        <ScreenLogo src={logoUrl} />
         <span className="cic-zhead-area">{areaLabel}</span>
       </div>
       <div className="cic-zhead-welcome">
@@ -132,11 +155,13 @@ function ZonedHeader({
         </span>
       </div>
       <div className="cic-head-right">
-        <div className="cic-wx">
-          <span aria-hidden>{weatherIcon}</span>
-          {tempF != null && <span>{tempF}&deg;</span>}
-        </div>
-        <div className="cic-clk">{renderClock(clock)}</div>
+        {showWeather && (
+          <div className="cic-wx">
+            <span aria-hidden>{weatherIcon}</span>
+            {tempF != null && <span>{tempF}&deg;</span>}
+          </div>
+        )}
+        {showClock && <div className="cic-clk">{renderClock(clock)}</div>}
       </div>
     </div>
   )
@@ -161,13 +186,24 @@ function WelcomeStrip({ visitor, portrait }: { visitor: FeedVisitor; portrait?: 
   )
 }
 
-function TickerBar({ items, portrait }: { items: string[]; portrait?: boolean }) {
-  const text = items.length
-    ? items.join('   •   ')
-    : 'Canyons Innovation Center'
+function TickerBar({
+  items,
+  portrait,
+  show = true,
+  pill = 'CIC',
+  fallback = 'Canyons Innovation Center',
+}: {
+  items: string[]
+  portrait?: boolean
+  show?: boolean
+  pill?: string
+  fallback?: string
+}) {
+  if (!show) return null
+  const text = items.length ? items.join('   •   ') : fallback
   return (
     <div className={`cic-ticker${portrait ? ' portrait' : ''}`}>
-      <span className="cic-ticker-pill" aria-hidden>CIC</span>
+      <span className="cic-ticker-pill" aria-hidden>{pill}</span>
       <div className="cic-ticker-scroll">
         <div className="cic-tickin">{text}</div>
       </div>
@@ -659,12 +695,24 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const currentMedia = feed.media[mediaIndex]
   const takeoverContent = currentMedia?.full_screen
   const showZones = !takeoverContent && !feed.live.live && !feed.board_takeover
-  const visitor = feed.visitors[0]
   const clock = formatSignageClock(now)
   const areaLabel = feed.screen.area?.name || feed.screen.name
   const centerSub = feed.screen.center_name === 'Canyons Innovation Center'
     ? 'Innovation Center'
     : feed.screen.center_name
+
+  // Per-site template toggles + branding (default to the original CIC behavior).
+  const showWeather = feed.template?.show_weather !== false
+  const showClock = feed.template?.show_clock !== false
+  const showTicker = feed.template?.show_ticker !== false
+  const showVisitorWelcome = feed.template?.show_visitor_welcome !== false
+  const visitor = showVisitorWelcome ? feed.visitors[0] : undefined
+  const logoUrl = feed.screen.logo_url
+  const brandTitle = feed.screen.brand_title || feed.screen.name
+  const brandSub = feed.screen.brand_subtitle || centerSub
+  const tickerPill = (feed.screen.brand_title || feed.screen.center_name || 'CIC')
+    .split(/\s+/).map(w => w[0]).join('').slice(0, 4).toUpperCase() || 'CIC'
+  const tickerFallback = feed.screen.center_name
 
   const screenClass = `cic-screen${portrait ? ' portrait' : ''} layout-${layout} cic-theme-${feed.screen.theme}`
   const siteStyle = siteColorVars(feed.screen.colors)
@@ -720,7 +768,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               <div className="cic-welchip"><ConfettiIcon /> Welcome {visitor.name}</div>
             )}
           </div>
-          <TickerBar items={feed.ticker} portrait={portrait} />
+          <TickerBar items={feed.ticker} portrait={portrait} show={showTicker} pill={tickerPill} fallback={tickerFallback} />
         </>
       )}
 
@@ -734,6 +782,9 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             tempF={feed.weather.tempF}
             clock={clock}
             visitor={visitor}
+            logoUrl={logoUrl}
+            showWeather={showWeather}
+            showClock={showClock}
           />
           <div className="cic-body">
             <MediaCarousel
@@ -748,7 +799,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               compactDirectory
             />
           </div>
-          <TickerBar items={feed.ticker} />
+          <TickerBar items={feed.ticker} show={showTicker} pill={tickerPill} fallback={tickerFallback} />
         </div>
       )}
 
@@ -757,11 +808,14 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         <>
           <ScreenHeader
             portrait
-            brandTitle={feed.screen.name}
-            brandSub={centerSub}
+            brandTitle={brandTitle}
+            brandSub={brandSub}
             weatherIcon={feed.weather.icon}
             tempF={feed.weather.tempF}
             clock={clock}
+            logoUrl={logoUrl}
+            showWeather={showWeather}
+            showClock={showClock}
           />
           {visitor && <WelcomeStrip visitor={visitor} portrait />}
           <MediaCarousel
@@ -783,7 +837,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               </>
             )}
           </div>
-          <TickerBar items={feed.ticker} portrait />
+          <TickerBar items={feed.ticker} portrait show={showTicker} pill={tickerPill} fallback={tickerFallback} />
         </>
       )}
 
@@ -797,6 +851,9 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             tempF={feed.weather.tempF}
             clock={clock}
             wayfindingHeading={wayfindingHeadings[headingIndex % wayfindingHeadings.length]}
+            logoUrl={logoUrl}
+            showWeather={showWeather}
+            showClock={showClock}
           />
           <div className="cic-body cic-body-wayfind">
             <div className="cic-wayfind-dir">
@@ -825,7 +882,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               </aside>
             </div>
           </div>
-          <TickerBar items={feed.ticker} />
+          <TickerBar items={feed.ticker} show={showTicker} pill={tickerPill} fallback={tickerFallback} />
         </>
       )}
 
@@ -840,6 +897,9 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             tempF={feed.weather.tempF}
             clock={clock}
             wayfindingHeading={wayfindingHeadings[headingIndex % wayfindingHeadings.length]}
+            logoUrl={logoUrl}
+            showWeather={showWeather}
+            showClock={showClock}
           />
           <MediaCarousel
             media={feed.media}
@@ -857,7 +917,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             <div className="cic-railhd">Announcements</div>
             {feed.announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
           </div>
-          <TickerBar items={feed.ticker} portrait />
+          <TickerBar items={feed.ticker} portrait show={showTicker} pill={tickerPill} fallback={tickerFallback} />
         </>
       )}
 

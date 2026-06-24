@@ -8,8 +8,8 @@ import { isInDateRange, signageTargetMatches, todayDateString } from './targetin
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
 import {
-  normalizeSignageLayout,
   normalizeSignageOrientation,
+  resolveScreenLayout,
   type ScreenFeed,
 } from './screen-feed'
 
@@ -218,7 +218,7 @@ export async function buildScreenFeed(
         name: screen.name,
         code: screen.code,
         orientation: normalizeSignageOrientation(screen.orientation),
-        layout: normalizeSignageLayout(screen.layout),
+        layout: resolveScreenLayout(screen.layout, site?.default_layout),
         heading: screen.wayfinding_heading,
         area: area ? { name: area.name, slug: area.slug, building: area.building, floor: area.floor } : null,
         center_name: site?.center_name ?? 'Canyons Innovation Center',
@@ -226,6 +226,15 @@ export async function buildScreenFeed(
         colors: site?.use_brand_colors && site?.bg_color
           ? { bg: site.bg_color, panel: site.panel_color ?? null, accent: site.accent_color ?? null }
           : null,
+        brand_title: site?.brand_title ?? null,
+        brand_subtitle: site?.brand_subtitle ?? null,
+        logo_url: site?.logo_url ?? null,
+      },
+      template: {
+        show_weather: site?.show_weather ?? true,
+        show_clock: site?.show_clock ?? true,
+        show_ticker: site?.show_ticker ?? true,
+        show_visitor_welcome: site?.show_visitor_welcome ?? true,
       },
       media,
       announcements,

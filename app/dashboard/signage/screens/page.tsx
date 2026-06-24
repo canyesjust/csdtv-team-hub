@@ -50,7 +50,7 @@ type Screen = ScreenForm & {
 }
 
 const empty: ScreenForm = {
-  code: '', name: '', area_id: null, building: '', floor: null, orientation: 'landscape', layout: 'zoned',
+  code: '', name: '', area_id: null, building: '', floor: null, orientation: 'landscape', layout: 'inherit',
   theme: '', wayfinding_heading: '', accepts_takeover: true, board_takeover_enabled: false, board_takeover_audio: false, active: true, notes: '',
 }
 
@@ -180,6 +180,7 @@ export default function SignageScreensPage() {
             <div>
               <p style={s.lbl}>Layout</p>
               <select value={form.layout} onChange={e => setForm(f => ({ ...f, layout: e.target.value }))} style={s.input}>
+                <option value="inherit">Inherit from site template</option>
                 <option value="zoned">Zoned — media + announcements (+ directory if area set)</option>
                 <option value="full_bleed">Full bleed — media only (hallways)</option>
                 <option value="wayfinding">Wayfinding — large directory + media (entrances)</option>
@@ -256,6 +257,7 @@ export default function SignageScreensPage() {
                 ablesign_heartbeat_at: screens.find(sc => sc.id === editId)?.ablesign_heartbeat_at ?? null,
               }}
               onUpdated={() => void loadScreens()}
+              siteId={activeSiteId}
             />
           )}
         </div>

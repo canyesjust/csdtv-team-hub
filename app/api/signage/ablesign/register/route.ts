@@ -5,6 +5,7 @@ import {
   syncHubScreenToAbleSign,
   writeAbleSignLog,
 } from '@/lib/signage/ablesign-helpers'
+import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
 import { requireManagerApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
 
   const { data: screen, error: loadError } = await service
     .from('signage_screens')
-    .select('id, code, name, orientation, ablesign_screen_id, ablesign_webapp_id')
+    .select('id, code, name, orientation, ablesign_screen_id, ablesign_webapp_id, site_id')
     .eq('id', hubScreenId)
     .single()
 
@@ -36,12 +37,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: loadError?.message || 'Screen not found' }, { status: 404 })
   }
 
+  const creds = await getSiteAbleSignCreds(service, screen.site_id)
+
   try {
     const registered = await registerScreen({
       registrationCode,
       title: screen.name,
       orientation: hubOrientationToAbleSign(orientationOverride || screen.orientation),
-    })
+    }, creds)
 
     await service
       .from('signage_screens')
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
     const synced = await syncHubScreenToAbleSign(service, {
       ...screen,
       ablesign_screen_id: registered.id,
-    })
+    }, creds)
 
     await writeAbleSignLog(service, {
       screen_id: hubScreenId,

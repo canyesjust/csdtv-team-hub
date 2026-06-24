@@ -80,7 +80,7 @@ export function SignageProvider({ children }: { children: ReactNode }) {
 
       const { data: user } = await supabase
         .from('team')
-        .select('role, signage_approver')
+        .select('id, role, signage_approver')
         .eq('supabase_user_id', session.user.id)
         .single()
       if (cancelled) return
@@ -98,7 +98,21 @@ export function SignageProvider({ children }: { children: ReactNode }) {
         .order('sort_order')
       if (cancelled) return
 
-      const list: SignageSite[] = siteRows || []
+      let list: SignageSite[] = siteRows || []
+
+      // Non-managers are scoped to the sites they've been granted access to.
+      // If they have no explicit grants, fall back to all active sites so an
+      // approver who predates the access model isn't locked out.
+      if (!manager && user?.id) {
+        const { data: accessRows } = await supabase
+          .from('signage_site_access')
+          .select('site_id')
+          .eq('team_id', user.id)
+        if (cancelled) return
+        const allowed = new Set((accessRows || []).map(r => r.site_id))
+        if (allowed.size > 0) list = list.filter(s => allowed.has(s.id))
+      }
+
       setSites(list)
       let stored = ''
       try { stored = window.localStorage.getItem(SITE_STORAGE_KEY) || '' } catch { /* ignore */ }

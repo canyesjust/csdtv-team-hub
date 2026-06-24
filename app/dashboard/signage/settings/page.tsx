@@ -6,10 +6,12 @@ import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { AbleSignTestConnection } from '../components/AbleSignControls'
 import { SignagePageShell, useSignageTheme } from '../components/SignageAdmin'
+import { useSignage } from '../components/SignageProvider'
 import { SIGNAGE_THEMES } from '@/lib/signage/constants'
 
 export default function SignageSettingsPage() {
   const { theme } = useTheme()
+  const { activeSiteId } = useSignage()
   const { text, border, cardBg, inputBg } = useSignageTheme(theme)
   const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
@@ -71,7 +73,7 @@ export default function SignageSettingsPage() {
           </div>
         )}
       </div>
-      <AbleSignTestConnection />
+      <AbleSignTestConnection siteId={activeSiteId} />
 
       {!loading && (
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20 }}>

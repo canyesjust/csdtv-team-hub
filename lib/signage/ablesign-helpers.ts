@@ -3,6 +3,7 @@ import {
   createWebApp,
   saveScreenPlaylist,
   updateWebApp,
+  type AbleSignCreds,
   type AbleSignOrientation,
 } from '@/lib/server/ablesign'
 import { signageScreenPublicUrl } from '@/lib/signage/constants'
@@ -58,6 +59,7 @@ export async function writeAbleSignLog(
 export async function syncHubScreenToAbleSign(
   service: SupabaseClient,
   screen: HubScreenRow,
+  creds?: AbleSignCreds,
 ): Promise<{ webappId: number }> {
   if (!screen.ablesign_screen_id) {
     throw new Error('Link this screen to AbleSign before syncing')
@@ -67,11 +69,11 @@ export async function syncHubScreenToAbleSign(
 
   let webappId = screen.ablesign_webapp_id
   if (webappId) {
-    await updateWebApp(webappId, { url, zoom: 100 })
+    await updateWebApp(webappId, { url, zoom: 100 }, creds)
   } else {
-    const created = await createWebApp({ title: screen.name, url })
+    const created = await createWebApp({ title: screen.name, url }, creds)
     webappId = created.id
-    await updateWebApp(webappId, { zoom: 100 })
+    await updateWebApp(webappId, { zoom: 100 }, creds)
     await service
       .from('signage_screens')
       .update({ ablesign_webapp_id: webappId })
@@ -83,7 +85,7 @@ export async function syncHubScreenToAbleSign(
     shufflePlay: false,
     enableWebappTransitions: false,
     enableImageTransitions: false,
-  })
+  }, creds)
 
   await service
     .from('signage_screens')

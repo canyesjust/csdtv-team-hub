@@ -52,11 +52,13 @@ function AbleSignLinkPanel({
   linkedId,
   onLinked,
   s,
+  siteId,
 }: {
   hubScreenId: string
   linkedId: number | null
   onLinked: () => void
   s: ReturnType<typeof useSignageAdminStyles>
+  siteId?: string
 }) {
   const [remoteScreens, setRemoteScreens] = useState<AbleSignRemoteScreen[]>([])
   const [loading, setLoading] = useState(false)
@@ -67,7 +69,7 @@ function AbleSignLinkPanel({
   const loadRemote = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/signage/ablesign/screens')
+      const res = await fetch(`/api/signage/ablesign/screens${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ''}`)
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Failed to load AbleSign screens')
       setRemoteScreens(data.screens || [])
@@ -76,7 +78,7 @@ function AbleSignLinkPanel({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [siteId])
 
   useEffect(() => {
     void loadRemote()
@@ -182,9 +184,11 @@ function AbleSignLinkPanel({
 export function AbleSignScreenPanel({
   screen,
   onUpdated,
+  siteId,
 }: {
   screen: AbleSignScreenFields & { name: string; code: string }
   onUpdated: () => void
+  siteId?: string
 }) {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
@@ -226,6 +230,7 @@ export function AbleSignScreenPanel({
         linkedId={screen.ablesign_screen_id}
         onLinked={onUpdated}
         s={s}
+        siteId={siteId}
       />
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 14 }}>
@@ -315,8 +320,10 @@ export function AbleSignSyncAllButton({
 
 export function AbleSignTestConnection({
   compact,
+  siteId,
 }: {
   compact?: boolean
+  siteId?: string
 }) {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
@@ -327,7 +334,7 @@ export function AbleSignTestConnection({
     setTesting(true)
     setResult(null)
     try {
-      const res = await fetch('/api/signage/ablesign/test')
+      const res = await fetch(`/api/signage/ablesign/test${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ''}`)
       const data = await res.json().catch(() => ({}))
       setResult(data)
       if (data.connected) {

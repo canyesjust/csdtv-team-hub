@@ -33,6 +33,13 @@ export type ScreenFeedVisitor = {
   note: string | null
 }
 
+export type ScreenTemplate = {
+  show_weather: boolean
+  show_clock: boolean
+  show_ticker: boolean
+  show_visitor_welcome: boolean
+}
+
 export type ScreenFeed = {
   screen: {
     name: string
@@ -44,7 +51,11 @@ export type ScreenFeed = {
     center_name: string
     theme: SignageTheme
     colors: { bg: string; panel: string | null; accent: string | null } | null
+    brand_title: string | null
+    brand_subtitle: string | null
+    logo_url: string | null
   }
+  template: ScreenTemplate
   media: ScreenFeedMedia[]
   announcements: ScreenFeedAnnouncement[]
   ticker: string[]
@@ -66,4 +77,18 @@ export function normalizeSignageOrientation(value: string): SignageOrientation {
 
 export function normalizeSignageLayout(value: string): SignageLayout {
   return LAYOUTS.has(value as SignageLayout) ? (value as SignageLayout) : 'zoned'
+}
+
+/**
+ * Resolve a screen's effective layout. A screen layout of 'inherit' (or an
+ * unknown/empty value) falls back to the site's default layout.
+ */
+export function resolveScreenLayout(
+  screenLayout: string | null | undefined,
+  siteDefault: string | null | undefined,
+): SignageLayout {
+  if (screenLayout && screenLayout !== 'inherit' && LAYOUTS.has(screenLayout as SignageLayout)) {
+    return screenLayout as SignageLayout
+  }
+  return normalizeSignageLayout(siteDefault || 'zoned')
 }

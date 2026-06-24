@@ -322,6 +322,7 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     label: 'Layout',
     items: [
       { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
+      { href: '/dashboard/signage/template', label: 'Template', managerOnly: true },
       { href: '/dashboard/signage/floor-plan', label: 'Floor plan', managerOnly: true },
       { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
       { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
@@ -337,6 +338,7 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     label: 'Setup',
     items: [
       { href: '/dashboard/signage/sites', label: 'Sites', managerOnly: true },
+      { href: '/dashboard/signage/access', label: 'Access', managerOnly: true },
       { href: '/dashboard/signage/settings', label: 'Settings', managerOnly: true },
     ],
   },
@@ -579,6 +581,7 @@ export function formatSignageDate(iso: string | null | undefined): string {
 export function layoutLabel(layout: string): string {
   if (layout === 'full_bleed') return 'Full bleed'
   if (layout === 'wayfinding') return 'Wayfinding'
+  if (!layout || layout === 'inherit') return 'Inherit'
   return 'Zoned'
 }
 

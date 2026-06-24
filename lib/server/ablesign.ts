@@ -60,24 +60,35 @@ export class AbleSignApiError extends Error {
   }
 }
 
-function requireAbleSignApiKey(): string {
-  const key = process.env.ABLESIGN_API_KEY?.trim()
-  if (!key) {
+/**
+ * Per-site AbleSign credentials. When omitted (or with blank fields) we fall
+ * back to the server-wide ABLESIGN_API_KEY / ABLESIGN_WORKSPACE_ID env vars, so
+ * existing single-workspace callers keep working unchanged.
+ */
+export type AbleSignCreds = {
+  apiKey?: string | null
+  workspaceId?: string | null
+}
+
+function resolveCreds(creds?: AbleSignCreds): { apiKey: string; workspaceId?: string } {
+  const apiKey = (creds?.apiKey?.trim() || process.env.ABLESIGN_API_KEY?.trim()) ?? ''
+  if (!apiKey) {
     throw new AbleSignApiError(
-      'ABLESIGN_API_KEY is not configured on the server',
+      'No AbleSign API key configured (set ABLESIGN_API_KEY or a per-site key)',
       'CONFIG_MISSING',
       500,
     )
   }
-  return key
+  const workspaceId = creds?.workspaceId?.trim() || process.env.ABLESIGN_WORKSPACE_ID?.trim() || undefined
+  return { apiKey, workspaceId }
 }
 
-function ablesignHeaders(): Record<string, string> {
+function ablesignHeaders(creds?: AbleSignCreds): Record<string, string> {
+  const { apiKey, workspaceId } = resolveCreds(creds)
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${requireAbleSignApiKey()}`,
+    Authorization: `Bearer ${apiKey}`,
     Accept: 'application/json',
   }
-  const workspaceId = process.env.ABLESIGN_WORKSPACE_ID?.trim()
   if (workspaceId) headers['Workspace-Id'] = workspaceId
   return headers
 }
@@ -121,9 +132,10 @@ async function asFetch<T>(
   method: string,
   path: string,
   body?: unknown,
+  creds?: AbleSignCreds,
   attempt = 0,
 ): Promise<T> {
-  const headers = ablesignHeaders()
+  const headers = ablesignHeaders(creds)
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   const res = await fetch(`${ABLESIGN_BASE}${path}`, {
@@ -136,7 +148,7 @@ async function asFetch<T>(
   const retryable = res.status === 429 || res.status >= 500
   if (retryable && attempt < 3) {
     await sleep(1000 * 2 ** attempt)
-    return asFetch<T>(method, path, body, attempt + 1)
+    return asFetch<T>(method, path, body, creds, attempt + 1)
   }
 
   return parseAbleSignResponse<T>(res)
@@ -146,7 +158,7 @@ export async function listScreens(options: {
   limit?: number
   offset?: number
   onlineStatus?: string
-} = {}): Promise<{ screens: AbleSignScreen[]; totalItems: number }> {
+} = {}, creds?: AbleSignCreds): Promise<{ screens: AbleSignScreen[]; totalItems: number }> {
   const limit = Math.min(Math.max(options.limit ?? 200, 1), 200)
   const offset = Math.max(options.offset ?? 0, 0)
   const params = new URLSearchParams({
@@ -155,13 +167,7 @@ export async function listScreens(options: {
   })
   if (options.onlineStatus) params.set('onlineStatus', options.onlineStatus)
 
-  const key = requireAbleSignApiKey()
-  const workspaceId = process.env.ABLESIGN_WORKSPACE_ID?.trim()
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${key}`,
-    Accept: 'application/json',
-  }
-  if (workspaceId) headers['Workspace-Id'] = workspaceId
+  const headers = ablesignHeaders(creds)
 
   const res = await fetch(`${ABLESIGN_BASE}/screens?${params}`, {
     headers,
@@ -193,12 +199,12 @@ export async function listScreens(options: {
   }
 }
 
-export async function listAllScreens(): Promise<AbleSignScreen[]> {
+export async function listAllScreens(creds?: AbleSignCreds): Promise<AbleSignScreen[]> {
   const all: AbleSignScreen[] = []
   let offset = 0
   const limit = 200
   for (;;) {
-    const page = await listScreens({ limit, offset })
+    const page = await listScreens({ limit, offset }, creds)
     all.push(...page.screens)
     if (all.length >= page.totalItems || page.screens.length < limit) break
     offset += limit
@@ -206,8 +212,8 @@ export async function listAllScreens(): Promise<AbleSignScreen[]> {
   return all
 }
 
-export function getScreen(id: number) {
-  return asFetch<AbleSignScreen>('GET', `/screens/${id}`)
+export function getScreen(id: number, creds?: AbleSignCreds) {
+  return asFetch<AbleSignScreen>('GET', `/screens/${id}`, undefined, creds)
 }
 
 export function registerScreen(input: {
@@ -215,41 +221,43 @@ export function registerScreen(input: {
   title: string
   orientation?: AbleSignOrientation
   description?: string
-}) {
+}, creds?: AbleSignCreds) {
   return asFetch<AbleSignScreen>('POST', '/screens', {
     registrationCode: input.registrationCode.trim().toUpperCase(),
     title: input.title,
     orientation: input.orientation || 'landscape',
     description: input.description,
-  })
+  }, creds)
 }
 
-export function getScreenPlaylist(id: number) {
+export function getScreenPlaylist(id: number, creds?: AbleSignCreds) {
   return asFetch<{ items: Array<{ id: number; webAppId?: number; mediafileId?: number }> }>(
     'GET',
     `/screens/${id}/playlist`,
+    undefined,
+    creds,
   )
 }
 
-export function saveScreenPlaylist(id: number, playlist: AbleSignSavePlaylistInput) {
-  return asFetch<unknown>('PUT', `/screens/${id}/playlist`, playlist)
+export function saveScreenPlaylist(id: number, playlist: AbleSignSavePlaylistInput, creds?: AbleSignCreds) {
+  return asFetch<unknown>('PUT', `/screens/${id}/playlist`, playlist, creds)
 }
 
-export function createWebApp(input: { title: string; url: string; description?: string }) {
-  return asFetch<AbleSignWebApp>('POST', '/web_apps', input)
+export function createWebApp(input: { title: string; url: string; description?: string }, creds?: AbleSignCreds) {
+  return asFetch<AbleSignWebApp>('POST', '/web_apps', input, creds)
 }
 
-export function updateWebApp(id: number, input: { url?: string; title?: string; zoom?: number }) {
-  return asFetch<AbleSignWebApp>('PUT', `/web_apps/${id}`, input)
+export function updateWebApp(id: number, input: { url?: string; title?: string; zoom?: number }, creds?: AbleSignCreds) {
+  return asFetch<AbleSignWebApp>('PUT', `/web_apps/${id}`, input, creds)
 }
 
-export function listWebApps(options: { limit?: number; offset?: number } = {}) {
+export function listWebApps(options: { limit?: number; offset?: number } = {}, creds?: AbleSignCreds) {
   const limit = Math.min(Math.max(options.limit ?? 200, 1), 200)
   const offset = Math.max(options.offset ?? 0, 0)
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
-  return asFetch<AbleSignWebApp[]>('GET', `/web_apps?${params}`)
+  return asFetch<AbleSignWebApp[]>('GET', `/web_apps?${params}`, undefined, creds)
 }
 
-export function isAbleSignConfigured(): boolean {
-  return Boolean(process.env.ABLESIGN_API_KEY?.trim())
+export function isAbleSignConfigured(creds?: AbleSignCreds): boolean {
+  return Boolean(creds?.apiKey?.trim() || process.env.ABLESIGN_API_KEY?.trim())
 }

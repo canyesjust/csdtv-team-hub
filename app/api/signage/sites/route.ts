@@ -3,9 +3,12 @@ import { requireManagerApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
+const LAYOUTS = ['full_bleed', 'zoned', 'wayfinding']
+
 function siteFields(body: Record<string, unknown>) {
   const theme = body.default_theme
-  return {
+  const layout = body.default_layout
+  const fields: Record<string, unknown> = {
     name: body.name,
     slug: body.slug,
     school_code: body.school_code || null,
@@ -24,6 +27,16 @@ function siteFields(body: Record<string, unknown>) {
     sort_order: body.sort_order ?? 0,
     active: body.active ?? true,
   }
+  // Template fields are optional — only included when present so a plain site
+  // edit doesn't clobber template settings managed on the Template page.
+  if (layout !== undefined) fields.default_layout = LAYOUTS.includes(String(layout)) ? layout : 'zoned'
+  if (body.show_weather !== undefined) fields.show_weather = Boolean(body.show_weather)
+  if (body.show_clock !== undefined) fields.show_clock = Boolean(body.show_clock)
+  if (body.show_ticker !== undefined) fields.show_ticker = Boolean(body.show_ticker)
+  if (body.show_visitor_welcome !== undefined) fields.show_visitor_welcome = Boolean(body.show_visitor_welcome)
+  if (body.brand_title !== undefined) fields.brand_title = body.brand_title || null
+  if (body.brand_subtitle !== undefined) fields.brand_subtitle = body.brand_subtitle || null
+  return fields
 }
 
 export async function POST(request: NextRequest) {
