@@ -58,6 +58,13 @@ function daysFromToday(dateStr: string | null): number | null {
   return Math.round(ms / 86400000)
 }
 
+function shortDate(iso: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
@@ -100,23 +107,30 @@ interface PersonCardProps {
   muted: string
   emptyMuted: string
   maxListedTasks: number
+  /** When true, also show upcoming (not-yet-in-progress) productions the person is on. */
+  showUpcomingProds?: boolean
 }
 
-function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListedTasks }: PersonCardProps) {
+function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListedTasks, showUpcomingProds = false }: PersonCardProps) {
   const { member, personTasks, personInProgressProds } = card
   const activeTasks = personTasks.filter(t => isActiveWorkTaskStatus(t.status))
   const openTasks = personTasks.filter(t => !isActiveWorkTaskStatus(t.status))
   const hasTasks = personTasks.length > 0
   const inProgressProds = personInProgressProds
-  const hasProds = inProgressProds.length > 0
+  const upcomingProds = showUpcomingProds ? card.personUpcomingProds : []
+  const prodEntries: { pm: ProductionMemberRow; upcoming: boolean }[] = [
+    ...inProgressProds.map(pm => ({ pm, upcoming: false })),
+    ...upcomingProds.map(pm => ({ pm, upcoming: true })),
+  ]
+  const hasProds = prodEntries.length > 0
   const slots = Math.max(4, maxListedTasks)
   const shownActive = activeTasks.slice(0, slots)
   const openSlots = Math.max(0, slots - shownActive.length)
   const shownOpen = openTasks.slice(0, openSlots)
   const hiddenTaskCount = personTasks.length - shownActive.length - shownOpen.length
   const prodSlots = Math.max(4, maxListedTasks)
-  const shownProds = inProgressProds.slice(0, prodSlots)
-  const hiddenProdCount = inProgressProds.length - shownProds.length
+  const shownProds = prodEntries.slice(0, prodSlots)
+  const hiddenProdCount = prodEntries.length - shownProds.length
 
   const chipFs = fit(12, 10)
   const chip = (bg: string, color: string, bd: string): CSSProperties => ({
@@ -295,11 +309,16 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
             }}
           >
             <p style={{ margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '7px', fontSize: `${fs.staffStat}px`, color: '#f0c060', fontWeight: 800, lineHeight: 1.2, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              <span style={{ fontSize: '0.7em' }}>●</span>
-              {inProgressProds.length} in progress
+              {inProgressProds.length > 0 && <span style={{ fontSize: '0.7em' }}>●</span>}
+              {[
+                inProgressProds.length > 0 ? `${inProgressProds.length} in progress` : null,
+                upcomingProds.length > 0 ? `${upcomingProds.length} upcoming` : null,
+              ].filter(Boolean).join(' · ')}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', overflow: 'hidden' }}>
-              {shownProds.map(pm => (
+              {shownProds.map(({ pm, upcoming }) => {
+                const dateLabel = upcoming ? shortDate(pm.productions?.start_datetime ?? null) : null
+                return (
                 <div
                   key={`prod-${pm.production_id}`}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}
@@ -309,8 +328,8 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
                       flexShrink: 0,
                       fontSize: `${fit(14, 12)}px`,
                       fontWeight: 800,
-                      color: '#0a0f1e',
-                      background: '#f0c060',
+                      color: upcoming ? '#cfe0ff' : '#0a0f1e',
+                      background: upcoming ? 'rgba(255,255,255,0.10)' : '#f0c060',
                       borderRadius: '5px',
                       padding: '1px 7px',
                       lineHeight: 1.3,
@@ -323,7 +342,7 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
                       flex: 1,
                       minWidth: 0,
                       fontSize: `${fs.taskLine}px`,
-                      color: '#f5d78e',
+                      color: upcoming ? '#c3d2ee' : '#f5d78e',
                       fontWeight: 600,
                       lineHeight: 1.3,
                       overflow: 'hidden',
@@ -333,8 +352,26 @@ function PersonCard({ card, fs, fit, cardBg, border, muted, emptyMuted, maxListe
                   >
                     {pm.productions?.title || 'Untitled production'}
                   </span>
+                  {dateLabel && (
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        fontSize: `${fit(13, 11)}px`,
+                        fontWeight: 700,
+                        color: muted,
+                        background: 'rgba(255,255,255,0.06)',
+                        borderRadius: '5px',
+                        padding: '1px 6px',
+                        lineHeight: 1.25,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {dateLabel}
+                    </span>
+                  )}
                 </div>
-              ))}
+                )
+              })}
               {hiddenProdCount > 0 && (
                 <p style={{ margin: 0, fontSize: `${fs.taskLine}px`, color: muted, lineHeight: 1.35 }}>
                   +{hiddenProdCount} more
@@ -818,6 +855,7 @@ export default function TasksSignagePage() {
                   muted={muted}
                   emptyMuted={emptyMuted}
                   maxListedTasks={maxTasksPerCard}
+                  showUpcomingProds
                 />
               ))}
             </div>
