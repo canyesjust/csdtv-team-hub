@@ -35,6 +35,12 @@ const OFFICE_SIGNAGE: DashboardNavItem = {
   icon: 'image',
 }
 
+const BRAND_LIBRARY: DashboardNavItem = {
+  label: 'Brand library',
+  href: '/dashboard/brand',
+  icon: 'image',
+}
+
 export function isManagerRole(role: string | null | undefined): boolean {
   return role === 'Manager'
 }
@@ -55,13 +61,18 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
 
   const resourcesItems: DashboardNavItem[] = [
     { label: 'Library', href: '/dashboard/library', icon: 'book' },
-    ...(manager ? [{ label: 'Reports', href: '/dashboard/reports', icon: 'chart' }] : []),
+    ...(manager
+      ? [
+          { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
+          BRAND_LIBRARY,
+        ]
+      : []),
   ]
 
   const moreItems: DashboardNavItem[] = [
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
-    ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
+    ...(manager ? [SIGNAGE, OFFICE_SIGNAGE, BRAND_LIBRARY] : []),
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
     { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
     { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },

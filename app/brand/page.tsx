@@ -1,0 +1,275 @@
+'use client'
+
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+
+type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
+
+type BrandSchool = {
+  code: string
+  name: string
+  shortName: string | null
+  mascot: string | null
+  city: string | null
+  level: BrandLevel
+  colors: {
+    primary: string | null
+    secondary: string | null
+    accent: string | null
+    text: string | null
+  }
+  logos: {
+    jpg: string | null
+    png: string | null
+    eps: string | null
+  }
+}
+
+const colors = {
+  bg: '#f8f9fc',
+  cardBg: '#ffffff',
+  border: 'rgba(0,0,0,0.08)',
+  line: '#d3d6dd',
+  text: '#1a1f36',
+  muted: '#6b7280',
+  info: '#185fa5',
+  chip: '#eef1f6',
+}
+
+const LEVELS: ('All' | BrandLevel)[] = ['All', 'Elementary', 'Middle', 'High', 'Specialty']
+
+function initialOf(name: string): string {
+  const t = name.trim()
+  return t ? t[0].toUpperCase() : '?'
+}
+
+function readableOn(hex: string | null): string {
+  if (!hex) return '#ffffff'
+  const h = hex.replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const r = parseInt(full.slice(0, 2), 16)
+  const g = parseInt(full.slice(2, 4), 16)
+  const b = parseInt(full.slice(4, 6), 16)
+  if ([r, g, b].some((v) => Number.isNaN(v))) return '#ffffff'
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.6 ? '#1a1f36' : '#ffffff'
+}
+
+export default function BrandLibraryPage() {
+  const [schools, setSchools] = useState<BrandSchool[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [level, setLevel] = useState<'All' | BrandLevel>('All')
+  const [copied, setCopied] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/brand', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        if (Array.isArray(d?.schools)) setSchools(d.schools as BrandSchool[])
+        else setLoadError(typeof d?.error === 'string' ? d.error : 'Could not load the brand library.')
+        setLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setLoadError('Could not load the brand library.')
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return schools.filter((s) => {
+      if (level !== 'All' && s.level !== level) return false
+      if (!q) return true
+      return (
+        s.name.toLowerCase().includes(q) ||
+        (s.mascot || '').toLowerCase().includes(q) ||
+        (s.city || '').toLowerCase().includes(q)
+      )
+    })
+  }, [schools, query, level])
+
+  const copyHex = async (key: string, hex: string) => {
+    try {
+      await navigator.clipboard.writeText(hex)
+      setCopied(key)
+      window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1400)
+    } catch {
+      // Clipboard not available; ignore.
+    }
+  }
+
+  const swatch = (school: BrandSchool, slot: 'primary' | 'secondary' | 'accent' | 'text', label: string) => {
+    const hex = school.colors[slot]
+    if (!hex) return null
+    const key = `${school.code}-${slot}`
+    const isCopied = copied === key
+    return (
+      <button
+        key={slot}
+        type="button"
+        onClick={() => copyHex(key, hex)}
+        title={`Copy ${hex}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 4,
+          flex: '1 1 0',
+          minWidth: 0,
+          border: `1px solid ${colors.line}`,
+          borderRadius: 8,
+          padding: 0,
+          background: colors.cardBg,
+          cursor: 'pointer',
+          overflow: 'hidden',
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ height: 34, background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: readableOn(hex) }}>
+          {isCopied ? 'Copied' : ''}
+        </span>
+        <span style={{ padding: '3px 6px 6px' }}>
+          <span style={{ display: 'block', fontSize: 10, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.text, fontFamily: 'ui-monospace, monospace' }}>{hex}</span>
+        </span>
+      </button>
+    )
+  }
+
+  const downloadBtnStyle: CSSProperties = {
+    flex: '1 1 0',
+    textAlign: 'center',
+    padding: '7px 8px',
+    borderRadius: 7,
+    border: `1px solid ${colors.line}`,
+    background: colors.cardBg,
+    color: colors.info,
+    fontSize: 12,
+    fontWeight: 700,
+    textDecoration: 'none',
+  }
+
+  return (
+    <div style={{ background: colors.bg, minHeight: '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '28px 20px 64px' }}>
+        <header style={{ marginBottom: 18 }}>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.15 }}>Canyons School District Brand Library</h1>
+          <p style={{ margin: '6px 0 0', fontSize: 14, color: colors.muted }}>Browse school brand colors and download official logos. Click a color to copy its hex code.</p>
+        </header>
+
+        <div style={{ position: 'sticky', top: 0, zIndex: 5, background: colors.bg, paddingTop: 8, paddingBottom: 12, marginBottom: 8 }}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by school, mascot, or city"
+            style={{ width: '100%', height: 42, border: `1px solid ${colors.line}`, borderRadius: 10, padding: '0 14px', fontSize: 15, color: colors.text, background: colors.cardBg, outline: 'none', boxSizing: 'border-box' }}
+          />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+            {LEVELS.map((lv) => {
+              const on = lv === level
+              return (
+                <button
+                  key={lv}
+                  type="button"
+                  onClick={() => setLevel(lv)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: 999,
+                    border: `1px solid ${on ? colors.info : colors.line}`,
+                    background: on ? colors.info : colors.cardBg,
+                    color: on ? '#ffffff' : colors.muted,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {lv}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {loading ? (
+          <p style={{ color: colors.muted, fontSize: 15, padding: '40px 0', textAlign: 'center' }}>Loading the brand library...</p>
+        ) : loadError ? (
+          <p style={{ color: '#b42318', fontSize: 15, padding: '40px 0', textAlign: 'center' }}>{loadError}</p>
+        ) : filtered.length === 0 ? (
+          <p style={{ color: colors.muted, fontSize: 15, padding: '40px 0', textAlign: 'center' }}>No schools match your search.</p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 16 }}>
+            {filtered.map((s) => {
+              const preview = s.logos.png || s.logos.jpg
+              const hasAny = Boolean(s.logos.png || s.logos.jpg || s.logos.eps)
+              const swatchEls = [
+                swatch(s, 'primary', 'Primary'),
+                swatch(s, 'secondary', 'Secondary'),
+                swatch(s, 'accent', 'Accent'),
+                swatch(s, 'text', 'Text'),
+              ].filter(Boolean)
+              return (
+                <div key={s.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 14, background: colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ padding: '14px 16px 10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, lineHeight: 1.2 }}>{s.name}</h2>
+                      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: colors.muted, background: colors.chip, borderRadius: 999, padding: '2px 8px' }}>{s.level}</span>
+                    </div>
+                    {(s.mascot || s.city) && (
+                      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: colors.muted }}>
+                        {[s.mascot, s.city].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                  </div>
+
+                  <div style={{ padding: '0 16px' }}>
+                    <div
+                      style={{
+                        height: 120,
+                        borderRadius: 10,
+                        border: `1px solid ${colors.line}`,
+                        background: preview ? '#ffffff' : (s.colors.primary || '#334155'),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {preview ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={preview} alt={`${s.name} logo`} style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
+                      ) : (
+                        <span style={{ fontSize: 44, fontWeight: 800, color: readableOn(s.colors.primary) }}>{initialOf(s.name)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {swatchEls.length > 0 && (
+                    <div style={{ display: 'flex', gap: 6, padding: '12px 16px 0' }}>
+                      {swatchEls}
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 'auto', padding: 16 }}>
+                    {hasAny ? (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {s.logos.jpg && <a href={s.logos.jpg} style={downloadBtnStyle}>JPG</a>}
+                        {s.logos.png && <a href={s.logos.png} style={downloadBtnStyle}>PNG</a>}
+                        {s.logos.eps && <a href={s.logos.eps} style={downloadBtnStyle}>EPS</a>}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 12.5, color: colors.muted, fontStyle: 'italic' }}>Logos coming soon</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

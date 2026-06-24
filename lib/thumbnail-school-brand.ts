@@ -16,7 +16,7 @@ export type ThumbnailSchoolRow = {
   type?: string | null
 }
 
-function pickHex(v: string | null | undefined): string | null {
+export function pickHex(v: string | null | undefined): string | null {
   const raw = (v || '').trim()
   if (!raw) return null
   const t = raw.startsWith('#') ? raw : `#${raw}`
