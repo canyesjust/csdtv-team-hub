@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
+type LogoEntry = {
+  type: 'logo' | 'seal' | 'mascot'
+  color: 'full' | 'white' | 'black'
+  orientation: 'horizontal' | 'stacked' | 'icon'
+  label: string | null
+  png: string | null
+  jpg: string | null
+}
 
 type BrandSchool = {
   code: string
@@ -11,17 +19,9 @@ type BrandSchool = {
   mascot: string | null
   city: string | null
   level: BrandLevel
-  colors: {
-    primary: string | null
-    secondary: string | null
-    accent: string | null
-    text: string | null
-  }
-  logos: {
-    jpg: string | null
-    png: string | null
-    eps: string | null
-  }
+  colors: { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
+  preview: string | null
+  logos: LogoEntry[]
 }
 
 const colors = {
@@ -36,6 +36,17 @@ const colors = {
 }
 
 const LEVELS: ('All' | BrandLevel)[] = ['All', 'Elementary', 'Middle', 'High', 'Specialty']
+
+function titleCase(s: string): string {
+  return s.split(' ').filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
+}
+
+function entryLabel(e: LogoEntry): string {
+  if (e.label) return e.label
+  const parts: string[] = [e.color, e.type]
+  if (e.orientation !== 'horizontal') parts.push(e.orientation)
+  return titleCase(parts.join(' '))
+}
 
 function initialOf(name: string): string {
   const t = name.trim()
@@ -114,43 +125,21 @@ export default function BrandLibraryPage() {
         type="button"
         onClick={() => copyHex(key, hex)}
         title={`Copy ${hex}`}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 4,
-          flex: '1 1 0',
-          minWidth: 0,
-          border: `1px solid ${colors.line}`,
-          borderRadius: 8,
-          padding: 0,
-          background: colors.cardBg,
-          cursor: 'pointer',
-          overflow: 'hidden',
-          textAlign: 'left',
-        }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 0', minWidth: 0, border: `1px solid ${colors.line}`, borderRadius: 8, padding: 0, background: colors.cardBg, cursor: 'pointer', overflow: 'hidden', textAlign: 'left' }}
       >
-        <span style={{ height: 34, background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: readableOn(hex) }}>
+        <span style={{ height: 30, background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: readableOn(hex) }}>
           {isCopied ? 'Copied' : ''}
         </span>
         <span style={{ padding: '3px 6px 6px' }}>
-          <span style={{ display: 'block', fontSize: 10, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
-          <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: colors.text, fontFamily: 'ui-monospace, monospace' }}>{hex}</span>
+          <span style={{ display: 'block', fontSize: 9.5, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+          <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: colors.text, fontFamily: 'ui-monospace, monospace' }}>{hex}</span>
         </span>
       </button>
     )
   }
 
-  const downloadBtnStyle: CSSProperties = {
-    flex: '1 1 0',
-    textAlign: 'center',
-    padding: '7px 8px',
-    borderRadius: 7,
-    border: `1px solid ${colors.line}`,
-    background: colors.cardBg,
-    color: colors.info,
-    fontSize: 12,
-    fontWeight: 700,
-    textDecoration: 'none',
+  const dlBtn: CSSProperties = {
+    padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11.5, fontWeight: 700, textDecoration: 'none',
   }
 
   return (
@@ -172,21 +161,7 @@ export default function BrandLibraryPage() {
             {LEVELS.map((lv) => {
               const on = lv === level
               return (
-                <button
-                  key={lv}
-                  type="button"
-                  onClick={() => setLevel(lv)}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: 999,
-                    border: `1px solid ${on ? colors.info : colors.line}`,
-                    background: on ? colors.info : colors.cardBg,
-                    color: on ? '#ffffff' : colors.muted,
-                    fontSize: 13,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
+                <button key={lv} type="button" onClick={() => setLevel(lv)} style={{ padding: '6px 14px', borderRadius: 999, border: `1px solid ${on ? colors.info : colors.line}`, background: on ? colors.info : colors.cardBg, color: on ? '#ffffff' : colors.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                   {lv}
                 </button>
               )
@@ -201,10 +176,8 @@ export default function BrandLibraryPage() {
         ) : filtered.length === 0 ? (
           <p style={{ color: colors.muted, fontSize: 15, padding: '40px 0', textAlign: 'center' }}>No schools match your search.</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
             {filtered.map((s) => {
-              const preview = s.logos.png || s.logos.jpg
-              const hasAny = Boolean(s.logos.png || s.logos.jpg || s.logos.eps)
               const swatchEls = [
                 swatch(s, 'primary', 'Primary'),
                 swatch(s, 'secondary', 'Secondary'),
@@ -219,28 +192,15 @@ export default function BrandLibraryPage() {
                       <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: colors.muted, background: colors.chip, borderRadius: 999, padding: '2px 8px' }}>{s.level}</span>
                     </div>
                     {(s.mascot || s.city) && (
-                      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: colors.muted }}>
-                        {[s.mascot, s.city].filter(Boolean).join(' · ')}
-                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: colors.muted }}>{[s.mascot, s.city].filter(Boolean).join(' · ')}</p>
                     )}
                   </div>
 
                   <div style={{ padding: '0 16px' }}>
-                    <div
-                      style={{
-                        height: 120,
-                        borderRadius: 10,
-                        border: `1px solid ${colors.line}`,
-                        background: preview ? '#ffffff' : (s.colors.primary || '#334155'),
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {preview ? (
+                    <div style={{ height: 120, borderRadius: 10, border: `1px solid ${colors.line}`, background: s.preview ? '#ffffff' : (s.colors.primary || '#334155'), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {s.preview ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={preview} alt={`${s.name} logo`} style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
+                        <img src={s.preview} alt={`${s.name} logo`} style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
                       ) : (
                         <span style={{ fontSize: 44, fontWeight: 800, color: readableOn(s.colors.primary) }}>{initialOf(s.name)}</span>
                       )}
@@ -248,20 +208,22 @@ export default function BrandLibraryPage() {
                   </div>
 
                   {swatchEls.length > 0 && (
-                    <div style={{ display: 'flex', gap: 6, padding: '12px 16px 0' }}>
-                      {swatchEls}
-                    </div>
+                    <div style={{ display: 'flex', gap: 6, padding: '12px 16px 0' }}>{swatchEls}</div>
                   )}
 
                   <div style={{ marginTop: 'auto', padding: 16 }}>
-                    {hasAny ? (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {s.logos.jpg && <a href={s.logos.jpg} style={downloadBtnStyle}>JPG</a>}
-                        {s.logos.png && <a href={s.logos.png} style={downloadBtnStyle}>PNG</a>}
-                        {s.logos.eps && <a href={s.logos.eps} style={downloadBtnStyle}>EPS</a>}
-                      </div>
-                    ) : (
+                    {s.logos.length === 0 ? (
                       <p style={{ margin: 0, fontSize: 12.5, color: colors.muted, fontStyle: 'italic' }}>Logos coming soon</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {s.logos.map((e) => (
+                          <div key={`${e.type}-${e.color}-${e.orientation}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: colors.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entryLabel(e)}</span>
+                            {e.png && <a href={e.png} style={dlBtn}>PNG</a>}
+                            {e.jpg && <a href={e.jpg} style={dlBtn}>JPG</a>}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>

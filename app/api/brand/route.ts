@@ -3,14 +3,24 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pickHex } from '@/lib/thumbnail-school-brand'
 
 // Public, non-sensitive brand catalog. Service role is used deliberately to read
-// public brand data and to list the storage bucket; this route takes no user input.
-// Mirrors the existing public signage feed routes.
+// public brand data; this route takes no user input. Mirrors the public signage feeds.
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const BUCKET = 'school-logos'
-type Format = 'jpg' | 'png' | 'eps'
+type LogoType = 'logo' | 'seal' | 'mascot'
+type LogoColor = 'full' | 'white' | 'black'
+type LogoOrientation = 'horizontal' | 'stacked' | 'icon'
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
+
+type LogoEntry = {
+  type: LogoType
+  color: LogoColor
+  orientation: LogoOrientation
+  label: string | null
+  png: string | null
+  jpg: string | null
+}
 
 type BrandSchool = {
   code: string
@@ -19,17 +29,9 @@ type BrandSchool = {
   mascot: string | null
   city: string | null
   level: BrandLevel
-  colors: {
-    primary: string | null
-    secondary: string | null
-    accent: string | null
-    text: string | null
-  }
-  logos: {
-    jpg: string | null
-    png: string | null
-    eps: string | null
-  }
+  colors: { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
+  preview: string | null
+  logos: LogoEntry[]
 }
 
 type SchoolRow = {
@@ -46,7 +48,18 @@ type SchoolRow = {
   text_color: string | null
 }
 
-// Levels for these schools are not set on the row but were confirmed by an admin.
+type LogoRow = {
+  school_code: string
+  type: LogoType
+  color: LogoColor
+  orientation: LogoOrientation
+  format: 'png' | 'jpg'
+  label: string | null
+  storage_path: string
+  sort_order: number
+}
+
+// Levels not set on the row but confirmed by an admin.
 const SPECIALTY_CODES = new Set(['996', '981', '180', '955', '995'])
 
 function resolveLevel(level: string | null, code: string): BrandLevel {
@@ -55,21 +68,11 @@ function resolveLevel(level: string | null, code: string): BrandLevel {
   if (l === 'elementary') return 'Elementary'
   if (l === 'middle school' || l === 'middle') return 'Middle'
   if (l === 'high school' || l === 'high') return 'High'
-  // Special School and any other unlabeled school is treated as Specialty.
   return 'Specialty'
 }
 
-// Letters, numbers, and spaces only; spaces become hyphens. "Alta High" -> "Alta-High".
 function slugifyName(name: string): string {
   return name.replace(/[^A-Za-z0-9 ]+/g, '').trim().replace(/\s+/g, '-') || 'logo'
-}
-
-function normalizeExt(ext: string): Format | null {
-  const e = ext.toLowerCase()
-  if (e === 'jpg' || e === 'jpeg') return 'jpg'
-  if (e === 'png') return 'png'
-  if (e === 'eps') return 'eps'
-  return null
 }
 
 export async function GET() {
@@ -78,44 +81,60 @@ export async function GET() {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
 
-  const { data: rows, error } = await supabase
-    .from('schools')
-    .select('code, name, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color')
-    .eq('type', 'school')
-    .not('active', 'is', false)
-    .order('name', { ascending: true })
+  const [schoolsRes, logosRes] = await Promise.all([
+    supabase
+      .from('schools')
+      .select('code, name, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color')
+      .eq('type', 'school')
+      .not('active', 'is', false)
+      .order('name', { ascending: true }),
+    supabase
+      .from('school_logos')
+      .select('school_code, type, color, orientation, format, label, storage_path, sort_order')
+      .order('sort_order', { ascending: true }),
+  ])
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  if (schoolsRes.error) return NextResponse.json({ error: schoolsRes.error.message }, { status: 500 })
+  // If the school_logos table is missing for any reason, fall back to no logos.
+  const logoRows = (logosRes.error ? [] : (logosRes.data ?? [])) as LogoRow[]
+
+  // Group logo rows per school code for quick lookup.
+  const rowsByCode = new Map<string, LogoRow[]>()
+  for (const row of logoRows) {
+    if (!rowsByCode.has(row.school_code)) rowsByCode.set(row.school_code, [])
+    rowsByCode.get(row.school_code)!.push(row)
   }
 
-  // List the bucket once and map code -> which formats exist. If the bucket has not
-  // been created yet, treat every logo as missing rather than failing the catalog.
-  const filesByCode = new Map<string, Set<Format>>()
-  const { data: objects } = await supabase.storage.from(BUCKET).list('', { limit: 1000 })
-  for (const obj of objects ?? []) {
-    const name = obj.name || ''
-    const dot = name.lastIndexOf('.')
-    if (dot <= 0) continue
-    const base = name.slice(0, dot)
-    const fmt = normalizeExt(name.slice(dot + 1))
-    if (!fmt) continue
-    if (!filesByCode.has(base)) filesByCode.set(base, new Set())
-    filesByCode.get(base)!.add(fmt)
-  }
-
-  const downloadUrl = (code: string, ext: Format, cleanName: string): string =>
-    supabase.storage.from(BUCKET).getPublicUrl(`${code}.${ext}`, {
-      download: `${cleanName}.${ext}`,
-    }).data.publicUrl
-
-  const schools: BrandSchool[] = ((rows ?? []) as SchoolRow[])
+  const schools: BrandSchool[] = ((schoolsRes.data ?? []) as SchoolRow[])
     .filter((r) => r.code && r.name)
     .map((r) => {
       const code = String(r.code)
       const name = String(r.name)
       const cleanName = slugifyName(name)
-      const have = filesByCode.get(code) ?? new Set<Format>()
+      const entries: LogoEntry[] = []
+      for (const row of rowsByCode.get(code) ?? []) {
+        const key = `${row.type}|${row.color}|${row.orientation}`
+        let entry = entries.find((e) => `${e.type}|${e.color}|${e.orientation}` === key)
+        if (!entry) {
+          entry = { type: row.type, color: row.color, orientation: row.orientation, label: row.label, png: null, jpg: null }
+          entries.push(entry)
+        }
+        if (row.label && !entry.label) entry.label = row.label
+        const dl = `${cleanName}-${row.type}-${row.color}-${row.orientation}.${row.format}`
+        const url = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { download: dl }).data.publicUrl
+        if (row.format === 'png') entry.png = url
+        else entry.jpg = url
+      }
+      entries.sort((a, b) =>
+        a.type.localeCompare(b.type) || a.color.localeCompare(b.color) || a.orientation.localeCompare(b.orientation),
+      )
+
+      const previewEntry =
+        entries.find((e) => e.type === 'logo' && e.color === 'full' && (e.png || e.jpg)) ||
+        entries.find((e) => e.png || e.jpg) ||
+        null
+      const preview = previewEntry ? previewEntry.png || previewEntry.jpg : null
+
       return {
         code,
         name,
@@ -129,11 +148,8 @@ export async function GET() {
           accent: pickHex(r.accent_color),
           text: pickHex(r.text_color),
         },
-        logos: {
-          jpg: have.has('jpg') ? downloadUrl(code, 'jpg', cleanName) : null,
-          png: have.has('png') ? downloadUrl(code, 'png', cleanName) : null,
-          eps: have.has('eps') ? downloadUrl(code, 'eps', cleanName) : null,
-        },
+        preview,
+        logos: entries,
       }
     })
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { getAuthenticatedTeamUser, isManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
@@ -6,34 +7,21 @@ export const dynamic = 'force-dynamic'
 
 const BUCKET = 'school-logos'
 const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
-type Format = 'jpg' | 'png' | 'eps'
 
-const CONTENT_TYPE: Record<Format, string> = {
-  jpg: 'image/jpeg',
-  png: 'image/png',
-  eps: 'application/postscript',
+const TYPES = ['logo', 'seal', 'mascot'] as const
+const COLORS = ['full', 'white', 'black'] as const
+const ORIENTATIONS = ['horizontal', 'stacked', 'icon'] as const
+type Format = 'png' | 'jpg'
+
+function inOne<T extends string>(value: string, set: readonly T[]): T | null {
+  return (set as readonly string[]).includes(value) ? (value as T) : null
 }
 
-function normalizeFormat(value: string | null | undefined): Format | null {
-  const v = (value || '').trim().toLowerCase()
-  if (v === 'jpg' || v === 'jpeg') return 'jpg'
-  if (v === 'png') return 'png'
-  if (v === 'eps') return 'eps'
+// Detect png/jpg from magic bytes so the stored format matches the bytes.
+function sniffFormat(bytes: Uint8Array): Format | null {
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png'
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg'
   return null
-}
-
-// Light magic-byte sniff so the stored extension matches the actual bytes.
-function bytesMatchFormat(bytes: Uint8Array, format: Format): boolean {
-  if (format === 'png') {
-    return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
-  }
-  if (format === 'jpg') {
-    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
-  }
-  // EPS: ASCII "%!PS" header, or the DOS/binary EPS marker C5 D0 D3 C6.
-  const ascii = bytes[0] === 0x25 && bytes[1] === 0x21 && bytes[2] === 0x50 && bytes[3] === 0x53
-  const binary = bytes[0] === 0xc5 && bytes[1] === 0xd0 && bytes[2] === 0xd3 && bytes[3] === 0xc6
-  return ascii || binary
 }
 
 async function requireManager() {
@@ -58,15 +46,20 @@ export async function POST(request: Request) {
 
   const file = form.get('file')
   const code = String(form.get('code') || '').trim()
-  const format = normalizeFormat(String(form.get('format') || ''))
+  const type = inOne(String(form.get('type') || ''), TYPES)
+  const color = inOne(String(form.get('color') || ''), COLORS)
+  const orientation = inOne(String(form.get('orientation') || ''), ORIENTATIONS)
+  const labelRaw = String(form.get('label') || '').trim()
+  const label = labelRaw ? labelRaw.slice(0, 120) : null
 
   if (!(file instanceof Blob)) return NextResponse.json({ error: 'Missing file' }, { status: 400 })
   if (!code) return NextResponse.json({ error: 'Missing school code' }, { status: 400 })
-  if (!format) return NextResponse.json({ error: 'Format must be jpg, png, or eps' }, { status: 400 })
+  if (!type) return NextResponse.json({ error: 'Type must be logo, seal, or mascot' }, { status: 400 })
+  if (!color) return NextResponse.json({ error: 'Color must be full, white, or black' }, { status: 400 })
+  if (!orientation) return NextResponse.json({ error: 'Orientation must be horizontal, stacked, or icon' }, { status: 400 })
   if (file.size === 0) return NextResponse.json({ error: 'File is empty' }, { status: 400 })
   if (file.size > MAX_BYTES) return NextResponse.json({ error: 'File is larger than 10 MB' }, { status: 400 })
 
-  // The code must match an existing, active school.
   const { data: school, error: schoolErr } = await service
     .from('schools')
     .select('code')
@@ -78,19 +71,41 @@ export async function POST(request: Request) {
   if (!school) return NextResponse.json({ error: 'Unknown school code' }, { status: 400 })
 
   const bytes = new Uint8Array(await file.arrayBuffer())
-  if (!bytesMatchFormat(bytes, format)) {
-    return NextResponse.json({ error: `File does not look like a valid ${format.toUpperCase()}` }, { status: 400 })
-  }
+  const format = sniffFormat(bytes)
+  if (!format) return NextResponse.json({ error: 'File must be a PNG or JPG' }, { status: 400 })
 
-  const path = `${code}.${format}`
-  const { error: uploadErr } = await service.storage.from(BUCKET).upload(path, bytes, {
+  // Reuse the existing row/path for this exact combination so a re-upload replaces it.
+  const { data: existing } = await service
+    .from('school_logos')
+    .select('id, storage_path')
+    .eq('school_code', code)
+    .eq('type', type)
+    .eq('color', color)
+    .eq('orientation', orientation)
+    .eq('format', format)
+    .maybeSingle()
+
+  const id = existing?.id || randomUUID()
+  const storagePath = existing?.storage_path || `${code}/${id}.${format}`
+
+  const { error: uploadErr } = await service.storage.from(BUCKET).upload(storagePath, bytes, {
     upsert: true,
-    contentType: CONTENT_TYPE[format],
+    contentType: format === 'png' ? 'image/png' : 'image/jpeg',
   })
   if (uploadErr) return NextResponse.json({ error: uploadErr.message }, { status: 500 })
 
-  const url = service.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
-  return NextResponse.json({ success: true, code, format, url })
+  const rowErr = existing
+    ? (await service
+        .from('school_logos')
+        .update({ label, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)).error
+    : (await service
+        .from('school_logos')
+        .insert({ id, school_code: code, type, color, orientation, format, label, storage_path: storagePath })).error
+
+  if (rowErr) return NextResponse.json({ error: rowErr.message }, { status: 500 })
+
+  return NextResponse.json({ success: true, id, code, type, color, orientation, format })
 }
 
 export async function DELETE(request: Request) {
@@ -102,13 +117,29 @@ export async function DELETE(request: Request) {
 
   const params = new URL(request.url).searchParams
   const code = String(params.get('code') || '').trim()
-  const format = normalizeFormat(params.get('format'))
+  const type = inOne(String(params.get('type') || ''), TYPES)
+  const color = inOne(String(params.get('color') || ''), COLORS)
+  const orientation = inOne(String(params.get('orientation') || ''), ORIENTATIONS)
+  const format = inOne(String(params.get('format') || ''), ['png', 'jpg'] as const)
+  if (!code || !type || !color || !orientation || !format) {
+    return NextResponse.json({ error: 'Missing code, type, color, orientation, or format' }, { status: 400 })
+  }
 
-  if (!code) return NextResponse.json({ error: 'Missing school code' }, { status: 400 })
-  if (!format) return NextResponse.json({ error: 'Format must be jpg, png, or eps' }, { status: 400 })
+  const { data: row, error: findErr } = await service
+    .from('school_logos')
+    .select('id, storage_path')
+    .eq('school_code', code)
+    .eq('type', type)
+    .eq('color', color)
+    .eq('orientation', orientation)
+    .eq('format', format)
+    .maybeSingle()
+  if (findErr) return NextResponse.json({ error: findErr.message }, { status: 500 })
+  if (!row) return NextResponse.json({ error: 'Logo not found' }, { status: 404 })
 
-  const { error } = await service.storage.from(BUCKET).remove([`${code}.${format}`])
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await service.storage.from(BUCKET).remove([row.storage_path])
+  const { error: delErr } = await service.from('school_logos').delete().eq('id', row.id)
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
 
-  return NextResponse.json({ success: true, code, format })
+  return NextResponse.json({ success: true })
 }

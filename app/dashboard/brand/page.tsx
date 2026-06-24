@@ -4,38 +4,51 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useRouter } from 'next/navigation'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type Format = 'jpg' | 'png' | 'eps'
+type LogoType = 'logo' | 'seal' | 'mascot'
+type LogoColor = 'full' | 'white' | 'black'
+type LogoOrientation = 'horizontal' | 'stacked' | 'icon'
+type LogoFormat = 'png' | 'jpg'
+
+type LogoEntry = {
+  type: LogoType
+  color: LogoColor
+  orientation: LogoOrientation
+  label: string | null
+  png: string | null
+  jpg: string | null
+}
 
 type BrandSchool = {
   code: string
   name: string
-  shortName: string | null
   mascot: string | null
   city: string | null
   level: BrandLevel
-  colors: {
-    primary: string | null
-    secondary: string | null
-    accent: string | null
-    text: string | null
-  }
-  logos: {
-    jpg: string | null
-    png: string | null
-    eps: string | null
-  }
+  preview: string | null
+  logos: LogoEntry[]
 }
 
+type AddForm = { type: LogoType; color: LogoColor; orientation: LogoOrientation; label: string }
+
 const LEVELS: ('All' | BrandLevel)[] = ['All', 'Elementary', 'Middle', 'High', 'Specialty']
-const FORMATS: Format[] = ['jpg', 'png', 'eps']
-const ACCEPT: Record<Format, string> = {
-  jpg: '.jpg,.jpeg,image/jpeg',
-  png: '.png,image/png',
-  eps: '.eps,application/postscript',
-}
+const TYPES: LogoType[] = ['logo', 'seal', 'mascot']
+const COLORS: LogoColor[] = ['full', 'white', 'black']
+const ORIENTATIONS: LogoOrientation[] = ['horizontal', 'stacked', 'icon']
+const DEFAULT_FORM: AddForm = { type: 'logo', color: 'full', orientation: 'horizontal', label: '' }
 
 function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }))
+}
+
+function titleCase(s: string): string {
+  return s.split(' ').filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
+}
+
+function entryLabel(e: LogoEntry): string {
+  if (e.label) return e.label
+  const parts: string[] = [e.color, e.type]
+  if (e.orientation !== 'horizontal') parts.push(e.orientation)
+  return titleCase(parts.join(' '))
 }
 
 export default function ManagerBrandPage() {
@@ -46,6 +59,7 @@ export default function ManagerBrandPage() {
   const [query, setQuery] = useState('')
   const [level, setLevel] = useState<'All' | BrandLevel>('All')
   const [busy, setBusy] = useState<string | null>(null)
+  const [forms, setForms] = useState<Record<string, AddForm>>({})
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => {
@@ -54,14 +68,10 @@ export default function ManagerBrandPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (cancelled) return
-        const role = String(d?.team?.role || '').toLowerCase()
-        if (role === 'manager') setAccess('ok')
+        if (String(d?.team?.role || '').toLowerCase() === 'manager') setAccess('ok')
         else { setAccess('denied'); router.replace('/dashboard') }
       })
-      .catch(() => {
-        if (cancelled) return
-        setAccess('denied'); router.replace('/dashboard')
-      })
+      .catch(() => { if (!cancelled) { setAccess('denied'); router.replace('/dashboard') } })
     return () => { cancelled = true }
   }, [router])
 
@@ -82,49 +92,50 @@ export default function ManagerBrandPage() {
     return schools.filter((s) => {
       if (level !== 'All' && s.level !== level) return false
       if (!q) return true
-      return (
-        s.name.toLowerCase().includes(q) ||
-        (s.mascot || '').toLowerCase().includes(q) ||
-        (s.city || '').toLowerCase().includes(q)
-      )
+      return s.name.toLowerCase().includes(q) || (s.mascot || '').toLowerCase().includes(q) || (s.city || '').toLowerCase().includes(q)
     })
   }, [schools, query, level])
 
-  const onPickFile = async (code: string, format: Format, file: File | null) => {
+  const formFor = (code: string): AddForm => forms[code] || DEFAULT_FORM
+  const setForm = (code: string, patch: Partial<AddForm>) =>
+    setForms((prev) => ({ ...prev, [code]: { ...(prev[code] || DEFAULT_FORM), ...patch } }))
+
+  const onAddFile = async (code: string, file: File | null) => {
     if (!file) return
-    const key = `${code}-${format}`
+    const f = formFor(code)
+    const key = `${code}-add`
     setBusy(key)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('code', code)
-      form.append('format', format)
-      const res = await fetch('/api/brand/upload', { method: 'POST', body: form })
+      const body = new FormData()
+      body.append('file', file)
+      body.append('code', code)
+      body.append('type', f.type)
+      body.append('color', f.color)
+      body.append('orientation', f.orientation)
+      if (f.label.trim()) body.append('label', f.label.trim())
+      const res = await fetch('/api/brand/upload', { method: 'POST', body })
       const d = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        notify(typeof d?.error === 'string' ? d.error : 'Upload failed', 'error')
-      } else {
-        notify(`${format.toUpperCase()} uploaded`, 'success')
-        await loadCatalog()
-      }
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Upload failed', 'error')
+      else { notify('Logo uploaded', 'success'); await loadCatalog() }
     } catch {
       notify('Upload failed', 'error')
     } finally {
       setBusy(null)
-      const input = fileInputs.current[key]
+      const input = fileInputs.current[code]
       if (input) input.value = ''
     }
   }
 
-  const onDelete = async (code: string, format: Format, name: string) => {
-    if (!window.confirm(`Remove the ${format.toUpperCase()} logo for ${name}?`)) return
-    const key = `${code}-${format}`
+  const onDelete = async (s: BrandSchool, e: LogoEntry, format: LogoFormat) => {
+    if (!window.confirm(`Remove the ${format.toUpperCase()} for "${entryLabel(e)}" at ${s.name}?`)) return
+    const key = `${s.code}-${e.type}-${e.color}-${e.orientation}-${format}`
     setBusy(key)
     try {
-      const res = await fetch(`/api/brand/upload?code=${encodeURIComponent(code)}&format=${format}`, { method: 'DELETE' })
+      const qs = new URLSearchParams({ code: s.code, type: e.type, color: e.color, orientation: e.orientation, format })
+      const res = await fetch(`/api/brand/upload?${qs.toString()}`, { method: 'DELETE' })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Delete failed', 'error')
-      else { notify(`${format.toUpperCase()} removed`, 'success'); await loadCatalog() }
+      else { notify('Logo removed', 'success'); await loadCatalog() }
     } catch {
       notify('Delete failed', 'error')
     } finally {
@@ -137,19 +148,15 @@ export default function ManagerBrandPage() {
   }
 
   const card: CSSProperties = { border: '1px solid var(--border-subtle)', borderRadius: 14, background: 'var(--surface-2)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }
-  const tabBtn = (on: boolean): CSSProperties => ({
-    padding: '6px 14px', borderRadius: 999,
-    border: `1px solid ${on ? 'var(--accent, #185fa5)' : 'var(--border-subtle)'}`,
-    background: on ? 'var(--accent, #185fa5)' : 'transparent',
-    color: on ? '#ffffff' : 'var(--text-muted)', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-  })
+  const selectStyle: CSSProperties = { flex: 1, minWidth: 0, height: 32, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: 'var(--text-primary)', fontSize: 12, padding: '0 6px' }
+  const tabBtn = (on: boolean): CSSProperties => ({ padding: '6px 14px', borderRadius: 999, border: `1px solid ${on ? '#185fa5' : 'var(--border-subtle)'}`, background: on ? '#185fa5' : 'transparent', color: on ? '#ffffff' : 'var(--text-muted)', fontSize: 13, fontWeight: 700, cursor: 'pointer' })
 
   return (
     <div style={{ maxWidth: 1600, margin: '0 auto', padding: '20px 16px 56px', color: 'var(--text-primary)' }}>
       <header style={{ marginBottom: 16 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Brand library</h1>
         <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>
-          Upload, replace, and remove official school logos. Colors are managed in Settings under Schools and locations.
+          Upload, replace, and remove official school logos (PNG and JPG). Colors are managed in Settings under Schools and locations.
         </p>
       </header>
 
@@ -170,9 +177,10 @@ export default function ManagerBrandPage() {
       ) : filtered.length === 0 ? (
         <p style={{ color: 'var(--text-muted)', padding: '40px 0', textAlign: 'center' }}>No schools match your search.</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
           {filtered.map((s) => {
-            const preview = s.logos.png || s.logos.jpg
+            const f = formFor(s.code)
+            const addBusy = busy === `${s.code}-add`
             return (
               <div key={s.code} style={card}>
                 <div style={{ padding: '14px 16px 10px' }}>
@@ -186,55 +194,73 @@ export default function ManagerBrandPage() {
                 </div>
 
                 <div style={{ padding: '0 16px' }}>
-                  <div style={{ height: 110, borderRadius: 10, border: '1px solid var(--border-subtle)', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    {preview ? (
+                  <div style={{ height: 100, borderRadius: 10, border: '1px solid var(--border-subtle)', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    {s.preview ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={preview} alt={`${s.name} logo`} style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
+                      <img src={s.preview} alt={`${s.name} logo`} style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
                     ) : (
-                      <span style={{ fontSize: 13, color: '#6b7280' }}>No preview</span>
+                      <span style={{ fontSize: 13, color: '#6b7280' }}>No logos yet</span>
                     )}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 16, marginTop: 'auto' }}>
-                  {FORMATS.map((fmt) => {
-                    const key = `${s.code}-${fmt}`
-                    const url = s.logos[fmt]
-                    const isBusy = busy === key
-                    return (
-                      <div key={fmt} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ width: 40, fontSize: 12, fontWeight: 800, color: 'var(--text-primary)' }}>{fmt.toUpperCase()}</span>
-                        <span style={{ flex: 1, fontSize: 12, color: url ? '#1f9254' : 'var(--text-muted)', fontWeight: 600 }}>
-                          {url ? 'Uploaded' : 'Missing'}
-                        </span>
-                        <input
-                          ref={(el) => { fileInputs.current[key] = el }}
-                          type="file"
-                          accept={ACCEPT[fmt]}
-                          style={{ display: 'none' }}
-                          onChange={(e) => onPickFile(s.code, fmt, e.target.files?.[0] || null)}
-                        />
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => fileInputs.current[key]?.click()}
-                          style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
-                        >
-                          {isBusy ? '...' : url ? 'Replace' : 'Upload'}
-                        </button>
-                        {url && (
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => onDelete(s.code, fmt, s.name)}
-                            style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', color: '#b42318', fontSize: 12, fontWeight: 700, cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
-                          >
-                            Delete
-                          </button>
-                        )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '12px 16px 0' }}>
+                  {s.logos.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>No logos uploaded yet.</p>
+                  ) : (
+                    s.logos.map((e) => (
+                      <div key={`${e.type}-${e.color}-${e.orientation}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entryLabel(e)}</span>
+                        {(['png', 'jpg'] as LogoFormat[]).map((fmt) => {
+                          const url = e[fmt]
+                          if (!url) return null
+                          const delBusy = busy === `${s.code}-${e.type}-${e.color}-${e.orientation}-${fmt}`
+                          return (
+                            <span key={fmt} style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border-subtle)', borderRadius: 6, overflow: 'hidden' }}>
+                              <a href={url} target="_blank" rel="noreferrer" style={{ padding: '3px 7px', fontSize: 11, fontWeight: 700, color: '#185fa5', textDecoration: 'none' }}>{fmt.toUpperCase()}</a>
+                              <button type="button" disabled={delBusy} onClick={() => onDelete(s, e, fmt)} title="Delete" style={{ padding: '3px 7px', fontSize: 12, fontWeight: 700, color: '#b42318', background: 'transparent', border: 'none', borderLeft: '1px solid var(--border-subtle)', cursor: delBusy ? 'default' : 'pointer', opacity: delBusy ? 0.5 : 1 }}>✕</button>
+                            </span>
+                          )
+                        })}
                       </div>
-                    )
-                  })}
+                    ))
+                  )}
+                </div>
+
+                <div style={{ marginTop: 'auto', padding: 16, borderTop: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Add a logo</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select value={f.type} onChange={(ev) => setForm(s.code, { type: ev.target.value as LogoType })} style={selectStyle}>
+                      {TYPES.map((t) => <option key={t} value={t}>{titleCase(t)}</option>)}
+                    </select>
+                    <select value={f.color} onChange={(ev) => setForm(s.code, { color: ev.target.value as LogoColor })} style={selectStyle}>
+                      {COLORS.map((c) => <option key={c} value={c}>{titleCase(c)}</option>)}
+                    </select>
+                    <select value={f.orientation} onChange={(ev) => setForm(s.code, { orientation: ev.target.value as LogoOrientation })} style={selectStyle}>
+                      {ORIENTATIONS.map((o) => <option key={o} value={o}>{titleCase(o)}</option>)}
+                    </select>
+                  </div>
+                  <input
+                    value={f.label}
+                    onChange={(ev) => setForm(s.code, { label: ev.target.value })}
+                    placeholder="Optional label override"
+                    style={{ height: 32, borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: 'var(--text-primary)', fontSize: 12, padding: '0 8px' }}
+                  />
+                  <input
+                    ref={(el) => { fileInputs.current[s.code] = el }}
+                    type="file"
+                    accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                    style={{ display: 'none' }}
+                    onChange={(ev) => onAddFile(s.code, ev.target.files?.[0] || null)}
+                  />
+                  <button
+                    type="button"
+                    disabled={addBusy}
+                    onClick={() => fileInputs.current[s.code]?.click()}
+                    style={{ height: 34, borderRadius: 8, border: '1px solid #185fa5', background: '#185fa5', color: '#ffffff', fontSize: 13, fontWeight: 700, cursor: addBusy ? 'default' : 'pointer', opacity: addBusy ? 0.6 : 1 }}
+                  >
+                    {addBusy ? 'Uploading...' : 'Choose PNG or JPG'}
+                  </button>
                 </div>
               </div>
             )
