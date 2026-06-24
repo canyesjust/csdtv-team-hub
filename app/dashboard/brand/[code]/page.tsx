@@ -28,7 +28,7 @@ type School = {
   level: BrandLevel
 }
 
-const CATEGORY_PRESETS = ['Official', 'Team/Sport', 'Specific', 'Other']
+const CATEGORY_PRESETS = ['Official', 'Wordmark', 'Team/Sport', 'Specific', 'Other']
 const CATEGORY_ORDER = CATEGORY_PRESETS
 
 function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {

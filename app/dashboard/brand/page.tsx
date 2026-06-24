@@ -81,6 +81,7 @@ export default function ManagerBrandGridPage() {
           <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>Pick a school to add, organize, and remove its logos. Colors are managed in Settings under Schools and locations.</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          <Link href="/dashboard/brand/bulk" style={{ fontSize: 13, fontWeight: 700, color: '#185fa5', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '8px 12px' }}>Bulk upload</Link>
           <Link href="/dashboard/brand/flagged" style={{ fontSize: 13, fontWeight: 700, color: '#b42318', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '8px 12px' }}>Flagged for deletion</Link>
           <Link href="/brand" target="_blank" style={{ fontSize: 13, fontWeight: 700, color: '#185fa5', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '8px 12px' }}>View public page</Link>
         </div>

@@ -331,8 +331,31 @@ function MediaSlide({
   useEffect(() => {
     const v = videoRef.current
     if (!active || !v || !item || item.type !== 'video') return
+    // Embedded/TV WebViews (e.g. the Amazon Fire TV signage stick) only allow
+    // muted autoplay when `muted` is a real DOM *property* — the React attribute
+    // alone isn't always applied, so the player blocks playback and shows a
+    // blank video while the rest of the page renders. Set it imperatively and
+    // retry play(), since the first attempt can be rejected before the element
+    // is ready on slower devices.
+    v.muted = true
+    v.defaultMuted = true
+    v.playsInline = true
+    let cancelled = false
+    let tries = 0
+    const tryPlay = () => {
+      if (cancelled) return
+      const p = v.play()
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          if (cancelled) return
+          tries += 1
+          if (tries <= 12) setTimeout(tryPlay, 600)
+        })
+      }
+    }
     v.load()
-    void v.play().catch(() => {})
+    tryPlay()
+    return () => { cancelled = true }
   }, [active, item])
 
   if (!item) return null
@@ -350,6 +373,7 @@ function MediaSlide({
           muted
           playsInline
           autoPlay
+          preload="auto"
           onEnded={() => onAdvanceRef.current()}
         />
       )}

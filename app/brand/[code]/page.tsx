@@ -27,7 +27,7 @@ const colors = {
   chip: '#eef1f6',
 }
 
-const CATEGORY_ORDER = ['Official', 'Team/Sport', 'Specific', 'Other']
+const CATEGORY_ORDER = ['Official', 'Wordmark', 'Team/Sport', 'Specific', 'Other']
 
 function readableOn(hex: string | null): string {
   if (!hex) return '#ffffff'
