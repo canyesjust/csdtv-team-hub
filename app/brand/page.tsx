@@ -1,18 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type LogoEntry = {
-  type: 'logo' | 'seal' | 'mascot'
-  color: 'full' | 'white' | 'black'
-  orientation: 'horizontal' | 'stacked' | 'icon'
-  label: string | null
-  png: string | null
-  jpg: string | null
-}
 
-type BrandSchool = {
+type BrandSchoolSummary = {
   code: string
   name: string
   shortName: string | null
@@ -21,7 +14,7 @@ type BrandSchool = {
   level: BrandLevel
   colors: { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
   preview: string | null
-  logos: LogoEntry[]
+  logoCount: number
 }
 
 const colors = {
@@ -37,17 +30,6 @@ const colors = {
 
 const LEVELS: ('All' | BrandLevel)[] = ['All', 'Elementary', 'Middle', 'High', 'Specialty']
 
-function titleCase(s: string): string {
-  return s.split(' ').filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
-}
-
-function entryLabel(e: LogoEntry): string {
-  if (e.label) return e.label
-  const parts: string[] = [e.color, e.type]
-  if (e.orientation !== 'horizontal') parts.push(e.orientation)
-  return titleCase(parts.join(' '))
-}
-
 function initialOf(name: string): string {
   const t = name.trim()
   return t ? t[0].toUpperCase() : '?'
@@ -61,12 +43,11 @@ function readableOn(hex: string | null): string {
   const g = parseInt(full.slice(2, 4), 16)
   const b = parseInt(full.slice(4, 6), 16)
   if ([r, g, b].some((v) => Number.isNaN(v))) return '#ffffff'
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-  return luminance > 0.6 ? '#1a1f36' : '#ffffff'
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1a1f36' : '#ffffff'
 }
 
 export default function BrandLibraryPage() {
-  const [schools, setSchools] = useState<BrandSchool[]>([])
+  const [schools, setSchools] = useState<BrandSchoolSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -79,15 +60,11 @@ export default function BrandLibraryPage() {
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return
-        if (Array.isArray(d?.schools)) setSchools(d.schools as BrandSchool[])
+        if (Array.isArray(d?.schools)) setSchools(d.schools as BrandSchoolSummary[])
         else setLoadError(typeof d?.error === 'string' ? d.error : 'Could not load the brand library.')
         setLoading(false)
       })
-      .catch(() => {
-        if (cancelled) return
-        setLoadError('Could not load the brand library.')
-        setLoading(false)
-      })
+      .catch(() => { if (!cancelled) { setLoadError('Could not load the brand library.'); setLoading(false) } })
     return () => { cancelled = true }
   }, [])
 
@@ -96,11 +73,7 @@ export default function BrandLibraryPage() {
     return schools.filter((s) => {
       if (level !== 'All' && s.level !== level) return false
       if (!q) return true
-      return (
-        s.name.toLowerCase().includes(q) ||
-        (s.mascot || '').toLowerCase().includes(q) ||
-        (s.city || '').toLowerCase().includes(q)
-      )
+      return s.name.toLowerCase().includes(q) || (s.mascot || '').toLowerCase().includes(q) || (s.city || '').toLowerCase().includes(q)
     })
   }, [schools, query, level])
 
@@ -110,36 +83,25 @@ export default function BrandLibraryPage() {
       setCopied(key)
       window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1400)
     } catch {
-      // Clipboard not available; ignore.
+      // ignore
     }
   }
 
-  const swatch = (school: BrandSchool, slot: 'primary' | 'secondary' | 'accent' | 'text', label: string) => {
-    const hex = school.colors[slot]
+  const swatch = (s: BrandSchoolSummary, slot: 'primary' | 'secondary' | 'accent' | 'text') => {
+    const hex = s.colors[slot]
     if (!hex) return null
-    const key = `${school.code}-${slot}`
-    const isCopied = copied === key
+    const key = `${s.code}-${slot}`
     return (
       <button
         key={slot}
         type="button"
         onClick={() => copyHex(key, hex)}
         title={`Copy ${hex}`}
-        style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 0', minWidth: 0, border: `1px solid ${colors.line}`, borderRadius: 8, padding: 0, background: colors.cardBg, cursor: 'pointer', overflow: 'hidden', textAlign: 'left' }}
+        style={{ flex: '1 1 0', minWidth: 0, height: 26, borderRadius: 6, border: `1px solid ${colors.line}`, background: hex, color: readableOn(hex), fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
       >
-        <span style={{ height: 30, background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: readableOn(hex) }}>
-          {isCopied ? 'Copied' : ''}
-        </span>
-        <span style={{ padding: '3px 6px 6px' }}>
-          <span style={{ display: 'block', fontSize: 9.5, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
-          <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: colors.text, fontFamily: 'ui-monospace, monospace' }}>{hex}</span>
-        </span>
+        {copied === key ? 'Copied' : hex}
       </button>
     )
-  }
-
-  const dlBtn: CSSProperties = {
-    padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11.5, fontWeight: 700, textDecoration: 'none',
   }
 
   return (
@@ -147,7 +109,7 @@ export default function BrandLibraryPage() {
       <div style={{ maxWidth: 1320, margin: '0 auto', padding: '28px 20px 64px' }}>
         <header style={{ marginBottom: 18 }}>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.15 }}>Canyons School District Brand Library</h1>
-          <p style={{ margin: '6px 0 0', fontSize: 14, color: colors.muted }}>Browse school brand colors and download official logos. Click a color to copy its hex code.</p>
+          <p style={{ margin: '6px 0 0', fontSize: 14, color: colors.muted }}>Pick a school to view and download its logos. Click a color to copy its hex code.</p>
         </header>
 
         <div style={{ position: 'sticky', top: 0, zIndex: 5, background: colors.bg, paddingTop: 8, paddingBottom: 12, marginBottom: 8 }}>
@@ -176,55 +138,39 @@ export default function BrandLibraryPage() {
         ) : filtered.length === 0 ? (
           <p style={{ color: colors.muted, fontSize: 15, padding: '40px 0', textAlign: 'center' }}>No schools match your search.</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
             {filtered.map((s) => {
-              const swatchEls = [
-                swatch(s, 'primary', 'Primary'),
-                swatch(s, 'secondary', 'Secondary'),
-                swatch(s, 'accent', 'Accent'),
-                swatch(s, 'text', 'Text'),
-              ].filter(Boolean)
+              const swatches = [swatch(s, 'primary'), swatch(s, 'secondary'), swatch(s, 'accent'), swatch(s, 'text')].filter(Boolean)
               return (
                 <div key={s.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 14, background: colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ padding: '14px 16px 10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, lineHeight: 1.2 }}>{s.name}</h2>
-                      <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: colors.muted, background: colors.chip, borderRadius: 999, padding: '2px 8px' }}>{s.level}</span>
-                    </div>
-                    {(s.mascot || s.city) && (
-                      <p style={{ margin: '4px 0 0', fontSize: 12.5, color: colors.muted }}>{[s.mascot, s.city].filter(Boolean).join(' · ')}</p>
-                    )}
-                  </div>
-
-                  <div style={{ padding: '0 16px' }}>
-                    <div style={{ height: 120, borderRadius: 10, border: `1px solid ${colors.line}`, background: s.preview ? '#ffffff' : (s.colors.primary || '#334155'), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <Link href={`/brand/${s.code}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{ height: 130, background: s.preview ? '#ffffff' : (s.colors.primary || '#334155'), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
                       {s.preview ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.preview} alt={`${s.name} logo`} style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }} />
+                        <img src={s.preview} alt={`${s.name} logo`} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
                       ) : (
-                        <span style={{ fontSize: 44, fontWeight: 800, color: readableOn(s.colors.primary) }}>{initialOf(s.name)}</span>
+                        <span style={{ fontSize: 46, fontWeight: 800, color: readableOn(s.colors.primary) }}>{initialOf(s.name)}</span>
                       )}
                     </div>
-                  </div>
+                    <div style={{ padding: '12px 14px 6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                        <h2 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, lineHeight: 1.2 }}>{s.name}</h2>
+                        <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: colors.muted, background: colors.chip, borderRadius: 999, padding: '2px 8px' }}>{s.level}</span>
+                      </div>
+                      {(s.mascot || s.city) && (
+                        <p style={{ margin: '4px 0 0', fontSize: 12.5, color: colors.muted }}>{[s.mascot, s.city].filter(Boolean).join(' · ')}</p>
+                      )}
+                    </div>
+                  </Link>
 
-                  {swatchEls.length > 0 && (
-                    <div style={{ display: 'flex', gap: 6, padding: '12px 16px 0' }}>{swatchEls}</div>
+                  {swatches.length > 0 && (
+                    <div style={{ display: 'flex', gap: 5, padding: '6px 14px 0' }}>{swatches}</div>
                   )}
 
-                  <div style={{ marginTop: 'auto', padding: 16 }}>
-                    {s.logos.length === 0 ? (
-                      <p style={{ margin: 0, fontSize: 12.5, color: colors.muted, fontStyle: 'italic' }}>Logos coming soon</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {s.logos.map((e) => (
-                          <div key={`${e.type}-${e.color}-${e.orientation}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: colors.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entryLabel(e)}</span>
-                            {e.png && <a href={e.png} style={dlBtn}>PNG</a>}
-                            {e.jpg && <a href={e.jpg} style={dlBtn}>JPG</a>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <div style={{ marginTop: 'auto', padding: 14 }}>
+                    <Link href={`/brand/${s.code}`} style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 8, border: `1px solid ${colors.line}`, color: colors.info, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                      {s.logoCount > 0 ? `View ${s.logoCount} logo${s.logoCount === 1 ? '' : 's'}` : 'View school'}
+                    </Link>
                   </div>
                 </div>
               )

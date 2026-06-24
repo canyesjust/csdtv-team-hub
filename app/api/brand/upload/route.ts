@@ -7,17 +7,8 @@ export const dynamic = 'force-dynamic'
 
 const BUCKET = 'school-logos'
 const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
-
-const TYPES = ['logo', 'seal', 'mascot'] as const
-const COLORS = ['full', 'white', 'black'] as const
-const ORIENTATIONS = ['horizontal', 'stacked', 'icon'] as const
 type Format = 'png' | 'jpg'
 
-function inOne<T extends string>(value: string, set: readonly T[]): T | null {
-  return (set as readonly string[]).includes(value) ? (value as T) : null
-}
-
-// Detect png/jpg from magic bytes so the stored format matches the bytes.
 function sniffFormat(bytes: Uint8Array): Format | null {
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png'
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpg'
@@ -46,17 +37,13 @@ export async function POST(request: Request) {
 
   const file = form.get('file')
   const code = String(form.get('code') || '').trim()
-  const type = inOne(String(form.get('type') || ''), TYPES)
-  const color = inOne(String(form.get('color') || ''), COLORS)
-  const orientation = inOne(String(form.get('orientation') || ''), ORIENTATIONS)
-  const labelRaw = String(form.get('label') || '').trim()
-  const label = labelRaw ? labelRaw.slice(0, 120) : null
+  const category = String(form.get('category') || '').trim().slice(0, 60)
+  const name = String(form.get('name') || '').trim().slice(0, 120)
 
   if (!(file instanceof Blob)) return NextResponse.json({ error: 'Missing file' }, { status: 400 })
   if (!code) return NextResponse.json({ error: 'Missing school code' }, { status: 400 })
-  if (!type) return NextResponse.json({ error: 'Type must be logo, seal, or mascot' }, { status: 400 })
-  if (!color) return NextResponse.json({ error: 'Color must be full, white, or black' }, { status: 400 })
-  if (!orientation) return NextResponse.json({ error: 'Orientation must be horizontal, stacked, or icon' }, { status: 400 })
+  if (!category) return NextResponse.json({ error: 'Missing category' }, { status: 400 })
+  if (!name) return NextResponse.json({ error: 'Missing logo name' }, { status: 400 })
   if (file.size === 0) return NextResponse.json({ error: 'File is empty' }, { status: 400 })
   if (file.size > MAX_BYTES) return NextResponse.json({ error: 'File is larger than 10 MB' }, { status: 400 })
 
@@ -74,14 +61,13 @@ export async function POST(request: Request) {
   const format = sniffFormat(bytes)
   if (!format) return NextResponse.json({ error: 'File must be a PNG or JPG' }, { status: 400 })
 
-  // Reuse the existing row/path for this exact combination so a re-upload replaces it.
+  // Reuse the existing row/path for this exact name + category + format so re-upload replaces it.
   const { data: existing } = await service
     .from('school_logos')
     .select('id, storage_path')
     .eq('school_code', code)
-    .eq('type', type)
-    .eq('color', color)
-    .eq('orientation', orientation)
+    .eq('category', category)
+    .eq('name', name)
     .eq('format', format)
     .maybeSingle()
 
@@ -95,17 +81,11 @@ export async function POST(request: Request) {
   if (uploadErr) return NextResponse.json({ error: uploadErr.message }, { status: 500 })
 
   const rowErr = existing
-    ? (await service
-        .from('school_logos')
-        .update({ label, updated_at: new Date().toISOString() })
-        .eq('id', existing.id)).error
-    : (await service
-        .from('school_logos')
-        .insert({ id, school_code: code, type, color, orientation, format, label, storage_path: storagePath })).error
-
+    ? (await service.from('school_logos').update({ updated_at: new Date().toISOString() }).eq('id', existing.id)).error
+    : (await service.from('school_logos').insert({ id, school_code: code, category, name, format, storage_path: storagePath })).error
   if (rowErr) return NextResponse.json({ error: rowErr.message }, { status: 500 })
 
-  return NextResponse.json({ success: true, id, code, type, color, orientation, format })
+  return NextResponse.json({ success: true, code, category, name, format })
 }
 
 export async function DELETE(request: Request) {
@@ -117,21 +97,20 @@ export async function DELETE(request: Request) {
 
   const params = new URL(request.url).searchParams
   const code = String(params.get('code') || '').trim()
-  const type = inOne(String(params.get('type') || ''), TYPES)
-  const color = inOne(String(params.get('color') || ''), COLORS)
-  const orientation = inOne(String(params.get('orientation') || ''), ORIENTATIONS)
-  const format = inOne(String(params.get('format') || ''), ['png', 'jpg'] as const)
-  if (!code || !type || !color || !orientation || !format) {
-    return NextResponse.json({ error: 'Missing code, type, color, orientation, or format' }, { status: 400 })
+  const category = String(params.get('category') || '').trim()
+  const name = String(params.get('name') || '').trim()
+  const formatRaw = String(params.get('format') || '').trim()
+  const format = formatRaw === 'png' || formatRaw === 'jpg' ? formatRaw : null
+  if (!code || !category || !name || !format) {
+    return NextResponse.json({ error: 'Missing code, category, name, or format' }, { status: 400 })
   }
 
   const { data: row, error: findErr } = await service
     .from('school_logos')
     .select('id, storage_path')
     .eq('school_code', code)
-    .eq('type', type)
-    .eq('color', color)
-    .eq('orientation', orientation)
+    .eq('category', category)
+    .eq('name', name)
     .eq('format', format)
     .maybeSingle()
   if (findErr) return NextResponse.json({ error: findErr.message }, { status: 500 })
