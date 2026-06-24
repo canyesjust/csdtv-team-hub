@@ -108,6 +108,10 @@ export default function EquipmentDetailPage() {
   const [checkoutNote, setCheckoutNote] = useState('')
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ name: '', brand: '', model: '', serial_number: '', status: '', site: '', condition: '', notes: '' })
+  // Duplicate: copy this item into a brand-new entry under a tag the user enters.
+  const [dupOpen, setDupOpen] = useState(false)
+  const [dupTag, setDupTag] = useState('')
+  const [dupSaving, setDupSaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
 
@@ -262,6 +266,43 @@ export default function EquipmentDetailPage() {
     setEditing(false); setSaving(false); setSavedMsg('Saved!'); setTimeout(() => setSavedMsg(''), 2000)
   }
 
+  // Copy this item to a new entry. Everything carries over except the asset tag
+  // (the user enters a new one) and the serial number (unique to each unit).
+  const duplicateItem = async () => {
+    if (!item || !dupTag) return
+    const tag = dupTag.padStart(4, '0')
+    setDupSaving(true)
+    const { data, error } = await supabase
+      .from('equipment')
+      .insert({
+        asset_tag: tag,
+        name: item.name,
+        brand: item.brand,
+        model: item.model,
+        serial_number: null,
+        category_id: item.category_id,
+        subcategory_id: item.subcategory_id,
+        status: 'available',
+        site: item.site,
+        condition: item.condition,
+        notes: item.notes,
+        photo_url: item.photo_url ?? null,
+      })
+      .select()
+      .single()
+    if (error) {
+      toast(/duplicate|unique/i.test(error.message) ? `Asset tag ${tag} already exists` : error.message, 'error')
+      setDupSaving(false)
+      return
+    }
+    if (data) {
+      await supabase.from('equipment_activity').insert({ equipment_id: data.id, action: 'created', detail: `Duplicated from ${item.asset_tag} — ${item.name} (${tag})`, user_id: userId })
+      toast(`Created ${tag}`, 'success')
+      router.push(`/dashboard/equipment/${tag}`)
+    }
+    setDupSaving(false)
+  }
+
   const handleCheckout = async () => {
     if (!item || !borrowerName.trim() || !userId) return
     const res = await fetch('/api/equipment/checkout', {
@@ -373,7 +414,37 @@ export default function EquipmentDetailPage() {
               {editing ? 'Cancel' : 'Edit'}
             </button>
             )}
+            {canEdit && !editing && (
+            <button onClick={() => { setDupTag(''); setDupOpen(true) }} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: cardBg, color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Duplicate
+            </button>
+            )}
           </div>
+
+          {dupOpen && (
+            <div onClick={() => !dupSaving && setDupOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '20px' }}>
+              <div onClick={ev => ev.stopPropagation()} style={{ background: cardBg, borderRadius: '14px', padding: '22px', width: 'min(420px, 100%)', border: `1px solid ${border}` }}>
+                <div style={{ fontSize: '17px', fontWeight: 600, color: text, marginBottom: '4px' }}>Duplicate item</div>
+                <div style={{ fontSize: '13px', color: muted, lineHeight: 1.5, marginBottom: '16px' }}>
+                  Creates a new entry copying everything from <b style={{ color: text }}>{item.asset_tag} — {item.name}</b> except the asset tag and serial number. Enter the new tag:
+                </div>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }}>New asset tag</label>
+                <input
+                  value={dupTag}
+                  autoFocus
+                  onChange={e => setDupTag(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  onKeyDown={e => { if (e.key === 'Enter' && dupTag && !dupSaving) void duplicateItem() }}
+                  placeholder="0000"
+                  inputMode="numeric"
+                  style={{ width: '120px', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: 'var(--surface-1)', color: text, fontSize: '15px', fontFamily: 'monospace' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+                  <button onClick={() => setDupOpen(false)} disabled={dupSaving} style={{ padding: '10px 16px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: text, cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>Cancel</button>
+                  <button onClick={() => void duplicateItem()} disabled={!dupTag || dupSaving} style={{ padding: '10px 20px', borderRadius: '8px', background: dupTag && !dupSaving ? '#1e6cb5' : 'var(--surface-2)', color: dupTag && !dupSaving ? '#fff' : muted, border: 'none', cursor: dupTag && !dupSaving ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>{dupSaving ? 'Creating…' : 'Create copy'}</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
