@@ -15,6 +15,7 @@ type LogoRow = {
   format: 'png' | 'jpg'
   storage_path: string
   sort_order: number
+  flagged_for_deletion: boolean
 }
 
 const SPECIALTY_CODES = new Set(['996', '981', '180', '955', '995'])
@@ -49,16 +50,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
 
   const { data: logoData } = await supabase
     .from('school_logos')
-    .select('category, name, format, storage_path, sort_order')
+    .select('category, name, format, storage_path, sort_order, flagged_for_deletion')
     .eq('school_code', code)
     .order('sort_order', { ascending: true })
 
   const cleanName = slugify(String(school.name || 'school'))
-  const map = new Map<string, { category: string; name: string; sort: number; png: string | null; jpg: string | null }>()
+  const map = new Map<string, { category: string; name: string; sort: number; png: string | null; jpg: string | null; flagged: boolean }>()
   for (const row of (logoData ?? []) as LogoRow[]) {
     const key = `${row.category}||${row.name}`
-    if (!map.has(key)) map.set(key, { category: row.category, name: row.name, sort: row.sort_order, png: null, jpg: null })
+    if (!map.has(key)) map.set(key, { category: row.category, name: row.name, sort: row.sort_order, png: null, jpg: null, flagged: false })
     const entry = map.get(key)!
+    if (row.flagged_for_deletion) entry.flagged = true
     const dl = `${cleanName}-${slugify(row.category)}-${slugify(row.name)}.${row.format}`
     const url = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { download: dl }).data.publicUrl
     if (row.format === 'png') entry.png = url
@@ -83,7 +85,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
           text: pickHex(school.text_color),
         },
       },
-      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg })),
+      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, flagged: l.flagged })),
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )

@@ -53,6 +53,13 @@ export default function BrandLibraryPage() {
   const [query, setQuery] = useState('')
   const [level, setLevel] = useState<'All' | BrandLevel>('All')
   const [copied, setCopied] = useState<string | null>(null)
+  const [reviewKey, setReviewKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Read after mount so server and client first render match (no hydration mismatch).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReviewKey(new URLSearchParams(window.location.search).get('review'))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -112,6 +119,12 @@ export default function BrandLibraryPage() {
           <p style={{ margin: '6px 0 0', fontSize: 14, color: colors.muted }}>Pick a school to view and download its logos. Click a color to copy its hex code.</p>
         </header>
 
+        {reviewKey && (
+          <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, border: '1px solid #f0b429', background: '#fff8e6', color: '#7a5300', fontSize: 13.5, fontWeight: 600 }}>
+            Review mode: open a school, then click the X on any logo that is old and should be deleted. Your marks are saved automatically for a manager to review.
+          </div>
+        )}
+
         <div style={{ position: 'sticky', top: 0, zIndex: 5, background: colors.bg, paddingTop: 8, paddingBottom: 12, marginBottom: 8 }}>
           <input
             value={query}
@@ -143,7 +156,7 @@ export default function BrandLibraryPage() {
               const swatches = [swatch(s, 'primary'), swatch(s, 'secondary'), swatch(s, 'accent'), swatch(s, 'text')].filter(Boolean)
               return (
                 <div key={s.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 14, background: colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <Link href={`/brand/${s.code}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <Link href={`/brand/${s.code}${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ height: 130, background: s.preview ? '#ffffff' : (s.colors.primary || '#334155'), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
                       {s.preview ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -168,7 +181,7 @@ export default function BrandLibraryPage() {
                   )}
 
                   <div style={{ marginTop: 'auto', padding: 14 }}>
-                    <Link href={`/brand/${s.code}`} style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 8, border: `1px solid ${colors.line}`, color: colors.info, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                    <Link href={`/brand/${s.code}${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 8, border: `1px solid ${colors.line}`, color: colors.info, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
                       {s.logoCount > 0 ? `View ${s.logoCount} logo${s.logoCount === 1 ? '' : 's'}` : 'View school'}
                     </Link>
                   </div>

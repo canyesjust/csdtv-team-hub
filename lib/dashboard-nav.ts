@@ -35,7 +35,13 @@ const OFFICE_SIGNAGE: DashboardNavItem = {
   icon: 'image',
 }
 
-const BRAND_LIBRARY: DashboardNavItem = {
+// Everyone can view the public brand library; managers go to the manage workspace.
+const BRAND_LIBRARY_PUBLIC: DashboardNavItem = {
+  label: 'Brand library',
+  href: '/brand',
+  icon: 'image',
+}
+const BRAND_LIBRARY_MANAGE: DashboardNavItem = {
   label: 'Brand library',
   href: '/dashboard/brand',
   icon: 'image',
@@ -52,6 +58,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
   moreItems: DashboardNavItem[]
 } {
   const manager = isManagerRole(role)
+  const brandLibrary = manager ? BRAND_LIBRARY_MANAGE : BRAND_LIBRARY_PUBLIC
 
   const workItems: DashboardNavItem[] = [
     ...WORK_BASE.slice(0, 2),
@@ -61,18 +68,15 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
 
   const resourcesItems: DashboardNavItem[] = [
     { label: 'Library', href: '/dashboard/library', icon: 'book' },
-    ...(manager
-      ? [
-          { label: 'Reports', href: '/dashboard/reports', icon: 'chart' },
-          BRAND_LIBRARY,
-        ]
-      : []),
+    brandLibrary,
+    ...(manager ? [{ label: 'Reports', href: '/dashboard/reports', icon: 'chart' }] : []),
   ]
 
   const moreItems: DashboardNavItem[] = [
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
-    ...(manager ? [SIGNAGE, OFFICE_SIGNAGE, BRAND_LIBRARY] : []),
+    ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
+    brandLibrary,
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
     { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
     { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
@@ -129,6 +133,7 @@ export function buildStudentInternDashboardNav(): {
         section: 'Resources',
         items: [
           { label: 'Library', href: '/dashboard/library', icon: 'book' },
+          BRAND_LIBRARY_PUBLIC,
         ],
       },
       {
@@ -154,6 +159,7 @@ export function buildStudentInternDashboardNav(): {
       { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
       { label: 'Equipment scan', href: '/dashboard/equipment/scan', icon: 'equipment' },
       { label: 'Library', href: '/dashboard/library', icon: 'book' },
+      BRAND_LIBRARY_PUBLIC,
       { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
       { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
       { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
@@ -174,12 +180,15 @@ export function buildProductionFocusDashboardNav(): {
   ]
 
   return {
-    navItems: [{ section: 'Main', items: main }],
+    navItems: [
+      { section: 'Main', items: main },
+      { section: 'Resources', items: [BRAND_LIBRARY_PUBLIC] },
+    ],
     bottomNav: [
       { label: 'Home', href: '/dashboard', icon: 'home' },
       { label: 'Tasks', href: '/dashboard/tasks', icon: 'check' },
       { label: 'Prods', href: '/dashboard/productions', icon: 'video' },
     ],
-    moreItems: [],
+    moreItems: [BRAND_LIBRARY_PUBLIC],
   }
 }

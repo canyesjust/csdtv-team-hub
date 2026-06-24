@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; flagged?: boolean }
 type School = {
   code: string
   name: string
@@ -55,6 +55,13 @@ export default function SchoolBrandPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [reviewKey, setReviewKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Read after mount so server and client first render match (no hydration mismatch).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReviewKey(new URLSearchParams(window.location.search).get('review'))
+  }, [])
 
   useEffect(() => {
     if (!code) return
@@ -79,6 +86,24 @@ export default function SchoolBrandPage() {
     }
     return orderCategories([...map.keys()]).map((cat) => ({ category: cat, items: map.get(cat) || [] }))
   }, [logos])
+
+  const toggleFlag = async (l: Logo) => {
+    if (!reviewKey) return
+    const next = !l.flagged
+    setLogos((prev) => prev.map((x) => (x.category === l.category && x.name === l.name ? { ...x, flagged: next } : x)))
+    try {
+      const res = await fetch('/api/brand/flag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: reviewKey, code, category: l.category, name: l.name, flagged: next }),
+      })
+      if (!res.ok) {
+        setLogos((prev) => prev.map((x) => (x.category === l.category && x.name === l.name ? { ...x, flagged: !next } : x)))
+      }
+    } catch {
+      setLogos((prev) => prev.map((x) => (x.category === l.category && x.name === l.name ? { ...x, flagged: !next } : x)))
+    }
+  }
 
   const copyHex = async (key: string, hex: string) => {
     try {
@@ -130,6 +155,12 @@ export default function SchoolBrandPage() {
               )}
             </header>
 
+            {reviewKey && (
+              <div style={{ marginBottom: 18, padding: '10px 14px', borderRadius: 10, border: '1px solid #f0b429', background: '#fff8e6', color: '#7a5300', fontSize: 13.5, fontWeight: 600 }}>
+                Review mode: click the X on any logo that is old and should be deleted. Marks save automatically. A manager confirms the deletions later.
+              </div>
+            )}
+
             <section style={{ marginBottom: 26 }}>
               <h2 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Brand colors</h2>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -152,8 +183,14 @@ export default function SchoolBrandPage() {
                       {group.items.map((l) => {
                         const preview = l.png || l.jpg
                         return (
-                          <div key={`${group.category}-${l.name}`} style={{ border: `1px solid ${colors.border}`, borderRadius: 12, background: colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                            <div style={{ height: 140, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
+                          <div key={`${group.category}-${l.name}`} style={{ position: 'relative', border: `1px solid ${l.flagged ? '#e0282e' : colors.border}`, borderRadius: 12, background: l.flagged ? '#fdecec' : colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                            {reviewKey && (
+                              <button type="button" onClick={() => toggleFlag(l)} title={l.flagged ? 'Unmark' : 'Mark as old'}
+                                style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, width: 30, height: 30, borderRadius: 999, border: `1px solid ${l.flagged ? '#e0282e' : colors.line}`, background: l.flagged ? '#e0282e' : '#ffffff', color: l.flagged ? '#ffffff' : colors.muted, fontSize: 15, fontWeight: 800, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                ✕
+                              </button>
+                            )}
+                            <div style={{ height: 140, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}`, opacity: l.flagged ? 0.5 : 1 }}>
                               {preview ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
@@ -161,8 +198,9 @@ export default function SchoolBrandPage() {
                                 <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                               )}
                             </div>
-                            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+                            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                               <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</span>
+                              {reviewKey && l.flagged && <span style={{ fontSize: 11.5, fontWeight: 700, color: '#e0282e' }}>Marked for deletion</span>}
                               <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
                                 {l.png && <a href={l.png} style={dlBtn}>PNG</a>}
                                 {l.jpg && <a href={l.jpg} style={dlBtn}>JPG</a>}

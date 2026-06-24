@@ -75,9 +75,15 @@ export default function ManagerBrandGridPage() {
 
   return (
     <div style={{ maxWidth: 1600, margin: '0 auto', padding: '20px 16px 56px', color: 'var(--text-primary)' }}>
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Brand library</h1>
-        <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>Pick a school to add, organize, and remove its logos. Colors are managed in Settings under Schools and locations.</p>
+      <header style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Brand library</h1>
+          <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--text-muted)' }}>Pick a school to add, organize, and remove its logos. Colors are managed in Settings under Schools and locations.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          <Link href="/dashboard/brand/flagged" style={{ fontSize: 13, fontWeight: 700, color: '#b42318', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '8px 12px' }}>Flagged for deletion</Link>
+          <Link href="/brand" target="_blank" style={{ fontSize: 13, fontWeight: 700, color: '#185fa5', textDecoration: 'none', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '8px 12px' }}>View public page</Link>
+        </div>
       </header>
 
       <input
