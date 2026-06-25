@@ -21,6 +21,13 @@ type Item = {
 
 const MAX_BYTES = 20 * 1024 * 1024
 
+// Folder-name aliases for schools whose real name can't be a folder name
+// (e.g. a slash) or that go by another label. Resolved against the live
+// school list, so no hardcoded codes.
+const FOLDER_ALIASES: { canonical: string; aliases: string[] }[] = [
+  { canonical: 'Entrada/Community Ed', aliases: ['Entrada Community Ed', 'Entrada', 'Community Ed'] },
+]
+
 function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }))
 }
@@ -80,6 +87,11 @@ export default function BulkUploadPage() {
           if (s?.name) map.set(normalize(String(s.name)), code)
           if (s?.shortName) map.set(normalize(String(s.shortName)), code)
           map.set(normalize(code), code) // folders named by code also match
+        }
+        // Apply folder-name aliases, resolved to the canonical school's code.
+        for (const { canonical, aliases } of FOLDER_ALIASES) {
+          const code = map.get(normalize(canonical))
+          if (code) for (const a of aliases) map.set(normalize(a), code)
         }
         setNameToCode(map)
       })

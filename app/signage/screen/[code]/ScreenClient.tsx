@@ -66,10 +66,13 @@ function AnnouncementIcon({ icon }: { icon: string }) {
 }
 
 function ScreenLogo({ portrait, src }: { portrait?: boolean; src?: string | null }) {
+  // No site logo configured → render nothing rather than falling back to the
+  // CIC logo (which would brand every other location as CIC).
+  if (!src) return null
   return (
     <div className={`cic-logo${portrait ? ' portrait' : ''}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src || '/cic-logo.png'} alt="" onError={e => { e.currentTarget.style.display = 'none' }} />
+      <img src={src} alt="" onError={e => { e.currentTarget.style.display = 'none' }} />
     </div>
   )
 }
@@ -753,7 +756,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   }
 
   return (
-    <div className={screenClass}>
+    <div className={screenClass} style={siteStyle}>
       <SignageBackground />
       <div className="cic-screen-content">
       {feed.live.live && (
