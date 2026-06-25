@@ -25,6 +25,7 @@ type BrandSchoolSummary = {
 type SchoolRow = {
   code: string | null
   name: string | null
+  type: string | null
   short_name: string | null
   mascot: string | null
   mascot_name: string | null
@@ -43,6 +44,7 @@ type LogoRow = {
   format: 'png' | 'jpg'
   storage_path: string
   sort_order: number
+  is_cover: boolean
 }
 
 const SPECIALTY_CODES = new Set(['996', '981', '180', '955', '995'])
@@ -62,57 +64,76 @@ export async function GET() {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
 
-  const [schoolsRes, logosRes] = await Promise.all([
-    supabase
-      .from('schools')
-      .select('code, name, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color')
-      .eq('type', 'school')
-      .not('active', 'is', false)
-      .order('name', { ascending: true }),
-    supabase
-      .from('school_logos')
-      .select('school_code, category, name, format, storage_path, sort_order')
-      .order('sort_order', { ascending: true }),
-  ])
+  const schoolsRes = await supabase
+    .from('schools')
+    .select('code, name, type, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color')
+    .in('type', ['school', 'district', 'department'])
+    .not('active', 'is', false)
+    .order('name', { ascending: true })
 
   if (schoolsRes.error) return NextResponse.json({ error: schoolsRes.error.message }, { status: 500 })
-  const logoRows = (logosRes.error ? [] : (logosRes.data ?? [])) as LogoRow[]
+
+  // Fetch every logo row, paginating past Supabase's 1000-row response cap.
+  const logoRows: LogoRow[] = []
+  const PAGE = 1000
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('school_logos')
+      .select('school_code, category, name, format, storage_path, sort_order, is_cover')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) break
+    const batch = (data ?? []) as LogoRow[]
+    logoRows.push(...batch)
+    if (batch.length < PAGE) break
+  }
 
   // Count distinct logos (by category+name) per school and pick a preview file.
+  // Preview priority: chosen cover PNG > cover (any) > Official PNG > any PNG > any file.
   const namesByCode = new Map<string, Set<string>>()
   const previewByCode = new Map<string, string>()
+  const previewRank = new Map<string, number>()
   for (const row of logoRows) {
     if (!namesByCode.has(row.school_code)) namesByCode.set(row.school_code, new Set())
     namesByCode.get(row.school_code)!.add(`${row.category}||${row.name}`)
-    // Prefer an Official PNG as the card preview; first row by sort_order wins otherwise.
-    const isOfficialPng = row.category.toLowerCase() === 'official' && row.format === 'png'
-    if (!previewByCode.has(row.school_code) || isOfficialPng) {
-      const url = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl
-      if (isOfficialPng || !previewByCode.has(row.school_code)) previewByCode.set(row.school_code, url)
+
+    let rank = 0
+    if (row.is_cover && row.format === 'png') rank = 5
+    else if (row.is_cover) rank = 4
+    else if (row.category.toLowerCase() === 'official' && row.format === 'png') rank = 3
+    else if (row.format === 'png') rank = 2
+    else rank = 1
+    if (rank > (previewRank.get(row.school_code) ?? -1)) {
+      previewRank.set(row.school_code, rank)
+      previewByCode.set(row.school_code, supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl)
     }
   }
 
-  const schools: BrandSchoolSummary[] = ((schoolsRes.data ?? []) as SchoolRow[])
-    .filter((r) => r.code && r.name)
-    .map((r) => {
-      const code = String(r.code)
-      return {
-        code,
-        name: String(r.name),
-        shortName: r.short_name || null,
-        mascot: r.mascot_name || r.mascot || null,
-        city: r.city || null,
-        level: resolveLevel(r.level, code),
-        colors: {
-          primary: pickHex(r.primary_color),
-          secondary: pickHex(r.secondary_color),
-          accent: pickHex(r.accent_color),
-          text: pickHex(r.text_color),
-        },
-        preview: previewByCode.get(code) ?? null,
-        logoCount: namesByCode.get(code)?.size ?? 0,
-      }
-    })
+  const allRows = ((schoolsRes.data ?? []) as SchoolRow[]).filter((r) => r.code && r.name)
+  const toSummary = (r: SchoolRow): BrandSchoolSummary => {
+    const code = String(r.code)
+    return {
+      code,
+      name: String(r.name),
+      shortName: r.short_name || null,
+      mascot: r.mascot_name || r.mascot || null,
+      city: r.city || null,
+      level: resolveLevel(r.level, code),
+      colors: {
+        primary: pickHex(r.primary_color),
+        secondary: pickHex(r.secondary_color),
+        accent: pickHex(r.accent_color),
+        text: pickHex(r.text_color),
+      },
+      preview: previewByCode.get(code) ?? null,
+      logoCount: namesByCode.get(code)?.size ?? 0,
+    }
+  }
 
-  return NextResponse.json({ schools }, { headers: { 'Cache-Control': 'no-store' } })
+  const schools = allRows.filter((r) => r.type === 'school').map(toSummary)
+  const departments = allRows.filter((r) => r.type === 'department').map(toSummary)
+  const districtRow = allRows.find((r) => r.type === 'district')
+  const district = districtRow ? toSummary(districtRow) : null
+
+  return NextResponse.json({ schools, district, departments }, { headers: { 'Cache-Control': 'no-store' } })
 }

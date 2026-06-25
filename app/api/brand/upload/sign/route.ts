@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     .from('schools')
     .select('code')
     .eq('code', code)
-    .eq('type', 'school')
+    .in('type', ['school', 'district', 'department'])
     .not('active', 'is', false)
     .maybeSingle()
   if (schoolErr) return NextResponse.json({ error: schoolErr.message }, { status: 500 })

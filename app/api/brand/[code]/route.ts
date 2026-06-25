@@ -16,6 +16,7 @@ type LogoRow = {
   storage_path: string
   sort_order: number
   flagged_for_deletion: boolean
+  is_cover: boolean
 }
 
 const SPECIALTY_CODES = new Set(['996', '981', '180', '955', '995'])
@@ -40,9 +41,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
 
   const { data: school, error: schoolErr } = await supabase
     .from('schools')
-    .select('code, name, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color')
+    .select('code, name, type, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color')
     .eq('code', code)
-    .eq('type', 'school')
+    .in('type', ['school', 'district', 'department'])
     .not('active', 'is', false)
     .maybeSingle()
   if (schoolErr) return NextResponse.json({ error: schoolErr.message }, { status: 500 })
@@ -50,17 +51,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
 
   const { data: logoData } = await supabase
     .from('school_logos')
-    .select('category, name, format, storage_path, sort_order, flagged_for_deletion')
+    .select('category, name, format, storage_path, sort_order, flagged_for_deletion, is_cover')
     .eq('school_code', code)
     .order('sort_order', { ascending: true })
 
   const cleanName = slugify(String(school.name || 'school'))
-  const map = new Map<string, { category: string; name: string; sort: number; png: string | null; jpg: string | null; flagged: boolean }>()
+  const map = new Map<string, { category: string; name: string; sort: number; png: string | null; jpg: string | null; flagged: boolean; cover: boolean }>()
   for (const row of (logoData ?? []) as LogoRow[]) {
     const key = `${row.category}||${row.name}`
-    if (!map.has(key)) map.set(key, { category: row.category, name: row.name, sort: row.sort_order, png: null, jpg: null, flagged: false })
+    if (!map.has(key)) map.set(key, { category: row.category, name: row.name, sort: row.sort_order, png: null, jpg: null, flagged: false, cover: false })
     const entry = map.get(key)!
     if (row.flagged_for_deletion) entry.flagged = true
+    if (row.is_cover) entry.cover = true
     const dl = `${cleanName}-${slugify(row.category)}-${slugify(row.name)}.${row.format}`
     const url = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { download: dl }).data.publicUrl
     if (row.format === 'png') entry.png = url
@@ -74,6 +76,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
       school: {
         code: String(school.code),
         name: String(school.name),
+        type: String(school.type || 'school'),
         shortName: school.short_name || null,
         mascot: school.mascot_name || school.mascot || null,
         city: school.city || null,
@@ -85,7 +88,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
           text: pickHex(school.text_color),
         },
       },
-      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, flagged: l.flagged })),
+      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, flagged: l.flagged, cover: l.cover })),
     },
     { headers: { 'Cache-Control': 'no-store' } },
   )

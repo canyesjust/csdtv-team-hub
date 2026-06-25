@@ -69,20 +69,23 @@ export async function DELETE() {
   const service = getServiceSupabaseClient()
   if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
 
-  const { data: rowsData, error } = await service
-    .from('school_logos')
-    .select('id, storage_path')
-    .eq('flagged_for_deletion', true)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Delete in batches so files and rows are removed together (no orphaned files),
+  // and so it works regardless of how many are flagged (past the 1000-row cap).
+  let deleted = 0
+  for (;;) {
+    const { data, error } = await service
+      .from('school_logos')
+      .select('id, storage_path')
+      .eq('flagged_for_deletion', true)
+      .limit(500)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const rows = (data ?? []) as { id: string; storage_path: string }[]
+    if (rows.length === 0) break
+    await service.storage.from(BUCKET).remove(rows.map((r) => r.storage_path))
+    const { error: delErr } = await service.from('school_logos').delete().in('id', rows.map((r) => r.id))
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+    deleted += rows.length
+  }
 
-  const rows = (rowsData ?? []) as { id: string; storage_path: string }[]
-  if (rows.length === 0) return NextResponse.json({ success: true, deleted: 0 })
-
-  const paths = rows.map((r) => r.storage_path)
-  await service.storage.from(BUCKET).remove(paths)
-
-  const { error: delErr } = await service.from('school_logos').delete().eq('flagged_for_deletion', true)
-  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
-
-  return NextResponse.json({ success: true, deleted: rows.length })
+  return NextResponse.json({ success: true, deleted })
 }

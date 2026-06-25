@@ -19,7 +19,7 @@ function detectFormat(file: File): 'png' | 'jpg' | null {
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type LogoFormat = 'png' | 'jpg'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; cover?: boolean }
 type School = {
   code: string
   name: string
@@ -177,6 +177,24 @@ export default function ManageSchoolBrandPage() {
     }
   }
 
+  const setCover = async (l: Logo) => {
+    setBusy(`cover-${l.category}-${l.name}`)
+    try {
+      const res = await fetch('/api/brand/cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, category: l.category, name: l.name }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Could not set cover', 'error')
+      else { notify('Cover image updated', 'success'); await loadDetail() }
+    } catch {
+      notify('Could not set cover', 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const onDelete = async (l: Logo, format: LogoFormat) => {
     if (!window.confirm(`Remove the ${format.toUpperCase()} for "${l.name}"?`)) return
     const key = `${l.category}-${l.name}-${format}`
@@ -292,6 +310,11 @@ export default function ManageSchoolBrandPage() {
                                 <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</span>
                                 <button type="button" onClick={() => startEdit(l)} title="Change category or name" style={{ flexShrink: 0, padding: '3px 8px', fontSize: 11, fontWeight: 700, color: '#185fa5', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: 'pointer' }}>Edit</button>
                               </div>
+                              {l.cover ? (
+                                <span style={{ alignSelf: 'flex-start', fontSize: 11, fontWeight: 700, color: '#1f9254', background: 'rgba(31,146,84,0.12)', border: '1px solid rgba(31,146,84,0.4)', borderRadius: 6, padding: '2px 8px' }}>★ Cover image</span>
+                              ) : (
+                                <button type="button" onClick={() => setCover(l)} disabled={busy === `cover-${l.category}-${l.name}`} style={{ alignSelf: 'flex-start', padding: '3px 8px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: busy === `cover-${l.category}-${l.name}` ? 'default' : 'pointer' }}>Set as cover</button>
+                              )}
                               <div style={{ display: 'flex', gap: 6, marginTop: 'auto', flexWrap: 'wrap' }}>
                                 {(['png', 'jpg'] as LogoFormat[]).map((fmt) => {
                                   const url = l[fmt]

@@ -6,15 +6,18 @@ import Link from 'next/link'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type Logo = { category: string; name: string; png: string | null; jpg: string | null; flagged?: boolean }
+type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
 type School = {
   code: string
   name: string
+  type?: string
   shortName: string | null
   mascot: string | null
   city: string | null
   level: BrandLevel
-  colors: { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
+  colors: Colors
 }
+type DeptSummary = { code: string; name: string; colors: Colors; logoCount: number }
 
 const colors = {
   bg: '#f8f9fc',
@@ -71,6 +74,25 @@ export default function SchoolBrandPage() {
   const [reviewKey, setReviewKey] = useState<string | null>(null)
   const [bg, setBg] = useState<PreviewBg>('check')
   const [flagError, setFlagError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Logo | null>(null)
+  const [departments, setDepartments] = useState<DeptSummary[]>([])
+
+  useEffect(() => {
+    if (school?.type !== 'district') return
+    let cancelled = false
+    fetch('/api/brand', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && Array.isArray(d?.departments)) setDepartments(d.departments as DeptSummary[]) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [school?.type])
+
+  useEffect(() => {
+    if (!selected) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelected(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
 
   useEffect(() => {
     // Read after mount so server and client first render match (no hydration mismatch).
@@ -156,7 +178,7 @@ export default function SchoolBrandPage() {
 
   return (
     <div style={{ background: colors.bg, minHeight: '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px 64px' }}>
+      <div style={{ maxWidth: 1640, margin: '0 auto', padding: '24px 24px 72px' }}>
         <Link href="/brand" style={{ fontSize: 13, fontWeight: 700, color: colors.info, textDecoration: 'none' }}>{'←'} All schools</Link>
 
         {loading ? (
@@ -168,7 +190,9 @@ export default function SchoolBrandPage() {
             <header style={{ margin: '14px 0 18px' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                 <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, lineHeight: 1.1 }}>{school.name}</h1>
-                <span style={{ fontSize: 11, fontWeight: 700, color: colors.muted, background: colors.chip, borderRadius: 999, padding: '3px 10px' }}>{school.level}</span>
+                {(!school.type || school.type === 'school') && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: colors.muted, background: colors.chip, borderRadius: 999, padding: '3px 10px' }}>{school.level}</span>
+                )}
               </div>
               {(school.mascot || school.city) && (
                 <p style={{ margin: '6px 0 0', fontSize: 14, color: colors.muted }}>{[school.mascot, school.city].filter(Boolean).join(' · ')}</p>
@@ -214,19 +238,19 @@ export default function SchoolBrandPage() {
                 grouped.map((group) => (
                   <div key={group.category} style={{ marginBottom: 22 }}>
                     <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700 }}>{group.category}</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 18 }}>
                       {group.items.map((l) => {
                         const preview = l.png || l.jpg
                         return (
                           <div key={`${group.category}-${l.name}`}
-                            onClick={reviewKey ? () => toggleFlag(l) : undefined}
-                            style={{ position: 'relative', border: `1px solid ${l.flagged ? '#e0282e' : colors.border}`, borderRadius: 12, background: l.flagged ? '#fdecec' : colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: reviewKey ? 'pointer' : 'default', userSelect: reviewKey ? 'none' : 'auto' }}>
+                            onClick={reviewKey ? () => toggleFlag(l) : () => setSelected(l)}
+                            style={{ position: 'relative', border: `1px solid ${l.flagged ? '#e0282e' : colors.border}`, borderRadius: 12, background: l.flagged ? '#fdecec' : colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer', userSelect: 'none' }}>
                             {reviewKey && (
                               <div aria-hidden style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, width: 30, height: 30, borderRadius: 999, border: `1px solid ${l.flagged ? '#e0282e' : colors.line}`, background: l.flagged ? '#e0282e' : 'rgba(255,255,255,0.92)', color: '#ffffff', fontSize: 15, fontWeight: 800, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 {l.flagged ? '✕' : ''}
                               </div>
                             )}
-                            <div style={{ height: 140, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}`, opacity: l.flagged ? 0.45 : 1 }}>
+                            <div style={{ height: 220, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}`, opacity: l.flagged ? 0.45 : 1 }}>
                               {preview ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
@@ -255,9 +279,72 @@ export default function SchoolBrandPage() {
                 ))
               )}
             </section>
+
+            {school.type === 'district' && departments.length > 0 && (
+              <section style={{ marginTop: 28 }}>
+                <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Departments</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+                  {departments.map((dep) => {
+                    const sw = (slot: keyof Colors) => {
+                      const hex = dep.colors[slot]
+                      if (!hex) return null
+                      const key = `dep-${dep.code}-${slot}`
+                      return (
+                        <button key={slot} type="button" onClick={() => copyHex(key, hex)} title={`Copy ${hex}`}
+                          style={{ flex: '1 1 0', minWidth: 0, height: 24, borderRadius: 6, border: `1px solid ${colors.line}`, background: hex, color: readableOn(hex), fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                          {copied === key ? 'Copied' : hex}
+                        </button>
+                      )
+                    }
+                    const sws = [sw('primary'), sw('secondary'), sw('accent'), sw('text')].filter(Boolean)
+                    return (
+                      <div key={dep.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 12, background: colors.cardBg, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.25 }}>{dep.name}</div>
+                        <div style={{ fontSize: 12, color: colors.muted, marginTop: 3 }}>{dep.logoCount > 0 ? `${dep.logoCount} logo${dep.logoCount === 1 ? '' : 's'}` : 'No logos yet'}</div>
+                        {sws.length > 0 && <div style={{ display: 'flex', gap: 5, marginTop: 10 }}>{sws}</div>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
           </>
         ) : null}
       </div>
+
+      {selected && (
+        <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(10,15,25,0.45)', zIndex: 50, display: 'flex', justifyContent: 'flex-end' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(480px, 94vw)', height: '100%', background: colors.bg, boxShadow: '-8px 0 30px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${colors.line}`, position: 'sticky', top: 0, background: colors.bg }}>
+              <span style={{ fontSize: 15, fontWeight: 800, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.name}</span>
+              <button type="button" onClick={() => setSelected(null)} style={{ flexShrink: 0, padding: '6px 12px', fontSize: 13, fontWeight: 700, color: colors.muted, background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 8, cursor: 'pointer' }}>Close</button>
+            </div>
+            <div style={{ padding: 18 }}>
+              <div style={{ ...previewBg(bg), borderRadius: 12, border: `1px solid ${colors.line}`, minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+                {(selected.png || selected.jpg) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={selected.png || selected.jpg || ''} alt={selected.name} style={{ maxWidth: '100%', maxHeight: 440, objectFit: 'contain' }} />
+                ) : (
+                  <span style={{ fontSize: 13, color: colors.muted }}>No preview</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+                {([['check', 'Checkered'], ['light', 'White'], ['dark', 'Dark']] as [PreviewBg, string][]).map(([m, label]) => (
+                  <button key={m} type="button" onClick={() => setBg(m)} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bg === m ? colors.info : colors.line}`, background: bg === m ? colors.info : colors.cardBg, color: bg === m ? '#ffffff' : colors.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+                ))}
+              </div>
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Category</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{selected.category}</p>
+              <p style={{ margin: '16px 0 8px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Download</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {selected.png && <a href={selected.png} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>PNG</a>}
+                {selected.jpg && <a href={selected.jpg} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>JPG</a>}
+                {!selected.png && !selected.jpg && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

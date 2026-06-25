@@ -35,6 +35,7 @@ export default function ManagerBrandGridPage() {
   const router = useRouter()
   const [access, setAccess] = useState<'loading' | 'ok' | 'denied'>('loading')
   const [schools, setSchools] = useState<BrandSchoolSummary[]>([])
+  const [district, setDistrict] = useState<BrandSchoolSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [level, setLevel] = useState<'All' | BrandLevel>('All')
@@ -60,6 +61,7 @@ export default function ManagerBrandGridPage() {
       .then((d) => {
         if (cancelled) return
         if (Array.isArray(d?.schools)) setSchools(d.schools as BrandSchoolSummary[])
+        setDistrict(d?.district ?? null)
         setLoading(false)
       })
       .catch(() => { if (!cancelled) setLoading(false) })
@@ -106,6 +108,24 @@ export default function ManagerBrandGridPage() {
           <button key={lv} type="button" onClick={() => setLevel(lv)} style={tabBtn(lv === level)}>{lv}</button>
         ))}
       </div>
+
+      {district && (
+        <Link href={`/dashboard/brand/${district.code}`} style={{ display: 'flex', alignItems: 'center', gap: 14, textDecoration: 'none', color: 'inherit', border: '1px solid var(--border-subtle)', borderRadius: 14, background: 'var(--surface-2)', padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ width: 90, height: 58, background: '#ffffff', borderRadius: 10, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+            {district.preview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={district.preview} alt="" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
+            ) : (
+              <span style={{ fontWeight: 800, color: '#9aa3b2' }}>CSD</span>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>{district.name}</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 2 }}>{district.logoCount > 0 ? `${district.logoCount} logos` : 'No logos yet'} · manage district brand</div>
+          </div>
+          <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 700, color: '#185fa5' }}>Manage {'→'}</span>
+        </Link>
+      )}
 
       {loading ? (
         <p style={{ color: 'var(--text-muted)', padding: '40px 0', textAlign: 'center' }}>Loading the catalog...</p>
