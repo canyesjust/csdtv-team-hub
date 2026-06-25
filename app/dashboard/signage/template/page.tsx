@@ -14,6 +14,7 @@ type TemplateRow = {
   show_clock: boolean
   show_ticker: boolean
   show_visitor_welcome: boolean
+  show_calendar_ticker: boolean
   brand_title: string | null
   brand_subtitle: string | null
   logo_url: string | null
@@ -27,7 +28,8 @@ const LAYOUT_OPTIONS = [
 
 const DEFAULTS: TemplateRow = {
   name: '', default_layout: 'zoned', show_weather: true, show_clock: true,
-  show_ticker: true, show_visitor_welcome: true, brand_title: null, brand_subtitle: null, logo_url: null,
+  show_ticker: true, show_visitor_welcome: true, show_calendar_ticker: false,
+  brand_title: null, brand_subtitle: null, logo_url: null,
 }
 
 export default function SignageTemplatePage() {
@@ -45,7 +47,7 @@ export default function SignageTemplatePage() {
     setLoading(true)
     const { data } = await supabase
       .from('signage_sites')
-      .select('name, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, brand_title, brand_subtitle, logo_url')
+      .select('name, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, show_calendar_ticker, brand_title, brand_subtitle, logo_url')
       .eq('id', activeSiteId)
       .maybeSingle()
     if (data) {
@@ -56,6 +58,7 @@ export default function SignageTemplatePage() {
         show_clock: data.show_clock ?? true,
         show_ticker: data.show_ticker ?? true,
         show_visitor_welcome: data.show_visitor_welcome ?? true,
+        show_calendar_ticker: data.show_calendar_ticker ?? false,
         brand_title: data.brand_title ?? null,
         brand_subtitle: data.brand_subtitle ?? null,
         logo_url: data.logo_url ?? null,
@@ -84,7 +87,7 @@ export default function SignageTemplatePage() {
     toast('Template saved', 'success')
   }
 
-  const toggle = (key: 'show_weather' | 'show_clock' | 'show_ticker' | 'show_visitor_welcome') => (
+  const toggle = (key: 'show_weather' | 'show_clock' | 'show_ticker' | 'show_visitor_welcome' | 'show_calendar_ticker') => (
     <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: s.text }}>
       <input type="checkbox" checked={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))} />
       {{
@@ -92,6 +95,7 @@ export default function SignageTemplatePage() {
         show_clock: 'Clock',
         show_ticker: 'Ticker bar',
         show_visitor_welcome: 'Visitor welcome',
+        show_calendar_ticker: 'District calendar in ticker',
       }[key]}
     </label>
   )
@@ -140,6 +144,7 @@ export default function SignageTemplatePage() {
           {toggle('show_clock')}
           {toggle('show_ticker')}
           {toggle('show_visitor_welcome')}
+          {toggle('show_calendar_ticker')}
         </div>
 
         <div style={{ ...s.card, display: 'grid', gap: 12 }}>

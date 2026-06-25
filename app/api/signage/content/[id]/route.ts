@@ -68,12 +68,18 @@ export async function PATCH(
 
   if (typeof body.status === 'string' && existing.submitter_email) {
     if (body.status === 'approved' || body.status === 'rejected') {
+      let centerName: string | null = null
+      if (existing.site_id) {
+        const { data: siteRow } = await service.from('signage_sites').select('center_name').eq('id', existing.site_id).maybeSingle()
+        centerName = siteRow?.center_name ?? null
+      }
       void emailSignageSubmitterDecision({
         email: existing.submitter_email,
         name: existing.submitter_name || 'there',
         approved: body.status === 'approved',
         title: existing.title,
         rejectReason: body.reject_reason ?? existing.reject_reason,
+        centerName,
       })
     }
   }

@@ -1,8 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+
+const CHECKER: CSSProperties = {
+  backgroundColor: '#ffffff',
+  backgroundImage:
+    'linear-gradient(45deg,#dfe3e8 25%,transparent 25%),linear-gradient(-45deg,#dfe3e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#dfe3e8 75%),linear-gradient(-45deg,transparent 75%,#dfe3e8 75%)',
+  backgroundSize: '18px 18px',
+  backgroundPosition: '0 0,0 9px,9px -9px,-9px 0',
+}
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 
@@ -107,7 +115,7 @@ export default function ManagerBrandGridPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
           {filtered.map((s) => (
             <Link key={s.code} href={`/dashboard/brand/${s.code}`} style={{ textDecoration: 'none', color: 'inherit', border: '1px solid var(--border-subtle)', borderRadius: 14, background: 'var(--surface-2)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: 120, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div style={{ height: 120, ...CHECKER, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)' }}>
                 {s.preview ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={s.preview} alt={`${s.name} logo`} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />

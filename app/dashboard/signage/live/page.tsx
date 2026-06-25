@@ -10,7 +10,7 @@ import { useSignage } from '../components/SignageProvider'
 export default function SignageLivePage() {
   const { theme } = useTheme()
   const { text, muted, border, cardBg, inputBg } = useSignageTheme(theme)
-  const { areas, screens } = useSignage()
+  const { areas, screens, activeSiteId } = useSignage()
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({ is_live: false, hls_url: '', label: '', all_screens: true })
   const [targeting, setTargeting] = useState<TargetingValue>({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
@@ -76,15 +76,19 @@ export default function SignageLivePage() {
   )
 
   const load = useCallback(async () => {
-    const liveRes = await fetch('/api/signage/live')
+    if (!activeSiteId) { setLoading(false); return }
+    const liveRes = await fetch(`/api/signage/live?site_id=${activeSiteId}`)
     const liveData = await liveRes.json().catch(() => ({}))
     const live = liveData.live
     if (live) {
       setForm({ is_live: live.is_live, hls_url: live.hls_url || '', label: live.label || '', all_screens: live.all_screens })
       setTargeting({ all_screens: live.all_screens, target_area_ids: live.target_area_ids || [], target_screen_ids: live.target_screen_ids || [] })
+    } else {
+      setForm({ is_live: false, hls_url: '', label: '', all_screens: true })
+      setTargeting({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
     }
     setLoading(false)
-  }, [])
+  }, [activeSiteId])
 
   useEffect(() => { void load() }, [load])
 
@@ -98,6 +102,7 @@ export default function SignageLivePage() {
       ...form,
       hls_url: streamUrl,
       ...targeting,
+      site_id: activeSiteId,
     }
     if (
       form.is_live &&
@@ -129,7 +134,7 @@ export default function SignageLivePage() {
     const res = await fetch('/api/signage/live', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_live: false, hls_url: form.hls_url, label: form.label, ...targeting }),
+      body: JSON.stringify({ is_live: false, hls_url: form.hls_url, label: form.label, ...targeting, site_id: activeSiteId }),
     })
     setSaving(false)
     if (!res.ok) { toast('Could not end live', 'error'); return }

@@ -227,6 +227,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let centerName: string | null = null
+  if (siteId) {
+    const { data: siteRow } = await service.from('signage_sites').select('center_name').eq('id', siteId).maybeSingle()
+    centerName = siteRow?.center_name ?? null
+  }
+
   void emailSignageApprovers(buildNewSubmissionEmailBody({
     submitterName,
     submitterEmail,
@@ -234,6 +240,7 @@ export async function POST(request: NextRequest) {
     startDate: startDate || visitDate,
     endDate: endDate || visitDate,
     requestedNote: requestedNote || null,
+    centerName,
   }))
 
   return NextResponse.json({ success: true })

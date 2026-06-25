@@ -15,7 +15,12 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), id: 1 }
+  const siteId = typeof body.site_id === 'string' && body.site_id ? body.site_id : null
+  if (!siteId) {
+    return NextResponse.json({ error: 'site_id is required' }, { status: 400 })
+  }
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (typeof body.is_live === 'boolean') patch.is_live = body.is_live
   if (body.hls_url === null || typeof body.hls_url === 'string') {
     patch.hls_url = body.hls_url === null ? null : normalizeSignageStreamUrl(body.hls_url)
@@ -44,7 +49,7 @@ export async function PATCH(request: NextRequest) {
   patch.target_screen_ids = normalized.target_screen_ids
 
   const row = {
-    id: 1,
+    site_id: siteId,
     is_live: false,
     hls_url: null as string | null,
     label: null as string | null,
@@ -57,7 +62,7 @@ export async function PATCH(request: NextRequest) {
 
   const { data, error } = await service
     .from('signage_live')
-    .upsert(row, { onConflict: 'id' })
+    .upsert(row, { onConflict: 'site_id' })
     .select('*')
     .single()
 
@@ -65,12 +70,15 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({ live: data })
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const auth = await requireManagerApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 
-  const { data, error } = await service.from('signage_live').select('*').eq('id', 1).maybeSingle()
+  const siteId = new URL(request.url).searchParams.get('site_id')
+  if (!siteId) return NextResponse.json({ error: 'site_id is required' }, { status: 400 })
+
+  const { data, error } = await service.from('signage_live').select('*').eq('site_id', siteId).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ live: data })
 }

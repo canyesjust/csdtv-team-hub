@@ -40,6 +40,19 @@ function readableOn(hex: string | null): string {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1a1f36' : '#ffffff'
 }
 
+type PreviewBg = 'check' | 'light' | 'dark'
+function previewBg(mode: PreviewBg): CSSProperties {
+  if (mode === 'dark') return { background: '#2b2f3a' }
+  if (mode === 'light') return { background: '#ffffff' }
+  return {
+    backgroundColor: '#ffffff',
+    backgroundImage:
+      'linear-gradient(45deg,#dfe3e8 25%,transparent 25%),linear-gradient(-45deg,#dfe3e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#dfe3e8 75%),linear-gradient(-45deg,transparent 75%,#dfe3e8 75%)',
+    backgroundSize: '18px 18px',
+    backgroundPosition: '0 0,0 9px,9px -9px,-9px 0',
+  }
+}
+
 function orderCategories(cats: string[]): string[] {
   const present = Array.from(new Set(cats))
   const known = CATEGORY_ORDER.filter((c) => present.includes(c))
@@ -56,6 +69,7 @@ export default function SchoolBrandPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [reviewKey, setReviewKey] = useState<string | null>(null)
+  const [bg, setBg] = useState<PreviewBg>('check')
 
   useEffect(() => {
     // Read after mount so server and client first render match (no hydration mismatch).
@@ -172,7 +186,17 @@ export default function SchoolBrandPage() {
             </section>
 
             <section>
-              <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Logos</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 12px' }}>
+                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Logos</h2>
+                {logos.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span style={{ fontSize: 11.5, color: colors.muted }}>Background</span>
+                    {([['check', 'Checkered'], ['light', 'White'], ['dark', 'Dark']] as [PreviewBg, string][]).map(([m, label]) => (
+                      <button key={m} type="button" onClick={() => setBg(m)} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bg === m ? colors.info : colors.line}`, background: bg === m ? colors.info : colors.cardBg, color: bg === m ? '#ffffff' : colors.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {logos.length === 0 ? (
                 <p style={{ fontSize: 14, color: colors.muted, fontStyle: 'italic' }}>No logos have been uploaded for this school yet.</p>
               ) : (
@@ -190,7 +214,7 @@ export default function SchoolBrandPage() {
                                 ✕
                               </button>
                             )}
-                            <div style={{ height: 140, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}`, opacity: l.flagged ? 0.5 : 1 }}>
+                            <div style={{ height: 140, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}`, opacity: l.flagged ? 0.5 : 1 }}>
                               {preview ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />

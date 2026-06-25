@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
   if (body.show_clock !== undefined) update.show_clock = Boolean(body.show_clock)
   if (body.show_ticker !== undefined) update.show_ticker = Boolean(body.show_ticker)
   if (body.show_visitor_welcome !== undefined) update.show_visitor_welcome = Boolean(body.show_visitor_welcome)
+  if (body.show_calendar_ticker !== undefined) update.show_calendar_ticker = Boolean(body.show_calendar_ticker)
   if (body.brand_title !== undefined) update.brand_title = body.brand_title || null
   if (body.brand_subtitle !== undefined) update.brand_subtitle = body.brand_subtitle || null
   if (body.logo_url !== undefined) update.logo_url = body.logo_url || null
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     .from('signage_sites')
     .update(update)
     .eq('id', siteId)
-    .select('id, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, brand_title, brand_subtitle, logo_url')
+    .select('id, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, show_calendar_ticker, brand_title, brand_subtitle, logo_url')
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ site: data })

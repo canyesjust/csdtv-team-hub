@@ -1,7 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import Link from 'next/link'
+
+const CHECKER: CSSProperties = {
+  backgroundColor: '#ffffff',
+  backgroundImage:
+    'linear-gradient(45deg,#dfe3e8 25%,transparent 25%),linear-gradient(-45deg,#dfe3e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#dfe3e8 75%),linear-gradient(-45deg,transparent 75%,#dfe3e8 75%)',
+  backgroundSize: '18px 18px',
+  backgroundPosition: '0 0,0 9px,9px -9px,-9px 0',
+}
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 
@@ -157,7 +165,7 @@ export default function BrandLibraryPage() {
               return (
                 <div key={s.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 14, background: colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                   <Link href={`/brand/${s.code}${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <div style={{ height: 130, background: s.preview ? '#ffffff' : (s.colors.primary || '#334155'), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
+                    <div style={{ height: 130, ...(s.preview ? CHECKER : { background: s.colors.primary || '#334155' }), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
                       {s.preview ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={s.preview} alt={`${s.name} logo`} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />

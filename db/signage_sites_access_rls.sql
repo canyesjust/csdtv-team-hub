@@ -39,6 +39,9 @@ AS $$
 $$;
 
 -- 2. Helper: can the current auth user see a given site?
+--    Managers see all. A user with NO grants at all also sees all (matches the
+--    app-layer fallback so legacy approvers aren't locked out). Once a user has
+--    at least one grant, they're restricted to their granted sites.
 CREATE OR REPLACE FUNCTION public.signage_can_access_site(target uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -49,6 +52,12 @@ AS $$
   SELECT
     target IS NULL
     OR public.signage_is_manager()
+    OR NOT EXISTS (
+      SELECT 1
+      FROM public.signage_site_access sa
+      JOIN public.team t ON t.id = sa.team_id
+      WHERE t.supabase_user_id = auth.uid()
+    )
     OR EXISTS (
       SELECT 1
       FROM public.signage_site_access sa

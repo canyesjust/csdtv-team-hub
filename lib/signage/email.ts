@@ -47,9 +47,11 @@ export function buildNewSubmissionEmailBody(fields: {
   startDate: string
   endDate: string
   requestedNote: string | null
+  centerName?: string | null
 }): string {
+  const center = fields.centerName?.trim() || 'Canyons School District'
   return [
-    'A new item was submitted for Canyons Innovation Center digital signage.',
+    `A new item was submitted for ${center} digital signage.`,
     '',
     `Submitter: ${fields.submitterName}`,
     `Email: ${fields.submitterEmail}`,
@@ -67,11 +69,13 @@ export async function emailSignageSubmitterDecision(fields: {
   approved: boolean
   title: string | null
   rejectReason?: string | null
+  centerName?: string | null
 }): Promise<void> {
   const cfg = notificationUrl()
   if (!cfg || !fields.email.trim()) return
 
   const firstName = fields.name.trim().split(/\s+/)[0] || 'there'
+  const center = fields.centerName?.trim() || 'Canyons School District'
   const type = fields.approved ? 'signage_decision_approved' : 'signage_decision_rejected'
   const subject = fields.approved
     ? 'Your signage submission was approved'
@@ -82,7 +86,7 @@ export async function emailSignageSubmitterDecision(fields: {
         '',
         `Your signage submission${fields.title ? ` "${fields.title}"` : ''} was approved and will appear on the requested screens during its scheduled dates.`,
         '',
-        '— Canyons Innovation Center',
+        `— ${center}`,
       ].join('\n')
     : [
         `Hi ${firstName},`,
@@ -92,7 +96,7 @@ export async function emailSignageSubmitterDecision(fields: {
         '',
         `You may submit another item at ${CIC_SUBMIT_URL}`,
         '',
-        '— Canyons Innovation Center',
+        `— ${center}`,
       ].join('\n')
 
   fetch(`${cfg.url}/functions/v1/send-notification`, {

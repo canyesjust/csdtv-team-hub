@@ -581,13 +581,15 @@ function LiveTakeover({
   )
 }
 
-function OfflineFallback({ centerName }: { centerName: string }) {
+function OfflineFallback({ centerName, logoUrl }: { centerName: string; logoUrl?: string | null }) {
   return (
     <div className="cic-fill offline-bg">
-      <div className="cic-offline-logo">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/cic-logo.svg" alt="" style={{ width: 26, height: 26 }} onError={e => { e.currentTarget.style.display = 'none' }} />
-      </div>
+      {logoUrl && (
+        <div className="cic-offline-logo">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logoUrl} alt="" style={{ width: 26, height: 26 }} onError={e => { e.currentTarget.style.display = 'none' }} />
+        </div>
+      )}
       <div className="cic-offline-title">Display will resume shortly</div>
       <div className="cic-msub" style={{ marginTop: 6 }}>Reconnecting…</div>
       <div className="cic-offline-foot">{centerName} · cached screen</div>
@@ -707,9 +709,10 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const wayfindingHeadings = useMemo(() => {
     const list: string[] = []
     if (feed.screen.heading) list.push(feed.screen.heading)
-    list.push('Find your way around the Innovation Center')
+    const where = feed.screen.center_name?.trim() || 'campus'
+    list.push(`Find your way around ${where}`)
     return list
-  }, [feed.screen.heading])
+  }, [feed.screen.heading, feed.screen.center_name])
 
   useEffect(() => {
     if (feed.screen.layout !== 'wayfinding') return
@@ -749,7 +752,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
       <div className={screenClass} style={siteStyle}>
         <SignageBackground />
         <div className="cic-screen-content">
-          <OfflineFallback centerName={feed.screen.center_name} />
+          <OfflineFallback centerName={feed.screen.center_name} logoUrl={feed.screen.logo_url} />
         </div>
       </div>
     )

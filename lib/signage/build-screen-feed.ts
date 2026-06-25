@@ -87,7 +87,9 @@ export async function buildScreenFeed(
       ? service.from('signage_wayfinding').select('*').eq('area_id', screen.area_id).order('sort_order')
       : Promise.resolve({ data: [] as unknown[] }),
     visitorsQuery,
-    service.from('signage_live').select('*').eq('id', 1).maybeSingle(),
+    siteId
+      ? service.from('signage_live').select('*').eq('site_id', siteId).maybeSingle()
+      : service.from('signage_live').select('*').eq('id', 1).maybeSingle(),
     siteId
       ? service.from('signage_sites').select('*').eq('id', siteId).maybeSingle()
       : service.from('signage_settings').select('*').eq('id', 1).maybeSingle(),
@@ -149,8 +151,11 @@ export async function buildScreenFeed(
   const weatherLat = Number(site?.weather_lat ?? 40.5649)
   const weatherLon = Number(site?.weather_lon ?? -111.8389)
 
+  // The district calendar only shows in the ticker for sites that opt in, so a
+  // new school doesn't inherit district-wide events.
+  const wantsCalendar = Boolean(site?.show_calendar_ticker)
   const [scheduleItems, weather] = await Promise.all([
-    scheduleTickerSafe(service, today),
+    wantsCalendar ? scheduleTickerSafe(service, today) : Promise.resolve([] as TickerItem[]),
     weatherWithTimeout(weatherLat, weatherLon),
   ])
 
