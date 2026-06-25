@@ -280,11 +280,11 @@ export default function SchoolBrandPage() {
               )}
             </section>
 
-            {school.type === 'district' && departments.length > 0 && (
+            {school.type === 'district' && departments.some((d) => d.logoCount > 0) && (
               <section style={{ marginTop: 28 }}>
                 <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Departments</h2>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-                  {departments.map((dep) => {
+                  {departments.filter((dep) => dep.logoCount > 0).map((dep) => {
                     const sw = (slot: keyof Colors) => {
                       const hex = dep.colors[slot]
                       if (!hex) return null

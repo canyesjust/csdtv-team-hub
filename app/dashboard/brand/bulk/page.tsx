@@ -26,6 +26,7 @@ const MAX_BYTES = 20 * 1024 * 1024
 // school list, so no hardcoded codes.
 const FOLDER_ALIASES: { canonical: string; aliases: string[] }[] = [
   { canonical: 'Entrada/Community Ed', aliases: ['Entrada Community Ed', 'Entrada', 'Community Ed'] },
+  { canonical: 'Canyons School District', aliases: ['District', 'CSD', 'Canyons', 'District Logos', 'Canyons District'] },
 ]
 
 function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {
@@ -80,8 +81,13 @@ export default function BulkUploadPage() {
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return
+        const records = [
+          ...(Array.isArray(d?.schools) ? d.schools : []),
+          ...(d?.district ? [d.district] : []),
+          ...(Array.isArray(d?.departments) ? d.departments : []),
+        ]
         const map = new Map<string, string>()
-        for (const s of (Array.isArray(d?.schools) ? d.schools : [])) {
+        for (const s of records) {
           const code = s?.code ? String(s.code) : ''
           if (!code) continue
           if (s?.name) map.set(normalize(String(s.name)), code)
