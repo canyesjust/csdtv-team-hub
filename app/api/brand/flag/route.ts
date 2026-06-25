@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { checkRateLimit } from '@/lib/server/rate-limit'
+import { timingSafeEqualStr } from '@/lib/server/security'
 
 // Key-gated flag toggle for the one-time logo cleanup review link. No login: a
 // reviewer with the shared ?review=KEY can mark logos as old. This only sets a
@@ -10,6 +12,14 @@ export async function POST(request: Request) {
   const expected = process.env.BRAND_REVIEW_KEY
   if (!expected) return NextResponse.json({ error: 'Review link is not configured' }, { status: 503 })
 
+  const rl = await checkRateLimit(request, { scope: 'brand_flag', max: 30, windowMs: 60 * 1000 })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a minute.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
+  }
+
   const body = await request.json().catch(() => ({})) as {
     key?: string
     code?: string
@@ -18,7 +28,7 @@ export async function POST(request: Request) {
     flagged?: boolean
   }
 
-  if (!body.key || body.key !== expected) {
+  if (!timingSafeEqualStr(body.key, expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

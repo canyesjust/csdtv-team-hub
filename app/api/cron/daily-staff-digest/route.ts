@@ -8,6 +8,7 @@ import {
   todayKeyInTz,
 } from '@/lib/daily-staff-digest'
 import { loadDailyDigestContext } from '@/lib/load-daily-digest-context'
+import { timingSafeEqualStr } from '@/lib/server/security'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,12 +21,10 @@ function verifyCron(request: Request): boolean {
   if (!auth?.startsWith('Bearer ')) return false
 
   const token = auth.slice('Bearer '.length)
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && token === cronSecret) return true
+  if (timingSafeEqualStr(token, process.env.CRON_SECRET)) return true
 
   // Supabase pg_cron can call this route with the service role key (stored only in DB cron job).
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (serviceKey && token === serviceKey) return true
+  if (timingSafeEqualStr(token, process.env.SUPABASE_SERVICE_ROLE_KEY)) return true
 
   return false
 }

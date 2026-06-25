@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const BUCKET = 'school-logos'
+// Card previews are display-only, so serve a small CDN-resized image instead of the
+// full file (some logos are 20 MB). Requires Supabase image transformations (Pro plan).
+const PREVIEW_TRANSFORM = { width: 480, quality: 75, resize: 'contain' as const }
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 
 type BrandSchoolSummary = {
@@ -41,7 +44,7 @@ type LogoRow = {
   school_code: string
   category: string
   name: string
-  format: 'png' | 'jpg'
+  format: 'png' | 'jpg' | 'svg'
   storage_path: string
   sort_order: number
   is_cover: boolean
@@ -97,15 +100,23 @@ export async function GET() {
     if (!namesByCode.has(row.school_code)) namesByCode.set(row.school_code, new Set())
     namesByCode.get(row.school_code)!.add(`${row.category}||${row.name}`)
 
-    let rank = 0
-    if (row.is_cover && row.format === 'png') rank = 5
-    else if (row.is_cover) rank = 4
+    // Preview priority: cover PNG/SVG > cover (any) > SVG (vector, crisp) > Official PNG
+    // > any PNG > any file. SVG is served raw; raster previews are CDN-resized.
+    const isSvg = row.format === 'svg'
+    let rank = 1
+    if (row.is_cover && (isSvg || row.format === 'png')) rank = 6
+    else if (row.is_cover) rank = 5
+    else if (isSvg) rank = 4
     else if (row.category.toLowerCase() === 'official' && row.format === 'png') rank = 3
     else if (row.format === 'png') rank = 2
-    else rank = 1
     if (rank > (previewRank.get(row.school_code) ?? -1)) {
       previewRank.set(row.school_code, rank)
-      previewByCode.set(row.school_code, supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl)
+      previewByCode.set(
+        row.school_code,
+        isSvg
+          ? supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl
+          : supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { transform: PREVIEW_TRANSFORM }).data.publicUrl,
+      )
     }
   }
 
@@ -135,5 +146,10 @@ export async function GET() {
   const districtRow = allRows.find((r) => r.type === 'district')
   const district = districtRow ? toSummary(districtRow) : null
 
-  return NextResponse.json({ schools, district, departments }, { headers: { 'Cache-Control': 'no-store' } })
+  // Brand data changes rarely; let the CDN serve a cached copy and revalidate in the
+  // background so visitors do not wait on a full school_logos scan each load.
+  return NextResponse.json(
+    { schools, district, departments },
+    { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } },
+  )
 }

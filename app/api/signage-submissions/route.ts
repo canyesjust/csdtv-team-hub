@@ -2,29 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { SIGNAGE_REVIEW_URL } from '@/lib/signage-submissions'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 const RATE_WINDOW_MS = 60 * 1000
 const RATE_MAX_PER_WINDOW = 8
-const submitAttempts = new Map<string, number[]>()
 const MAX_BYTES = 10 * 1024 * 1024
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0].trim()
-  return request.headers.get('x-real-ip') || 'unknown'
-}
-
-function isRateLimited(key: string): boolean {
-  const now = Date.now()
-  const prev = submitAttempts.get(key) || []
-  const recent = prev.filter(ts => now - ts < RATE_WINDOW_MS)
-  recent.push(now)
-  submitAttempts.set(key, recent)
-  return recent.length > RATE_MAX_PER_WINDOW
-}
 
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -43,9 +28,12 @@ function todayUtc(): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = getClientIp(request)
-    if (isRateLimited(ip)) {
-      return NextResponse.json({ error: 'Too many submissions. Please wait a minute and try again.' }, { status: 429 })
+    const rl = await checkRateLimit(request, { scope: 'signage_submissions', max: RATE_MAX_PER_WINDOW, windowMs: RATE_WINDOW_MS })
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: 'Too many submissions. Please wait a minute and try again.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      )
     }
 
     const service = getServiceSupabaseClient()

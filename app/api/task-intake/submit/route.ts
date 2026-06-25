@@ -9,6 +9,7 @@ import {
   isValidPurchaseRequestLink,
 } from '@/lib/task-intake'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,14 @@ export async function POST(request: Request) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
+
+  const rl = await checkRateLimit(request, { scope: 'task_intake_submit', max: 8, windowMs: 60 * 1000 })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many submissions. Please wait a minute and try again.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
   }
 
   let body: Body

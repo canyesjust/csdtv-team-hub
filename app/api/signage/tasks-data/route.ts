@@ -4,6 +4,7 @@ import { SIGNAGE_TASK_INTAKE_APP_SETTINGS_KEY } from '@/lib/equipment-power'
 import { isProductionInDateWindow, normalizeProductionDatetimeFields } from '@/lib/productions/effective-datetime'
 import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 import { fetchTaskAssignments } from '@/lib/task-assignments'
+import { timingSafeEqualStr } from '@/lib/server/security'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,8 +29,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'SIGNAGE_TASKS_KEY not configured' }, { status: 500 })
   }
 
-  const incomingKey = new URL(request.url).searchParams.get('k')
-  if (!incomingKey || incomingKey !== expectedKey) {
+  // Prefer an Authorization: Bearer <key> header (keeps the secret out of URLs
+  // and access logs); fall back to the legacy ?k= query param for existing callers.
+  const authHeader = request.headers.get('authorization')
+  const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  const incomingKey = bearer ?? new URL(request.url).searchParams.get('k')
+  if (!timingSafeEqualStr(incomingKey, expectedKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

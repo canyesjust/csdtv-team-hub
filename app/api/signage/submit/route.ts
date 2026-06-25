@@ -14,26 +14,12 @@ import {
   validateVideoBuffer,
 } from '@/lib/signage/media-process'
 import { formatSignageUploadError } from '@/lib/signage/upload-errors'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
 const RATE_WINDOW_MS = 60 * 1000
 const RATE_MAX = 8
-const attempts = new Map<string, number[]>()
-
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0].trim()
-  return request.headers.get('x-real-ip') || 'unknown'
-}
-
-function rateLimited(key: string): boolean {
-  const now = Date.now()
-  const recent = (attempts.get(key) || []).filter(ts => now - ts < RATE_WINDOW_MS)
-  recent.push(now)
-  attempts.set(key, recent)
-  return recent.length > RATE_MAX
-}
 
 function validEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -42,8 +28,12 @@ function validEmail(email: string): boolean {
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
 
 export async function POST(request: NextRequest) {
-  if (rateLimited(clientIp(request))) {
-    return NextResponse.json({ error: 'Too many submissions. Please wait a minute.' }, { status: 429 })
+  const rl = await checkRateLimit(request, { scope: 'signage_submit', max: RATE_MAX, windowMs: RATE_WINDOW_MS })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many submissions. Please wait a minute.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
   }
 
   const service = getServiceSupabaseClient()

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { checkRateLimit } from '@/lib/server/rate-limit'
+import { timingSafeEqualStr } from '@/lib/server/security'
 
 // Key-gated category change for the review link (no login). Lets a reviewer with
 // the shared ?review=KEY re-file a logo into a different category in one click.
@@ -9,10 +11,18 @@ export async function POST(request: Request) {
   const expected = process.env.BRAND_REVIEW_KEY
   if (!expected) return NextResponse.json({ error: 'Review link is not configured' }, { status: 503 })
 
+  const rl = await checkRateLimit(request, { scope: 'brand_review_category', max: 30, windowMs: 60 * 1000 })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a minute.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
+  }
+
   const body = await request.json().catch(() => ({})) as {
     key?: string; code?: string; category?: string; name?: string; newCategory?: string
   }
-  if (!body.key || body.key !== expected) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!timingSafeEqualStr(body.key, expected)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const code = String(body.code || '').trim()
   const category = String(body.category || '').trim()

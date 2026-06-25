@@ -20,6 +20,7 @@ import { verifySignageCron } from '@/lib/signage/ablesign-cron'
 import { requireManagerApi } from '@/lib/signage/server-auth'
 import { writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
 import { renderAndPushScreen, type PushTrigger } from '@/lib/signage/push-screen'
+import { timingSafeEqualStr } from '@/lib/server/security'
 
 // pg_cron calls authenticate with a token stored in app_settings (matching the
 // other Supabase crons), so no Vercel env var or service-role key is embedded in
@@ -53,7 +54,7 @@ async function verifyPushToken(request: NextRequest, service: SupabaseClient): P
     .eq('key', PUSH_TOKEN_KEY)
     .maybeSingle()
   const expected = (data?.value as string | undefined)?.trim()
-  return Boolean(expected) && token === expected
+  return timingSafeEqualStr(token, expected)
 }
 
 export const dynamic = 'force-dynamic'

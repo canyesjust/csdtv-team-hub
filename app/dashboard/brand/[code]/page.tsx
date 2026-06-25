@@ -7,25 +7,31 @@ import { createClient } from '@/lib/supabase'
 
 const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
 
-function detectFormat(file: File): 'png' | 'jpg' | null {
+function detectFormat(file: File): 'png' | 'jpg' | 'svg' | null {
   const t = (file.type || '').toLowerCase()
   if (t === 'image/png') return 'png'
   if (t === 'image/jpeg') return 'jpg'
+  if (t === 'image/svg+xml') return 'svg'
   const n = file.name.toLowerCase()
   if (n.endsWith('.png')) return 'png'
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
+  if (n.endsWith('.svg')) return 'svg'
   return null
 }
 
+const CONTENT_TYPE: Record<LogoFormat, string> = { png: 'image/png', jpg: 'image/jpeg', svg: 'image/svg+xml' }
+
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type LogoFormat = 'png' | 'jpg'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; cover?: boolean; notes?: string | null }
+type LogoFormat = 'png' | 'jpg' | 'svg'
+type Fonts = { heading: string | null; body: string | null; notes: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; cover?: boolean; notes?: string | null }
 type School = {
   code: string
   name: string
   mascot: string | null
   city: string | null
   level: BrandLevel
+  fonts?: Fonts
 }
 
 const CATEGORY_PRESETS = ['Official', 'Wordmark', 'Team/Sport', 'Specific', 'Other']
@@ -90,13 +96,17 @@ export default function ManageSchoolBrandPage() {
   const [fileSize, setFileSize] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [fontHeading, setFontHeading] = useState('')
+  const [fontBody, setFontBody] = useState('')
+  const [fontNotes, setFontNotes] = useState('')
+  const [fontBusy, setFontBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
 
   useEffect(() => {
     if (!selected) return
-    const url = selected.png || selected.jpg
+    const url = selected.png || selected.jpg || selected.svg
     if (!url) return
     let cancelled = false
     fetch(url, { method: 'HEAD' })
@@ -124,10 +134,34 @@ export default function ManageSchoolBrandPage() {
     if (!code) return
     const res = await fetch(`/api/brand/${encodeURIComponent(code)}`, { cache: 'no-store' })
     const d = await res.json().catch(() => ({}))
-    if (d?.school) { setSchool(d.school as School); setLogos(Array.isArray(d.logos) ? (d.logos as Logo[]) : []) }
-    else setNotFound(true)
+    if (d?.school) {
+      const sc = d.school as School
+      setSchool(sc)
+      setLogos(Array.isArray(d.logos) ? (d.logos as Logo[]) : [])
+      setFontHeading(sc.fonts?.heading || '')
+      setFontBody(sc.fonts?.body || '')
+      setFontNotes(sc.fonts?.notes || '')
+    } else setNotFound(true)
     setLoading(false)
   }, [code])
+
+  const saveFonts = async () => {
+    setFontBusy(true)
+    try {
+      const res = await fetch('/api/brand/school', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, headingFont: fontHeading, bodyFont: fontBody, fontNotes }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Could not save typography', 'error')
+      else { notify('Typography saved', 'success'); await loadDetail() }
+    } catch {
+      notify('Could not save typography', 'error')
+    } finally {
+      setFontBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (access !== 'ok') return
@@ -147,7 +181,7 @@ export default function ManageSchoolBrandPage() {
   const triggerUpload = () => fileRef.current?.click()
 
   // Upload one file via sign -> direct upload -> finalize. Returns true on success.
-  const uploadOneFile = async (file: File, cat: string, nm: string, format: 'png' | 'jpg'): Promise<boolean> => {
+  const uploadOneFile = async (file: File, cat: string, nm: string, format: LogoFormat): Promise<boolean> => {
     try {
       const signRes = await fetch('/api/brand/upload/sign', {
         method: 'POST',
@@ -157,7 +191,7 @@ export default function ManageSchoolBrandPage() {
       const sign = await signRes.json().catch(() => ({}))
       if (!signRes.ok) { notify(typeof sign?.error === 'string' ? sign.error : 'Upload failed', 'error'); return false }
       const supabase = createClient()
-      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: format === 'png' ? 'image/png' : 'image/jpeg' })
+      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: CONTENT_TYPE[format] })
       if (upErr) { notify(upErr.message || 'Upload failed', 'error'); return false }
       const finRes = await fetch('/api/brand/upload/finalize', {
         method: 'POST',
@@ -192,7 +226,7 @@ export default function ManageSchoolBrandPage() {
     setBusy(null)
     if (fileRef.current) fileRef.current.value = ''
     if (ok > 0) { notify(`${ok} logo${ok === 1 ? '' : 's'} uploaded`, 'success'); setName(''); await loadDetail() }
-    if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (must be PNG or JPG under 20 MB)`, 'error')
+    if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (must be PNG, JPG, or SVG under 20 MB)`, 'error')
   }
 
   const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || ''); setEditCustom(false) }
@@ -296,7 +330,7 @@ export default function ManageSchoolBrandPage() {
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Primary wordmark, white" style={input} />
               </label>
             </div>
-            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple style={{ display: 'none' }} onChange={(e) => onAddFiles(e.target.files)} />
+            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml" multiple style={{ display: 'none' }} onChange={(e) => onAddFiles(e.target.files)} />
             <div
               onClick={() => { if (!addBusy) triggerUpload() }}
               onDragOver={(e) => { e.preventDefault(); if (!addBusy) setDragOver(true) }}
@@ -305,7 +339,7 @@ export default function ManageSchoolBrandPage() {
               style={{ border: `2px dashed ${dragOver ? '#185fa5' : 'var(--border-subtle)'}`, borderRadius: 10, background: dragOver ? 'rgba(24,95,165,0.08)' : 'transparent', padding: '22px 14px', textAlign: 'center', cursor: addBusy ? 'default' : 'pointer', color: 'var(--text-muted)', fontSize: 13 }}
             >
               {addBusy ? 'Uploading...' : (
-                <><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Drag PNG or JPG files here</span><br />or click to choose</>
+                <><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Drag PNG, JPG, or SVG files here</span><br />or click to choose</>
               )}
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
@@ -313,6 +347,28 @@ export default function ManageSchoolBrandPage() {
             </p>
             </div>
             )}
+          </section>
+
+          <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', marginBottom: 24, padding: 16 }}>
+            <h2 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800 }}>Typography</h2>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>Shown on this school&rsquo;s printable brand guide. Leave blank to hide the typography section.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Heading font</span>
+                <input value={fontHeading} onChange={(e) => setFontHeading(e.target.value)} placeholder="e.g. Montserrat" style={input} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Body font</span>
+                <input value={fontBody} onChange={(e) => setFontBody(e.target.value)} placeholder="e.g. Open Sans" style={input} />
+              </label>
+            </div>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 10 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Notes (optional)</span>
+              <textarea value={fontNotes} onChange={(e) => setFontNotes(e.target.value)} rows={2} placeholder="e.g. Where to download the fonts, fallback fonts, usage notes." style={{ ...input, height: 'auto', padding: '8px 10px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }} />
+            </label>
+            <div style={{ marginTop: 12 }}>
+              <button type="button" disabled={fontBusy} onClick={saveFonts} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: fontBusy ? 'default' : 'pointer', opacity: fontBusy ? 0.6 : 1 }}>{fontBusy ? 'Saving...' : 'Save typography'}</button>
+            </div>
           </section>
 
           {logos.length > 0 && (
@@ -331,7 +387,7 @@ export default function ManageSchoolBrandPage() {
                 <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700 }}>{group.category}</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
                   {group.items.map((l) => {
-                    const preview = l.png || l.jpg
+                    const preview = l.svg || l.png || l.jpg
                     return (
                       <div key={`${group.category}-${l.name}`} style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         <div onClick={() => openDrawer(l)} title="View details" style={{ height: 130, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
@@ -387,7 +443,7 @@ export default function ManageSchoolBrandPage() {
                                 <button type="button" onClick={() => setCover(l)} disabled={busy === `cover-${l.category}-${l.name}`} style={{ alignSelf: 'flex-start', padding: '3px 8px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: busy === `cover-${l.category}-${l.name}` ? 'default' : 'pointer' }}>Set as cover</button>
                               )}
                               <div style={{ display: 'flex', gap: 6, marginTop: 'auto', flexWrap: 'wrap' }}>
-                                {(['png', 'jpg'] as LogoFormat[]).map((fmt) => {
+                                {(['svg', 'png', 'jpg'] as LogoFormat[]).map((fmt) => {
                                   const url = l[fmt]
                                   if (!url) return null
                                   const delBusy = busy === `${l.category}-${l.name}-${fmt}`
@@ -421,9 +477,9 @@ export default function ManageSchoolBrandPage() {
             </div>
             <div style={{ padding: 18 }}>
               <div style={{ ...previewBg(bg), borderRadius: 12, border: '1px solid var(--border-subtle)', minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
-                {(selected.png || selected.jpg) ? (
+                {(selected.png || selected.jpg || selected.svg) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={selected.png || selected.jpg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 420, objectFit: 'contain' }} />
+                  <img src={selected.png || selected.jpg || selected.svg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 420, objectFit: 'contain' }} />
                 ) : (
                   <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No preview</span>
                 )}
@@ -451,6 +507,7 @@ export default function ManageSchoolBrandPage() {
 
               <p style={{ margin: '16px 0 8px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Download</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {selected.svg && <a href={selected.svg} target="_blank" rel="noreferrer" style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: '#185fa5', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>SVG</a>}
                 {selected.png && <a href={selected.png} target="_blank" rel="noreferrer" style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: '#185fa5', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>PNG</a>}
                 {selected.jpg && <a href={selected.jpg} target="_blank" rel="noreferrer" style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: '#185fa5', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>JPG</a>}
               </div>
@@ -460,7 +517,7 @@ export default function ManageSchoolBrandPage() {
                 {!selected.cover && (
                   <button type="button" onClick={async () => { await setCover(selected); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Set as cover</button>
                 )}
-                {(['png', 'jpg'] as LogoFormat[]).map((fmt) => (selected[fmt] ? (
+                {(['svg', 'png', 'jpg'] as LogoFormat[]).map((fmt) => (selected[fmt] ? (
                   <button key={fmt} type="button" onClick={async () => { await onDelete(selected, fmt); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: '#b42318', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Delete {fmt.toUpperCase()}</button>
                 ) : null))}
               </div>

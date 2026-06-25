@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
-type Format = 'png' | 'jpg'
+type Format = 'png' | 'jpg' | 'svg'
 type ItemStatus = 'ready' | 'unmatched' | 'unsupported' | 'uploading' | 'done' | 'error'
 type Item = {
   id: string
@@ -37,13 +37,17 @@ function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+const CONTENT_TYPE: Record<Format, string> = { png: 'image/png', jpg: 'image/jpeg', svg: 'image/svg+xml' }
+
 function detectFormat(file: File): Format | null {
   const t = (file.type || '').toLowerCase()
   if (t === 'image/png') return 'png'
   if (t === 'image/jpeg') return 'jpg'
+  if (t === 'image/svg+xml') return 'svg'
   const n = file.name.toLowerCase()
   if (n.endsWith('.png')) return 'png'
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
+  if (n.endsWith('.svg')) return 'svg'
   return null
 }
 
@@ -176,7 +180,7 @@ export default function BulkUploadPage() {
       const sign = await signRes.json().catch(() => ({}))
       if (!signRes.ok) return { ok: false, error: typeof sign?.error === 'string' ? sign.error : 'sign failed' }
       const supabase = createClient()
-      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, it.file, { contentType: format === 'png' ? 'image/png' : 'image/jpeg' })
+      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, it.file, { contentType: CONTENT_TYPE[format] })
       if (upErr) return { ok: false, error: upErr.message || 'upload failed' }
       const finRes = await fetch('/api/brand/upload/finalize', {
         method: 'POST',
@@ -215,7 +219,7 @@ export default function BulkUploadPage() {
       <header style={{ margin: '14px 0 16px' }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>Bulk upload logos</h1>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          Choose a folder that contains one subfolder per school, named to match the school (for example &ldquo;Alta High&rdquo;). Every PNG or JPG inside is imported into that school. Files directly in a school folder become &ldquo;Official&rdquo; logos; files inside a category subfolder use that subfolder as the category. The filename becomes the logo name. Re-running replaces files with the same name.
+          Choose a folder that contains one subfolder per school, named to match the school (for example &ldquo;Alta High&rdquo;). Every PNG, JPG, or SVG inside is imported into that school. Files directly in a school folder become &ldquo;Official&rdquo; logos; files inside a category subfolder use that subfolder as the category. The filename becomes the logo name. Re-running replaces files with the same name.
         </p>
       </header>
 

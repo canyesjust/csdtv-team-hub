@@ -7,12 +7,15 @@ export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const BUCKET = 'school-logos'
+// Grid thumbnails are display-only; serve a small CDN-resized image so the page does not
+// download every full-size logo at once. Requires Supabase image transformations (Pro).
+const THUMB_TRANSFORM = { width: 480, quality: 75, resize: 'contain' as const }
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 
 type LogoRow = {
   category: string
   name: string
-  format: 'png' | 'jpg'
+  format: 'png' | 'jpg' | 'svg'
   storage_path: string
   sort_order: number
   flagged_for_deletion: boolean
@@ -42,7 +45,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
 
   const { data: school, error: schoolErr } = await supabase
     .from('schools')
-    .select('code, name, type, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color')
+    .select('code, name, type, short_name, mascot, mascot_name, city, level, primary_color, secondary_color, accent_color, text_color, heading_font, body_font, font_notes')
     .eq('code', code)
     .in('type', ['school', 'district', 'department'])
     .not('active', 'is', false)
@@ -57,10 +60,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
     .order('sort_order', { ascending: true })
 
   const cleanName = slugify(String(school.name || 'school'))
-  const map = new Map<string, { category: string; name: string; sort: number; png: string | null; jpg: string | null; flagged: boolean; cover: boolean; notes: string | null }>()
+  const map = new Map<string, { category: string; name: string; sort: number; png: string | null; jpg: string | null; svg: string | null; thumb: string | null; thumbRank: number; flagged: boolean; cover: boolean; notes: string | null }>()
   for (const row of (logoData ?? []) as LogoRow[]) {
     const key = `${row.category}||${row.name}`
-    if (!map.has(key)) map.set(key, { category: row.category, name: row.name, sort: row.sort_order, png: null, jpg: null, flagged: false, cover: false, notes: null })
+    if (!map.has(key)) map.set(key, { category: row.category, name: row.name, sort: row.sort_order, png: null, jpg: null, svg: null, thumb: null, thumbRank: -1, flagged: false, cover: false, notes: null })
     const entry = map.get(key)!
     if (row.flagged_for_deletion) entry.flagged = true
     if (row.is_cover) entry.cover = true
@@ -68,7 +71,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
     const dl = `${cleanName}-${slugify(row.category)}-${slugify(row.name)}.${row.format}`
     const url = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { download: dl }).data.publicUrl
     if (row.format === 'png') entry.png = url
-    else entry.jpg = url
+    else if (row.format === 'jpg') entry.jpg = url
+    else entry.svg = url
+    // One thumbnail per logo for the grid. Prefer SVG (vector, tiny, scales crisply -
+    // image transforms do not apply to it), then a CDN-resized PNG, then JPG.
+    const isSvg = row.format === 'svg'
+    const rank = isSvg ? 3 : row.format === 'png' ? 2 : 1
+    if (rank > entry.thumbRank) {
+      entry.thumbRank = rank
+      entry.thumb = isSvg
+        ? supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl
+        : supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { transform: THUMB_TRANSFORM }).data.publicUrl
+    }
   }
 
   const logos = [...map.values()].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
@@ -89,9 +103,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
           accent: pickHex(school.accent_color),
           text: pickHex(school.text_color),
         },
+        fonts: {
+          heading: school.heading_font || null,
+          body: school.body_font || null,
+          notes: school.font_notes || null,
+        },
       },
-      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, flagged: l.flagged, cover: l.cover, notes: l.notes })),
+      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, svg: l.svg, thumb: l.thumb, flagged: l.flagged, cover: l.cover, notes: l.notes })),
     },
-    { headers: { 'Cache-Control': 'no-store' } },
+    { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } },
   )
 }

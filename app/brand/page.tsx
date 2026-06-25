@@ -66,8 +66,16 @@ export default function BrandLibraryPage() {
 
   useEffect(() => {
     // Read after mount so server and client first render match (no hydration mismatch).
+    // Persist the review key for the tab so review mode survives navigation even when a
+    // link does not carry the ?review= param.
+    const fromUrl = new URLSearchParams(window.location.search).get('review')
+    let key = fromUrl
+    try {
+      if (fromUrl) sessionStorage.setItem('brandReviewKey', fromUrl)
+      else key = sessionStorage.getItem('brandReviewKey')
+    } catch { /* sessionStorage unavailable */ }
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReviewKey(new URLSearchParams(window.location.search).get('review'))
+    setReviewKey(key)
   }, [])
 
   useEffect(() => {
@@ -197,7 +205,7 @@ export default function BrandLibraryPage() {
                       </span>
                       {s.preview ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.preview} alt={`${s.name} logo`} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
+                        <img src={s.preview} alt={`${s.name} logo`} loading="lazy" decoding="async" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
                       ) : (
                         <span style={{ fontSize: 46, fontWeight: 800, color: readableOn(s.colors.primary) }}>{initialOf(s.name)}</span>
                       )}

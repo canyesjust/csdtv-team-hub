@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; flagged?: boolean; notes?: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; thumb?: string | null; flagged?: boolean; notes?: string | null }
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -79,6 +79,8 @@ export default function SchoolBrandPage() {
   const [copied, setCopied] = useState<string | null>(null)
   const [reviewKey, setReviewKey] = useState<string | null>(null)
   const [bg, setBg] = useState<PreviewBg>('check')
+  const [catFilter, setCatFilter] = useState<string>('All')
+  const [vectorOnly, setVectorOnly] = useState(false)
   const [flagError, setFlagError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Logo | null>(null)
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
@@ -104,7 +106,7 @@ export default function SchoolBrandPage() {
 
   useEffect(() => {
     if (!selected) return
-    const url = selected.png || selected.jpg
+    const url = selected.png || selected.jpg || selected.svg
     if (!url) return
     let cancelled = false
     fetch(url, { method: 'HEAD' })
@@ -132,8 +134,16 @@ export default function SchoolBrandPage() {
 
   useEffect(() => {
     // Read after mount so server and client first render match (no hydration mismatch).
+    // Persist the review key for the tab so review mode survives navigation between
+    // schools even when a link does not carry the ?review= param.
+    const fromUrl = new URLSearchParams(window.location.search).get('review')
+    let key = fromUrl
+    try {
+      if (fromUrl) sessionStorage.setItem('brandReviewKey', fromUrl)
+      else key = sessionStorage.getItem('brandReviewKey')
+    } catch { /* sessionStorage unavailable */ }
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReviewKey(new URLSearchParams(window.location.search).get('review'))
+    setReviewKey(key)
   }, [])
 
   useEffect(() => {
@@ -151,14 +161,20 @@ export default function SchoolBrandPage() {
     return () => { cancelled = true }
   }, [code])
 
+  const categories = useMemo(() => orderCategories([...new Set(logos.map((l) => l.category))]), [logos])
+  const hasVector = useMemo(() => logos.some((l) => Boolean(l.svg)), [logos])
+
   const grouped = useMemo(() => {
     const map = new Map<string, Logo[]>()
     for (const l of logos) {
+      if (vectorOnly && !l.svg) continue
       if (!map.has(l.category)) map.set(l.category, [])
       map.get(l.category)!.push(l)
     }
-    return orderCategories([...map.keys()]).map((cat) => ({ category: cat, items: map.get(cat) || [] }))
-  }, [logos])
+    let cats = orderCategories([...map.keys()])
+    if (catFilter !== 'All') cats = cats.filter((cat) => cat === catFilter)
+    return cats.map((cat) => ({ category: cat, items: map.get(cat) || [] }))
+  }, [logos, catFilter, vectorOnly])
 
   const toggleFlag = async (l: Logo) => {
     if (!reviewKey) return
@@ -238,7 +254,7 @@ export default function SchoolBrandPage() {
   return (
     <div style={{ background: colors.bg, minHeight: '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <div style={{ maxWidth: 1640, margin: '0 auto', padding: '24px 24px 72px' }}>
-        <Link href="/brand" style={{ fontSize: 13, fontWeight: 700, color: colors.info, textDecoration: 'none' }}>{'←'} All schools</Link>
+        <Link href={`/brand${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ fontSize: 13, fontWeight: 700, color: colors.info, textDecoration: 'none' }}>{'←'} All schools</Link>
 
         {loading ? (
           <p style={{ color: colors.muted, fontSize: 15, padding: '40px 0', textAlign: 'center' }}>Loading...</p>
@@ -298,13 +314,13 @@ export default function SchoolBrandPage() {
                             ) : (
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
                                 {dlogos.map((l) => {
-                                  const preview = l.png || l.jpg
+                                  const preview = l.thumb || l.png || l.jpg
                                   return (
                                     <div key={`${l.category}-${l.name}`} onClick={() => openDrawer(l)} style={{ border: `1px solid ${colors.border}`, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: colors.cardBg }}>
                                       <div style={{ height: 140, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
                                         {preview ? (
                                           // eslint-disable-next-line @next/next/no-img-element
-                                          <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
+                                          <img src={preview} alt={l.name} loading="lazy" decoding="async" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
                                         ) : (
                                           <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                                         )}
@@ -349,15 +365,30 @@ export default function SchoolBrandPage() {
                   </div>
                 )}
               </div>
+              {logos.length > 0 && !reviewKey && (categories.length > 1 || hasVector) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', margin: '0 0 16px' }}>
+                  {['All', ...categories].map((cat) => {
+                    const on = catFilter === cat
+                    return (
+                      <button key={cat} type="button" onClick={() => setCatFilter(cat)} style={{ padding: '5px 12px', borderRadius: 999, border: `1px solid ${on ? colors.info : colors.line}`, background: on ? colors.info : colors.cardBg, color: on ? '#ffffff' : colors.muted, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{cat}</button>
+                    )
+                  })}
+                  {hasVector && (
+                    <button type="button" onClick={() => setVectorOnly((v) => !v)} title="Show only logos available as scalable vector (SVG)" style={{ padding: '5px 12px', borderRadius: 999, border: `1px solid ${vectorOnly ? colors.info : colors.line}`, background: vectorOnly ? colors.info : colors.cardBg, color: vectorOnly ? '#ffffff' : colors.muted, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', marginLeft: 'auto' }}>{vectorOnly ? '✓ ' : ''}Vector (SVG)</button>
+                  )}
+                </div>
+              )}
               {logos.length === 0 ? (
                 <p style={{ fontSize: 14, color: colors.muted, fontStyle: 'italic' }}>No logos have been uploaded for this school yet.</p>
+              ) : grouped.length === 0 ? (
+                <p style={{ fontSize: 14, color: colors.muted, fontStyle: 'italic' }}>No logos match the current filter.</p>
               ) : (
                 grouped.map((group) => (
                   <div key={group.category} style={{ marginBottom: 22 }}>
                     <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 700 }}>{group.category}</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 18 }}>
                       {group.items.map((l) => {
-                        const preview = l.png || l.jpg
+                        const preview = l.thumb || l.png || l.jpg
                         return (
                           <div key={`${group.category}-${l.name}`}
                             onClick={reviewKey ? () => toggleFlag(l) : () => openDrawer(l)}
@@ -370,7 +401,7 @@ export default function SchoolBrandPage() {
                             <div style={{ height: 220, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}`, opacity: l.flagged ? 0.45 : 1 }}>
                               {preview ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
+                                <img src={preview} alt={l.name} loading="lazy" decoding="async" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
                               ) : (
                                 <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                               )}
@@ -396,7 +427,8 @@ export default function SchoolBrandPage() {
                                   </div>
                                 </div>
                               ) : (
-                                <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+                                <div style={{ display: 'flex', gap: 6, marginTop: 'auto', flexWrap: 'wrap' }}>
+                                  {l.svg && <a href={l.svg} style={dlBtn}>SVG</a>}
                                   {l.png && <a href={l.png} style={dlBtn}>PNG</a>}
                                   {l.jpg && <a href={l.jpg} style={dlBtn}>JPG</a>}
                                 </div>
@@ -424,9 +456,9 @@ export default function SchoolBrandPage() {
             </div>
             <div style={{ padding: 18 }}>
               <div style={{ ...previewBg(bg), borderRadius: 12, border: `1px solid ${colors.line}`, minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
-                {(selected.png || selected.jpg) ? (
+                {(selected.png || selected.jpg || selected.svg) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={selected.png || selected.jpg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 440, objectFit: 'contain' }} />
+                  <img src={selected.png || selected.jpg || selected.svg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 440, objectFit: 'contain' }} />
                 ) : (
                   <span style={{ fontSize: 13, color: colors.muted }}>No preview</span>
                 )}
@@ -450,9 +482,10 @@ export default function SchoolBrandPage() {
               )}
               <p style={{ margin: '16px 0 8px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Download</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {selected.svg && <a href={selected.svg} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>SVG</a>}
                 {selected.png && <a href={selected.png} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>PNG</a>}
                 {selected.jpg && <a href={selected.jpg} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>JPG</a>}
-                {!selected.png && !selected.jpg && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
+                {!selected.png && !selected.jpg && !selected.svg && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
               </div>
             </div>
           </div>

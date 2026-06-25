@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
-type Logo = { category: string; name: string; png: string | null; jpg: string | null }
+type Fonts = { heading: string | null; body: string | null; notes: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null }
 type School = {
   code: string
   name: string
@@ -13,6 +14,7 @@ type School = {
   mascot: string | null
   city: string | null
   colors: Colors
+  fonts?: Fonts
 }
 
 const c = { text: '#1a1f36', muted: '#6b7280', line: '#d3d6dd', border: 'rgba(0,0,0,0.12)', accent: '#185fa5' }
@@ -67,6 +69,8 @@ export default function BrandGuidePage() {
   }, [])
 
   const official = useMemo(() => logos.filter((l) => l.category.trim().toLowerCase() === 'official'), [logos])
+  const fonts = school?.fonts
+  const hasFonts = Boolean(fonts && (fonts.heading || fonts.body || fonts.notes))
   const colorList = useMemo<[string, string][]>(() => {
     if (!school) return []
     return ([['Primary', school.colors.primary], ['Secondary', school.colors.secondary], ['Accent', school.colors.accent], ['Text', school.colors.text]] as [string, string | null][])
@@ -128,6 +132,31 @@ export default function BrandGuidePage() {
               )}
             </section>
 
+            {hasFonts && (
+              <section style={{ marginBottom: 28 }}>
+                <h2 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: c.muted }}>Typography</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  {fonts?.heading && (
+                    <div className="bg-card" style={{ border: `1px solid ${c.border}`, borderRadius: 8, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: c.muted }}>Headings</div>
+                      <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.1, margin: '6px 0 4px', fontFamily: `'${fonts.heading}', sans-serif` }}>Aa Bb Cc</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{fonts.heading}</div>
+                    </div>
+                  )}
+                  {fonts?.body && (
+                    <div className="bg-card" style={{ border: `1px solid ${c.border}`, borderRadius: 8, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: c.muted }}>Body</div>
+                      <div style={{ fontSize: 15, lineHeight: 1.4, margin: '6px 0 4px', fontFamily: `'${fonts.body}', sans-serif` }}>The quick brown fox jumps over the lazy dog.</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{fonts.body}</div>
+                    </div>
+                  )}
+                </div>
+                {fonts?.notes && (
+                  <p style={{ margin: '10px 0 0', fontSize: 12.5, color: c.muted, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{fonts.notes}</p>
+                )}
+              </section>
+            )}
+
             <section>
               <h2 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: c.muted }}>Official Logos</h2>
               {official.length === 0 ? (
@@ -135,7 +164,7 @@ export default function BrandGuidePage() {
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
                   {official.map((l) => {
-                    const src = l.png || l.jpg
+                    const src = l.svg || l.png || l.jpg
                     return (
                       <div key={l.name} className="bg-card" style={{ border: `1px solid ${c.border}`, borderRadius: 8, overflow: 'hidden' }}>
                         <div style={{ height: 120, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12, borderBottom: `1px solid ${c.line}` }}>
@@ -148,7 +177,7 @@ export default function BrandGuidePage() {
                         </div>
                         <div style={{ padding: '8px 10px' }}>
                           <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.25 }}>{l.name}</div>
-                          <div style={{ fontSize: 11.5, color: c.muted, marginTop: 2 }}>{[l.png ? 'PNG' : null, l.jpg ? 'JPG' : null].filter(Boolean).join(' · ')}</div>
+                          <div style={{ fontSize: 11.5, color: c.muted, marginTop: 2 }}>{[l.svg ? 'SVG' : null, l.png ? 'PNG' : null, l.jpg ? 'JPG' : null].filter(Boolean).join(' · ')}</div>
                         </div>
                       </div>
                     )

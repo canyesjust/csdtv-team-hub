@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { runWeeklyBackup } from '@/lib/weekly-backup/run-backup'
+import { timingSafeEqualStr } from '@/lib/server/security'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -13,11 +14,8 @@ function verifyCron(request: Request): boolean {
   if (!auth?.startsWith('Bearer ')) return false
 
   const token = auth.slice('Bearer '.length)
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && token === cronSecret) return true
-
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (serviceKey && token === serviceKey) return true
+  if (timingSafeEqualStr(token, process.env.CRON_SECRET)) return true
+  if (timingSafeEqualStr(token, process.env.SUPABASE_SERVICE_ROLE_KEY)) return true
 
   return false
 }

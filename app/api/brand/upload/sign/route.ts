@@ -21,12 +21,12 @@ export async function POST(request: Request) {
   const code = String(body.code || '').trim()
   const category = String(body.category || '').trim().slice(0, 60)
   const name = String(body.name || '').trim().slice(0, 120)
-  const format = body.format === 'png' || body.format === 'jpg' ? body.format : null
+  const format = body.format === 'png' || body.format === 'jpg' || body.format === 'svg' ? body.format : null
 
   if (!code) return NextResponse.json({ error: 'Missing school code' }, { status: 400 })
   if (!category) return NextResponse.json({ error: 'Missing category' }, { status: 400 })
   if (!name) return NextResponse.json({ error: 'Missing logo name' }, { status: 400 })
-  if (!format) return NextResponse.json({ error: 'File must be a PNG or JPG' }, { status: 400 })
+  if (!format) return NextResponse.json({ error: 'File must be a PNG, JPG, or SVG' }, { status: 400 })
 
   const { data: school, error: schoolErr } = await service
     .from('schools')
