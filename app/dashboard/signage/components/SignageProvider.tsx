@@ -8,7 +8,15 @@ import type { SignageArea, SignageScreen } from './SignageAdmin'
 
 type AccessState = 'loading' | 'ok' | 'denied'
 
-export type SignageSite = { id: string; name: string; slug: string }
+export type SignageSite = { id: string; name: string; slug: string; accent: string | null }
+
+type SiteSelectRow = { id: string; name: string; slug: string; accent_color: string | null; bg_color: string | null }
+
+function mapSite(r: SiteSelectRow): SignageSite {
+  return { id: r.id, name: r.name, slug: r.slug, accent: r.accent_color || r.bg_color || null }
+}
+
+const SITE_SELECT = 'id, name, slug, accent_color, bg_color'
 
 const SITE_STORAGE_KEY = 'cic-signage-active-site'
 
@@ -59,10 +67,10 @@ export function SignageProvider({ children }: { children: ReactNode }) {
   const refreshSites = useCallback(async () => {
     const { data } = await supabase
       .from('signage_sites')
-      .select('id, name, slug')
+      .select(SITE_SELECT)
       .eq('active', true)
       .order('sort_order')
-    setSites(data || [])
+    setSites(((data as SiteSelectRow[]) || []).map(mapSite))
   }, [supabase])
 
   const setActiveSite = useCallback((id: string) => {
@@ -93,12 +101,12 @@ export function SignageProvider({ children }: { children: ReactNode }) {
 
       const { data: siteRows } = await supabase
         .from('signage_sites')
-        .select('id, name, slug')
+        .select(SITE_SELECT)
         .eq('active', true)
         .order('sort_order')
       if (cancelled) return
 
-      let list: SignageSite[] = siteRows || []
+      let list: SignageSite[] = ((siteRows as SiteSelectRow[]) || []).map(mapSite)
 
       // Non-managers are scoped to the sites they've been granted access to.
       // If they have no explicit grants, fall back to all active sites so an

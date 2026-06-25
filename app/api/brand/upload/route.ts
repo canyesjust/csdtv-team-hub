@@ -14,6 +14,54 @@ async function requireManager() {
   return teamUser
 }
 
+// Change a logo's category and/or name in place (metadata only; the stored file
+// does not move). Updates all formats of the logo identity.
+export async function PATCH(request: Request) {
+  const manager = await requireManager()
+  if (!manager) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const service = getServiceSupabaseClient()
+  if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+
+  const body = await request.json().catch(() => ({})) as {
+    code?: string; category?: string; name?: string; newCategory?: string; newName?: string
+  }
+  const code = String(body.code || '').trim()
+  const category = String(body.category || '').trim()
+  const name = String(body.name || '').trim()
+  const newCategory = (String(body.newCategory ?? category).trim() || category).slice(0, 60)
+  const newName = (String(body.newName ?? name).trim() || name).slice(0, 120)
+
+  if (!code || !category || !name) {
+    return NextResponse.json({ error: 'Missing code, category, or name' }, { status: 400 })
+  }
+  if (newCategory === category && newName === name) {
+    return NextResponse.json({ success: true })
+  }
+
+  // Reject if a different logo already uses the target category + name.
+  const { data: clash } = await service
+    .from('school_logos')
+    .select('id')
+    .eq('school_code', code)
+    .eq('category', newCategory)
+    .eq('name', newName)
+    .limit(1)
+  if (clash && clash.length > 0) {
+    return NextResponse.json({ error: 'A logo with that category and name already exists for this school' }, { status: 409 })
+  }
+
+  const { error } = await service
+    .from('school_logos')
+    .update({ category: newCategory, name: newName, updated_at: new Date().toISOString() })
+    .eq('school_code', code)
+    .eq('category', category)
+    .eq('name', name)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ success: true, category: newCategory, name: newName })
+}
+
 export async function DELETE(request: Request) {
   const manager = await requireManager()
   if (!manager) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

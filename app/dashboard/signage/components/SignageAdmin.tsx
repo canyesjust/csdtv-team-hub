@@ -436,28 +436,47 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
   const { text, muted, border, inputBg } = useSignageTheme(theme)
   const activeSite = sites.find(s => s.id === activeSiteId)
 
+  const accent = activeSite?.accent || '#94a3b8'
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <SignageSubnav active={pathname} isManager={isManager} />
         </div>
-        {sites.length > 1 && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: muted, paddingTop: 4, flexShrink: 0 }}>
-            Location
-            <select
-              value={activeSiteId}
-              onChange={e => setActiveSite(e.target.value)}
-              style={{ background: inputBg, color: text, border: `1px solid ${border}`, borderRadius: 8, padding: '6px 10px', fontSize: 14, fontFamily: 'inherit' }}
-            >
-              {sites.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
-            </select>
-          </label>
-        )}
+        {/* Active location — always visible so it's never ambiguous which school you're editing. */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0, paddingTop: 2 }}>
+          <span style={{ fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: muted, fontWeight: 700 }}>Active location</span>
+          {sites.length > 1 ? (
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '7px 30px 7px 11px', background: inputBg }}>
+              <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 0 3px ${accent}22` }} />
+              <select
+                value={activeSiteId}
+                onChange={e => setActiveSite(e.target.value)}
+                aria-label="Active location"
+                style={{ appearance: 'none', WebkitAppearance: 'none', background: 'transparent', border: 'none', color: text, fontSize: 15, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}
+              >
+                {sites.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+              </select>
+              <span style={{ position: 'absolute', right: 11, color: muted, pointerEvents: 'none', fontSize: 11 }}>▾</span>
+            </div>
+          ) : (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '7px 12px', background: inputBg }}>
+              <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0 }} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{activeSite?.name || 'Digital signage'}</span>
+            </div>
+          )}
+        </div>
       </div>
       <div style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 3px', color: text }}>{title}</h1>
-        <p style={{ fontSize: 13, color: muted, margin: 0 }}>{subtitle ?? (activeSite ? `${activeSite.name} signage` : 'Digital signage')}</p>
+        <p style={{ fontSize: 13, color: muted, margin: 0 }}>
+          {activeSite && (
+            <span style={{ color: text, fontWeight: 600 }}>{activeSite.name}</span>
+          )}
+          {activeSite ? ' · ' : ''}
+          {subtitle ?? 'Digital signage'}
+        </p>
       </div>
       {children}
     </div>

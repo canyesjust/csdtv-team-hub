@@ -69,6 +69,9 @@ export default function ManageSchoolBrandPage() {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [bg, setBg] = useState<PreviewBg>('check')
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editCategory, setEditCategory] = useState('')
+  const [editName, setEditName] = useState('')
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -150,6 +153,27 @@ export default function ManageSchoolBrandPage() {
     } finally {
       setBusy(null)
       if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name) }
+
+  const saveEdit = async (l: Logo) => {
+    if (!editCategory.trim() || !editName.trim()) { notify('Category and name are required', 'error'); return }
+    setBusy('edit')
+    try {
+      const res = await fetch('/api/brand/upload', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, category: l.category, name: l.name, newCategory: editCategory.trim(), newName: editName.trim() }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Update failed', 'error')
+      else { notify('Logo updated', 'success'); setEditing(null); await loadDetail() }
+    } catch {
+      notify('Update failed', 'error')
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -247,20 +271,42 @@ export default function ManageSchoolBrandPage() {
                           )}
                         </div>
                         <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</span>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 'auto', flexWrap: 'wrap' }}>
-                            {(['png', 'jpg'] as LogoFormat[]).map((fmt) => {
-                              const url = l[fmt]
-                              if (!url) return null
-                              const delBusy = busy === `${l.category}-${l.name}-${fmt}`
-                              return (
-                                <span key={fmt} style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border-subtle)', borderRadius: 7, overflow: 'hidden' }}>
-                                  <a href={url} target="_blank" rel="noreferrer" style={{ padding: '4px 9px', fontSize: 11.5, fontWeight: 700, color: '#185fa5', textDecoration: 'none' }}>{fmt.toUpperCase()}</a>
-                                  <button type="button" disabled={delBusy} onClick={() => onDelete(l, fmt)} title="Delete" style={{ padding: '4px 8px', fontSize: 12, fontWeight: 700, color: '#b42318', background: 'transparent', border: 'none', borderLeft: '1px solid var(--border-subtle)', cursor: delBusy ? 'default' : 'pointer', opacity: delBusy ? 0.5 : 1 }}>✕</button>
-                                </span>
-                              )
-                            })}
-                          </div>
+                          {editing === `${l.category}||${l.name}` ? (
+                            <>
+                              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Category</span>
+                                <input list="brand-categories" value={editCategory} onChange={(e) => setEditCategory(e.target.value)} style={input} />
+                              </label>
+                              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Name</span>
+                                <input value={editName} onChange={(e) => setEditName(e.target.value)} style={input} />
+                              </label>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
+                                <button type="button" disabled={busy === 'edit'} onClick={() => saveEdit(l)} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 12, fontWeight: 700, cursor: busy === 'edit' ? 'default' : 'pointer', opacity: busy === 'edit' ? 0.6 : 1 }}>{busy === 'edit' ? 'Saving...' : 'Save'}</button>
+                                <button type="button" onClick={() => setEditing(null)} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</span>
+                                <button type="button" onClick={() => startEdit(l)} title="Change category or name" style={{ flexShrink: 0, padding: '3px 8px', fontSize: 11, fontWeight: 700, color: '#185fa5', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: 'pointer' }}>Edit</button>
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 'auto', flexWrap: 'wrap' }}>
+                                {(['png', 'jpg'] as LogoFormat[]).map((fmt) => {
+                                  const url = l[fmt]
+                                  if (!url) return null
+                                  const delBusy = busy === `${l.category}-${l.name}-${fmt}`
+                                  return (
+                                    <span key={fmt} style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--border-subtle)', borderRadius: 7, overflow: 'hidden' }}>
+                                      <a href={url} target="_blank" rel="noreferrer" style={{ padding: '4px 9px', fontSize: 11.5, fontWeight: 700, color: '#185fa5', textDecoration: 'none' }}>{fmt.toUpperCase()}</a>
+                                      <button type="button" disabled={delBusy} onClick={() => onDelete(l, fmt)} title="Delete" style={{ padding: '4px 8px', fontSize: 12, fontWeight: 700, color: '#b42318', background: 'transparent', border: 'none', borderLeft: '1px solid var(--border-subtle)', cursor: delBusy ? 'default' : 'pointer', opacity: delBusy ? 0.5 : 1 }}>✕</button>
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     )
