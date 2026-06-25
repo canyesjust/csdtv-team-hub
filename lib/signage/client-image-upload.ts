@@ -1,6 +1,67 @@
 /** Vercel serverless request bodies are capped (~4.5 MB). Stay under this before upload. */
 export const SIGNAGE_MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 
+/** Videos upload directly to storage (signed URL), so they aren't bound by the
+ *  serverless body cap. Keep a sane ceiling so a screen device isn't asked to
+ *  stream something enormous. */
+export const SIGNAGE_MAX_VIDEO_BYTES = 200 * 1024 * 1024
+
+/**
+ * Grab a poster frame from a video file in the browser (for the content
+ * thumbnail). Resolves with a JPEG blob, or null if a frame can't be captured —
+ * callers should treat null as "no thumbnail" and carry on.
+ */
+export function captureVideoPoster(file: File): Promise<Blob | null> {
+  return new Promise(resolve => {
+    let settled = false
+    const video = document.createElement('video')
+    const url = URL.createObjectURL(file)
+    const done = (blob: Blob | null) => {
+      if (settled) return
+      settled = true
+      URL.revokeObjectURL(url)
+      resolve(blob)
+    }
+
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'auto'
+
+    const grab = () => {
+      try {
+        const vw = video.videoWidth || 640
+        const vh = video.videoHeight || 360
+        const scale = Math.min(1, 640 / Math.max(vw, vh))
+        const w = Math.max(1, Math.round(vw * scale))
+        const h = Math.max(1, Math.round(vh * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return done(null)
+        ctx.drawImage(video, 0, 0, w, h)
+        canvas.toBlob(b => done(b), 'image/jpeg', 0.75)
+      } catch {
+        done(null)
+      }
+    }
+
+    video.onloadedmetadata = () => {
+      const target = Math.min(1, (Number.isFinite(video.duration) ? video.duration : 2) * 0.1)
+      video.onseeked = grab
+      try {
+        video.currentTime = target
+      } catch {
+        grab()
+      }
+    }
+    video.onerror = () => done(null)
+    // Safety net: if metadata/seek never resolves, give up.
+    setTimeout(() => done(null), 8000)
+    video.src = url
+  })
+}
+
 const MAX_EDGE = 1920
 const MIN_QUALITY = 0.55
 const START_QUALITY = 0.82

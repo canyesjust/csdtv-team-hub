@@ -75,7 +75,11 @@ export default function BulkUploadPage() {
         if (cancelled) return
         const map = new Map<string, string>()
         for (const s of (Array.isArray(d?.schools) ? d.schools : [])) {
-          if (s?.name && s?.code) map.set(normalize(String(s.name)), String(s.code))
+          const code = s?.code ? String(s.code) : ''
+          if (!code) continue
+          if (s?.name) map.set(normalize(String(s.name)), code)
+          if (s?.shortName) map.set(normalize(String(s.shortName)), code)
+          map.set(normalize(code), code) // folders named by code also match
         }
         setNameToCode(map)
       })
@@ -108,7 +112,9 @@ export default function BulkUploadPage() {
         const c = nameToCode.get(normalize(dirs[d]))
         if (c) { schoolIdx = d; code = c; break }
       }
-      const schoolName = schoolIdx >= 0 ? dirs[schoolIdx] : (dirs[dirs.length - 1] || '')
+      // When matched, show the matched folder. When unmatched, show the full folder
+      // path so it is clear which folder needs renaming (not the category subfolder).
+      const schoolName = schoolIdx >= 0 ? dirs[schoolIdx] : (dirs.join(' / ') || file.name)
       // A folder between the school folder and the file becomes the category.
       const category = schoolIdx >= 0 && dirs.length > schoolIdx + 1 ? dirs[schoolIdx + 1].slice(0, 60) : 'Official'
 

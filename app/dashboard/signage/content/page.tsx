@@ -14,7 +14,7 @@ import SignageTargetingPicker, {
 import { useSignage } from '../components/SignageProvider'
 import { SIGNAGE_DEFAULT_DISPLAY_SECONDS, SIGNAGE_MAX_DISPLAY_SECONDS, SIGNAGE_MIN_DISPLAY_SECONDS } from '@/lib/signage/content-display'
 import { signageMediaPublicUrl, CIC_SUBMIT_URL } from '@/lib/signage/constants'
-import { prepareSignageImageFile, SIGNAGE_MAX_UPLOAD_BYTES } from '@/lib/signage/client-image-upload'
+import { prepareSignageImageFile, captureVideoPoster, SIGNAGE_MAX_VIDEO_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
 import { dateRangeLifecycle as contentLifecycle, LIFECYCLE_META, LIFECYCLE_RANK } from '@/lib/signage/lifecycle'
@@ -236,33 +236,87 @@ export default function SignageContentPage() {
 
     if (addContentType === 'html') {
       fd.set('html_body', addHtmlBody)
-    } else {
-      const isVideo = addFile!.type.startsWith('video/') || addFile!.name.toLowerCase().endsWith('.mp4')
+    } else if (addContentType !== 'video') {
+      // Image: compress in-browser, then send through the API route (small).
       let uploadFile: File
       try {
-        if (isVideo) {
-          if (addFile!.size > SIGNAGE_MAX_UPLOAD_BYTES) {
-            toast('Video must be 4 MB or smaller.', 'error')
-            return
-          }
-          uploadFile = addFile!
-        } else {
-          uploadFile = await prepareSignageImageFile(addFile!)
-        }
+        uploadFile = await prepareSignageImageFile(addFile!)
       } catch (e) {
         toast(e instanceof Error ? e.message : 'Could not prepare file for upload', 'error')
         return
       }
-      fd.set(isVideo ? 'video' : 'image', uploadFile)
+      fd.set('image', uploadFile)
     }
+
     setBusy('add')
-    const res = await fetch('/api/signage/content', { method: 'POST', body: fd })
-    const data = await res.json().catch(() => ({}))
-    setBusy(null)
-    if (!res.ok) {
-      toast(typeof data.error === 'string' ? data.error : `Upload failed (${res.status})`, 'error')
-      return
+
+    if (addContentType === 'video') {
+      // Videos upload DIRECTLY to storage via a signed URL, so they aren't
+      // bound by the serverless ~4.5 MB request-body cap.
+      const file = addFile!
+      const isMp4 = file.type === 'video/mp4' || file.name.toLowerCase().endsWith('.mp4')
+      if (!isMp4) { setBusy(null); toast('Video must be an MP4 file.', 'error'); return }
+      if (file.size > SIGNAGE_MAX_VIDEO_BYTES) { setBusy(null); toast('Video must be 200 MB or smaller.', 'error'); return }
+      try {
+        // 1. Signed upload URLs for the video + its poster thumbnail.
+        const signRes = await fetch('/api/signage/content/sign-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mime: 'video/mp4', size_bytes: file.size, filename: file.name }),
+        })
+        const sign = await signRes.json().catch(() => ({}))
+        if (!signRes.ok) { setBusy(null); toast(sign.error || 'Could not start upload', 'error'); return }
+
+        // 2. Upload the video file straight to storage.
+        const up = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.video.path, sign.video.token, file, { contentType: 'video/mp4' })
+        if (up.error) { setBusy(null); toast(`Upload failed: ${up.error.message}`, 'error'); return }
+
+        // 3. Capture + upload a poster frame for the thumbnail (best-effort).
+        let thumbPath: string | null = null
+        if (sign.thumb) {
+          const poster = await captureVideoPoster(file)
+          if (poster) {
+            const upThumb = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.thumb.path, sign.thumb.token, poster, { contentType: 'image/jpeg' })
+            if (!upThumb.error) thumbPath = sign.thumb.path
+          }
+        }
+
+        // 4. Record the content row pointing at the uploaded objects.
+        const finRes = await fetch('/api/signage/content/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: addDates.title,
+            start_date: addDates.start_date,
+            end_date: addDates.end_date,
+            priority: addDates.priority,
+            display_seconds: addDates.display_seconds,
+            site_id: activeSiteId,
+            all_screens: addTargeting.all_screens,
+            target_area_ids: addTargeting.target_area_ids,
+            target_screen_ids: addTargeting.target_screen_ids,
+            media_path: sign.video.path,
+            thumb_path: thumbPath,
+          }),
+        })
+        const fin = await finRes.json().catch(() => ({}))
+        setBusy(null)
+        if (!finRes.ok) { toast(fin.error || 'Could not save video', 'error'); return }
+      } catch (e) {
+        setBusy(null)
+        toast(e instanceof Error ? e.message : 'Video upload failed', 'error')
+        return
+      }
+    } else {
+      const res = await fetch('/api/signage/content', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      setBusy(null)
+      if (!res.ok) {
+        toast(typeof data.error === 'string' ? data.error : `Upload failed (${res.status})`, 'error')
+        return
+      }
     }
+
     toast('Content added', 'success')
     setShowAdd(false)
     setAddFile(null)
@@ -375,7 +429,9 @@ export default function SignageContentPage() {
               <>
                 <FilePickButton accept="image/png,image/jpeg,image/jpg,image/webp,video/mp4" label="Choose file" changeLabel="Change file" onChange={setAddFile} />
                 <p style={{ ...s.lbl, margin: 0, lineHeight: 1.45 }}>
-                  JPG, PNG, WebP, or MP4. Large photos are compressed automatically (max 4 MB upload).
+                  {addContentType === 'video'
+                    ? 'MP4 video, up to 200 MB. Uploaded directly to storage; a thumbnail is captured automatically. Use H.264 for best playback on TV sticks.'
+                    : 'JPG, PNG, or WebP. Large photos are compressed automatically (max 4 MB).'}
                 </p>
               </>
             )}
@@ -394,8 +450,14 @@ export default function SignageContentPage() {
             const showStatus = tab === 'approved' && lc !== 'none'
             const expanded = expandedId === row.id
             const isHtml = row.type === 'html'
-            const preview = !isHtml && row.media_path
-              ? (row.thumb_path ? signageMediaPublicUrl(row.thumb_path) : signageMediaPublicUrl(row.media_path))
+            const isVideoRow = row.type === 'video'
+            // Prefer a real thumbnail; fall back to the image itself, or a video
+            // poster frame (#t hint) for videos uploaded without a thumbnail.
+            const previewImg = !isHtml && row.thumb_path
+              ? signageMediaPublicUrl(row.thumb_path)
+              : (!isHtml && !isVideoRow && row.media_path ? signageMediaPublicUrl(row.media_path) : null)
+            const previewVideo = isVideoRow && !row.thumb_path && row.media_path
+              ? `${signageMediaPublicUrl(row.media_path)}#t=0.5`
               : null
             const fileName = row.media_path ? mediaFileName(row.media_path) : 'HTML slide'
 
@@ -418,11 +480,13 @@ export default function SignageContentPage() {
                   }}
                 >
                   <div style={{ ...s.thumb, width: 64, height: 40 }}>
-                    {preview ? (
+                    {previewImg ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                      <img src={previewImg} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                    ) : previewVideo ? (
+                      <video src={previewVideo} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
                     ) : (
-                      <span style={{ fontSize: 11, fontWeight: 600 }}>HTML</span>
+                      <span style={{ fontSize: 11, fontWeight: 600 }}>{isHtml ? 'HTML' : 'VIDEO'}</span>
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -441,9 +505,11 @@ export default function SignageContentPage() {
               <div key={row.id} style={{ ...s.card, borderLeft: showStatus ? `4px solid ${LIFECYCLE_META[lc].color}` : undefined }}>
                 <div style={{ display: 'flex', gap: 14 }}>
                   <div style={{ ...s.thumb, width: 150, height: 84, overflow: 'hidden', padding: isHtml ? 8 : 0 }}>
-                    {preview ? (
+                    {previewImg ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                      <img src={previewImg} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
+                    ) : previewVideo ? (
+                      <video src={previewVideo} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
                     ) : (
                       <div style={{ fontSize: 11, color: s.muted, overflow: 'hidden', height: '100%' }}>
                         {e.html_body.slice(0, 120) || 'HTML slide'}
