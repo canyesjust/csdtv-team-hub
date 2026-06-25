@@ -19,7 +19,7 @@ function detectFormat(file: File): 'png' | 'jpg' | null {
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type LogoFormat = 'png' | 'jpg'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; cover?: boolean }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; cover?: boolean; notes?: string | null }
 type School = {
   code: string
   name: string
@@ -72,6 +72,7 @@ export default function ManageSchoolBrandPage() {
   const [editing, setEditing] = useState<string | null>(null)
   const [editCategory, setEditCategory] = useState('')
   const [editName, setEditName] = useState('')
+  const [editNotes, setEditNotes] = useState('')
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -156,7 +157,7 @@ export default function ManageSchoolBrandPage() {
     }
   }
 
-  const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name) }
+  const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || '') }
 
   const saveEdit = async (l: Logo) => {
     if (!editCategory.trim() || !editName.trim()) { notify('Category and name are required', 'error'); return }
@@ -165,7 +166,7 @@ export default function ManageSchoolBrandPage() {
       const res = await fetch('/api/brand/upload', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, category: l.category, name: l.name, newCategory: editCategory.trim(), newName: editName.trim() }),
+        body: JSON.stringify({ code, category: l.category, name: l.name, newCategory: editCategory.trim(), newName: editName.trim(), notes: editNotes }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Update failed', 'error')
@@ -298,6 +299,10 @@ export default function ManageSchoolBrandPage() {
                               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Name</span>
                                 <input value={editName} onChange={(e) => setEditName(e.target.value)} style={input} />
+                              </label>
+                              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Official notes (shown publicly)</span>
+                                <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} placeholder="e.g. Use on white backgrounds only; do not stretch." style={{ ...input, height: 'auto', padding: '8px 10px', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.4 }} />
                               </label>
                               <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
                                 <button type="button" disabled={busy === 'edit'} onClick={() => saveEdit(l)} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 12, fontWeight: 700, cursor: busy === 'edit' ? 'default' : 'pointer', opacity: busy === 'edit' ? 0.6 : 1 }}>{busy === 'edit' ? 'Saving...' : 'Save'}</button>

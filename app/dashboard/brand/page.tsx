@@ -36,6 +36,7 @@ export default function ManagerBrandGridPage() {
   const [access, setAccess] = useState<'loading' | 'ok' | 'denied'>('loading')
   const [schools, setSchools] = useState<BrandSchoolSummary[]>([])
   const [district, setDistrict] = useState<BrandSchoolSummary | null>(null)
+  const [departments, setDepartments] = useState<BrandSchoolSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [level, setLevel] = useState<'All' | BrandLevel>('All')
@@ -62,6 +63,7 @@ export default function ManagerBrandGridPage() {
         if (cancelled) return
         if (Array.isArray(d?.schools)) setSchools(d.schools as BrandSchoolSummary[])
         setDistrict(d?.district ?? null)
+        if (Array.isArray(d?.departments)) setDepartments(d.departments as BrandSchoolSummary[])
         setLoading(false)
       })
       .catch(() => { if (!cancelled) setLoading(false) })
@@ -154,6 +156,32 @@ export default function ManagerBrandGridPage() {
               </div>
             </Link>
           ))}
+        </div>
+      )}
+
+      {!loading && level === 'All' && departments.length > 0 && (
+        <div style={{ marginTop: 34 }}>
+          <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Departments</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+            {departments
+              .filter((dep) => { const q = query.trim().toLowerCase(); return !q || dep.name.toLowerCase().includes(q) })
+              .map((dep) => (
+                <Link key={dep.code} href={`/dashboard/brand/${dep.code}`} style={{ textDecoration: 'none', color: 'inherit', border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ height: 90, ...CHECKER, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)' }}>
+                    {dep.preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={dep.preview} alt={`${dep.name} logo`} style={{ maxWidth: '86%', maxHeight: '86%', objectFit: 'contain' }} />
+                    ) : (
+                      <span style={{ fontSize: 26, fontWeight: 800, color: '#9aa3b2' }}>{initialOf(dep.name)}</span>
+                    )}
+                  </div>
+                  <div style={{ padding: '10px 12px' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.2 }}>{dep.name}</div>
+                    <p style={{ margin: '5px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{dep.logoCount > 0 ? `${dep.logoCount} logo${dep.logoCount === 1 ? '' : 's'}` : 'No logos yet'}</p>
+                  </div>
+                </Link>
+              ))}
+          </div>
         </div>
       )}
     </div>

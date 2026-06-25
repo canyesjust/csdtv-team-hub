@@ -5,7 +5,13 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; flagged?: boolean }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; flagged?: boolean; notes?: string | null }
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
 type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
 type School = {
   code: string
@@ -75,7 +81,22 @@ export default function SchoolBrandPage() {
   const [bg, setBg] = useState<PreviewBg>('check')
   const [flagError, setFlagError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Logo | null>(null)
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
+  const [fileSize, setFileSize] = useState<number | null>(null)
   const [departments, setDepartments] = useState<DeptSummary[]>([])
+
+  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
+
+  useEffect(() => {
+    if (!selected) return
+    const url = selected.png || selected.jpg
+    if (!url) return
+    let cancelled = false
+    fetch(url, { method: 'HEAD' })
+      .then((r) => { const len = r.headers.get('content-length'); if (!cancelled && len) setFileSize(Number(len)) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [selected])
 
   useEffect(() => {
     if (school?.type !== 'district') return
@@ -243,7 +264,7 @@ export default function SchoolBrandPage() {
                         const preview = l.png || l.jpg
                         return (
                           <div key={`${group.category}-${l.name}`}
-                            onClick={reviewKey ? () => toggleFlag(l) : () => setSelected(l)}
+                            onClick={reviewKey ? () => toggleFlag(l) : () => openDrawer(l)}
                             style={{ position: 'relative', border: `1px solid ${l.flagged ? '#e0282e' : colors.border}`, borderRadius: 12, background: l.flagged ? '#fdecec' : colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column', cursor: 'pointer', userSelect: 'none' }}>
                             {reviewKey && (
                               <div aria-hidden style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, width: 30, height: 30, borderRadius: 999, border: `1px solid ${l.flagged ? '#e0282e' : colors.line}`, background: l.flagged ? '#e0282e' : 'rgba(255,255,255,0.92)', color: '#ffffff', fontSize: 15, fontWeight: 800, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -323,7 +344,7 @@ export default function SchoolBrandPage() {
               <div style={{ ...previewBg(bg), borderRadius: 12, border: `1px solid ${colors.line}`, minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
                 {(selected.png || selected.jpg) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={selected.png || selected.jpg || ''} alt={selected.name} style={{ maxWidth: '100%', maxHeight: 440, objectFit: 'contain' }} />
+                  <img src={selected.png || selected.jpg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 440, objectFit: 'contain' }} />
                 ) : (
                   <span style={{ fontSize: 13, color: colors.muted }}>No preview</span>
                 )}
@@ -333,8 +354,18 @@ export default function SchoolBrandPage() {
                   <button key={m} type="button" onClick={() => setBg(m)} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bg === m ? colors.info : colors.line}`, background: bg === m ? colors.info : colors.cardBg, color: bg === m ? '#ffffff' : colors.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
                 ))}
               </div>
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Image</p>
+              <p style={{ margin: 0, fontSize: 14 }}>
+                {dims ? `${dims.w} × ${dims.h} px` : 'Loading dimensions...'}{fileSize ? ` · ${formatBytes(fileSize)}` : ''}
+              </p>
               <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Category</p>
               <p style={{ margin: 0, fontSize: 14 }}>{selected.category}</p>
+              {selected.notes && (
+                <>
+                  <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Notes</p>
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selected.notes}</p>
+                </>
+              )}
               <p style={{ margin: '16px 0 8px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Download</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {selected.png && <a href={selected.png} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>PNG</a>}

@@ -24,7 +24,7 @@ export async function PATCH(request: Request) {
   if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
 
   const body = await request.json().catch(() => ({})) as {
-    code?: string; category?: string; name?: string; newCategory?: string; newName?: string
+    code?: string; category?: string; name?: string; newCategory?: string; newName?: string; notes?: string
   }
   const code = String(body.code || '').trim()
   const category = String(body.category || '').trim()
@@ -35,25 +35,44 @@ export async function PATCH(request: Request) {
   if (!code || !category || !name) {
     return NextResponse.json({ error: 'Missing code, category, or name' }, { status: 400 })
   }
-  if (newCategory === category && newName === name) {
+
+  const renaming = newCategory !== category || newName !== name
+  const setNotes = body.notes !== undefined
+  if (!renaming && !setNotes) {
     return NextResponse.json({ success: true })
   }
 
-  // Reject if a different logo already uses the target category + name.
-  const { data: clash } = await service
-    .from('school_logos')
-    .select('id')
-    .eq('school_code', code)
-    .eq('category', newCategory)
-    .eq('name', newName)
-    .limit(1)
-  if (clash && clash.length > 0) {
-    return NextResponse.json({ error: 'A logo with that category and name already exists for this school' }, { status: 409 })
+  // Renaming onto an existing category+name MERGES (e.g. a JPG joins the matching PNG),
+  // which is allowed as long as the formats do not collide (can't have two PNGs).
+  if (renaming) {
+    const { data: srcRows } = await service
+      .from('school_logos')
+      .select('format')
+      .eq('school_code', code)
+      .eq('category', category)
+      .eq('name', name)
+    const srcFormats = new Set(((srcRows ?? []) as { format: string }[]).map((r) => r.format))
+
+    const { data: tgtRows } = await service
+      .from('school_logos')
+      .select('format')
+      .eq('school_code', code)
+      .eq('category', newCategory)
+      .eq('name', newName)
+    const tgtFormats = new Set(((tgtRows ?? []) as { format: string }[]).map((r) => r.format))
+
+    if ([...srcFormats].some((f) => tgtFormats.has(f))) {
+      return NextResponse.json({ error: 'That category and name already has the same file format. Rename one of them differently.' }, { status: 409 })
+    }
   }
+
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (renaming) { updates.category = newCategory; updates.name = newName }
+  if (setNotes) updates.notes = String(body.notes || '').trim().slice(0, 600) || null
 
   const { error } = await service
     .from('school_logos')
-    .update({ category: newCategory, name: newName, updated_at: new Date().toISOString() })
+    .update(updates)
     .eq('school_code', code)
     .eq('category', category)
     .eq('name', name)
