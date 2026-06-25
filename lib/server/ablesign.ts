@@ -247,8 +247,33 @@ export function createWebApp(input: { title: string; url: string; description?: 
   return asFetch<AbleSignWebApp>('POST', '/web_apps', input, creds)
 }
 
+/** AbleSign caps raw HTML web app content at 5,000,000 characters (see API docs). */
+export const ABLESIGN_HTML_MAX_CHARS = 5_000_000
+
+/**
+ * Create an HTML-type web app (raw HTML downloaded to the stick and played from
+ * local storage — survives a network outage). NOTE: the AbleSign PUT /web_apps
+ * endpoint cannot change `html` on an existing web app, so updates are done by
+ * creating a new HTML web app and re-pointing the screen's playlist to it
+ * (see pushScreenHtmlWebApp), not by mutating in place.
+ */
+export function createHtmlWebApp(input: { title: string; html: string; description?: string }, creds?: AbleSignCreds) {
+  if (input.html.length > ABLESIGN_HTML_MAX_CHARS) {
+    throw new AbleSignApiError(
+      `HTML web app is ${input.html.length.toLocaleString()} characters, over the AbleSign ${ABLESIGN_HTML_MAX_CHARS.toLocaleString()} limit`,
+      'HTML_TOO_LARGE',
+      413,
+    )
+  }
+  return asFetch<AbleSignWebApp>('POST', '/web_apps', input, creds)
+}
+
 export function updateWebApp(id: number, input: { url?: string; title?: string; zoom?: number }, creds?: AbleSignCreds) {
   return asFetch<AbleSignWebApp>('PUT', `/web_apps/${id}`, input, creds)
+}
+
+export function deleteWebApp(id: number, creds?: AbleSignCreds) {
+  return asFetch<unknown>('DELETE', `/web_apps/${id}`, undefined, creds)
 }
 
 export function listWebApps(options: { limit?: number; offset?: number } = {}, creds?: AbleSignCreds) {

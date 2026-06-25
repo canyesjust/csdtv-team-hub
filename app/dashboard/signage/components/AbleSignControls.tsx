@@ -9,6 +9,8 @@ export type AbleSignScreenFields = {
   id: string
   ablesign_screen_id: number | null
   ablesign_webapp_id: number | null
+  ablesign_html_webapp_id: number | null
+  ablesign_html_dirty_at: string | null
   ablesign_synced_at: string | null
   ablesign_online: boolean | null
   ablesign_heartbeat_at: string | null
@@ -193,6 +195,7 @@ export function AbleSignScreenPanel({
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const [syncing, setSyncing] = useState(false)
+  const [pushingHtml, setPushingHtml] = useState(false)
 
   const syncOne = async () => {
     setSyncing(true)
@@ -207,6 +210,30 @@ export function AbleSignScreenPanel({
     } finally {
       setSyncing(false)
     }
+  }
+
+  const pushHtml = async () => {
+    setPushingHtml(true)
+    try {
+      const res = await fetch(`/api/signage/push/${encodeURIComponent(screen.code)}`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Push failed')
+      toast(
+        data.skipped
+          ? `No content change to push for ${screen.name}`
+          : `Pushed HTML to ${screen.name} (web app #${data.webappId})`,
+        'success',
+      )
+      onUpdated()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Push failed', 'error')
+    } finally {
+      setPushingHtml(false)
+    }
+  }
+
+  const previewHtml = () => {
+    window.open(`/api/signage/push/${encodeURIComponent(screen.code)}`, '_blank', 'noopener')
   }
 
   return (
@@ -249,6 +276,33 @@ export function AbleSignScreenPanel({
           {screen.ablesign_screen_id ? ` · AbleSign #${screen.ablesign_screen_id}` : ''}
           {screen.ablesign_webapp_id ? ` · Web app #${screen.ablesign_webapp_id}` : ''}
         </span>
+      </div>
+
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${s.infoBorder}` }}>
+        <p style={{ ...s.lbl, marginBottom: 8 }}>Offline HTML web app</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => void pushHtml()}
+            style={s.btnPrimary}
+            disabled={pushingHtml || !screen.ablesign_screen_id}
+          >
+            {pushingHtml ? 'Pushing…' : 'Regenerate & push HTML'}
+          </button>
+          <button type="button" onClick={previewHtml} style={s.btn}>
+            Preview HTML
+          </button>
+          <span style={{ fontSize: 12, color: s.muted }}>
+            {screen.ablesign_html_webapp_id
+              ? `HTML web app #${screen.ablesign_html_webapp_id}`
+              : 'No HTML web app yet'}
+            {screen.ablesign_html_dirty_at ? ' · pending re-push' : ''}
+          </span>
+        </div>
+        <p style={{ ...s.lbl, margin: '8px 0 0', lineHeight: 1.45 }}>
+          Pushes a self-contained HTML copy of this screen that plays from the stick&apos;s local
+          storage and survives a network outage. Preview opens the exact file that would be pushed.
+        </p>
       </div>
     </div>
   )

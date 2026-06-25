@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireManagerApi } from '@/lib/signage/server-auth'
+import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
     sort_order: body.sort_order ?? 0,
   }).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await markScreensDirty(service, data.area_id ? { areaId: data.area_id } : { all: true })
   return NextResponse.json({ entry: data })
 }
 
@@ -32,6 +34,7 @@ export async function PATCH(request: NextRequest) {
     sort_order: body.sort_order,
   }).eq('id', body.id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await markScreensDirty(service, data.area_id ? { areaId: data.area_id } : { all: true })
   return NextResponse.json({ entry: data })
 }
 
@@ -43,5 +46,6 @@ export async function DELETE(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const { error } = await service.from('signage_wayfinding').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await markScreensDirty(service, { all: true })
   return NextResponse.json({ success: true })
 }

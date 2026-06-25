@@ -44,6 +44,8 @@ type Screen = ScreenForm & {
   id: string
   ablesign_screen_id: number | null
   ablesign_webapp_id: number | null
+  ablesign_html_webapp_id: number | null
+  ablesign_html_dirty_at: string | null
   ablesign_synced_at: string | null
   ablesign_online: boolean | null
   ablesign_heartbeat_at: string | null
@@ -252,6 +254,8 @@ export default function SignageScreensPage() {
                 code: form.code,
                 ablesign_screen_id: screens.find(sc => sc.id === editId)?.ablesign_screen_id ?? null,
                 ablesign_webapp_id: screens.find(sc => sc.id === editId)?.ablesign_webapp_id ?? null,
+                ablesign_html_webapp_id: screens.find(sc => sc.id === editId)?.ablesign_html_webapp_id ?? null,
+                ablesign_html_dirty_at: screens.find(sc => sc.id === editId)?.ablesign_html_dirty_at ?? null,
                 ablesign_synced_at: screens.find(sc => sc.id === editId)?.ablesign_synced_at ?? null,
                 ablesign_online: screens.find(sc => sc.id === editId)?.ablesign_online ?? null,
                 ablesign_heartbeat_at: screens.find(sc => sc.id === editId)?.ablesign_heartbeat_at ?? null,

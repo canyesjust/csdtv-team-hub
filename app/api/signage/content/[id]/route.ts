@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireManagerApi, requireSignageApproverApi } from '@/lib/signage/server-auth'
+import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { emailSignageSubmitterDecision } from '@/lib/signage/email'
 import { clampDisplaySeconds, sanitizeSignageHtml } from '@/lib/signage/content-display'
@@ -66,6 +67,8 @@ export async function PATCH(
   const { data, error } = await service.from('signage_content').update(patch).eq('id', id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  await markScreensDirty(service, existing.site_id ? { siteId: existing.site_id } : { all: true })
+
   if (typeof body.status === 'string' && existing.submitter_email) {
     if (body.status === 'approved' || body.status === 'rejected') {
       let centerName: string | null = null
@@ -96,12 +99,15 @@ export async function DELETE(
   const { service } = auth
   const { id } = await params
 
-  const { data: row } = await service.from('signage_content').select('media_path, thumb_path').eq('id', id).maybeSingle()
+  const { data: row } = await service.from('signage_content').select('media_path, thumb_path, site_id').eq('id', id).maybeSingle()
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const paths = [row.media_path, row.thumb_path].filter((p): p is string => Boolean(p && !p.startsWith('html/')))
   await service.storage.from(SIGNAGE_MEDIA_BUCKET).remove(paths).catch(() => {})
   const { error } = await service.from('signage_content').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await markScreensDirty(service, row.site_id ? { siteId: row.site_id } : { all: true })
+
   return NextResponse.json({ success: true })
 }

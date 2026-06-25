@@ -42,7 +42,7 @@ export default function SignageFloorPlanPage() {
   const loadScreens = useCallback(async () => {
     const { data } = await supabase
       .from('signage_screens')
-      .select('id, code, name, building, floor, active, ablesign_screen_id, ablesign_webapp_id, ablesign_synced_at, ablesign_online, ablesign_heartbeat_at')
+      .select('id, code, name, building, floor, active, ablesign_screen_id, ablesign_webapp_id, ablesign_html_webapp_id, ablesign_html_dirty_at, ablesign_synced_at, ablesign_online, ablesign_heartbeat_at')
       .order('building')
       .order('floor')
       .order('name')

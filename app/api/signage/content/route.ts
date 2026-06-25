@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireManagerApi } from '@/lib/signage/server-auth'
+import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import {
   extFromVideoMime,
@@ -140,6 +141,9 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Flag affected screens for an AbleSign HTML re-push (the cron coalesces these).
+  await markScreensDirty(service, data.site_id ? { siteId: data.site_id } : { all: true })
 
   return NextResponse.json({ content: data })
 }

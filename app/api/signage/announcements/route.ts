@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSignageAnnouncementIcon, normalizeSignageAnnouncementIcon } from '@/lib/signage/announcement-icons'
 import { requireManagerApi } from '@/lib/signage/server-auth'
+import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
     active: body.active ?? true,
   }).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await markScreensDirty(service, data.site_id ? { siteId: data.site_id } : { all: true })
   return NextResponse.json({ announcement: data })
 }
 
@@ -60,6 +62,7 @@ export async function PATCH(request: NextRequest) {
 
   const { data, error } = await service.from('signage_announcements').update(patch).eq('id', body.id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await markScreensDirty(service, data.site_id ? { siteId: data.site_id } : { all: true })
   return NextResponse.json({ announcement: data })
 }
 
@@ -71,5 +74,6 @@ export async function DELETE(request: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const { error } = await service.from('signage_announcements').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  await markScreensDirty(service, { all: true })
   return NextResponse.json({ success: true })
 }
