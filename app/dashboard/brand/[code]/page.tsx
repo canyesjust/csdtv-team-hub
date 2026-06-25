@@ -35,6 +35,17 @@ function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }))
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function deriveLogoName(filename: string): string {
+  const base = filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return base || 'Logo'
+}
+
 type PreviewBg = 'check' | 'light' | 'dark'
 function previewBg(mode: PreviewBg): CSSProperties {
   if (mode === 'dark') return { background: '#2b2f3a' }
@@ -73,7 +84,27 @@ export default function ManageSchoolBrandPage() {
   const [editCategory, setEditCategory] = useState('')
   const [editName, setEditName] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  const [editCustom, setEditCustom] = useState(false)
+  const [selected, setSelected] = useState<Logo | null>(null)
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
+  const [fileSize, setFileSize] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
+
+  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
+
+  useEffect(() => {
+    if (!selected) return
+    const url = selected.png || selected.jpg
+    if (!url) return
+    let cancelled = false
+    fetch(url, { method: 'HEAD' })
+      .then((r) => { const len = r.headers.get('content-length'); if (!cancelled && len) setFileSize(Number(len)) })
+      .catch(() => {})
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelected(null) }
+    window.addEventListener('keydown', onKey)
+    return () => { cancelled = true; window.removeEventListener('keydown', onKey) }
+  }, [selected])
 
   useEffect(() => {
     let cancelled = false
@@ -112,52 +143,58 @@ export default function ManageSchoolBrandPage() {
     return orderCategories([...map.keys()]).map((cat) => ({ category: cat, items: map.get(cat) || [] }))
   }, [logos])
 
-  const triggerUpload = () => {
-    if (!category.trim()) { notify('Pick or type a category first', 'error'); return }
-    if (!name.trim()) { notify('Give the logo a name first', 'error'); return }
-    fileRef.current?.click()
-  }
+  const triggerUpload = () => fileRef.current?.click()
 
-  const onFile = async (file: File | null) => {
-    if (!file) return
-    const format = detectFormat(file)
-    if (!format) { notify('File must be a PNG or JPG', 'error'); if (fileRef.current) fileRef.current.value = ''; return }
-    if (file.size > MAX_BYTES) { notify('File is larger than 20 MB', 'error'); if (fileRef.current) fileRef.current.value = ''; return }
-    setBusy('add')
+  // Upload one file via sign -> direct upload -> finalize. Returns true on success.
+  const uploadOneFile = async (file: File, cat: string, nm: string, format: 'png' | 'jpg'): Promise<boolean> => {
     try {
-      // 1. Ask the server for a signed upload URL.
       const signRes = await fetch('/api/brand/upload/sign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, category: category.trim(), name: name.trim(), format }),
+        body: JSON.stringify({ code, category: cat, name: nm, format }),
       })
       const sign = await signRes.json().catch(() => ({}))
-      if (!signRes.ok) { notify(typeof sign?.error === 'string' ? sign.error : 'Upload failed', 'error'); return }
-
-      // 2. Upload the file directly to storage (no serverless body-size limit).
+      if (!signRes.ok) { notify(typeof sign?.error === 'string' ? sign.error : 'Upload failed', 'error'); return false }
       const supabase = createClient()
-      const contentType = format === 'png' ? 'image/png' : 'image/jpeg'
-      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType })
-      if (upErr) { notify(upErr.message || 'Upload failed', 'error'); return }
-
-      // 3. Record (or replace) the logo row.
+      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: format === 'png' ? 'image/png' : 'image/jpeg' })
+      if (upErr) { notify(upErr.message || 'Upload failed', 'error'); return false }
       const finRes = await fetch('/api/brand/upload/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, category: category.trim(), name: name.trim(), format, path: sign.path }),
+        body: JSON.stringify({ code, category: cat, name: nm, format, path: sign.path }),
       })
       const fin = await finRes.json().catch(() => ({}))
-      if (!finRes.ok) { notify(typeof fin?.error === 'string' ? fin.error : 'Could not save logo', 'error'); return }
-      notify('Logo uploaded', 'success'); setName(''); await loadDetail()
+      if (!finRes.ok) { notify(typeof fin?.error === 'string' ? fin.error : 'Could not save logo', 'error'); return false }
+      return true
     } catch {
       notify('Upload failed', 'error')
-    } finally {
-      setBusy(null)
-      if (fileRef.current) fileRef.current.value = ''
+      return false
     }
   }
 
-  const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || '') }
+  // Accepts one or many files (button, file dialog, or drag-and-drop). When a single
+  // file is dropped the typed name is used; for multiple, each name comes from its filename.
+  const onAddFiles = async (list: FileList | File[] | null) => {
+    const files = list ? Array.from(list) : []
+    if (files.length === 0) return
+    const cat = category.trim() || 'Official'
+    setBusy('add')
+    let ok = 0
+    let fail = 0
+    for (const file of files) {
+      const format = detectFormat(file)
+      if (!format || file.size > MAX_BYTES) { fail++; continue }
+      const nm = files.length === 1 && name.trim() ? name.trim() : deriveLogoName(file.name)
+      const r = await uploadOneFile(file, cat, nm, format)
+      if (r) ok++; else fail++
+    }
+    setBusy(null)
+    if (fileRef.current) fileRef.current.value = ''
+    if (ok > 0) { notify(`${ok} logo${ok === 1 ? '' : 's'} uploaded`, 'success'); setName(''); await loadDetail() }
+    if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (must be PNG or JPG under 20 MB)`, 'error')
+  }
+
+  const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || ''); setEditCustom(false) }
 
   const saveEdit = async (l: Logo) => {
     if (!editCategory.trim() || !editName.trim()) { notify('Category and name are required', 'error'); return }
@@ -240,7 +277,7 @@ export default function ManageSchoolBrandPage() {
 
           <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', padding: 16, marginBottom: 24 }}>
             <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800 }}>Add a logo</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(200px, 2fr) auto', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(200px, 2fr)', gap: 10, marginBottom: 12 }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Category</span>
                 <input list="brand-categories" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Official" style={input} />
@@ -249,16 +286,24 @@ export default function ManageSchoolBrandPage() {
                 </datalist>
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Logo name</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Logo name (optional for drag-and-drop)</span>
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Primary wordmark, white" style={input} />
               </label>
-              <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" style={{ display: 'none' }} onChange={(e) => onFile(e.target.files?.[0] || null)} />
-              <button type="button" disabled={addBusy} onClick={triggerUpload} style={{ height: 36, borderRadius: 8, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 13, fontWeight: 700, padding: '0 16px', cursor: addBusy ? 'default' : 'pointer', opacity: addBusy ? 0.6 : 1 }}>
-                {addBusy ? 'Uploading...' : 'Choose PNG or JPG'}
-              </button>
+            </div>
+            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" multiple style={{ display: 'none' }} onChange={(e) => onAddFiles(e.target.files)} />
+            <div
+              onClick={() => { if (!addBusy) triggerUpload() }}
+              onDragOver={(e) => { e.preventDefault(); if (!addBusy) setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); if (!addBusy) onAddFiles(e.dataTransfer.files) }}
+              style={{ border: `2px dashed ${dragOver ? '#185fa5' : 'var(--border-subtle)'}`, borderRadius: 10, background: dragOver ? 'rgba(24,95,165,0.08)' : 'transparent', padding: '22px 14px', textAlign: 'center', cursor: addBusy ? 'default' : 'pointer', color: 'var(--text-muted)', fontSize: 13 }}
+            >
+              {addBusy ? 'Uploading...' : (
+                <><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Drag PNG or JPG files here</span><br />or click to choose</>
+              )}
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
-              Re-uploading the same category, name, and format replaces the existing file. Upload PNG and JPG separately to offer both.
+              Drop one or more files. With a single file the name above is used; for multiple, each name comes from its filename. Re-uploading the same category, name, and format replaces the existing file.
             </p>
           </section>
 
@@ -281,7 +326,7 @@ export default function ManageSchoolBrandPage() {
                     const preview = l.png || l.jpg
                     return (
                       <div key={`${group.category}-${l.name}`} style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ height: 130, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)' }}>
+                        <div onClick={() => openDrawer(l)} title="View details" style={{ height: 130, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
                           {preview ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
@@ -294,7 +339,20 @@ export default function ManageSchoolBrandPage() {
                             <>
                               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Category</span>
-                                <input list="brand-categories" value={editCategory} onChange={(e) => setEditCategory(e.target.value)} style={input} />
+                                <select
+                                  value={editCustom ? '__custom__' : editCategory}
+                                  onChange={(e) => {
+                                    if (e.target.value === '__custom__') { setEditCustom(true); setEditCategory('') }
+                                    else { setEditCustom(false); setEditCategory(e.target.value) }
+                                  }}
+                                  style={input}
+                                >
+                                  {existingCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                                  <option value="__custom__">+ New category...</option>
+                                </select>
+                                {editCustom && (
+                                  <input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} placeholder="New category name" style={input} autoFocus />
+                                )}
                               </label>
                               <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Name</span>
@@ -344,6 +402,63 @@ export default function ManageSchoolBrandPage() {
             ))
           )}
         </>
+      )}
+
+      {selected && (
+        <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(10,15,25,0.5)', zIndex: 60, display: 'flex', justifyContent: 'flex-end' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(480px, 94vw)', height: '100%', background: 'var(--bg-main)', boxShadow: '-8px 0 30px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', overflow: 'auto', color: 'var(--text-primary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', position: 'sticky', top: 0, background: 'var(--bg-main)' }}>
+              <span style={{ fontSize: 15, fontWeight: 800, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selected.name}</span>
+              <button type="button" onClick={() => setSelected(null)} style={{ flexShrink: 0, padding: '6px 12px', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 8, cursor: 'pointer' }}>Close</button>
+            </div>
+            <div style={{ padding: 18 }}>
+              <div style={{ ...previewBg(bg), borderRadius: 12, border: '1px solid var(--border-subtle)', minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+                {(selected.png || selected.jpg) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={selected.png || selected.jpg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 420, objectFit: 'contain' }} />
+                ) : (
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No preview</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+                {([['check', 'Checkered'], ['light', 'White'], ['dark', 'Dark']] as [PreviewBg, string][]).map(([m, label]) => (
+                  <button key={m} type="button" onClick={() => setBg(m)} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bg === m ? '#185fa5' : 'var(--border-subtle)'}`, background: bg === m ? '#185fa5' : 'transparent', color: bg === m ? '#ffffff' : 'var(--text-muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
+                ))}
+              </div>
+
+              {selected.cover && <p style={{ margin: '14px 0 0', fontSize: 12, fontWeight: 700, color: '#1f9254' }}>★ Cover image</p>}
+
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Image</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{dims ? `${dims.w} × ${dims.h} px` : 'Loading dimensions...'}{fileSize ? ` · ${formatBytes(fileSize)}` : ''}</p>
+
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Category</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{selected.category}</p>
+
+              {selected.notes && (
+                <>
+                  <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Notes</p>
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selected.notes}</p>
+                </>
+              )}
+
+              <p style={{ margin: '16px 0 8px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Download</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {selected.png && <a href={selected.png} target="_blank" rel="noreferrer" style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: '#185fa5', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>PNG</a>}
+                {selected.jpg && <a href={selected.jpg} target="_blank" rel="noreferrer" style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', color: '#185fa5', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>JPG</a>}
+              </div>
+
+              <p style={{ margin: '20px 0 8px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Manage</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {!selected.cover && (
+                  <button type="button" onClick={async () => { await setCover(selected); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Set as cover</button>
+                )}
+                {(['png', 'jpg'] as LogoFormat[]).map((fmt) => (selected[fmt] ? (
+                  <button key={fmt} type="button" onClick={async () => { await onDelete(selected, fmt); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: '#b42318', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Delete {fmt.toUpperCase()}</button>
+                ) : null))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -84,8 +84,23 @@ export default function SchoolBrandPage() {
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
   const [fileSize, setFileSize] = useState<number | null>(null)
   const [departments, setDepartments] = useState<DeptSummary[]>([])
+  const [deptOpen, setDeptOpen] = useState<Set<string>>(new Set())
+  const [deptLogos, setDeptLogos] = useState<Record<string, Logo[]>>({})
+  const [deptLoading, setDeptLoading] = useState<Set<string>>(new Set())
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
+
+  const toggleDept = (depCode: string) => {
+    setDeptOpen((prev) => { const next = new Set(prev); if (next.has(depCode)) next.delete(depCode); else next.add(depCode); return next })
+    if (!deptLogos[depCode] && !deptLoading.has(depCode)) {
+      setDeptLoading((prev) => new Set(prev).add(depCode))
+      fetch(`/api/brand/${encodeURIComponent(depCode)}`, { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => setDeptLogos((prev) => ({ ...prev, [depCode]: Array.isArray(d?.logos) ? (d.logos as Logo[]) : [] })))
+        .catch(() => {})
+        .finally(() => setDeptLoading((prev) => { const n = new Set(prev); n.delete(depCode); return n }))
+    }
+  }
 
   useEffect(() => {
     if (!selected) return
@@ -168,6 +183,29 @@ export default function SchoolBrandPage() {
     }
   }
 
+  const changeCategory = async (l: Logo, newCat: string) => {
+    if (!reviewKey || newCat === l.category) return
+    const prevCat = l.category
+    setFlagError(null)
+    setLogos((prev) => prev.map((x) => (x.category === prevCat && x.name === l.name ? { ...x, category: newCat } : x)))
+    const revert = () => setLogos((prev) => prev.map((x) => (x.category === newCat && x.name === l.name ? { ...x, category: prevCat } : x)))
+    try {
+      const res = await fetch('/api/brand/review-category', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: reviewKey, code, category: prevCat, name: l.name, newCategory: newCat }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        revert()
+        setFlagError(typeof d?.error === 'string' ? d.error : 'Could not change the category.')
+      }
+    } catch {
+      revert()
+      setFlagError('Could not change the category. Try again.')
+    }
+  }
+
   const copyHex = async (key: string, hex: string) => {
     try {
       await navigator.clipboard.writeText(hex)
@@ -220,6 +258,10 @@ export default function SchoolBrandPage() {
               )}
             </header>
 
+            {!reviewKey && (
+              <a href={`/brand/${code}/guide`} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginBottom: 18, padding: '9px 16px', borderRadius: 8, border: `1px solid ${colors.info}`, color: colors.info, fontSize: 13.5, fontWeight: 700, textDecoration: 'none' }}>Open brand guide {'↗'}</a>
+            )}
+
             {reviewKey && (
               <div style={{ marginBottom: flagError ? 10 : 18, padding: '10px 14px', borderRadius: 10, border: '1px solid #f0b429', background: '#fff8e6', color: '#7a5300', fontSize: 13.5, fontWeight: 600 }}>
                 Review mode: click any logo that is old and should be deleted (click it again to undo). Marks save automatically, and a manager confirms the deletions later.
@@ -229,6 +271,60 @@ export default function SchoolBrandPage() {
               <div style={{ marginBottom: 18, padding: '10px 14px', borderRadius: 10, border: '1px solid #e0282e', background: '#fdecec', color: '#a4161a', fontSize: 13.5, fontWeight: 600 }}>
                 {flagError}
               </div>
+            )}
+
+            {school.type === 'district' && departments.some((d) => d.logoCount > 0) && (
+              <section style={{ marginBottom: 28 }}>
+                <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Departments</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {departments.filter((dep) => dep.logoCount > 0).map((dep) => {
+                    const open = deptOpen.has(dep.code)
+                    const dlogos = deptLogos[dep.code] || []
+                    return (
+                      <div key={dep.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 12, background: colors.cardBg, overflow: 'hidden' }}>
+                        <button type="button" onClick={() => toggleDept(dep.code)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', color: colors.text }}>
+                          <span style={{ fontSize: 15, fontWeight: 700 }}>{dep.name}</span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                            <span style={{ fontSize: 12.5, color: colors.muted }}>{dep.logoCount} logo{dep.logoCount === 1 ? '' : 's'}</span>
+                            <span style={{ fontSize: 12, color: colors.muted }}>{open ? '▾' : '▸'}</span>
+                          </span>
+                        </button>
+                        {open && (
+                          <div style={{ padding: '0 16px 16px' }}>
+                            {deptLoading.has(dep.code) && dlogos.length === 0 ? (
+                              <p style={{ fontSize: 13, color: colors.muted, margin: 0 }}>Loading...</p>
+                            ) : dlogos.length === 0 ? (
+                              <p style={{ fontSize: 13, color: colors.muted, margin: 0 }}>No logos.</p>
+                            ) : (
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+                                {dlogos.map((l) => {
+                                  const preview = l.png || l.jpg
+                                  return (
+                                    <div key={`${l.category}-${l.name}`} onClick={() => openDrawer(l)} style={{ border: `1px solid ${colors.border}`, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: colors.cardBg }}>
+                                      <div style={{ height: 140, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
+                                        {preview ? (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
+                                        ) : (
+                                          <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
+                                        )}
+                                      </div>
+                                      <div style={{ padding: '10px 12px' }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</div>
+                                        <div style={{ fontSize: 12, color: colors.muted, marginTop: 2 }}>{l.category}</div>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
             )}
 
             <section style={{ marginBottom: 26 }}>
@@ -282,9 +378,23 @@ export default function SchoolBrandPage() {
                             <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                               <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</span>
                               {reviewKey ? (
-                                <span style={{ fontSize: 12, fontWeight: 700, color: l.flagged ? '#e0282e' : colors.muted, marginTop: 'auto' }}>
-                                  {l.flagged ? 'Marked for deletion - click to undo' : 'Click to mark as old'}
-                                </span>
+                                <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: l.flagged ? '#e0282e' : colors.muted }}>
+                                    {l.flagged ? 'Marked for deletion - click to undo' : 'Click to mark as old'}
+                                  </span>
+                                  <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                                    <span style={{ fontSize: 10.5, color: colors.muted, alignSelf: 'center', marginRight: 2 }}>Category:</span>
+                                    {(CATEGORY_ORDER.includes(l.category) ? CATEGORY_ORDER : [...CATEGORY_ORDER, l.category]).map((cat) => {
+                                      const cur = cat === l.category
+                                      return (
+                                        <button key={cat} type="button" onClick={(e) => { e.stopPropagation(); changeCategory(l, cat) }}
+                                          style={{ padding: '3px 8px', borderRadius: 6, border: `1px solid ${cur ? colors.info : colors.line}`, background: cur ? colors.info : colors.cardBg, color: cur ? '#ffffff' : colors.muted, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                                          {cat}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
                               ) : (
                                 <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
                                   {l.png && <a href={l.png} style={dlBtn}>PNG</a>}
@@ -301,34 +411,6 @@ export default function SchoolBrandPage() {
               )}
             </section>
 
-            {school.type === 'district' && departments.some((d) => d.logoCount > 0) && (
-              <section style={{ marginTop: 28 }}>
-                <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Departments</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-                  {departments.filter((dep) => dep.logoCount > 0).map((dep) => {
-                    const sw = (slot: keyof Colors) => {
-                      const hex = dep.colors[slot]
-                      if (!hex) return null
-                      const key = `dep-${dep.code}-${slot}`
-                      return (
-                        <button key={slot} type="button" onClick={() => copyHex(key, hex)} title={`Copy ${hex}`}
-                          style={{ flex: '1 1 0', minWidth: 0, height: 24, borderRadius: 6, border: `1px solid ${colors.line}`, background: hex, color: readableOn(hex), fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
-                          {copied === key ? 'Copied' : hex}
-                        </button>
-                      )
-                    }
-                    const sws = [sw('primary'), sw('secondary'), sw('accent'), sw('text')].filter(Boolean)
-                    return (
-                      <div key={dep.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 12, background: colors.cardBg, padding: '12px 14px' }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.25 }}>{dep.name}</div>
-                        <div style={{ fontSize: 12, color: colors.muted, marginTop: 3 }}>{dep.logoCount > 0 ? `${dep.logoCount} logo${dep.logoCount === 1 ? '' : 's'}` : 'No logos yet'}</div>
-                        {sws.length > 0 && <div style={{ display: 'flex', gap: 5, marginTop: 10 }}>{sws}</div>}
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            )}
           </>
         ) : null}
       </div>
