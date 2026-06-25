@@ -89,6 +89,7 @@ export default function ManageSchoolBrandPage() {
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
   const [fileSize, setFileSize] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
@@ -275,8 +276,13 @@ export default function ManageSchoolBrandPage() {
             </p>
           </header>
 
-          <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', padding: 16, marginBottom: 24 }}>
-            <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800 }}>Add a logo</h2>
+          <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', marginBottom: 24, overflow: 'hidden' }}>
+            <button type="button" onClick={() => setAddOpen((o) => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>
+              <span style={{ fontSize: 14, fontWeight: 800 }}>Add a logo</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#185fa5' }}>{addOpen ? 'Hide' : '+ Add logo'}</span>
+            </button>
+            {addOpen && (
+            <div style={{ padding: '0 16px 16px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(200px, 2fr)', gap: 10, marginBottom: 12 }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Category</span>
@@ -305,6 +311,8 @@ export default function ManageSchoolBrandPage() {
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
               Drop one or more files. With a single file the name above is used; for multiple, each name comes from its filename. Re-uploading the same category, name, and format replaces the existing file.
             </p>
+            </div>
+            )}
           </section>
 
           {logos.length > 0 && (
