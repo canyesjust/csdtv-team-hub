@@ -98,6 +98,26 @@ const C = {
   sage: '#5C7762', sageSoft: '#E7EEE9', ok: '#2E7A50', warn: '#AE3A29',
 }
 
+/* Drawing palettes. `C` styles the app chrome (panels, buttons); the floor plan
+   itself is themed by one of these so we can switch between a clean CAD/drafting
+   look and the original colored look without touching the UI. Keys mirror the
+   subset of `C` that the SVG components use, so a component just reads `pal.x`. */
+const PAL_COLOR = {
+  floor: C.floor, grid: C.grid, gridStrong: C.gridStrong, wall: C.wall,
+  accent: C.accent, faint: C.faint, deskFill: C.deskFill, deskEdge: C.deskEdge,
+  chair: C.chair, amber: C.amber, amberSoft: C.amberSoft, sage: C.sage,
+  sageSoft: C.sageSoft, muted: C.muted, warn: C.warn, paper: C.paper, ok: C.ok,
+  wallHatch: null as string | null, wallFill: C.wall, rx: 1.5, showGrid: true,
+}
+type Pal = typeof PAL_COLOR
+const PAL_CAD: Pal = {
+  ...PAL_COLOR,
+  grid: '#F2F2F2', gridStrong: '#E6E6E6', wall: '#202020', accent: '#202020',
+  faint: '#8A8A8A', deskFill: '#FFFFFF', deskEdge: '#2B2B2B', chair: '#FFFFFF',
+  amber: '#202020', amberSoft: '#F2F2F2', sage: '#202020', sageSoft: '#F4F4F4',
+  muted: '#202020', warn: '#9A9A9A', wallHatch: '#202020', wallFill: '#E4E4E4', rx: 0, showGrid: false,
+}
+
 const INTRA = 0 // gap between desks inside a cluster (in) — flush
 const SEAT_GAP = 6 // gap between desks along a horseshoe wall (in)
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
@@ -119,12 +139,14 @@ const overlaps = (bb: Box, z: Box) => bb.l < z.r - 0.5 && bb.r > z.l + 0.5 && bb
 const clearOfDoors = (desks: Item[], zones: Box[]) =>
   desks.filter((d) => { const bb = bboxOf(d); return !zones.some((z) => overlaps(bb, z)) })
 
+// Worksurface sizes in inches (W × D). Sources: standard student desk ~24×18;
+// office/computer desks run 30–60" wide × 24–30" deep (dual-monitor ≥60×30).
 const DESK_PRESETS = [
-  { name: 'Student desk', w: 24, d: 18, seats: 1 },
-  { name: 'Large desk', w: 30, d: 20, seats: 1 },
-  { name: 'Tablet-arm chair', w: 26, d: 22, seats: 1 },
-  { name: '2-seat table', w: 48, d: 24, seats: 2 },
-  { name: 'Activity table', w: 48, d: 30, seats: 2 },
+  { name: 'Student desk 24×18', w: 24, d: 18, seats: 1 },
+  { name: 'Standard desk 30×24', w: 30, d: 24, seats: 1 },
+  { name: 'Computer desk 30×30', w: 30, d: 30, seats: 1 },
+  { name: '2-seat table 48×24', w: 48, d: 24, seats: 2 },
+  { name: 'Activity table 60×30', w: 60, d: 30, seats: 2 },
 ]
 
 const LAYOUTS: LayoutDef[] = [
@@ -378,44 +400,70 @@ function Check({ on, set, label }: { on: boolean; set: (v: boolean) => void; lab
 
 /* ---------------- plan items ---------------- */
 
-function Desk({ d, sw, editable, selected, index, onDown }: { d: Item; sw: number; editable: boolean; selected: boolean; index: number; onDown: (index: number, e: React.PointerEvent) => void }) {
-  const fill = d.ada ? C.amberSoft : C.deskFill
-  const edge = d.ada ? C.amber : C.deskEdge
-  const hw = d.w / 2, hh = d.d / 2
-  const seats = Math.max(1, d.seats || Math.round(d.w / 26))
-  const chairH = Math.min(8, d.d * 0.42)
-  const slot = d.w / seats
-  const chairW = Math.min(slot * 0.62, 16)
+// A task-chair plan symbol drawn in the desk's local frame, seated just in
+// front of the desk's front edge (local +y). Rounded seat + curved backrest
+// + short armrests — the conventional top-view chair (lightest line weight).
+// A task-chair plan symbol (~18" seat) seated at the desk's front edge and
+// tucked partly UNDER the worksurface, the way chairs are shown on real plans.
+// The desk rect is drawn after the chairs, so the tucked part reads as hidden.
+function chairSymbol(cx: number, frontEdge: number, slot: number, deskD: number, stroke: string, fill: string, w: number) {
+  const seatW = clamp(Math.min(slot, 26) * 0.66, 14, 19)  // ~17" seat
+  const seatD = clamp(deskD * 0.62, 15, 19)               // ~18" deep
+  const tuck = seatD * 0.32                                // slides under the desk
+  const y0 = frontEdge - tuck                              // seat top (under desk)
+  const yBack = y0 + seatD                                 // backrest side (away from desk)
+  const arm = seatW * 0.5
   return (
-    <g transform={`translate(${d.cx} ${d.cy}) rotate(${d.rot})`}
-      style={{ transition: editable ? 'none' : 'transform .4s cubic-bezier(.4,0,.2,1)', cursor: editable ? 'grab' : 'default' }}
-      onPointerDown={editable ? (e) => onDown(index, e) : undefined}>
-      {selected && <rect x={-hw - 5} y={-hh - 5} width={d.w + 10} height={d.d + 10} rx={4} fill="none" stroke={C.accent} strokeWidth={sw * 1.4} strokeDasharray={`${sw * 3} ${sw * 2}`} />}
-      {[...Array(seats)].map((_, i) => {
-        const cx = -hw + slot * (i + 0.5)
-        return <rect key={i} x={cx - chairW / 2} y={hh + 1.5} width={chairW} height={chairH} rx={1.5} fill={C.chair} stroke={edge} strokeWidth={sw * 0.55} />
-      })}
-      <rect x={-hw} y={-hh} width={d.w} height={d.d} rx={1.5} fill={fill} stroke={selected ? C.accent : edge} strokeWidth={selected ? sw * 1.5 : sw} />
-      {d.ada && <text x={0} y={2.5} textAnchor="middle" fontSize={Math.min(11, d.d * 0.5)} fontFamily="'Public Sans',sans-serif" fontWeight="700" fill={C.amber} style={{ pointerEvents: 'none' }}>♿</text>}
+    <g key={'ch' + cx} style={{ pointerEvents: 'none' }}>
+      {/* armrests */}
+      <line x1={cx - seatW / 2 - 0.8} y1={frontEdge + seatD * 0.04} x2={cx - seatW / 2 - 0.8} y2={yBack - seatD * 0.14} stroke={stroke} strokeWidth={w} strokeLinecap="round" />
+      <line x1={cx + seatW / 2 + 0.8} y1={frontEdge + seatD * 0.04} x2={cx + seatW / 2 + 0.8} y2={yBack - seatD * 0.14} stroke={stroke} strokeWidth={w} strokeLinecap="round" />
+      {/* seat */}
+      <rect x={cx - seatW / 2} y={y0} width={seatW} height={seatD} rx={2.6} fill={fill} stroke={stroke} strokeWidth={w} />
+      {/* curved backrest hugging the far edge */}
+      <path d={`M ${cx - arm} ${yBack - 0.4} Q ${cx} ${yBack + seatD * 0.4} ${cx + arm} ${yBack - 0.4}`} fill="none" stroke={stroke} strokeWidth={w * 1.2} strokeLinecap="round" />
     </g>
   )
 }
 
-function Teacher({ t, sw, selected, index, onDown, room }: { t: Item; sw: number; selected: boolean; index: number; onDown: (index: number, e: React.PointerEvent) => void; room: Room }) {
+function Desk({ d, sw, pal, editable, selected, index, onDown }: { d: Item; sw: number; pal: Pal; editable: boolean; selected: boolean; index: number; onDown: (index: number, e: React.PointerEvent) => void }) {
+  const fill = d.ada ? pal.amberSoft : pal.deskFill
+  const edge = d.ada ? pal.amber : pal.deskEdge
+  const hw = d.w / 2, hh = d.d / 2
+  const seats = Math.max(1, d.seats || Math.round(d.w / 26))
+  const slot = d.w / seats
+  const deskW = sw * 0.85   // furniture outline — medium-thin
+  const chairW = sw * 0.55  // chair detail — thinnest
+  return (
+    <g transform={`translate(${d.cx} ${d.cy}) rotate(${d.rot})`}
+      style={{ transition: editable ? 'none' : 'transform .4s cubic-bezier(.4,0,.2,1)', cursor: editable ? 'grab' : 'default' }}
+      onPointerDown={editable ? (e) => onDown(index, e) : undefined}>
+      {selected && <rect x={-hw - 6} y={-hh - 6} width={d.w + 12} height={d.d + 12 + d.d * 0.55} rx={pal.rx ? 4 : 1} fill="none" stroke={C.accent} strokeWidth={sw * 1.4} strokeDasharray={`${sw * 3} ${sw * 2}`} />}
+      {[...Array(seats)].map((_, i) => chairSymbol(-hw + slot * (i + 0.5), hh, slot, d.d, edge, pal.chair, chairW))}
+      <rect x={-hw} y={-hh} width={d.w} height={d.d} rx={pal.rx} fill={fill} stroke={selected ? C.accent : edge} strokeWidth={selected ? deskW * 1.7 : deskW} />
+      {/* worktop front lip — a light secondary line gives the desk depth */}
+      <line x1={-hw + 2} y1={hh - Math.min(4, d.d * 0.18)} x2={hw - 2} y2={hh - Math.min(4, d.d * 0.18)} stroke={edge} strokeWidth={sw * 0.4} opacity={0.5} />
+      {d.ada && <text x={0} y={2.5} textAnchor="middle" fontSize={Math.min(11, d.d * 0.5)} fontFamily="'Public Sans',sans-serif" fontWeight="700" fill={pal.amber} style={{ pointerEvents: 'none' }}>♿</text>}
+    </g>
+  )
+}
+
+function Teacher({ t, sw, pal, selected, index, onDown, room }: { t: Item; sw: number; pal: Pal; selected: boolean; index: number; onDown: (index: number, e: React.PointerEvent) => void; room: Room }) {
   const cx = clamp(t.cx, effW(t) / 2, room.w - effW(t) / 2)
   const cy = clamp(t.cy, effH(t) / 2, room.l - effH(t) / 2)
   const hw = t.w / 2, hh = t.d / 2
   return (
     <g transform={`translate(${cx} ${cy}) rotate(${t.rot})`} style={{ cursor: 'grab' }} onPointerDown={(e) => onDown(index, e)}>
-      {selected && <rect x={-hw - 5} y={-hh - 5} width={t.w + 10} height={t.d + 10} rx={4} fill="none" stroke={C.accent} strokeWidth={sw * 1.4} strokeDasharray={`${sw * 3} ${sw * 2}`} />}
-      <rect x={-hw} y={-hh} width={t.w} height={t.d} rx={2} fill={C.sageSoft} stroke={selected ? C.accent : C.sage} strokeWidth={selected ? sw * 1.5 : sw} />
-      <rect x={-hw * 0.5} y={-hh - Math.min(8, t.d * 0.34)} width={t.w * 0.5} height={Math.min(7, t.d * 0.3)} rx={1.5} fill={C.chair} stroke={C.sage} strokeWidth={sw * 0.55} />
-      <text x={0} y={2.5} textAnchor="middle" fontSize={Math.min(9, t.d * 0.34)} fontFamily="'Public Sans',sans-serif" fontWeight="600" fill={C.sage} style={{ pointerEvents: 'none' }}>teacher</text>
+      {selected && <rect x={-hw - 6} y={-hh - 6 - t.d * 0.55} width={t.w + 12} height={t.d + 12 + t.d * 0.55} rx={pal.rx ? 4 : 1} fill="none" stroke={C.accent} strokeWidth={sw * 1.4} strokeDasharray={`${sw * 3} ${sw * 2}`} />}
+      {/* teacher chair sits behind the desk (local -y, facing the class) */}
+      <g transform="scale(1 -1)">{chairSymbol(0, hh, t.w * 0.9, t.d, pal.sage, pal.chair, sw * 0.55)}</g>
+      <rect x={-hw} y={-hh} width={t.w} height={t.d} rx={pal.rx} fill={pal.sageSoft} stroke={selected ? C.accent : pal.sage} strokeWidth={selected ? sw * 1.5 : sw * 0.85} />
+      <text x={0} y={2.5} textAnchor="middle" fontSize={Math.min(9, t.d * 0.34)} fontFamily="'Public Sans',sans-serif" fontWeight="600" fill={pal.sage} style={{ pointerEvents: 'none' }}>teacher</text>
     </g>
   )
 }
 
-function Door({ dr, sw, wallT, selected, index, onDown, room }: { dr: DoorT; sw: number; wallT: number; selected: boolean; index: number; onDown: (index: number, e: React.PointerEvent) => void; room: Room }) {
+function Door({ dr, sw, pal, wallT, selected, index, onDown, room }: { dr: DoorT; sw: number; pal: Pal; wallT: number; selected: boolean; index: number; onDown: (index: number, e: React.PointerEvent) => void; room: Room }) {
   const len = dr.len || 36
   let tx: number, ty: number, rot: number, max: number
   if (dr.wall === 'left' || dr.wall === 'right') max = room.l; else max = room.w
@@ -424,13 +472,19 @@ function Door({ dr, sw, wallT, selected, index, onDown, room }: { dr: DoorT; sw:
   else if (dr.wall === 'right') { tx = room.w; ty = pos + len / 2; rot = 180 }
   else if (dr.wall === 'top') { tx = pos + len / 2; ty = 0; rot = 90 }
   else { tx = pos - len / 2; ty = room.l; rot = -90 }
-  const stroke = selected ? C.accent : C.muted
+  const stroke = selected ? C.accent : pal.wall
   return (
     <g transform={`translate(${tx} ${ty}) rotate(${rot})`} style={{ cursor: 'grab' }} onPointerDown={(e) => onDown(index, e)}>
-      <rect x={-wallT} y={-1} width={wallT * 2} height={len + 2} fill={C.floor} />
-      <line x1={0} y1={0} x2={len} y2={0} stroke={stroke} strokeWidth={sw * 1.2} />
-      <path d={`M ${len} 0 A ${len} ${len} 0 0 1 0 ${len}`} fill="none" stroke={C.faint} strokeWidth={sw * 0.7} />
-      {selected && <circle cx={0} cy={0} r={sw * 2.4} fill={C.accent} />}
+      {/* cut the wall poché at the opening */}
+      <rect x={-wallT - 0.5} y={-0.5} width={wallT + 1} height={len + 1} fill={pal.floor} />
+      {/* jamb returns (close the wall ends) */}
+      <line x1={-wallT} y1={0} x2={0} y2={0} stroke={stroke} strokeWidth={sw * 0.9} />
+      <line x1={-wallT} y1={len} x2={0} y2={len} stroke={stroke} strokeWidth={sw * 0.9} />
+      {/* swing arc */}
+      <path d={`M ${len} 0 A ${len} ${len} 0 0 1 0 ${len}`} fill="none" stroke={pal.faint} strokeWidth={sw * 0.5} />
+      {/* door leaf panel, swung open into the room */}
+      <rect x={0} y={-1.4} width={len} height={2} rx={0.4} fill={selected ? C.accentSoft : pal.floor} stroke={stroke} strokeWidth={sw * 0.7} />
+      {selected && <circle cx={0} cy={0} r={sw * 2.2} fill={C.accent} />}
       <rect x={-9} y={-6} width={18} height={len + 12} fill="transparent" />
     </g>
   )
@@ -438,19 +492,17 @@ function Door({ dr, sw, wallT, selected, index, onDown, room }: { dr: DoorT; sw:
 
 function dimLine(x1: number, y1: number, x2: number, y2: number, label: string, sw: number, vertical?: boolean, color?: string): React.ReactElement {
   const c = color || C.faint
-  const tick = sw * 3.2
+  const t = sw * 2.2          // architectural 45° slash tick
+  const lw = sw * 0.45        // dimensions are among the lightest lines
+  const slash = (x: number, y: number) => <line x1={x - t} y1={y + t} x2={x + t} y2={y - t} stroke={c} strokeWidth={lw} />
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={c} strokeWidth={sw * 0.7} />
-      {vertical ? (<>
-        <line x1={x1 - tick} y1={y1} x2={x1 + tick} y2={y1} stroke={c} strokeWidth={sw * 0.7} />
-        <line x1={x2 - tick} y1={y2} x2={x2 + tick} y2={y2} stroke={c} strokeWidth={sw * 0.7} />
-        <text x={x1 + 9} y={(y1 + y2) / 2} textAnchor="middle" fontSize={9.5} fontFamily="'IBM Plex Mono',monospace" fill={c} transform={`rotate(90 ${x1 + 9} ${(y1 + y2) / 2})`}>{label}</text>
-      </>) : (<>
-        <line x1={x1} y1={y1 - tick} x2={x1} y2={y1 + tick} stroke={c} strokeWidth={sw * 0.7} />
-        <line x1={x2} y1={y2 - tick} x2={x2} y2={y2 + tick} stroke={c} strokeWidth={sw * 0.7} />
-        <text x={(x1 + x2) / 2} y={y1 + 13} textAnchor="middle" fontSize={9.5} fontFamily="'IBM Plex Mono',monospace" fill={c}>{label}</text>
-      </>)}
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={c} strokeWidth={lw} />
+      {slash(x1, y1)}
+      {slash(x2, y2)}
+      {vertical
+        ? <text x={x1 + 9} y={(y1 + y2) / 2} textAnchor="middle" fontSize={9} fontFamily="'IBM Plex Mono',monospace" fill={c} transform={`rotate(90 ${x1 + 9} ${(y1 + y2) / 2})`}>{label}</text>
+        : <text x={(x1 + x2) / 2} y={y1 + 12} textAnchor="middle" fontSize={9} fontFamily="'IBM Plex Mono',monospace" fill={c}>{label}</text>}
     </g>
   )
 }
@@ -471,17 +523,22 @@ type PlanProps = {
   onItemDown: (kind: SelKind, idx: number, e: React.PointerEvent) => void
   onBackgroundDown: () => void
   svgRef: React.RefObject<SVGSVGElement | null>
+  pal: Pal
 }
 
-function Plan({ room, desks, teachers, doors, sp, showADA, firstAisleX, firstRowY, manual, showFrontGuide, showDims, sel, onItemDown, onBackgroundDown, svgRef }: PlanProps) {
-  const M = 34
-  const vbW = room.w + M * 2, vbH = room.l + M * 2
+function Plan({ room, desks, teachers, doors, sp, showADA, firstAisleX, firstRowY, manual, showFrontGuide, showDims, sel, onItemDown, onBackgroundDown, svgRef, pal }: PlanProps) {
+  const cadMargin = pal.wallHatch != null
+  const M = cadMargin ? 50 : 34
+  const vbW = room.w + M * 2, vbH = room.l + M * 2 + (cadMargin ? 14 : 0)
   const sw = Math.max(1.3, room.w / 320)
-  const wallT = sw * 3.4
+  const cad = pal.wallHatch != null
+  const wallT = cad ? Math.max(6, room.w / 90) : sw * 3.4
   const ft = 12
   const gridLines: React.ReactElement[] = []
-  for (let x = ft; x < room.w; x += ft) gridLines.push(<line key={'gx' + x} x1={x} y1={0} x2={x} y2={room.l} stroke={x % 60 === 0 ? C.gridStrong : C.grid} strokeWidth={sw * 0.4} />)
-  for (let y = ft; y < room.l; y += ft) gridLines.push(<line key={'gy' + y} x1={0} y1={y} x2={room.w} y2={y} stroke={y % 60 === 0 ? C.gridStrong : C.grid} strokeWidth={sw * 0.4} />)
+  if (pal.showGrid) {
+    for (let x = ft; x < room.w; x += ft) gridLines.push(<line key={'gx' + x} x1={x} y1={0} x2={x} y2={room.l} stroke={x % 60 === 0 ? pal.gridStrong : pal.grid} strokeWidth={sw * 0.4} />)
+    for (let y = ft; y < room.l; y += ft) gridLines.push(<line key={'gy' + y} x1={0} y1={y} x2={room.w} y2={y} stroke={y % 60 === 0 ? pal.gridStrong : pal.grid} strokeWidth={sw * 0.4} />)
+  }
   const isSel = (kind: SelKind, idx: number) => !!sel && sel.kind === kind && sel.idx === idx
   const mLbl = (v: number) => `${Math.round(v)}″`
   let mb: { minL: number; maxR: number; minT: number; maxB: number } | null = null
@@ -494,72 +551,102 @@ function Plan({ room, desks, teachers, doors, sp, showADA, firstAisleX, firstRow
   }
 
   return (
-    <svg ref={svgRef} viewBox={`${-M} ${-M} ${vbW} ${vbH}`} style={{ width: '100%', height: 'auto', display: 'block', background: C.paper, touchAction: 'none' }} preserveAspectRatio="xMidYMid meet">
+    <svg ref={svgRef} viewBox={`${-M} ${-M} ${vbW} ${vbH}`} style={{ width: '100%', height: 'auto', display: 'block', background: pal.paper, touchAction: 'none' }} preserveAspectRatio="xMidYMid meet">
       <rect x={-M} y={-M} width={vbW} height={vbH} fill="transparent" onPointerDown={onBackgroundDown} />
-      <rect x={0} y={0} width={room.w} height={room.l} fill={C.floor} onPointerDown={onBackgroundDown} />
+      <rect x={0} y={0} width={room.w} height={room.l} fill={pal.floor} onPointerDown={onBackgroundDown} />
       {gridLines}
-      {doors.map((dr, i) => { const z = doorClear(dr, room); return <rect key={'dz' + i} x={z.l} y={z.t} width={z.r - z.l} height={z.b - z.t} fill={C.warn} fillOpacity={0.05} stroke={C.warn} strokeOpacity={0.28} strokeWidth={sw * 0.5} strokeDasharray={`${sw * 2} ${sw * 1.6}`} style={{ pointerEvents: 'none' }} /> })}
-      <rect x={-wallT / 2} y={-wallT / 2} width={room.w + wallT} height={room.l + wallT} fill="none" stroke={C.wall} strokeWidth={wallT} />
-      <rect x={room.w * 0.24} y={-wallT / 2 - 1} width={room.w * 0.52} height={sw * 1.4} fill={C.accent} />
-      <text x={room.w / 2} y={-wallT / 2 - 6} textAnchor="middle" fontSize={9.5} fontFamily="'Public Sans',sans-serif" fill={C.faint}>board</text>
+      {!cad && doors.map((dr, i) => { const z = doorClear(dr, room); return <rect key={'dz' + i} x={z.l} y={z.t} width={z.r - z.l} height={z.b - z.t} fill={pal.warn} fillOpacity={0.05} stroke={pal.warn} strokeOpacity={0.28} strokeWidth={sw * 0.5} strokeDasharray={`${sw * 2} ${sw * 1.6}`} style={{ pointerEvents: 'none' }} /> })}
+      {cad ? (<>
+        {/* solid poché wall band between heavy black faces — the heaviest line weight */}
+        <path fillRule="evenodd" fill={pal.wallFill} stroke="none" style={{ pointerEvents: 'none' }}
+          d={`M ${-wallT} ${-wallT} H ${room.w + wallT} V ${room.l + wallT} H ${-wallT} Z M 0 0 H ${room.w} V ${room.l} H 0 Z`} />
+        <rect x={-wallT} y={-wallT} width={room.w + 2 * wallT} height={room.l + 2 * wallT} fill="none" stroke={pal.wall} strokeWidth={sw * 1.05} />
+        <rect x={0} y={0} width={room.w} height={room.l} fill="none" stroke={pal.wall} strokeWidth={sw * 1.05} />
+      </>) : (
+        <rect x={-wallT / 2} y={-wallT / 2} width={room.w + wallT} height={room.l + wallT} fill="none" stroke={pal.wall} strokeWidth={wallT} />
+      )}
+      {/* markerboard mounted on the front wall */}
+      <g style={{ pointerEvents: 'none' }}>
+        <line x1={room.w * 0.27} y1={1.5} x2={room.w * 0.73} y2={1.5} stroke={pal.wall} strokeWidth={sw * 1.4} strokeLinecap="round" />
+        <line x1={room.w * 0.27} y1={3.6} x2={room.w * 0.73} y2={3.6} stroke={pal.faint} strokeWidth={sw * 0.45} />
+        <text x={room.w / 2} y={-wallT / 2 - 5} textAnchor="middle" fontSize={8.5} letterSpacing={1} fontFamily="'IBM Plex Mono',monospace" fill={pal.faint}>MARKERBOARD</text>
+      </g>
 
-      {doors.map((dr, i) => <Door key={'dr' + i} dr={dr} sw={sw} wallT={wallT} selected={isSel('door', i)} index={i} onDown={(idx, e) => onItemDown('door', idx, e)} room={room} />)}
-      {teachers.map((t, i) => <Teacher key={'tc' + i} t={t} sw={sw} selected={isSel('teacher', i)} index={i} onDown={(idx, e) => onItemDown('teacher', idx, e)} room={room} />)}
+      {doors.map((dr, i) => <Door key={'dr' + i} dr={dr} sw={sw} pal={pal} wallT={wallT} selected={isSel('door', i)} index={i} onDown={(idx, e) => onItemDown('door', idx, e)} room={room} />)}
+      {teachers.map((t, i) => <Teacher key={'tc' + i} t={t} sw={sw} pal={pal} selected={isSel('teacher', i)} index={i} onDown={(idx, e) => onItemDown('teacher', idx, e)} room={room} />)}
 
       {showFrontGuide && sp.front > 6 && (
         <g style={{ pointerEvents: 'none' }}>
-          <rect x={0} y={0} width={room.w} height={sp.front} fill={C.accent} opacity={0.04} />
-          <line x1={0} y1={sp.front} x2={room.w} y2={sp.front} stroke={C.accent} strokeWidth={sw * 0.6} strokeDasharray={`${sw * 3} ${sw * 2}`} opacity={0.55} />
-          <text x={6} y={sp.front - 4} fontSize={8.5} fontFamily="'Public Sans',sans-serif" fill={C.accent} opacity={0.85}>front clearance {Math.round(sp.front)}″</text>
+          <rect x={0} y={0} width={room.w} height={sp.front} fill={pal.accent} opacity={0.04} />
+          <line x1={0} y1={sp.front} x2={room.w} y2={sp.front} stroke={pal.accent} strokeWidth={sw * 0.6} strokeDasharray={`${sw * 3} ${sw * 2}`} opacity={0.55} />
+          <text x={6} y={sp.front - 4} fontSize={8.5} fontFamily="'Public Sans',sans-serif" fill={pal.accent} opacity={0.85}>front clearance {Math.round(sp.front)}″</text>
         </g>
       )}
 
       {showADA && desks.filter((d) => d.ada && d.rot === 0).map((d, i) => (
-        <rect key={'ada' + i} x={d.cx - 15} y={d.cy - d.d / 2 - 48} width={30} height={48} fill="none" stroke={C.amber} strokeWidth={sw * 0.6} strokeDasharray={`${sw * 2.4} ${sw * 1.6}`} opacity={0.6} />
+        <rect key={'ada' + i} x={d.cx - 15} y={d.cy - d.d / 2 - 48} width={30} height={48} fill="none" stroke={pal.amber} strokeWidth={sw * 0.6} strokeDasharray={`${sw * 2.4} ${sw * 1.6}`} opacity={0.6} />
       ))}
 
-      {desks.map((d, i) => <Desk key={'dk' + i} d={d} sw={sw} editable={manual} selected={isSel('desk', i)} index={i} onDown={(idx, e) => onItemDown('desk', idx, e)} />)}
+      {desks.map((d, i) => <Desk key={'dk' + i} d={d} sw={sw} pal={pal} editable={manual} selected={isSel('desk', i)} index={i} onDown={(idx, e) => onItemDown('desk', idx, e)} />)}
 
       {showDims && firstAisleX != null && (
         <g style={{ pointerEvents: 'none' }}>
-          <line x1={firstAisleX.a} y1={sp.front - 9} x2={firstAisleX.b} y2={sp.front - 9} stroke={C.accent} strokeWidth={sw * 0.8} />
-          <line x1={firstAisleX.a} y1={sp.front - 13} x2={firstAisleX.a} y2={sp.front - 5} stroke={C.accent} strokeWidth={sw * 0.8} />
-          <line x1={firstAisleX.b} y1={sp.front - 13} x2={firstAisleX.b} y2={sp.front - 5} stroke={C.accent} strokeWidth={sw * 0.8} />
-          <text x={(firstAisleX.a + firstAisleX.b) / 2} y={sp.front - 14} textAnchor="middle" fontSize={9} fontFamily="'IBM Plex Mono',monospace" fontWeight="600" fill={sp.aisle < 36 ? C.warn : C.accent}>aisle {Math.round(firstAisleX.b - firstAisleX.a)}″</text>
+          <line x1={firstAisleX.a} y1={sp.front - 9} x2={firstAisleX.b} y2={sp.front - 9} stroke={pal.accent} strokeWidth={sw * 0.8} />
+          <line x1={firstAisleX.a} y1={sp.front - 13} x2={firstAisleX.a} y2={sp.front - 5} stroke={pal.accent} strokeWidth={sw * 0.8} />
+          <line x1={firstAisleX.b} y1={sp.front - 13} x2={firstAisleX.b} y2={sp.front - 5} stroke={pal.accent} strokeWidth={sw * 0.8} />
+          <text x={(firstAisleX.a + firstAisleX.b) / 2} y={sp.front - 14} textAnchor="middle" fontSize={9} fontFamily="'IBM Plex Mono',monospace" fontWeight="600" fill={sp.aisle < 36 ? pal.warn : pal.accent}>aisle {Math.round(firstAisleX.b - firstAisleX.a)}″</text>
         </g>
       )}
 
       {showDims && mb && (
         <g>
-          {mb.minT > 4 && dimLine(room.w * 0.16, 0, room.w * 0.16, mb.minT, mLbl(mb.minT), sw, true, C.accent)}
-          {mb.minL > 4 && dimLine(0, room.l * 0.5, mb.minL, room.l * 0.5, mLbl(mb.minL), sw, false, C.accent)}
-          {room.w - mb.maxR > 4 && dimLine(mb.maxR, room.l * 0.5, room.w, room.l * 0.5, mLbl(room.w - mb.maxR), sw, false, C.accent)}
-          {room.l - mb.maxB > 4 && dimLine(room.w * 0.5, mb.maxB, room.w * 0.5, room.l, mLbl(room.l - mb.maxB), sw, true, C.accent)}
-          {firstRowY && dimLine(room.w * 0.88, firstRowY.a, room.w * 0.88, firstRowY.b, mLbl(firstRowY.b - firstRowY.a), sw, true, C.accent)}
+          {mb.minT > 4 && dimLine(room.w * 0.16, 0, room.w * 0.16, mb.minT, mLbl(mb.minT), sw, true, pal.accent)}
+          {mb.minL > 4 && dimLine(0, room.l * 0.5, mb.minL, room.l * 0.5, mLbl(mb.minL), sw, false, pal.accent)}
+          {room.w - mb.maxR > 4 && dimLine(mb.maxR, room.l * 0.5, room.w, room.l * 0.5, mLbl(room.w - mb.maxR), sw, false, pal.accent)}
+          {room.l - mb.maxB > 4 && dimLine(room.w * 0.5, mb.maxB, room.w * 0.5, room.l, mLbl(room.l - mb.maxB), sw, true, pal.accent)}
+          {firstRowY && dimLine(room.w * 0.88, firstRowY.a, room.w * 0.88, firstRowY.b, mLbl(firstRowY.b - firstRowY.a), sw, true, pal.accent)}
         </g>
       )}
 
-      {dimLine(0, room.l + 16, room.w, room.l + 16, fmtFtIn(room.w), sw, false)}
-      {dimLine(room.w + 16, 0, room.w + 16, room.l, fmtFtIn(room.l), sw, true)}
+      {/* overall room dimensions with extension lines */}
+      <g style={{ pointerEvents: 'none' }}>
+        <line x1={0} y1={room.l + wallT + 2} x2={0} y2={room.l + 19} stroke={pal.faint} strokeWidth={sw * 0.4} />
+        <line x1={room.w} y1={room.l + wallT + 2} x2={room.w} y2={room.l + 19} stroke={pal.faint} strokeWidth={sw * 0.4} />
+        {dimLine(0, room.l + 18, room.w, room.l + 18, fmtFtIn(room.w), sw, false, pal.faint)}
+        <line x1={room.w + wallT + 2} y1={0} x2={room.w + 19} y2={0} stroke={pal.faint} strokeWidth={sw * 0.4} />
+        <line x1={room.w + wallT + 2} y1={room.l} x2={room.w + 19} y2={room.l} stroke={pal.faint} strokeWidth={sw * 0.4} />
+        {dimLine(room.w + 18, 0, room.w + 18, room.l, fmtFtIn(room.l), sw, true, pal.faint)}
+      </g>
+
+      {/* graphic scale bar (true to the drawing regardless of display size) */}
+      {cad && (
+        <g style={{ pointerEvents: 'none' }} transform={`translate(0 ${room.l + 33})`}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <rect key={i} x={i * 24} y={0} width={24} height={sw * 2.2} fill={i % 2 ? pal.floor : pal.wall} stroke={pal.wall} strokeWidth={sw * 0.4} />
+          ))}
+          <text x={0} y={sw * 2.2 + 9} fontSize={8} fontFamily="'IBM Plex Mono',monospace" fill={pal.faint}>0</text>
+          <text x={120} y={sw * 2.2 + 9} textAnchor="middle" fontSize={8} fontFamily="'IBM Plex Mono',monospace" fill={pal.faint}>10 ft</text>
+        </g>
+      )}
     </svg>
   )
 }
 
 function fmtFtIn(inches: number) { const f = Math.floor(inches / 12); const i = Math.round(inches - f * 12); return i ? `${f}′ ${i}″` : `${f}′` }
 
-function MiniPlan({ room, desks, teachers }: { room: Room; desks: Item[]; teachers?: Item[] }) {
+function MiniPlan({ room, desks, teachers, pal = PAL_CAD }: { room: Room; desks: Item[]; teachers?: Item[]; pal?: Pal }) {
   const w = 132, h = 92, pad = 6
   const s = Math.min((w - pad * 2) / room.w, (h - pad * 2) / room.l)
   const ox = (w - room.w * s) / 2, oy = (h - room.l * s) / 2
   const box = (d: Item, fill: string, edge: string, key: string) => {
     const dw = effW(d) * s, dh = effH(d) * s
-    return <rect key={key} x={ox + d.cx * s - dw / 2} y={oy + d.cy * s - dh / 2} width={Math.max(1.2, dw)} height={Math.max(1.2, dh)} rx={0.6} fill={fill} stroke={edge} strokeWidth={0.5} />
+    return <rect key={key} x={ox + d.cx * s - dw / 2} y={oy + d.cy * s - dh / 2} width={Math.max(1.2, dw)} height={Math.max(1.2, dh)} rx={pal.rx ? 0.6 : 0} fill={fill} stroke={edge} strokeWidth={0.5} />
   }
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto', display: 'block', background: C.paper }}>
-      <rect x={ox} y={oy} width={room.w * s} height={room.l * s} fill={C.floor} stroke={C.wall} strokeWidth={1.2} />
-      {(teachers || []).map((t, i) => box(t, C.sageSoft, C.sage, 't' + i))}
-      {desks.map((d, i) => box(d, d.ada ? C.amberSoft : C.deskFill, d.ada ? C.amber : C.deskEdge, 'd' + i))}
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto', display: 'block', background: pal.paper }}>
+      <rect x={ox} y={oy} width={room.w * s} height={room.l * s} fill={pal.floor} stroke={pal.wall} strokeWidth={1.2} />
+      {(teachers || []).map((t, i) => box(t, pal.sageSoft, pal.sage, 't' + i))}
+      {desks.map((d, i) => box(d, d.ada ? pal.amberSoft : pal.deskFill, d.ada ? pal.amber : pal.deskEdge, 'd' + i))}
     </svg>
   )
 }
@@ -606,6 +693,23 @@ export default function ClassroomPlannerPage() {
   const [sel, setSel] = useState<Sel>(null)
   const [snap, setSnap] = useState(true)
   const [showDims, setShowDims] = useState(true)
+  const [cad, setCad] = useState(true)
+  const pal: Pal = cad ? PAL_CAD : PAL_COLOR
+
+  // Starter for the Video Production room (D131): rectangle, side + center
+  // columns of single desks, teacher station at front. Dimensions are an
+  // estimate — adjust Room width/length to the architect's exact figures.
+  const loadD131 = () => {
+    setManual(false)
+    setRoomWft(30); setRoomWin(0); setRoomLft(26); setRoomLin(0)
+    setDeskW(30); setDeskD(24); setDeskSeats(1)
+    setLayoutId('sides_center')
+    setFillMax(false); setTarget(28)
+    setAisle(36); setRowGap(30); setFront(60); setPerim(4)
+    setTeachers([{ cx: 180, cy: 42, w: 48, d: 24, rot: 0 }])
+    setDoors([{ wall: 'left', pos: 30, len: 36 }, { wall: 'right', pos: 288, len: 36 }])
+    setSel(null)
+  }
 
   const { autoDesks, cap, firstAisleX, firstRowY } = useMemo(() => {
     let res: BuildResult
@@ -895,6 +999,9 @@ export default function ClassroomPlannerPage() {
               <Field label="Length"><FtIn ft={roomLft} inch={roomLin} setFt={setRoomLft} setIn={setRoomLin} /></Field>
             </div>
             <div style={{ marginTop: 8, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: C.faint }}>{Math.round(areaSqft)} sq ft · length runs front → back</div>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.lineSoft}` }}>
+              <Btn size="sm" onClick={loadD131}>Load D131 (Video Production)</Btn>
+            </div>
           </Panel>
 
           <Panel title="Desk">
@@ -970,6 +1077,10 @@ export default function ClassroomPlannerPage() {
                 <Check on={showDims} set={setShowDims} label="Measurements" />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', border: `1px solid ${C.line}`, borderRadius: 5, overflow: 'hidden' }}>
+                  <button className="cls-btn" onClick={() => setCad(true)} style={{ cursor: 'pointer', border: 'none', padding: '5px 10px', fontSize: 12, fontWeight: 600, fontFamily: "'Public Sans',sans-serif", background: cad ? C.accent : C.paper, color: cad ? '#fff' : C.muted }}>Drafting</button>
+                  <button className="cls-btn" onClick={() => setCad(false)} style={{ cursor: 'pointer', border: 'none', borderLeft: `1px solid ${C.line}`, padding: '5px 10px', fontSize: 12, fontWeight: 600, fontFamily: "'Public Sans',sans-serif", background: !cad ? C.accent : C.paper, color: !cad ? '#fff' : C.muted }}>Color</button>
+                </div>
                 <Btn size="sm" onClick={exportImage}>⤓ Export PNG</Btn>
                 <Btn kind={manual ? 'primary' : 'default'} size="sm" onClick={() => (manual ? setManual(false) : enterManual())}>{manual ? '← Back to auto' : 'Manual arrange'}</Btn>
               </div>
@@ -995,11 +1106,11 @@ export default function ClassroomPlannerPage() {
 
             <div style={{ padding: 12 }}>
               <Plan room={room} desks={desks} teachers={teachers} doors={doors} sp={sp} showADA={showADA} firstAisleX={manual ? null : firstAisleX} firstRowY={manual ? null : firstRowY}
-                manual={manual} showFrontGuide={!manual && ap.front} showDims={showDims} sel={sel} onItemDown={onItemDown} onBackgroundDown={onBackgroundDown} svgRef={svgRef} />
+                manual={manual} showFrontGuide={!manual && ap.front && !cad} showDims={showDims} sel={sel} onItemDown={onItemDown} onBackgroundDown={onBackgroundDown} svgRef={svgRef} pal={pal} />
               <div style={{ display: 'flex', gap: 15, flexWrap: 'wrap', marginTop: 9, fontSize: 11, color: C.muted }}>
-                <Legend color={C.deskFill} edge={C.deskEdge} label="Desk" />
-                <Legend color={C.amberSoft} edge={C.amber} label="Accessible (30×48 clear floor)" />
-                <Legend color={C.sageSoft} edge={C.sage} label="Teacher desk" />
+                <Legend color={pal.deskFill} edge={pal.deskEdge} label={`Desk ${deskW}″ × ${deskD}″`} />
+                <Legend color={pal.amberSoft} edge={pal.amber} label="Accessible (30×48 clear floor)" />
+                <Legend color={pal.sageSoft} edge={pal.sage} label="Teacher desk" />
               </div>
             </div>
           </section>

@@ -44,3 +44,7 @@ csdtv-handoff.zip
 # cursor deploy scratch files
 .cursor-*
 .next.old/
+
+# scratch SSR render folders (layout preview)
+__ssr*/
+__ssrtmp/
