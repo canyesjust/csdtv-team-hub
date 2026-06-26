@@ -507,6 +507,35 @@ function dimLine(x1: number, y1: number, x2: number, y2: number, label: string, 
   )
 }
 
+// A running dimension string (chain): ticks at every edge in `edges`, with the
+// size of each segment labelled — the architectural way to dimension repeated
+// items. `cross` is the fixed coordinate of the chain line; `room*` give the
+// extent so we can draw light extension lines back to the wall.
+function dimChain(edges: number[], cross: number, vertical: boolean, sw: number, color: string, wallCoord: number): React.ReactElement {
+  const lw = sw * 0.42, t = sw * 1.9
+  const a = edges[0], b = edges[edges.length - 1]
+  const els: React.ReactElement[] = []
+  els.push(vertical
+    ? <line key="m" x1={cross} y1={a} x2={cross} y2={b} stroke={color} strokeWidth={lw} />
+    : <line key="m" x1={a} y1={cross} x2={b} y2={cross} stroke={color} strokeWidth={lw} />)
+  edges.forEach((e, i) => {
+    const x = vertical ? cross : e, y = vertical ? e : cross
+    els.push(<line key={'t' + i} x1={x - t} y1={y + t} x2={x + t} y2={y - t} stroke={color} strokeWidth={lw} />)
+    // faint extension line from the wall to the chain
+    els.push(vertical
+      ? <line key={'e' + i} x1={wallCoord} y1={e} x2={cross} y2={e} stroke={color} strokeWidth={lw * 0.6} opacity={0.35} />
+      : <line key={'e' + i} x1={e} y1={wallCoord} x2={e} y2={cross} stroke={color} strokeWidth={lw * 0.6} opacity={0.35} />)
+    if (i > 0) {
+      const seg = e - edges[i - 1], mid = (e + edges[i - 1]) / 2
+      if (seg < 1) return
+      els.push(vertical
+        ? <text key={'l' + i} x={cross - 4} y={mid} textAnchor="middle" fontSize={7} fontFamily="'IBM Plex Mono',monospace" fill={color} transform={`rotate(-90 ${cross - 4} ${mid})`}>{Math.round(seg)}</text>
+        : <text key={'l' + i} x={mid} y={cross + 9} textAnchor="middle" fontSize={7} fontFamily="'IBM Plex Mono',monospace" fill={color}>{Math.round(seg)}</text>)
+    }
+  })
+  return <g style={{ pointerEvents: 'none' }}>{els}</g>
+}
+
 type PlanProps = {
   room: Room
   desks: Item[]
@@ -527,11 +556,15 @@ type PlanProps = {
 }
 
 function Plan({ room, desks, teachers, doors, sp, showADA, firstAisleX, firstRowY, manual, showFrontGuide, showDims, sel, onItemDown, onBackgroundDown, svgRef, pal }: PlanProps) {
-  const cadMargin = pal.wallHatch != null
-  const M = cadMargin ? 50 : 34
-  const vbW = room.w + M * 2, vbH = room.l + M * 2 + (cadMargin ? 14 : 0)
-  const sw = Math.max(1.3, room.w / 320)
   const cad = pal.wallHatch != null
+  const baseM = cad ? 50 : 34
+  // extra room on the left & bottom for the dimension chains when measurements are on
+  const ML = showDims ? baseM + 26 : baseM
+  const MT = baseM
+  const MR = baseM
+  const MB = showDims ? baseM + 44 : baseM
+  const vbW = ML + room.w + MR, vbH = MT + room.l + MB
+  const sw = Math.max(1.3, room.w / 320)
   const wallT = cad ? Math.max(6, room.w / 90) : sw * 3.4
   const ft = 12
   const gridLines: React.ReactElement[] = []
@@ -542,17 +575,27 @@ function Plan({ room, desks, teachers, doors, sp, showADA, firstAisleX, firstRow
   const isSel = (kind: SelKind, idx: number) => !!sel && sel.kind === kind && sel.idx === idx
   const mLbl = (v: number) => `${Math.round(v)}″`
   let mb: { minL: number; maxR: number; minT: number; maxB: number } | null = null
+  // dimension-chain edges: break the top row into x-segments and the left column into y-segments
+  let hEdges: number[] = [], vEdges: number[] = []
   if (showDims && desks.length) {
     const bbs = desks.map(bboxOf)
     mb = {
       minL: Math.min(...bbs.map((b) => b.l)), maxR: Math.max(...bbs.map((b) => b.r)),
       minT: Math.min(...bbs.map((b) => b.t)), maxB: Math.max(...bbs.map((b) => b.b)),
     }
+    const minCy = Math.min(...desks.map((d) => d.cy))
+    const xs = new Set<number>([0, room.w])
+    desks.filter((d) => Math.abs(d.cy - minCy) < 6).forEach((d) => { const w = effW(d); xs.add(Math.round(d.cx - w / 2)); xs.add(Math.round(d.cx + w / 2)) })
+    hEdges = [...xs].sort((a, b) => a - b)
+    const minCx = Math.min(...desks.map((d) => d.cx))
+    const ys = new Set<number>([0, room.l])
+    desks.filter((d) => Math.abs(d.cx - minCx) < 6).forEach((d) => { const h = effH(d); ys.add(Math.round(d.cy - h / 2)); ys.add(Math.round(d.cy + h / 2)) })
+    vEdges = [...ys].sort((a, b) => a - b)
   }
 
   return (
-    <svg ref={svgRef} viewBox={`${-M} ${-M} ${vbW} ${vbH}`} style={{ width: '100%', height: 'auto', display: 'block', background: pal.paper, touchAction: 'none' }} preserveAspectRatio="xMidYMid meet">
-      <rect x={-M} y={-M} width={vbW} height={vbH} fill="transparent" onPointerDown={onBackgroundDown} />
+    <svg ref={svgRef} viewBox={`${-ML} ${-MT} ${vbW} ${vbH}`} style={{ width: '100%', height: 'auto', display: 'block', background: pal.paper, touchAction: 'none' }} preserveAspectRatio="xMidYMid meet">
+      <rect x={-ML} y={-MT} width={vbW} height={vbH} fill="transparent" onPointerDown={onBackgroundDown} />
       <rect x={0} y={0} width={room.w} height={room.l} fill={pal.floor} onPointerDown={onBackgroundDown} />
       {gridLines}
       {!cad && doors.map((dr, i) => { const z = doorClear(dr, room); return <rect key={'dz' + i} x={z.l} y={z.t} width={z.r - z.l} height={z.b - z.t} fill={pal.warn} fillOpacity={0.05} stroke={pal.warn} strokeOpacity={0.28} strokeWidth={sw * 0.5} strokeDasharray={`${sw * 2} ${sw * 1.6}`} style={{ pointerEvents: 'none' }} /> })}
@@ -618,9 +661,13 @@ function Plan({ room, desks, teachers, doors, sp, showADA, firstAisleX, firstRow
         {dimLine(room.w + 18, 0, room.w + 18, room.l, fmtFtIn(room.l), sw, true, pal.faint)}
       </g>
 
+      {/* dimension strings — break the layout into every desk / gap / aisle / margin (inches) */}
+      {showDims && hEdges.length > 1 && dimChain(hEdges, room.l + 40, false, sw, pal.faint, room.l)}
+      {showDims && vEdges.length > 1 && dimChain(vEdges, -28, true, sw, pal.faint, 0)}
+
       {/* graphic scale bar (true to the drawing regardless of display size) */}
       {cad && (
-        <g style={{ pointerEvents: 'none' }} transform={`translate(0 ${room.l + 33})`}>
+        <g style={{ pointerEvents: 'none' }} transform={`translate(0 ${room.l + (showDims ? 64 : 33)})`}>
           {[0, 1, 2, 3, 4].map((i) => (
             <rect key={i} x={i * 24} y={0} width={24} height={sw * 2.2} fill={i % 2 ? pal.floor : pal.wall} stroke={pal.wall} strokeWidth={sw * 0.4} />
           ))}
