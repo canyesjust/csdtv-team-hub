@@ -44,7 +44,7 @@ type Wall = 'left' | 'right' | 'top' | 'bottom'
 type DoorT = { wall: Wall; pos: number; len?: number }
 type Room = { w: number; l: number }
 type Desk = { w: number; d: number; seats: number }
-type Sp = { aisle: number; rowGap: number; front: number; perim: number }
+type Sp = { aisle: number; rowGap: number; front: number; perim: number; seatGap: number }
 type SelKind = 'desk' | 'teacher' | 'door'
 type Sel = { kind: SelKind; idx: number } | null
 type Box = { l: number; r: number; t: number; b: number }
@@ -80,6 +80,7 @@ type Saved = {
   rowGap: number
   front: number
   perim: number
+  seatGap?: number
   manual: boolean
   studentDesks: Item[] | null
   teachers: Item[]
@@ -119,7 +120,7 @@ const PAL_CAD: Pal = {
 }
 
 const INTRA = 0 // gap between desks inside a cluster (in) — flush
-const SEAT_GAP = 6 // gap between desks along a horseshoe wall (in)
+const DEFAULT_SEAT_GAP = 6 // default gap between adjacent desks in a run (in) — now user-adjustable
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const effW = (d: Item) => (d.rot % 180 === 0 ? d.w : d.d)
 const effH = (d: Item) => (d.rot % 180 === 0 ? d.d : d.w)
@@ -164,12 +165,13 @@ const LAYOUTS: LayoutDef[] = [
 // Which spacing rules actually bind for a given arrangement. Front and perimeter
 // clearances apply everywhere; aisle only matters where there's a walking lane
 // (grid columns, or nested horseshoe rings); row gap is grid-only.
-type SpacingApplies = { perim: boolean; front: boolean; aisle: boolean; rowGap: boolean }
+type SpacingApplies = { perim: boolean; front: boolean; aisle: boolean; rowGap: boolean; seatGap: boolean }
 function spacingApplies(layout: LayoutDef): SpacingApplies {
-  if (layout.kind === 'grid') return { perim: true, front: true, aisle: true, rowGap: true }
-  if (layout.kind === 'u') return { perim: true, front: true, aisle: (layout.rings ?? 1) > 1, rowGap: false }
-  if (layout.kind === 'lanes') return { perim: true, front: true, aisle: false, rowGap: false }
-  return { perim: true, front: true, aisle: false, rowGap: false }
+  // seatGap = gap between adjacent desks in a run; binds for perimeter, horseshoe, and lanes.
+  if (layout.kind === 'grid') return { perim: true, front: true, aisle: true, rowGap: true, seatGap: false }
+  if (layout.kind === 'u') return { perim: true, front: true, aisle: (layout.rings ?? 1) > 1, rowGap: false, seatGap: true }
+  if (layout.kind === 'lanes') return { perim: true, front: true, aisle: false, rowGap: false, seatGap: true }
+  return { perim: true, front: true, aisle: false, rowGap: false, seatGap: true }
 }
 
 /* ---------------- geometry ---------------- */
@@ -202,6 +204,7 @@ function buildGrid(room: Room, desk: Desk, sp: Sp, cCols: number, cRows: number)
 }
 
 function buildHorseshoe(room: Room, desk: Desk, sp: Sp, rings: number): BuildResult {
+  const SEAT_GAP = sp.seatGap
   const all: Item[] = []
   for (let r = 0; r < rings; r++) {
     const off = r * (desk.d + sp.aisle)
@@ -226,6 +229,7 @@ function buildHorseshoe(room: Room, desk: Desk, sp: Sp, rings: number): BuildRes
 
 function buildPerimeter(room: Room, desk: Desk, sp: Sp, facing: 'in' | 'out'): BuildResult {
   // Front (board) wall honors the front-clearance rule; the other three walls use perimeter.
+  const SEAT_GAP = sp.seatGap
   const iL = sp.perim, iR = room.w - sp.perim, iT = sp.front, iB = room.l - sp.perim
   const all: Item[] = []
   const out = facing !== 'in'
@@ -259,8 +263,8 @@ function buildLanes(room: Room, desk: Desk, sp: Sp): BuildResult {
   // (touching). Rotated ±90°, a desk spans `desk.d` across and `desk.w` along the run.
   const runStart = sp.front
   const usable = room.l - sp.front - sp.perim
-  const step = desk.w // rotated: the desk's width runs front-to-back, flush together
-  const nRows = Math.max(0, Math.floor(usable / step))
+  const step = desk.w + sp.seatGap // rotated: desk width runs front-to-back, plus the gap
+  const nRows = Math.max(0, Math.floor((usable + sp.seatGap) / step))
 
   // Columns: {x center, rotation}. rot -90 faces left (west), rot 90 faces right (east).
   const cols: { x: number; rot: number }[] = [
@@ -276,7 +280,7 @@ function buildLanes(room: Room, desk: Desk, sp: Sp): BuildResult {
 
   const desks: Item[] = []
   for (let r = 0; r < nRows; r++) {
-    const cy = runStart + r * step + step / 2
+    const cy = runStart + r * step + desk.w / 2
     for (const c of cols) desks.push({ cx: c.x, cy, w: desk.w, d: desk.d, rot: c.rot, seats: desk.seats })
   }
   desks.sort((a, b) => a.cy - b.cy || a.cx - b.cx)
@@ -718,10 +722,11 @@ export default function ClassroomPlannerPage() {
   const [rowGap, setRowGap] = useState(30)
   const [front, setFront] = useState(60)
   const [perim, setPerim] = useState(30)
+  const [seatGap, setSeatGap] = useState(DEFAULT_SEAT_GAP)
 
   const room: Room = { w: roomWft * 12 + roomWin, l: roomLft * 12 + roomLin }
   const desk: Desk = { w: deskW, d: deskD, seats: deskSeats }
-  const sp: Sp = { aisle, rowGap, front, perim }
+  const sp: Sp = { aisle, rowGap, front, perim, seatGap }
   const layout: LayoutDef = LAYOUTS.find((l) => l.id === layoutId) ?? LAYOUTS[0]
   const ap = spacingApplies(layout)
   // The circulation route to check against the 36" ADA minimum: the aisle where
@@ -752,7 +757,7 @@ export default function ClassroomPlannerPage() {
     setDeskW(30); setDeskD(24); setDeskSeats(1)
     setLayoutId('sides_center')
     setFillMax(false); setTarget(28)
-    setAisle(36); setRowGap(30); setFront(60); setPerim(4)
+    setAisle(36); setRowGap(30); setFront(60); setPerim(4); setSeatGap(6)
     setTeachers([{ cx: 180, cy: 42, w: 48, d: 24, rot: 0 }])
     setDoors([{ wall: 'left', pos: 30, len: 36 }, { wall: 'right', pos: 288, len: 36 }])
     setSel(null)
@@ -787,7 +792,7 @@ export default function ClassroomPlannerPage() {
     }
     return { autoDesks: shown, cap: capF, firstAisleX: fa, firstRowY: fry }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomWft, roomWin, roomLft, roomLin, deskW, deskD, deskSeats, target, fillMax, showADA, layoutId, aisle, rowGap, front, perim, doors])
+  }, [roomWft, roomWin, roomLft, roomLin, deskW, deskD, deskSeats, target, fillMax, showADA, layoutId, aisle, rowGap, front, perim, seatGap, doors])
 
   const svgRef = useRef<SVGSVGElement | null>(null)
   const dragRef = useRef<{ kind: SelKind; idx: number; dx?: number; dy?: number } | null>(null)
@@ -985,7 +990,7 @@ export default function ClassroomPlannerPage() {
     const snapshot: Saved = {
       id: Date.now().toString(36), name, createdAt: Date.now(), count: placed,
       roomWft, roomWin, roomLft, roomLin, deskW, deskD, deskSeats, layoutId, target, fillMax, showADA,
-      aisle, rowGap, front, perim, manual,
+      aisle, rowGap, front, perim, seatGap, manual,
       studentDesks: manual ? studentDesks.map((d) => ({ ...d })) : null,
       teachers: teachers.map((t) => ({ ...t })), doors: doors.map((d) => ({ ...d })),
     }
@@ -994,7 +999,7 @@ export default function ClassroomPlannerPage() {
   const loadSnap = (s: Saved) => {
     setRoomWft(s.roomWft); setRoomWin(s.roomWin || 0); setRoomLft(s.roomLft); setRoomLin(s.roomLin || 0)
     setDeskW(s.deskW); setDeskD(s.deskD); setDeskSeats(s.deskSeats || 1); setLayoutId(s.layoutId); setTarget(s.target); setFillMax(s.fillMax); setShowADA(s.showADA)
-    setAisle(s.aisle); setRowGap(s.rowGap); setFront(s.front); setPerim(s.perim)
+    setAisle(s.aisle); setRowGap(s.rowGap); setFront(s.front); setPerim(s.perim); setSeatGap(s.seatGap ?? DEFAULT_SEAT_GAP)
     setTeachers((s.teachers || []).map((t) => ({ ...t }))); setDoors((s.doors || []).map((d) => ({ ...d })))
     setSel(null)
     if (s.manual && s.studentDesks) { setStudentDesks(s.studentDesks.map((d) => ({ ...d }))); setManual(true) } else setManual(false)
@@ -1103,6 +1108,7 @@ export default function ClassroomPlannerPage() {
               <Slider label="Between rows" value={rowGap} set={setRowGap} min={0} max={60} rec={30} recLabel="≈ 30″ (3 ft)" suffix="″" disabled={!ap.rowGap} naNote="no front-to-back rows in this arrangement" />
               <Slider label="Front clearance" value={front} set={setFront} min={0} max={144} rec={60} recLabel="60–120″ board to row 1" suffix="″" />
               <Slider label="Perimeter" value={perim} set={setPerim} min={0} max={60} rec={36} recLabel="≈ 36″ at the back" suffix="″" />
+              <Slider label="Between desks" value={seatGap} set={setSeatGap} min={0} max={36} suffix="″" disabled={!ap.seatGap} naNote="desks in this arrangement are set by aisle / row spacing" />
             </div>
           </Panel>
         </aside>
@@ -1240,7 +1246,7 @@ export default function ClassroomPlannerPage() {
 function previewDesks(s: Saved): Item[] {
   const room = { w: s.roomWft * 12 + (s.roomWin || 0), l: s.roomLft * 12 + (s.roomLin || 0) }
   const desk = { w: s.deskW, d: s.deskD, seats: s.deskSeats || 1 }
-  const sp = { aisle: s.aisle, rowGap: s.rowGap, front: s.front, perim: s.perim }
+  const sp = { aisle: s.aisle, rowGap: s.rowGap, front: s.front, perim: s.perim, seatGap: s.seatGap ?? DEFAULT_SEAT_GAP }
   const lay = LAYOUTS.find((l) => l.id === s.layoutId) || LAYOUTS[0]
   const res = lay.kind === 'grid' ? buildGrid(room, desk, sp, lay.cCols ?? 1, lay.cRows ?? 1)
     : lay.kind === 'perim' ? buildPerimeter(room, desk, sp, lay.facing ?? 'out')
