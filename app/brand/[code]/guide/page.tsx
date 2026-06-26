@@ -1,8 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type SyntheticEvent } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+
+// Fall back to the original file if a CDN-resized image fails to load.
+function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | null) {
+  const img = e.currentTarget
+  if (img.dataset.fellBack || !fallback || img.src === fallback) return
+  img.dataset.fellBack = '1'
+  img.src = fallback
+}
 
 type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
 type Fonts = { heading: string | null; body: string | null; notes: string | null }
@@ -35,6 +43,7 @@ export default function BrandGuidePage() {
   const [school, setSchool] = useState<School | null>(null)
   const [logos, setLogos] = useState<Logo[]>([])
   const [districtLogo, setDistrictLogo] = useState<string | null>(null)
+  const [districtLogoRaw, setDistrictLogoRaw] = useState<string | null>(null)
   const [meta, setMeta] = useState({ date: '', url: '' })
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
@@ -63,7 +72,7 @@ export default function BrandGuidePage() {
     let cancelled = false
     fetch('/api/brand', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => { if (!cancelled && d?.district?.preview) setDistrictLogo(d.district.preview as string) })
+      .then((d) => { if (!cancelled && d?.district?.preview) { setDistrictLogo(d.district.preview as string); setDistrictLogoRaw((d.district.previewRaw as string) ?? (d.district.preview as string)) } })
       .catch(() => {})
     return () => { cancelled = true }
   }, [])
@@ -189,7 +198,7 @@ export default function BrandGuidePage() {
             <footer style={{ marginTop: 32, paddingTop: 16, borderTop: `1px solid ${c.text}`, display: 'flex', alignItems: 'center', gap: 16 }}>
               {districtLogo && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={districtLogo} alt="Canyons School District" style={{ height: 46, width: 'auto', maxWidth: 120, objectFit: 'contain', flexShrink: 0 }} />
+                <img src={districtLogo} alt="Canyons School District" onError={(e) => onThumbError(e, districtLogoRaw)} style={{ height: 46, width: 'auto', maxWidth: 120, objectFit: 'contain', flexShrink: 0 }} />
               )}
               <div style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: c.muted, lineHeight: 1.5 }}>
                 <div style={{ fontWeight: 700, color: c.text }}>Canyons School District</div>

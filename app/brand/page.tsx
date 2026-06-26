@@ -1,7 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import Link from 'next/link'
+
+// If a CDN-resized preview fails (e.g. the source image is too large for the transform
+// service), fall back to the original file once so the card still shows a logo.
+function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | null) {
+  const img = e.currentTarget
+  if (img.dataset.fellBack || !fallback || img.src === fallback) return
+  img.dataset.fellBack = '1'
+  img.src = fallback
+}
 
 const CHECKER: CSSProperties = {
   backgroundColor: '#ffffff',
@@ -22,6 +31,7 @@ type BrandSchoolSummary = {
   level: BrandLevel
   colors: { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
   preview: string | null
+  previewRaw: string | null
   logoCount: number
 }
 
@@ -135,7 +145,7 @@ export default function BrandLibraryPage() {
         <header style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16 }}>
           {district?.preview && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={district.preview} alt="Canyons School District" style={{ height: 52, width: 'auto', maxWidth: 120, objectFit: 'contain', flexShrink: 0 }} />
+            <img src={district.preview} alt="Canyons School District" onError={(e) => onThumbError(e, district.previewRaw)} style={{ height: 52, width: 'auto', maxWidth: 120, objectFit: 'contain', flexShrink: 0 }} />
           )}
           <div>
             <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.15 }}>Canyons School District Brand Library</h1>
@@ -154,7 +164,7 @@ export default function BrandLibraryPage() {
             <div style={{ width: 110, height: 70, ...CHECKER, borderRadius: 10, border: `1px solid ${colors.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
               {district.preview ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={district.preview} alt="" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
+                <img src={district.preview} alt="" onError={(e) => onThumbError(e, district.previewRaw)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
               ) : (
                 <span style={{ fontSize: 16, fontWeight: 800, color: colors.muted }}>CSD</span>
               )}
@@ -205,7 +215,7 @@ export default function BrandLibraryPage() {
                       </span>
                       {s.preview ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.preview} alt={`${s.name} logo`} loading="lazy" decoding="async" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
+                        <img src={s.preview} alt={`${s.name} logo`} loading="lazy" decoding="async" onError={(e) => onThumbError(e, s.previewRaw)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
                       ) : (
                         <span style={{ fontSize: 46, fontWeight: 800, color: readableOn(s.colors.primary) }}>{initialOf(s.name)}</span>
                       )}

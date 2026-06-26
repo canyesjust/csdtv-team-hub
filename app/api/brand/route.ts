@@ -22,6 +22,7 @@ type BrandSchoolSummary = {
   level: BrandLevel
   colors: { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
   preview: string | null
+  previewRaw: string | null
   logoCount: number
 }
 
@@ -95,6 +96,7 @@ export async function GET() {
   // Preview priority: chosen cover PNG > cover (any) > Official PNG > any PNG > any file.
   const namesByCode = new Map<string, Set<string>>()
   const previewByCode = new Map<string, string>()
+  const previewRawByCode = new Map<string, string>()
   const previewRank = new Map<string, number>()
   for (const row of logoRows) {
     if (!namesByCode.has(row.school_code)) namesByCode.set(row.school_code, new Set())
@@ -111,10 +113,12 @@ export async function GET() {
     else if (row.format === 'png') rank = 2
     if (rank > (previewRank.get(row.school_code) ?? -1)) {
       previewRank.set(row.school_code, rank)
+      const raw = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl
+      previewRawByCode.set(row.school_code, raw)
       previewByCode.set(
         row.school_code,
         isSvg
-          ? supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl
+          ? raw
           : supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { transform: PREVIEW_TRANSFORM }).data.publicUrl,
       )
     }
@@ -137,6 +141,7 @@ export async function GET() {
         text: pickHex(r.text_color),
       },
       preview: previewByCode.get(code) ?? null,
+      previewRaw: previewRawByCode.get(code) ?? null,
       logoCount: namesByCode.get(code)?.size ?? 0,
     }
   }

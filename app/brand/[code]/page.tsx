@@ -1,8 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+
+// If a CDN-resized thumbnail fails (e.g. the source image is too large for the
+// transform service), fall back to the original file once so the logo still shows.
+function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | null) {
+  const img = e.currentTarget
+  if (img.dataset.fellBack || !fallback || img.src === fallback) return
+  img.dataset.fellBack = '1'
+  img.src = fallback
+}
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; thumb?: string | null; flagged?: boolean; notes?: string | null }
@@ -315,12 +324,13 @@ export default function SchoolBrandPage() {
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
                                 {dlogos.map((l) => {
                                   const preview = l.thumb || l.png || l.jpg
+                                  const rawPreview = l.png || l.jpg || l.svg || null
                                   return (
                                     <div key={`${l.category}-${l.name}`} onClick={() => openDrawer(l)} style={{ border: `1px solid ${colors.border}`, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: colors.cardBg }}>
                                       <div style={{ height: 140, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
                                         {preview ? (
                                           // eslint-disable-next-line @next/next/no-img-element
-                                          <img src={preview} alt={l.name} loading="lazy" decoding="async" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
+                                          <img src={preview} alt={l.name} loading="lazy" decoding="async" onError={(e) => onThumbError(e, rawPreview)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
                                         ) : (
                                           <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                                         )}
@@ -389,6 +399,7 @@ export default function SchoolBrandPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 18 }}>
                       {group.items.map((l) => {
                         const preview = l.thumb || l.png || l.jpg
+                        const rawPreview = l.png || l.jpg || l.svg || null
                         return (
                           <div key={`${group.category}-${l.name}`}
                             onClick={reviewKey ? () => toggleFlag(l) : () => openDrawer(l)}
@@ -401,7 +412,7 @@ export default function SchoolBrandPage() {
                             <div style={{ height: 220, ...previewBg(bg), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}`, opacity: l.flagged ? 0.45 : 1 }}>
                               {preview ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={preview} alt={l.name} loading="lazy" decoding="async" style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
+                                <img src={preview} alt={l.name} loading="lazy" decoding="async" onError={(e) => onThumbError(e, rawPreview)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
                               ) : (
                                 <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                               )}
