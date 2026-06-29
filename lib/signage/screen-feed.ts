@@ -65,6 +65,10 @@ export type ScreenFeed = {
   /** Board meeting takeover (opt-in screens only): preroll graphics or live stream. */
   board_takeover?: { mode: 'preroll' | 'live'; url: string; audio: boolean; label: string | null }
   weather: SignageWeather
+  /** Zoned 2 only: latest published CSDtv videos for the Spotlight rail. */
+  spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]
+  /** Zoned 2 only: a board meeting currently live ("Now on CSDtv"). */
+  csdtv_live?: { title: string; channel: number | null } | null
   offline?: boolean
 }
 

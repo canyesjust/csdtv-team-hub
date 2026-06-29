@@ -1,7 +1,7 @@
 'use client'
 
 import Hls from 'hls.js'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type SignageTheme, type WayfindingDirection } from '@/lib/signage/constants'
 import { announcementIconEmoji } from '@/lib/signage/announcement-icons'
 import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
@@ -50,6 +50,8 @@ export type ScreenFeed = {
   live: { live: true; hls_url: string; label: string | null } | { live: false }
   board_takeover?: { mode: 'preroll' | 'live'; url: string; audio: boolean; label: string | null }
   weather: { tempF: number | null; condition: string; icon: string }
+  spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]
+  csdtv_live?: { title: string; channel: number | null } | null
   offline?: boolean
 }
 
@@ -395,6 +397,7 @@ function MediaCarousel({
   fill,
   portrait,
   wayfindMedia,
+  overlay,
 }: {
   media: FeedMedia[]
   index: number
@@ -403,6 +406,7 @@ function MediaCarousel({
   fill?: boolean
   portrait?: boolean
   wayfindMedia?: boolean
+  overlay?: ReactNode
 }) {
   const displayedIndexRef = useRef(index)
   const [crossfade, setCrossfade] = useState<{ from: number; to: number; active: boolean } | null>(null)
@@ -499,6 +503,78 @@ function MediaCarousel({
           />
         </div>
       )}
+      {overlay}
+    </div>
+  )
+}
+
+function ScanToWatch({ title }: { title: string | null }) {
+  return (
+    <div className="cic-z2-scan">
+      <div className="cic-z2-scan-cap">
+        <div className="cic-z2-scan-k">Now playing</div>
+        {title ? <div className="cic-z2-scan-t">{title}</div> : null}
+      </div>
+      <div className="cic-z2-scan-hint">Scan to watch with sound</div>
+    </div>
+  )
+}
+
+const Z2_SPOT_MS = 8_000
+function Zoned2Rail({
+  spotlight,
+  live,
+  announcements,
+}: {
+  spotlight?: ScreenFeed['spotlight']
+  live?: ScreenFeed['csdtv_live']
+  announcements: FeedAnnouncement[]
+}) {
+  const items = spotlight ?? []
+  const [spot, setSpot] = useState(0)
+  useEffect(() => {
+    if (items.length <= 1) return
+    const t = setInterval(() => setSpot(i => (i + 1) % items.length), Z2_SPOT_MS)
+    return () => clearInterval(t)
+  }, [items.length])
+  const cur = items.length ? items[spot % items.length] : undefined
+  return (
+    <div className="cic-railcol">
+      <div className="cic-rail cic-z2-spot">
+        {live ? (
+          <>
+            <div className="cic-railhd">Now on CSDtv</div>
+            <div className="cic-z2-live">
+              <span className="cic-z2-livepill"><span className="cic-z2-livedot" />Live</span>
+              <div className="cic-z2-live-title">{live.title}</div>
+              <div className="cic-z2-live-sub">Watch live on CSDtv</div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="cic-railhd">CSDtv Spotlight</div>
+            {cur ? (
+              <div className="cic-z2-spotitem">
+                <div className="cic-z2-thumb">
+                  <img src={cur.thumb} alt="" />
+                  {cur.duration && cur.duration !== '0:00' ? <span className="cic-z2-dur">{cur.duration}</span> : null}
+                </div>
+                <div className="cic-z2-sptitle">{cur.title}</div>
+                <div className="cic-z2-spmeta">
+                  {cur.kind ?? 'CSDtv'}{typeof cur.views === 'number' && cur.views > 0 ? ` · ${cur.views.toLocaleString()} views` : ''}
+                </div>
+              </div>
+            ) : (
+              <div className="cic-empty-muted">No videos yet</div>
+            )}
+          </>
+        )}
+      </div>
+      <div className="cic-rail cic-rail-ann">
+        <div className="cic-railhd">Announcements</div>
+        {announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
+        {!announcements.length && <div className="cic-empty-muted">No announcements</div>}
+      </div>
     </div>
   )
 }
@@ -802,9 +878,9 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         </>
       )}
 
-      {/* 1. Zoned landscape (zoned + zoned2 share structure; CSS diverges by layout class) */}
-      {(layout === 'zoned' || layout === 'zoned2') && showZones && !portrait && (
-        <div className={`cic-zoned-stage${layout === 'zoned2' ? ' cic-zoned2-stage' : ''}`}>
+      {/* 1. Zoned landscape */}
+      {layout === 'zoned' && showZones && !portrait && (
+        <div className="cic-zoned-stage">
           <ZonedHeader
             centerName={feed.screen.center_name}
             areaLabel={areaLabel}
@@ -830,6 +906,34 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             />
           </div>
           <TickerBar items={feed.ticker} show={showTicker} pill={tickerPill} fallback={tickerFallback} />
+        </div>
+      )}
+
+      {/* 1b. Zoned 2 — district-branded landscape (CSDtv office screens) */}
+      {layout === 'zoned2' && showZones && !portrait && (
+        <div className="cic-zoned-stage cic-zoned2-stage">
+          <ZonedHeader
+            centerName={feed.screen.center_name}
+            areaLabel={areaLabel}
+            weatherIcon={feed.weather.icon}
+            tempF={feed.weather.tempF}
+            clock={clock}
+            visitor={visitor}
+            logoUrl={logoUrl}
+            showWeather={showWeather}
+            showClock={showClock}
+          />
+          <div className="cic-body">
+            <MediaCarousel
+              media={feed.media}
+              index={mediaIndex}
+              imageSeconds={imageSeconds}
+              onAdvance={advanceMedia}
+              overlay={currentMedia?.type === 'video' ? <ScanToWatch title={currentMedia.title} /> : null}
+            />
+            <Zoned2Rail spotlight={feed.spotlight} live={feed.csdtv_live} announcements={feed.announcements} />
+          </div>
+          <TickerBar items={feed.ticker} show={showTicker} pill="News" fallback={tickerFallback} />
         </div>
       )}
 

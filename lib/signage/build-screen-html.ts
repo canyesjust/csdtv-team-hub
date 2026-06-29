@@ -296,7 +296,7 @@ function slideInner(item: Feed['media'][number]): string {
 
 function mediaCarousel(
   media: Feed['media'],
-  opts: { fill?: boolean; portrait?: boolean; wayfindMedia?: boolean } = {},
+  opts: { fill?: boolean; portrait?: boolean; wayfindMedia?: boolean; overlayHtml?: string } = {},
 ): string {
   const className = ['cic-media16', opts.fill ? 'fill' : '', opts.portrait && !opts.fill ? 'portrait-top' : '', opts.wayfindMedia ? 'wayfind-media' : '']
     .filter(Boolean)
@@ -313,7 +313,34 @@ function mediaCarousel(
     media.length > 1
       ? `<div class="cic-mediaprog" aria-hidden><span class="cic-mediaprog-fill" data-prog style="animation-duration:${Math.max(3, first?.display_seconds ?? DEFAULT_IMAGE_SECONDS)}s"></span></div>`
       : ''
-  return `<div class="${className}" data-carousel style="--crossfade-ms:${CROSSFADE_MS}ms">${layer}${dots}${prog}</div>`
+  return `<div class="${className}" data-carousel style="--crossfade-ms:${CROSSFADE_MS}ms">${layer}${dots}${prog}${opts.overlayHtml ?? ''}</div>`
+}
+
+/** Zoned 2 rail: CSDtv Spotlight (or Now-on-CSDtv live) over announcements. */
+function zoned2Rail(feed: Feed): string {
+  const live = feed.csdtv_live
+  const spotlight = feed.spotlight ?? []
+  let top: string
+  if (live) {
+    top =
+      `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Now on CSDtv</div>` +
+      `<div class="cic-z2-live"><span class="cic-z2-livepill"><span class="cic-z2-livedot"></span>Live</span>` +
+      `<div class="cic-z2-live-title">${esc(live.title)}</div><div class="cic-z2-live-sub">Watch live on CSDtv</div></div></div>`
+  } else if (spotlight.length) {
+    const v = spotlight[0]
+    const dur = v.duration && v.duration !== '0:00' ? `<span class="cic-z2-dur">${esc(v.duration)}</span>` : ''
+    const views = typeof v.views === 'number' && v.views > 0 ? ` · ${v.views.toLocaleString()} views` : ''
+    top =
+      `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight</div>` +
+      `<div class="cic-z2-spotitem"><div class="cic-z2-thumb"><img src="${esc(v.thumb)}" alt="">${dur}</div>` +
+      `<div class="cic-z2-sptitle">${esc(v.title)}</div><div class="cic-z2-spmeta">${esc(v.kind ?? 'CSDtv')}${esc(views)}</div></div></div>`
+  } else {
+    top = `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight</div><div class="cic-empty-muted">No videos yet</div></div>`
+  }
+  const annRows = feed.announcements.map(announcementRow).join('')
+  const annEmpty = feed.announcements.length ? '' : '<div class="cic-empty-muted">No announcements</div>'
+  const ann = `<div class="cic-rail cic-rail-ann"><div class="cic-railhd">Announcements</div>${annRows}${annEmpty}</div>`
+  return `<div class="cic-railcol">${top}${ann}</div>`
 }
 
 // ---------------------------------------------------------------------------
@@ -386,9 +413,23 @@ function composeBody(feed: Feed): string {
     )
   }
 
-  if ((layout === 'zoned' || layout === 'zoned2') && !portrait) {
+  if (layout === 'zoned2' && !portrait) {
+    const cur = feed.media[0]
+    const scan = cur?.type === 'video'
+      ? `<div class="cic-z2-scan"><div class="cic-z2-scan-cap"><div class="cic-z2-scan-k">Now playing</div>${cur.title ? `<div class="cic-z2-scan-t">${esc(cur.title)}</div>` : ''}</div><div class="cic-z2-scan-hint">Scan to watch with sound</div></div>`
+      : ''
+    const z2ticker = tickerBar({ items: feed.ticker, portrait, show: showTicker, pill: 'News', fallback: tickerFallback })
     return (
-      `<div class="cic-zoned-stage${layout === 'zoned2' ? ' cic-zoned2-stage' : ''}">` +
+      `<div class="cic-zoned-stage cic-zoned2-stage">` +
+      zonedHeader({ centerName: s.center_name, areaLabel, weatherIcon, tempF, visitor, logoUrl: s.logo_url, showWeather, showClock }) +
+      `<div class="cic-body">${mediaCarousel(feed.media, { overlayHtml: scan })}${zoned2Rail(feed)}</div>` +
+      `${z2ticker}</div>`
+    )
+  }
+
+  if (layout === 'zoned' && !portrait) {
+    return (
+      `<div class="cic-zoned-stage">` +
       zonedHeader({ centerName: s.center_name, areaLabel, weatherIcon, tempF, visitor, logoUrl: s.logo_url, showWeather, showClock }) +
       `<div class="cic-body">${mediaCarousel(feed.media)}${announcementsRail(feed.announcements, feed.wayfinding)}</div>` +
       `${ticker}</div>`

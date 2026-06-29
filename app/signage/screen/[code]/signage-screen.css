@@ -1760,3 +1760,91 @@
   border-radius: 0.7vmax 0 0 0.7vmax;
 }
 .cic-screen.layout-zoned2:not(.portrait) .cic-tickin { color: #eaf6fd; }
+
+/* Zoned 2 — Spotlight rail, Now-on-CSDtv live card, and scan-to-watch overlay. */
+.cic-screen.layout-zoned2:not(.portrait) .cic-z2-spot { flex: none; }
+.cic-screen.layout-zoned2:not(.portrait) .cic-rail-ann { flex: 1; min-height: 0; overflow: hidden; }
+
+.cic-screen.layout-zoned2 .cic-z2-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.5vmax;
+  overflow: hidden;
+  background: #04304d;
+}
+.cic-screen.layout-zoned2 .cic-z2-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cic-screen.layout-zoned2 .cic-z2-dur {
+  position: absolute;
+  right: 0.5vmax;
+  bottom: 0.5vmax;
+  background: color-mix(in srgb, #021a2c 78%, transparent);
+  color: #fff;
+  font-size: 0.85vmax;
+  font-weight: 700;
+  padding: 0.15vmax 0.45vmax;
+  border-radius: 0.3vmax;
+}
+.cic-screen.layout-zoned2 .cic-z2-sptitle {
+  font-size: 1.35vmax;
+  font-weight: 700;
+  color: #eef7fd;
+  line-height: 1.16;
+  margin-top: 0.7vmax;
+}
+.cic-screen.layout-zoned2 .cic-z2-spmeta { font-size: 1.02vmax; color: var(--gray); margin-top: 0.4vmax; }
+
+.cic-screen.layout-zoned2 .cic-z2-livepill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4vmax;
+  background: #e0322f;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.95vmax;
+  letter-spacing: 0.1vmax;
+  text-transform: uppercase;
+  padding: 0.3vmax 0.65vmax;
+  border-radius: 0.4vmax;
+}
+.cic-screen.layout-zoned2 .cic-z2-livedot { width: 0.5vmax; height: 0.5vmax; border-radius: 50%; background: #fff; display: inline-block; }
+.cic-screen.layout-zoned2 .cic-z2-live-title { font-size: 1.6vmax; font-weight: 800; color: #fff; margin-top: 0.7vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-live-sub { font-size: 1.02vmax; color: var(--gray); margin-top: 0.4vmax; }
+
+.cic-screen.layout-zoned2 .cic-z2-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1vmax;
+  padding: 1vmax 1.1vmax;
+  background: linear-gradient(0deg, color-mix(in srgb, #021a2c 88%, transparent), transparent);
+  pointer-events: none;
+}
+.cic-screen.layout-zoned2 .cic-z2-scan-cap {
+  background: color-mix(in srgb, #021a2c 74%, transparent);
+  border-radius: 0.5vmax;
+  padding: 0.6vmax 0.9vmax;
+  max-width: 64%;
+}
+.cic-screen.layout-zoned2 .cic-z2-scan-k {
+  font-size: 0.8vmax;
+  letter-spacing: 0.12vmax;
+  text-transform: uppercase;
+  color: var(--csd-yellow);
+  font-weight: 700;
+}
+.cic-screen.layout-zoned2 .cic-z2-scan-t { font-size: 1.25vmax; font-weight: 600; color: #fff; margin-top: 0.2vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-scan-hint {
+  background: var(--csd-yellow);
+  color: #06304d;
+  font-weight: 800;
+  font-size: 1.05vmax;
+  padding: 0.55vmax 0.85vmax;
+  border-radius: 0.4vmax;
+  flex: none;
+}

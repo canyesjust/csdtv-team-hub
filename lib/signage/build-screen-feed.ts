@@ -217,6 +217,49 @@ export async function buildScreenFeed(
     }
   }
 
+  // CSDtv Spotlight — latest published, public videos (Zoned 2 layout only).
+  let spotlight: NonNullable<ScreenFeed['spotlight']> = []
+  try {
+    const spotRes = await service
+      .from('videos')
+      .select('id, title, video_type, youtube_thumbnail, thumbnail_url, youtube_views, youtube_duration, date_published, updated_at')
+      .eq('status', 'Published')
+      .eq('visibility', 'Public')
+      .order('date_published', { ascending: false, nullsFirst: false })
+      .limit(8)
+    spotlight = (spotRes.data ?? [])
+      .map((v: Record<string, unknown>) => ({
+        id: String(v.id),
+        title: (v.title as string) ?? '',
+        thumb: ((v.youtube_thumbnail as string) || (v.thumbnail_url as string) || ''),
+        kind: (v.video_type as string) ?? null,
+        views: (v.youtube_views as number) ?? null,
+        duration: (v.youtube_duration as string) ?? null,
+      }))
+      .filter(v => v.thumb && v.title)
+      .slice(0, 5)
+  } catch {
+    spotlight = []
+  }
+
+  // Now on CSDtv — a board meeting currently broadcasting live.
+  let csdtv_live: ScreenFeed['csdtv_live'] = null
+  try {
+    const liveRes = await service
+      .from('board_meetings')
+      .select('production_id, productions(title)')
+      .eq('broadcast_status', 'live')
+      .limit(1)
+      .maybeSingle()
+    if (liveRes.data) {
+      const prod = (liveRes.data as { productions?: { title?: string | null } | { title?: string | null }[] | null }).productions
+      const title = Array.isArray(prod) ? prod[0]?.title : prod?.title
+      csdtv_live = { title: title ?? 'Board Meeting', channel: null }
+    }
+  } catch {
+    csdtv_live = null
+  }
+
   return {
     feed: {
       screen: {
@@ -249,6 +292,8 @@ export async function buildScreenFeed(
       live,
       board_takeover,
       weather,
+      spotlight,
+      csdtv_live,
     },
   }
 }
