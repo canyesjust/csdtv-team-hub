@@ -40,6 +40,67 @@ async function scheduleTickerSafe(service: SupabaseClient, today: string): Promi
   }
 }
 
+const DISTRICT_NEWS_FEED = 'https://rss.app/feeds/hR9Of3ZD4b0Rw2Bg.xml'
+const DISTRICT_NEWS_FALLBACK: string[] = [
+  'Canyons Names Patricia Larkin as New Director of Career and Technical Education',
+  'Building the Future: Students Watch Trades Campus Take Shape at Canyons Innovation Center',
+  'Board Appoints Union Middle’s Angi Holden as New Director of CSD Middle Schools',
+  'Canyons Announces Administrative Appointments for 2026-2027',
+  'Corner Canyon High Student Brings Home Historic Glass at International DECA Competition',
+]
+let districtNewsCache: { at: number; items: string[] } | null = null
+const DISTRICT_NEWS_TTL_MS = 10 * 60 * 1000
+
+function decodeNewsTitle(raw: string): string {
+  return raw
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&#8217;|&#x2019;/gi, '’')
+    .replace(/&#8216;|&#x2018;/gi, '‘')
+    .replace(/&#8211;|&#x2013;/gi, '–')
+    .replace(/&#8212;|&#x2014;/gi, '—')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/gi, "'")
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** District news headlines for the Zoned 2 bottom rotator (cached ~10 min). */
+async function loadDistrictNews(): Promise<string[]> {
+  if (districtNewsCache && Date.now() - districtNewsCache.at < DISTRICT_NEWS_TTL_MS) {
+    return districtNewsCache.items
+  }
+  try {
+    const ctrl = new AbortController()
+    const to = setTimeout(() => ctrl.abort(), 2500)
+    const res = await fetch(DISTRICT_NEWS_FEED, { signal: ctrl.signal, cache: 'no-store' })
+    clearTimeout(to)
+    if (!res.ok) throw new Error('news ' + res.status)
+    const xml = await res.text()
+    const blocks = xml.split(/<item[\s>]/i).slice(1)
+    const titles: string[] = []
+    const seen = new Set<string>()
+    for (const block of blocks) {
+      const m = block.match(/<title>([\s\S]*?)<\/title>/i)
+      if (!m) continue
+      const t = decodeNewsTitle(m[1])
+      if (t && !seen.has(t)) {
+        seen.add(t)
+        titles.push(t)
+      }
+      if (titles.length >= 8) break
+    }
+    const out = titles.length ? titles : DISTRICT_NEWS_FALLBACK
+    districtNewsCache = { at: Date.now(), items: out }
+    return out
+  } catch {
+    return districtNewsCache?.items ?? DISTRICT_NEWS_FALLBACK
+  }
+}
+
 export async function buildScreenFeed(
   service: SupabaseClient,
   code: string,
@@ -217,47 +278,55 @@ export async function buildScreenFeed(
     }
   }
 
-  // CSDtv Spotlight — latest published, public videos (Zoned 2 layout only).
+  // Zoned 2 extras — only fetched for screens using the district-branded layout.
+  const resolvedLayout = resolveScreenLayout(screen.layout, site?.default_layout)
   let spotlight: NonNullable<ScreenFeed['spotlight']> = []
-  try {
-    const spotRes = await service
-      .from('videos')
-      .select('id, title, video_type, youtube_thumbnail, thumbnail_url, youtube_views, youtube_duration, date_published, updated_at')
-      .eq('status', 'Published')
-      .eq('visibility', 'Public')
-      .order('date_published', { ascending: false, nullsFirst: false })
-      .limit(8)
-    spotlight = (spotRes.data ?? [])
-      .map((v: Record<string, unknown>) => ({
-        id: String(v.id),
-        title: (v.title as string) ?? '',
-        thumb: ((v.youtube_thumbnail as string) || (v.thumbnail_url as string) || ''),
-        kind: (v.video_type as string) ?? null,
-        views: (v.youtube_views as number) ?? null,
-        duration: (v.youtube_duration as string) ?? null,
-      }))
-      .filter(v => v.thumb && v.title)
-      .slice(0, 5)
-  } catch {
-    spotlight = []
-  }
-
-  // Now on CSDtv — a board meeting currently broadcasting live.
   let csdtv_live: ScreenFeed['csdtv_live'] = null
-  try {
-    const liveRes = await service
-      .from('board_meetings')
-      .select('production_id, productions(title)')
-      .eq('broadcast_status', 'live')
-      .limit(1)
-      .maybeSingle()
-    if (liveRes.data) {
-      const prod = (liveRes.data as { productions?: { title?: string | null } | { title?: string | null }[] | null }).productions
-      const title = Array.isArray(prod) ? prod[0]?.title : prod?.title
-      csdtv_live = { title: title ?? 'Board Meeting', channel: null }
+  let news: string[] = []
+  if (resolvedLayout === 'zoned2') {
+    // CSDtv Spotlight — latest published, public videos.
+    try {
+      const spotRes = await service
+        .from('videos')
+        .select('id, title, video_type, youtube_thumbnail, thumbnail_url, youtube_views, youtube_duration, date_published, updated_at')
+        .eq('status', 'Published')
+        .eq('visibility', 'Public')
+        .order('date_published', { ascending: false, nullsFirst: false })
+        .limit(8)
+      spotlight = (spotRes.data ?? [])
+        .map((v: Record<string, unknown>) => ({
+          id: String(v.id),
+          title: (v.title as string) ?? '',
+          thumb: ((v.youtube_thumbnail as string) || (v.thumbnail_url as string) || ''),
+          kind: (v.video_type as string) ?? null,
+          views: (v.youtube_views as number) ?? null,
+          duration: (v.youtube_duration as string) ?? null,
+        }))
+        .filter(v => v.thumb && v.title)
+        .slice(0, 5)
+    } catch {
+      spotlight = []
     }
-  } catch {
-    csdtv_live = null
+
+    // Now on CSDtv — a board meeting currently broadcasting live.
+    try {
+      const liveRes = await service
+        .from('board_meetings')
+        .select('production_id, productions(title)')
+        .eq('broadcast_status', 'live')
+        .limit(1)
+        .maybeSingle()
+      if (liveRes.data) {
+        const prod = (liveRes.data as { productions?: { title?: string | null } | { title?: string | null }[] | null }).productions
+        const title = Array.isArray(prod) ? prod[0]?.title : prod?.title
+        csdtv_live = { title: title ?? 'Board Meeting', channel: null }
+      }
+    } catch {
+      csdtv_live = null
+    }
+
+    // District news headlines (district website RSS) for the bottom rotator.
+    news = await loadDistrictNews()
   }
 
   return {
@@ -266,7 +335,7 @@ export async function buildScreenFeed(
         name: screen.name,
         code: screen.code,
         orientation: normalizeSignageOrientation(screen.orientation),
-        layout: resolveScreenLayout(screen.layout, site?.default_layout),
+        layout: resolvedLayout,
         heading: screen.wayfinding_heading,
         area: area ? { name: area.name, slug: area.slug, building: area.building, floor: area.floor } : null,
         center_name: site?.center_name ?? 'Canyons Innovation Center',
@@ -294,6 +363,7 @@ export async function buildScreenFeed(
       weather,
       spotlight,
       csdtv_live,
+      news,
     },
   }
 }

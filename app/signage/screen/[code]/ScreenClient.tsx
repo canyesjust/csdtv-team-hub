@@ -52,6 +52,7 @@ export type ScreenFeed = {
   weather: { tempF: number | null; condition: string; icon: string }
   spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]
   csdtv_live?: { title: string; channel: number | null } | null
+  news?: string[]
   offline?: boolean
 }
 
@@ -980,7 +981,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               <Zoned2Spot spotlight={feed.spotlight} live={feed.csdtv_live} />
             </div>
           </div>
-          <Zoned2News items={feed.ticker} />
+          <Zoned2News items={feed.news ?? []} />
         </div>
       )}
 

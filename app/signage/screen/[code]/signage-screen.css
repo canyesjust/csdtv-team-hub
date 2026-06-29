@@ -1741,10 +1741,10 @@
   border-radius: 0.7vmax;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: var(--blue1);
+  background: #04263f;
 }
 .cic-screen.layout-zoned2 .cic-media16 img,
-.cic-screen.layout-zoned2 .cic-media16 video { object-fit: cover; }
+.cic-screen.layout-zoned2 .cic-media16 video { object-fit: contain; }
 
 /* scan-to-watch overlay */
 .cic-screen.layout-zoned2 .cic-z2-scan { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; align-items: flex-end; justify-content: space-between; gap: 1vmax; padding: 1.1vmax 1.2vmax; background: linear-gradient(0deg, rgba(2, 18, 30, 0.9), transparent); pointer-events: none; }

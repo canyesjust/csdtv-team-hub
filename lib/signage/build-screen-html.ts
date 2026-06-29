@@ -457,7 +457,7 @@ function composeBody(feed: Feed): string {
       zoned2Brand({ tag: areaLabel, logoUrl: s.logo_url, dateStr }) +
       `<div class="cic-body">${mediaCarousel(feed.media, { overlayHtml: scan })}` +
       `<div class="cic-railcol">${zoned2Weather(weatherIcon, tempF, feed.weather.condition)}${zoned2Spot(feed)}</div></div>` +
-      zoned2News(feed.ticker) +
+      zoned2News(feed.news ?? []) +
       `</div>`
     )
   }
