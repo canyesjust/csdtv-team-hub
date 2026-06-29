@@ -802,9 +802,9 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         </>
       )}
 
-      {/* 1. Zoned landscape */}
-      {layout === 'zoned' && showZones && !portrait && (
-        <div className="cic-zoned-stage">
+      {/* 1. Zoned landscape (zoned + zoned2 share structure; CSS diverges by layout class) */}
+      {(layout === 'zoned' || layout === 'zoned2') && showZones && !portrait && (
+        <div className={`cic-zoned-stage${layout === 'zoned2' ? ' cic-zoned2-stage' : ''}`}>
           <ZonedHeader
             centerName={feed.screen.center_name}
             areaLabel={areaLabel}
@@ -833,8 +833,8 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         </div>
       )}
 
-      {/* 3. Portrait (zoned stack) */}
-      {layout === 'zoned' && showZones && portrait && (
+      {/* 3. Portrait (zoned stack; zoned2 reuses the zoned portrait layout) */}
+      {(layout === 'zoned' || layout === 'zoned2') && showZones && portrait && (
         <>
           <ScreenHeader
             portrait

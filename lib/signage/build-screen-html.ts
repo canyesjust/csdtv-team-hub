@@ -386,16 +386,16 @@ function composeBody(feed: Feed): string {
     )
   }
 
-  if (layout === 'zoned' && !portrait) {
+  if ((layout === 'zoned' || layout === 'zoned2') && !portrait) {
     return (
-      `<div class="cic-zoned-stage">` +
+      `<div class="cic-zoned-stage${layout === 'zoned2' ? ' cic-zoned2-stage' : ''}">` +
       zonedHeader({ centerName: s.center_name, areaLabel, weatherIcon, tempF, visitor, logoUrl: s.logo_url, showWeather, showClock }) +
       `<div class="cic-body">${mediaCarousel(feed.media)}${announcementsRail(feed.announcements, feed.wayfinding)}</div>` +
       `${ticker}</div>`
     )
   }
 
-  if (layout === 'zoned' && portrait) {
+  if ((layout === 'zoned' || layout === 'zoned2') && portrait) {
     const annRows = feed.announcements.map(announcementRow).join('')
     const annEmpty = feed.announcements.length ? '' : '<div class="cic-empty-muted">No announcements</div>'
     const dir =

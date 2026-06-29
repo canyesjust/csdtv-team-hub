@@ -69,7 +69,7 @@ export type ScreenFeed = {
 }
 
 const ORIENTATIONS = new Set<SignageOrientation>(['landscape', 'portrait'])
-const LAYOUTS = new Set<SignageLayout>(['full_bleed', 'zoned', 'wayfinding'])
+const LAYOUTS = new Set<SignageLayout>(['full_bleed', 'zoned', 'zoned2', 'wayfinding'])
 
 export function normalizeSignageOrientation(value: string): SignageOrientation {
   return ORIENTATIONS.has(value as SignageOrientation) ? (value as SignageOrientation) : 'landscape'

@@ -22,6 +22,7 @@ type TemplateRow = {
 
 const LAYOUT_OPTIONS = [
   { value: 'zoned', label: 'Zoned', hint: 'Header, media, announcements rail, ticker.' },
+  { value: 'zoned2', label: 'Zoned 2', hint: 'District-branded: big 16:9 media, weather, CSDtv spotlight, news band.' },
   { value: 'full_bleed', label: 'Full bleed', hint: 'Edge-to-edge media with a ticker.' },
   { value: 'wayfinding', label: 'Wayfinding', hint: 'Directory + media + announcements.' },
 ]

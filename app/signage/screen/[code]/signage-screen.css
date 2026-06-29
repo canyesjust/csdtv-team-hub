@@ -1665,3 +1665,98 @@
   60% { --navy: #321537; --panel: #52204f; --accent: #d4419a; }
   80% { --navy: #34122b; --panel: #501c3f; --accent: #ec5a84; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Zoned 2 — district-branded variant (CSDtv office screens).
+   Reuses the zoned DOM (header · 16:9 media · rail · ticker) with the Canyons
+   District palette, a large 16:9 stage, and a news-band ticker. Phase 1.
+   ───────────────────────────────────────────────────────────────────────── */
+.cic-screen.layout-zoned2 {
+  --navy: #04263f;
+  --panel: #06314f;
+  --gray: #7f9bb0;
+  --accent: #3abfe8;
+  --csd-yellow: #fbae42;
+  --csd-blue1: #065687;
+}
+
+.cic-screen.layout-zoned2:not(.portrait) .cic-zoned-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1vmax;
+  gap: 1.05vmax;
+  box-sizing: border-box;
+}
+
+.cic-screen.layout-zoned2:not(.portrait) .cic-tvhead,
+.cic-screen.layout-zoned2:not(.portrait) .cic-media16,
+.cic-screen.layout-zoned2:not(.portrait) .cic-rail,
+.cic-screen.layout-zoned2:not(.portrait) .cic-ticker {
+  border-radius: 0.7vmax;
+  box-shadow: 0 0 0 0.05vmax var(--accent-border);
+}
+
+.cic-screen.layout-zoned2:not(.portrait) .cic-tvhead {
+  background: var(--csd-blue1);
+  border-bottom: none;
+  padding: 0.7vmax 1.3vmax;
+  flex: none;
+}
+.cic-screen.layout-zoned2:not(.portrait) .cic-zhead { padding: 0.5vmax 1.3vmax; }
+.cic-screen.layout-zoned2:not(.portrait) .cic-zhead-area { color: var(--csd-yellow); }
+
+.cic-screen.layout-zoned2:not(.portrait) .cic-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 1.05vmax;
+}
+.cic-screen.layout-zoned2:not(.portrait) .cic-media16 {
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  background: var(--csd-blue1);
+}
+.cic-screen.layout-zoned2:not(.portrait) .cic-railcol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.05vmax;
+}
+.cic-screen.layout-zoned2:not(.portrait) .cic-rail {
+  background: var(--panel);
+  overflow: hidden;
+  padding: 1.05vmax 1.1vmax;
+}
+.cic-screen.layout-zoned2:not(.portrait) .cic-rail-ann { flex: 1; min-height: 0; }
+.cic-screen.layout-zoned2:not(.portrait) .cic-rail-dir { flex: none; }
+.cic-screen.layout-zoned2:not(.portrait) .cic-railhd {
+  font-weight: 700;
+  letter-spacing: 0.12vmax;
+  color: var(--accent);
+  padding-bottom: 0.5vmax;
+  margin-bottom: 0.9vmax;
+  border-bottom: 0.1vmax solid var(--accent-border);
+}
+
+.cic-screen.layout-zoned2:not(.portrait) .cic-ticker {
+  flex: none;
+  background: var(--csd-blue1);
+}
+.cic-screen.layout-zoned2:not(.portrait) .cic-ticker-pill {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 1vmax;
+  background: var(--csd-yellow);
+  color: #06304d;
+  font-weight: 800;
+  letter-spacing: 0.06vmax;
+  font-size: var(--cic-ticker-text);
+  flex: none;
+  border-radius: 0.7vmax 0 0 0.7vmax;
+}
+.cic-screen.layout-zoned2:not(.portrait) .cic-tickin { color: #eaf6fd; }

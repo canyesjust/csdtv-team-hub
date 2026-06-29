@@ -57,7 +57,7 @@ export function signageMediaPublicUrl(path: string): string {
 }
 
 export type SignageOrientation = 'landscape' | 'portrait'
-export type SignageLayout = 'full_bleed' | 'zoned' | 'wayfinding'
+export type SignageLayout = 'full_bleed' | 'zoned' | 'zoned2' | 'wayfinding'
 
 export type SignageTheme = 'primary' | 'secondary' | 'special' | 'spectrum'
 
