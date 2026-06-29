@@ -521,15 +521,42 @@ function ScanToWatch({ title }: { title: string | null }) {
 }
 
 const Z2_SPOT_MS = 8_000
-function Zoned2Rail({
-  spotlight,
-  live,
-  announcements,
-}: {
-  spotlight?: ScreenFeed['spotlight']
-  live?: ScreenFeed['csdtv_live']
-  announcements: FeedAnnouncement[]
-}) {
+const Z2_NEWS_MS = 8_000
+const NEWS_QR = 'data:image/png;base64,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'
+
+function Zoned2Brand({ tag, logoUrl, clock, dateStr }: { tag: string; logoUrl: string | null; clock: string; dateStr: string }) {
+  return (
+    <header className="cic-z2-brand">
+      <div className="cic-z2-brand-left">
+        <div className="cic-z2-logo">{logoUrl ? <img src={logoUrl} alt="" /> : 'C'}</div>
+        <div className="cic-z2-word">Canyons <b>School District</b></div>
+        <div className="cic-z2-brand-div" />
+        <div className="cic-z2-brand-tag">{tag}</div>
+      </div>
+      <div className="cic-z2-brand-right">
+        <div className="cic-z2-onair"><span className="dot" /> On Air</div>
+        <div className="cic-z2-clock"><div className="cic-z2-time">{clock}</div><div className="cic-z2-date">{dateStr}</div></div>
+      </div>
+    </header>
+  )
+}
+
+function Zoned2Weather({ weather }: { weather: { tempF: number | null; condition: string; icon: string } }) {
+  return (
+    <div className="cic-rail cic-z2-weather">
+      <div className="cic-railhd">Sandy, Utah <span className="sub">Now</span></div>
+      <div className="cic-z2-wx">
+        <div className="cic-z2-wxico" aria-hidden>{weather.icon}</div>
+        <div>
+          <div className="cic-z2-temp">{weather.tempF != null ? weather.tempF : '--'}<sup>°</sup></div>
+          {weather.condition ? <div className="cic-z2-cond">{weather.condition}</div> : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Zoned2Spot({ spotlight, live }: { spotlight?: ScreenFeed['spotlight']; live?: ScreenFeed['csdtv_live'] }) {
   const items = spotlight ?? []
   const [spot, setSpot] = useState(0)
   useEffect(() => {
@@ -538,44 +565,66 @@ function Zoned2Rail({
     return () => clearInterval(t)
   }, [items.length])
   const cur = items.length ? items[spot % items.length] : undefined
-  return (
-    <div className="cic-railcol">
+  if (live) {
+    return (
       <div className="cic-rail cic-z2-spot">
-        {live ? (
-          <>
-            <div className="cic-railhd">Now on CSDtv</div>
-            <div className="cic-z2-live">
-              <span className="cic-z2-livepill"><span className="cic-z2-livedot" />Live</span>
-              <div className="cic-z2-live-title">{live.title}</div>
-              <div className="cic-z2-live-sub">Watch live on CSDtv</div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="cic-railhd">CSDtv Spotlight</div>
-            {cur ? (
-              <div className="cic-z2-spotitem">
-                <div className="cic-z2-thumb">
-                  <img src={cur.thumb} alt="" />
-                  {cur.duration && cur.duration !== '0:00' ? <span className="cic-z2-dur">{cur.duration}</span> : null}
-                </div>
-                <div className="cic-z2-sptitle">{cur.title}</div>
-                <div className="cic-z2-spmeta">
-                  {cur.kind ?? 'CSDtv'}{typeof cur.views === 'number' && cur.views > 0 ? ` · ${cur.views.toLocaleString()} views` : ''}
-                </div>
-              </div>
-            ) : (
-              <div className="cic-empty-muted">No videos yet</div>
-            )}
-          </>
-        )}
+        <div className="cic-railhd">Now on CSDtv <span className="sub">Live</span></div>
+        <span className="cic-z2-livepill"><span className="cic-z2-livedot" />Live</span>
+        <div className="cic-z2-live-title">{live.title}</div>
+        <div className="cic-z2-live-sub">Watch live on CSDtv</div>
       </div>
-      <div className="cic-rail cic-rail-ann">
-        <div className="cic-railhd">Announcements</div>
-        {announcements.map(a => <AnnouncementRow key={a.id} ann={a} />)}
-        {!announcements.length && <div className="cic-empty-muted">No announcements</div>}
-      </div>
+    )
+  }
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">CSDtv Spotlight <span className="sub">Latest</span></div>
+      {cur ? (
+        <>
+          <div className="cic-z2-thumb">
+            <img src={cur.thumb} alt="" />
+            {cur.duration && cur.duration !== '0:00' ? <span className="cic-z2-dur">{cur.duration}</span> : null}
+          </div>
+          <div className="cic-z2-sptitle">{cur.title}</div>
+          <div className="cic-z2-spmeta">
+            {cur.kind ?? 'CSDtv'}{typeof cur.views === 'number' && cur.views > 0 ? ` · ${cur.views.toLocaleString()} views` : ''}
+          </div>
+        </>
+      ) : (
+        <div className="cic-empty-muted">No videos yet</div>
+      )}
     </div>
+  )
+}
+
+function Zoned2News({ items }: { items: string[] }) {
+  const list = items.length ? items : ['Canyons School District']
+  const [idx, setIdx] = useState(0)
+  const [vis, setVis] = useState(true)
+  useEffect(() => {
+    if (list.length <= 1) return
+    const t = setInterval(() => {
+      setVis(false)
+      setTimeout(() => { setIdx(i => (i + 1) % list.length); setVis(true) }, 600)
+    }, Z2_NEWS_MS)
+    return () => clearInterval(t)
+  }, [list.length])
+  return (
+    <footer className="cic-z2-news">
+      <div className="cic-z2-news-badge">
+        <span className="cic-z2-news-k">Canyons School District</span>
+        <span className="cic-z2-news-w"><span className="dot" />NEWS</span>
+      </div>
+      <div className="cic-z2-news-rot">
+        <div className={`cic-z2-headline${vis ? ' show' : ''}`}><span>{list[idx]}</span></div>
+      </div>
+      <div className="cic-z2-news-cta">
+        <div>
+          <div className="lead">Scan for more</div>
+          <div className="url">canyonsdistrict.org/news</div>
+        </div>
+        <div className="cic-z2-qr"><img src={NEWS_QR} alt="" /></div>
+      </div>
+    </footer>
   )
 }
 
@@ -912,16 +961,11 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
       {/* 1b. Zoned 2 — district-branded landscape (CSDtv office screens) */}
       {layout === 'zoned2' && showZones && !portrait && (
         <div className="cic-zoned-stage cic-zoned2-stage">
-          <ZonedHeader
-            centerName={feed.screen.center_name}
-            areaLabel={areaLabel}
-            weatherIcon={feed.weather.icon}
-            tempF={feed.weather.tempF}
-            clock={clock}
-            visitor={visitor}
+          <Zoned2Brand
+            tag={areaLabel}
             logoUrl={logoUrl}
-            showWeather={showWeather}
-            showClock={showClock}
+            clock={clock}
+            dateStr={now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           />
           <div className="cic-body">
             <MediaCarousel
@@ -931,9 +975,12 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               onAdvance={advanceMedia}
               overlay={currentMedia?.type === 'video' ? <ScanToWatch title={currentMedia.title} /> : null}
             />
-            <Zoned2Rail spotlight={feed.spotlight} live={feed.csdtv_live} announcements={feed.announcements} />
+            <div className="cic-railcol">
+              <Zoned2Weather weather={feed.weather} />
+              <Zoned2Spot spotlight={feed.spotlight} live={feed.csdtv_live} />
+            </div>
           </div>
-          <TickerBar items={feed.ticker} show={showTicker} pill="News" fallback={tickerFallback} />
+          <Zoned2News items={feed.ticker} />
         </div>
       )}
 
