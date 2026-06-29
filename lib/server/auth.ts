@@ -75,6 +75,22 @@ export function isManagerRole(role: string | null | undefined): boolean {
   return (role || '').toLowerCase() === 'manager'
 }
 
+/**
+ * Manager or Staff. Excludes Student Intern / Intern / Production Focus and any other
+ * limited role. Used to gate write access to board-meeting control + config/media.
+ */
+export function isStaffOrManagerRole(role: string | null | undefined): boolean {
+  const r = role || ''
+  return r === 'Manager' || r === 'Staff'
+}
+
+/** Authenticated team user who is Manager or Staff, else null. */
+export async function getStaffOrManagerUser(): Promise<TeamUser | null> {
+  const teamUser = await getAuthenticatedTeamUser()
+  if (!teamUser || !isStaffOrManagerRole(teamUser.role)) return null
+  return teamUser
+}
+
 /** Reject API mutations while a manager is in view-as mode. */
 export async function assertActorNotImpersonating(): Promise<{ ok: true } | { ok: false; message: string }> {
   const actor = await getActorTeamUser()

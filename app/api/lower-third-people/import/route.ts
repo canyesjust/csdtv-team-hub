@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { importPeopleRows, parsePeopleImportCsv } from '@/lib/board-meetings/people-import'
 
@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const service = getServiceSupabaseClient()
   if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })

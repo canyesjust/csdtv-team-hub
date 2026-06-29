@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
 import { normalizeAgendaType } from '@/lib/board-meetings/extraction'
@@ -20,6 +20,7 @@ export async function PATCH(
 ) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { production_id, item_id } = await params
   const service = getServiceSupabaseClient()
@@ -133,6 +134,7 @@ export async function DELETE(
 ) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { production_id, item_id } = await params
   const service = getServiceSupabaseClient()

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
 import { notifyBoardOutputsForMeeting } from '@/lib/board-meetings/output-realtime'
@@ -46,6 +46,7 @@ export async function withControlContext(
   const notifyOutputs = options.notifyOutputs !== false
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const service = getServiceSupabaseClient()
   if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })

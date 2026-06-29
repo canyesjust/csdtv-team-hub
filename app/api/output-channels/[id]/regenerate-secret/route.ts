@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { randomUUID } from 'crypto'
 
@@ -11,6 +11,7 @@ export async function POST(
 ) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
   const service = getServiceSupabaseClient()
