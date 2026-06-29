@@ -184,6 +184,7 @@ export default function SignageScreensPage() {
               <select value={form.layout} onChange={e => setForm(f => ({ ...f, layout: e.target.value }))} style={s.input}>
                 <option value="inherit">Inherit from site template</option>
                 <option value="zoned">Zoned — media + announcements (+ directory if area set)</option>
+                <option value="zoned2">Zoned 2 — district-branded (big 16:9, weather, spotlight, news band)</option>
                 <option value="full_bleed">Full bleed — media only (hallways)</option>
                 <option value="wayfinding">Wayfinding — large directory + media (entrances)</option>
               </select>

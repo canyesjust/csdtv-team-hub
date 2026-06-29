@@ -600,6 +600,7 @@ export function formatSignageDate(iso: string | null | undefined): string {
 export function layoutLabel(layout: string): string {
   if (layout === 'full_bleed') return 'Full bleed'
   if (layout === 'wayfinding') return 'Wayfinding'
+  if (layout === 'zoned2') return 'Zoned 2'
   if (!layout || layout === 'inherit') return 'Inherit'
   return 'Zoned'
 }

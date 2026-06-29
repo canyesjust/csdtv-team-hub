@@ -3,7 +3,7 @@ import { requireManagerApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
-const LAYOUTS = ['full_bleed', 'zoned', 'wayfinding']
+const LAYOUTS = ['full_bleed', 'zoned', 'zoned2', 'wayfinding']
 
 // POST { site_id, default_layout, show_*, brand_title, brand_subtitle, logo_url }
 // Updates only the template columns for a site (leaves name/colors/etc. alone).

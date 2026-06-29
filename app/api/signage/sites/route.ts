@@ -3,7 +3,7 @@ import { requireManagerApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
-const LAYOUTS = ['full_bleed', 'zoned', 'wayfinding']
+const LAYOUTS = ['full_bleed', 'zoned', 'zoned2', 'wayfinding']
 
 function siteFields(body: Record<string, unknown>) {
   const theme = body.default_theme
