@@ -188,7 +188,7 @@ export default function StudentHomePage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px' }}>
         <section style={uiStyles.zoneSection}>
-          <ZoneHeader label="My productions" hint="Shows where you are on the crew list" accent="#5ba3e0" />
+          <ZoneHeader label="My productions" hint="Shows where you are on the crew list" accent="var(--brand-primary)" />
           <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', overflow: 'hidden', boxShadow: 'var(--shadow-soft)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: `1px solid ${border}` }}>
               <span style={{ fontSize: '13px', color: muted }}>{myProductions.length} production{myProductions.length !== 1 ? 's' : ''}</span>
@@ -280,7 +280,7 @@ export default function StudentHomePage() {
                       title="Mark complete"
                     >
                       {busy ? (
-                        <span style={{ width: '10px', height: '10px', border: '2px solid var(--border-subtle)', borderTopColor: '#5ba3e0', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                        <span style={{ width: '10px', height: '10px', border: '2px solid var(--border-subtle)', borderTopColor: 'var(--brand-primary)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
                       ) : null}
                     </button>
                     <Link href="/dashboard/tasks" style={{ flex: 1, minWidth: 0, textDecoration: 'none' }}>

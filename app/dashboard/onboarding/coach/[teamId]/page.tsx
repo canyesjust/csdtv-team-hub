@@ -416,7 +416,7 @@ export default function OnboardingCoachPage() {
               style={{
                 padding: '10px 16px',
                 borderRadius: '8px',
-                background: '#1e6cb5',
+                background: 'var(--brand-primary)',
                 color: '#fff',
                 border: 'none',
                 cursor: 'pointer',

@@ -478,7 +478,7 @@ export default function VideosPage() {
           <button onClick={() => { setShowBulkImport(!showBulkImport); setShowNew(false) }} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
             Bulk import
           </button>
-          <button onClick={() => { setShowNew(!showNew); setShowBulkImport(false) }} style={{ background: '#1e6cb5', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button onClick={() => { setShowNew(!showNew); setShowBulkImport(false) }} style={{ background: 'var(--brand-primary)', border: 'none', borderRadius: '10px', padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             + New video
           </button>
         </div>
@@ -495,7 +495,7 @@ export default function VideosPage() {
             <button onClick={() => setFilterReview(!filterReview)} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: filterReview ? '#f59e0b' : cardBg, color: filterReview ? '#fff' : muted, border: `0.5px solid ${filterReview ? '#f59e0b' : border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
               {filterReview ? 'Show all' : 'Show needs review'}
             </button>
-            <button onClick={categorizeVideos} disabled={categorizing} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: categorizing ? 0.7 : 1 }}>
+            <button onClick={categorizeVideos} disabled={categorizing} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: categorizing ? 0.7 : 1 }}>
               {categorizing ? '🤖 Categorizing...' : '🤖 AI Categorize'}
             </button>
           </div>
@@ -560,7 +560,7 @@ export default function VideosPage() {
                 </p>
               ) : candidates.map((c, i) => (
                 <div key={c.prod.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '8px', marginBottom: '6px', border: `0.5px solid ${border}` }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: dark ? 'rgba(91,163,224,0.15)' : '#dbeafe', color: '#5ba3e0', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: dark ? 'rgba(91,163,224,0.15)' : '#dbeafe', color: 'var(--brand-primary)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 2px' }}>#{c.prod.production_number} {c.prod.title}</p>
                     <p style={{ fontSize: '12px', color: muted, margin: 0 }}>
@@ -569,7 +569,7 @@ export default function VideosPage() {
                       {c.prod.start_datetime ? ` · ${new Date(c.prod.start_datetime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
                     </p>
                   </div>
-                  <button onClick={() => linkReviewVideo(c.prod.id, `#${c.prod.production_number} ${c.prod.title}`)} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>Match</button>
+                  <button onClick={() => linkReviewVideo(c.prod.id, `#${c.prod.production_number} ${c.prod.title}`)} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, flexShrink: 0 }}>Match</button>
                 </div>
               ))}
             </div>
@@ -633,7 +633,7 @@ export default function VideosPage() {
               setBulkCSV('')
               setBulkImporting(false)
               setShowBulkImport(false)
-            }} disabled={bulkImporting || !bulkCSV.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: bulkCSV.trim() ? '#1e6cb5' : 'var(--surface-2)', color: bulkCSV.trim() ? '#fff' : muted, border: 'none', cursor: bulkCSV.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
+            }} disabled={bulkImporting || !bulkCSV.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: bulkCSV.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: bulkCSV.trim() ? '#fff' : muted, border: 'none', cursor: bulkCSV.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>
               {bulkImporting ? 'Importing...' : `Import ${bulkCSV.trim() ? bulkCSV.trim().split('\n').filter(l => l.trim()).length : 0} videos`}
             </button>
             <button onClick={() => setShowBulkImport(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
@@ -693,7 +693,7 @@ export default function VideosPage() {
             <input value={newVideo.tags} onChange={e => setNewVideo(f => ({ ...f, tags: e.target.value }))} placeholder="e.g. board meeting, athletics, drone" style={inputStyle} />
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={createVideo} disabled={!newVideo.title || saving} style={{ padding: '10px 20px', borderRadius: '8px', background: newVideo.title ? '#1e6cb5' : 'var(--surface-2)', color: newVideo.title ? '#fff' : muted, border: 'none', cursor: newVideo.title ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+            <button onClick={createVideo} disabled={!newVideo.title || saving} style={{ padding: '10px 20px', borderRadius: '8px', background: newVideo.title ? 'var(--brand-primary)' : 'var(--surface-2)', color: newVideo.title ? '#fff' : muted, border: 'none', cursor: newVideo.title ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
               {saving ? 'Creating...' : 'Create video'}
             </button>
             <button onClick={() => setShowNew(false)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>Cancel</button>
@@ -733,7 +733,7 @@ export default function VideosPage() {
         <div style={{ textAlign: 'center' as const, padding: '60px 20px' }}>
           <p style={{ fontSize: '40px', margin: '0 0 12px' }}>🎬</p>
           <p style={{ fontSize: '16px', color: text, fontWeight: 500, margin: '0 0 6px' }}>No videos match your filters</p>
-          <button onClick={() => { setSearch(''); setFilterType('all'); setFilterStatus('all'); setFilterReview(false) }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Clear filters</button>
+          <button onClick={() => { setSearch(''); setFilterType('all'); setFilterStatus('all'); setFilterReview(false) }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Clear filters</button>
         </div>
       ) : (
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', overflow: 'hidden' }}>
@@ -782,7 +782,7 @@ export default function VideosPage() {
                       <td style={{ padding: '8px' }}>
                         {video.productions ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Link href={`/dashboard/productions/${video.productions.production_number}`} style={{ fontSize: '11px', color: '#5ba3e0', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '120px', display: 'block' }}>#{video.productions.production_number} {video.productions.title}</Link>
+                            <Link href={`/dashboard/productions/${video.productions.production_number}`} style={{ fontSize: '11px', color: 'var(--brand-primary)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: '120px', display: 'block' }}>#{video.productions.production_number} {video.productions.title}</Link>
                             <button onClick={async () => { const { error } = await supabase.from('videos').update({ production_id: null }).eq('id', video.id); if (error) { toast('Could not unlink video', 'error'); return }; setVideos(prev => prev.map(v => v.id === video.id ? { ...v, production_id: null, productions: null } : v)); toast('Unlinked', 'success') }} style={{ fontSize: '9px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px' }}>✕</button>
                           </div>
                         ) : linkingVideoId === video.id ? (
@@ -836,7 +836,7 @@ export default function VideosPage() {
                               const pubDate = video.date_published ? new Date(video.date_published + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown'
                               await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/send-notification`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }, body: JSON.stringify({ type: 'create_production_request', recipientEmail: sd.value, subject: sanitizeEmailSubject(`Please create production: ${video.title}`), body: `Create a production and mark complete:\n\nTitle: ${video.title}\nDate: ${pubDate}\nYouTube: ${video.youtube_url || ''}\n\n— CSDtv` }) })
                               toast('Email sent', 'success')
-                            }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(30,108,181,0.08)', color: '#5ba3e0', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
+                            }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(30,108,181,0.08)', color: 'var(--brand-primary)', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📧</button>
                           )}
                           <button onClick={async () => { const { error } = await supabase.from('videos').update({ status: 'Hidden' }).eq('id', video.id); if (error) { toast('Could not hide video', 'error'); return }; setVideos(prev => prev.map(v => v.id === video.id ? { ...v, status: 'Hidden' } : v)); toast('Hidden', 'success') }} style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', color: muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>👁‍🗨</button>
                         </div>

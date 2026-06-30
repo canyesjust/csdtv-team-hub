@@ -31,7 +31,7 @@ interface ProdMember { production_id: string; user_id: string }
 interface CameraPackageRow { option_id: number; label: string; cost: number }
 
 const TYPE_COLORS: Record<string, string> = {
-  'Photo Headshots': '#e8a020', 'Create a Video(Film, Edit, Publish)': '#5ba3e0', 'LiveStream Meeting': '#22c55e',
+  'Photo Headshots': '#e8a020', 'Create a Video(Film, Edit, Publish)': 'var(--brand-primary)', 'LiveStream Meeting': '#22c55e',
   'Record Meeting': '#9b85e0', 'Podcast': '#f97316', 'Board Meeting': '#ef4444',
 }
 
@@ -315,7 +315,7 @@ export default function ReportsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: `1px solid ${border}` }}>
         <div style={{ display: 'flex', gap: '4px', overflowX: 'auto' as const }}>
         {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{ background: 'none', border: 'none', borderBottom: tab === t.key ? '2px solid #5ba3e0' : '2px solid transparent', padding: '10px 16px', fontSize: '14px', fontWeight: tab === t.key ? 600 : 400, color: tab === t.key ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const }}>
+          <button key={t.key} onClick={() => setTab(t.key)} style={{ background: 'none', border: 'none', borderBottom: tab === t.key ? '2px solid var(--brand-primary)' : '2px solid transparent', padding: '10px 16px', fontSize: '14px', fontWeight: tab === t.key ? 600 : 400, color: tab === t.key ? 'var(--brand-primary)' : muted, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const }}>
             {t.label}
           </button>
         ))}
@@ -354,7 +354,7 @@ export default function ReportsPage() {
               {monthlyBreakdown.map((m, i) => (
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                   <span style={{ fontSize: '11px', color: text, fontWeight: 600 }}>{m.count || ''}</span>
-                  {(() => { const h = maxMonthly ? (m.count / maxMonthly) * 90 : 0; return <div style={{ width: '100%', height: `${h}px`, background: '#1e6cb5', borderRadius: '4px 4px 0 0', minHeight: m.count ? '4px' : '0px', transition: 'height 0.3s' }} /> })()}
+                  {(() => { const h = maxMonthly ? (m.count / maxMonthly) * 90 : 0; return <div style={{ width: '100%', height: `${h}px`, background: 'var(--brand-primary)', borderRadius: '4px 4px 0 0', minHeight: m.count ? '4px' : '0px', transition: 'height 0.3s' }} /> })()}
                   <span style={{ fontSize: '10px', color: muted, whiteSpace: 'nowrap' as const }}>{m.label}</span>
                 </div>
               ))}
@@ -365,7 +365,7 @@ export default function ReportsPage() {
               {typeBreakdown.slice(0, 6).map(([type, count]) => (
                 <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 0' }}>
                   <span style={{ fontSize: '13px', color: text, minWidth: '200px' }}>{type}</span>
-                  {pctBar(count, maxTypeCount, TYPE_COLORS[type] || '#5ba3e0')}
+                  {pctBar(count, maxTypeCount, TYPE_COLORS[type] || 'var(--brand-primary)')}
                   <span style={{ fontSize: '13px', fontWeight: 600, color: text, minWidth: '30px', textAlign: 'right' as const }}>{count}</span>
                 </div>
               ))}
@@ -388,7 +388,7 @@ export default function ReportsPage() {
               {typeBreakdown.map(([type, count]) => (
                 <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 0' }}>
                   <span style={{ fontSize: '13px', color: text, minWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{type}</span>
-                  {pctBar(count, maxTypeCount, TYPE_COLORS[type] || '#5ba3e0')}
+                  {pctBar(count, maxTypeCount, TYPE_COLORS[type] || 'var(--brand-primary)')}
                   <span style={{ fontSize: '13px', fontWeight: 600, color: text, minWidth: '30px', textAlign: 'right' as const }}>{count}</span>
                 </div>
               ))}
@@ -462,7 +462,7 @@ export default function ReportsPage() {
               {monthlyBreakdown.map((m, i) => (
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                   <span style={{ fontSize: '11px', color: text, fontWeight: 600 }}>{m.count || ''}</span>
-                  {(() => { const h = maxMonthly ? (m.count / maxMonthly) * 90 : 0; return <div style={{ width: '100%', height: `${h}px`, background: '#1e6cb5', borderRadius: '4px 4px 0 0', minHeight: m.count ? '4px' : '0px' }} /> })()}
+                  {(() => { const h = maxMonthly ? (m.count / maxMonthly) * 90 : 0; return <div style={{ width: '100%', height: `${h}px`, background: 'var(--brand-primary)', borderRadius: '4px 4px 0 0', minHeight: m.count ? '4px' : '0px' }} /> })()}
                   <span style={{ fontSize: '10px', color: muted, whiteSpace: 'nowrap' as const }}>{m.label}</span>
                 </div>
               ))}
@@ -492,7 +492,7 @@ export default function ReportsPage() {
                     <div style={{ minWidth: '100px' }}>
                       <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Productions</p>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {pctBar(member.prodsAssigned, maxTeamProds, '#5ba3e0')}
+                        {pctBar(member.prodsAssigned, maxTeamProds, 'var(--brand-primary)')}
                         <span style={{ fontSize: '14px', fontWeight: 600, color: text }}>{member.prodsAssigned}</span>
                       </div>
                     </div>

@@ -62,7 +62,7 @@ export default function MeetingPlaylistSection({ productionId }: { productionId:
       {!hasPlaylist ? (
         <div>
           <p style={{ margin: '0 0 12px', fontSize: '14px', color: muted }}>No playlist yet.</p>
-          <button type="button" onClick={() => { setApplyOpen(true); loadTemplates() }} style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Apply template</button>
+          <button type="button" onClick={() => { setApplyOpen(true); loadTemplates() }} style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Apply template</button>
         </div>
       ) : (
         <PlaylistEditor mode="meeting" productionId={productionId} />

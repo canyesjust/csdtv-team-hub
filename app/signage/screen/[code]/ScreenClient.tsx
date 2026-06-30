@@ -573,8 +573,8 @@ function Zoned2WxScene({ cls }: { cls: string }) {
   if (cls === 'night') {
     return (
       <div className="z2wx-scene" aria-hidden>
-        {Array.from({ length: 14 }).map((_, i) => (
-          <span key={i} className="z2wx-star" style={{ left: `${(i * 37) % 94 + 3}%`, top: `${(i * 23) % 58 + 6}%`, animationDelay: `${(i % 5) * 0.6}s` }} />
+        {Array.from({ length: 12 }).map((_, i) => (
+          <span key={i} className="z2wx-star" style={{ left: `${(i * 37) % 92 + 4}%`, top: `${(i * 19) % 34 + 4}%`, animationDelay: `${(i % 5) * 0.6}s` }} />
         ))}
       </div>
     )

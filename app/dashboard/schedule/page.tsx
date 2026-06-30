@@ -87,7 +87,7 @@ const PAY_PERIODS: PayPeriodRow[] = [
 // ─── Production type colors ───────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
   'Photo Headshots':                          '#e8a020',
-  'Create a Video(Film, Edit, Publish)':      '#5ba3e0',
+  'Create a Video(Film, Edit, Publish)':      'var(--brand-primary)',
   'LiveStream Meeting':                       '#22c55e',
   'Record Meeting':                           '#9b85e0',
   'Podcast':                                  '#f97316',
@@ -714,7 +714,7 @@ export default function SchedulePage() {
           <button onClick={() => setMonthOffset(p => p - 1)} style={{ width: '38px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <button onClick={() => setMonthOffset(0)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: monthOffset === 0 ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: monthOffset === 0 ? 600 : 400 }}>
+          <button onClick={() => setMonthOffset(0)} style={{ fontSize: '13px', padding: '0 14px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: monthOffset === 0 ? 'var(--brand-primary)' : muted, cursor: 'pointer', fontFamily: 'inherit', fontWeight: monthOffset === 0 ? 600 : 400 }}>
             Today
           </button>
           <button onClick={() => setMonthOffset(p => p + 1)} style={{ width: '38px', height: '38px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: text, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -736,9 +736,9 @@ export default function SchedulePage() {
               fontSize: '14px',
               padding: '8px 14px',
               borderRadius: '8px',
-              border: `0.5px solid ${hoursTab === id ? '#1e6cb5' : border}`,
+              border: `0.5px solid ${hoursTab === id ? 'var(--brand-primary)' : border}`,
               background: hoursTab === id ? 'rgba(30,108,181,0.12)' : cardBg,
-              color: hoursTab === id ? '#5ba3e0' : muted,
+              color: hoursTab === id ? 'var(--brand-primary)' : muted,
               cursor: 'pointer',
               fontFamily: 'inherit',
               fontWeight: hoursTab === id ? 600 : 500,
@@ -777,7 +777,7 @@ export default function SchedulePage() {
               <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Color</label>
               <input type="color" value={newEvent.color} onChange={e => setNewEvent(p => ({ ...p, color: e.target.value }))} style={{ width: '100%', height: '36px', border: `0.5px solid ${border}`, borderRadius: '8px', cursor: 'pointer', background: 'transparent' }} />
             </div>
-            <button onClick={saveEvent} disabled={!newEvent.title || !newEvent.date} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: newEvent.title && newEvent.date ? '#1e6cb5' : 'var(--surface-2)', color: newEvent.title && newEvent.date ? '#fff' : muted, border: 'none', cursor: newEvent.title && newEvent.date ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+            <button onClick={saveEvent} disabled={!newEvent.title || !newEvent.date} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: newEvent.title && newEvent.date ? 'var(--brand-primary)' : 'var(--surface-2)', color: newEvent.title && newEvent.date ? '#fff' : muted, border: 'none', cursor: newEvent.title && newEvent.date ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
           </div>
         </div>
       )}
@@ -785,7 +785,7 @@ export default function SchedulePage() {
       {/* ── Pay period banner ── */}
       {hoursTab === 'pay' && primaryPP && (
         <div style={{ background: dark ? 'rgba(30,108,181,0.12)' : 'rgba(30,108,181,0.07)', border: `0.5px solid rgba(30,108,181,0.25)`, borderRadius: '10px', padding: '10px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 20px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#5ba3e0' }}>Pay Period {primaryPP.num}</span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--brand-primary)' }}>Pay Period {primaryPP.num}</span>
           <span style={{ fontSize: '13px', color: muted }}>
             {fmt(primaryPP.start, { month: 'short', day: 'numeric' })} – {fmt(primaryPP.end, { month: 'short', day: 'numeric' })}
           </span>
@@ -848,7 +848,7 @@ export default function SchedulePage() {
                 placeholder="e.g. 9am-5pm"
                 style={{ background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '7px 12px', fontSize: '13px', color: text, fontFamily: 'inherit', outline: 'none', width: '140px' }}
               />
-              <button onClick={runMassFill} disabled={massFilling || !massFillValue.trim()} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: massFilling ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+              <button onClick={runMassFill} disabled={massFilling || !massFillValue.trim()} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: massFilling ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                 {massFilling ? 'Applying…' : 'Apply'}
               </button>
               <button onClick={() => { setShowMassFill(false); setMassFillValue('') }} style={{ fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
@@ -973,7 +973,7 @@ export default function SchedulePage() {
                   <span style={{
                     fontSize: '13px', fontWeight: todayCell ? 700 : 400,
                     color: todayCell ? '#fff' : isWeekend ? (dark ? 'rgba(136,153,187,0.5)' : 'rgba(107,114,128,0.5)') : text,
-                    background: todayCell ? '#1e6cb5' : 'transparent',
+                    background: todayCell ? 'var(--brand-primary)' : 'transparent',
                     width: '22px', height: '22px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
@@ -994,7 +994,7 @@ export default function SchedulePage() {
                       onBlur={() => saveDay(day, editingCell.value)}
                       onClick={e => e.stopPropagation()}
                       placeholder="9am-5pm"
-                      style={{ fontSize: '10px', width: '68px', background: inputBg, border: `0.5px solid #1e6cb5`, borderRadius: '4px', padding: '1px 4px', color: text, fontFamily: 'inherit', outline: 'none' }}
+                      style={{ fontSize: '10px', width: '68px', background: inputBg, border: `0.5px solid var(--brand-primary)`, borderRadius: '4px', padding: '1px 4px', color: text, fontFamily: 'inherit', outline: 'none' }}
                     />
                   ) : officeClosed && inMonth ? (
                     <span
@@ -1005,7 +1005,7 @@ export default function SchedulePage() {
                   ) : hours && inMonth ? (
                     <span
                       title="Click to edit"
-                      style={{ fontSize: '10px', fontWeight: 500, color: '#5ba3e0', background: dark ? 'rgba(30,108,181,0.18)' : 'rgba(30,108,181,0.1)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' as const, cursor: canEditHours ? 'text' : 'default' }}>
+                      style={{ fontSize: '10px', fontWeight: 500, color: 'var(--brand-primary)', background: dark ? 'rgba(30,108,181,0.18)' : 'rgba(30,108,181,0.1)', borderRadius: '4px', padding: '1px 5px', whiteSpace: 'nowrap' as const, cursor: canEditHours ? 'text' : 'default' }}>
                       {hours.replace(/\s/g, '')}
                     </span>
                   ) : canEditHours ? (
@@ -1104,7 +1104,7 @@ export default function SchedulePage() {
                         }}>
                           <p style={{ fontSize: '12px', fontWeight: 600, color: text, margin: '0 0 3px' }}>{prod.title}</p>
                           {prod.request_type_label && <p style={{ fontSize: '11px', color: muted, margin: '0 0 2px' }}>{prod.request_type_label}</p>}
-                          {startTime && <p style={{ fontSize: '11px', color: '#5ba3e0', margin: 0, fontWeight: 500 }}>🕐 {startTime}</p>}
+                          {startTime && <p style={{ fontSize: '11px', color: 'var(--brand-primary)', margin: 0, fontWeight: 500 }}>🕐 {startTime}</p>}
                         </div>
                       )}
                     </div>
@@ -1149,7 +1149,7 @@ export default function SchedulePage() {
                 <p style={{ fontSize: '13px', color: muted, margin: '2px 0 0' }}>Repeats every week</p>
               </div>
               {!editingDefault && (
-                <button onClick={() => setEditingDefault(true)} style={{ fontSize: '13px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
+                <button onClick={() => setEditingDefault(true)} style={{ fontSize: '13px', color: 'var(--brand-primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
               )}
             </div>
             {editingDefault ? (
@@ -1166,7 +1166,7 @@ export default function SchedulePage() {
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <button onClick={saveDefault} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Save</button>
+                  <button onClick={saveDefault} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Save</button>
                   <button onClick={() => setEditingDefault(false)} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                 </div>
               </div>
@@ -1193,7 +1193,7 @@ export default function SchedulePage() {
                 <p style={{ fontSize: '13px', color: muted, margin: '2px 0 0' }}>Override your default</p>
               </div>
               {!editingOverride && (
-                <button onClick={() => setEditingOverride(true)} style={{ fontSize: '13px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
+                <button onClick={() => setEditingOverride(true)} style={{ fontSize: '13px', color: 'var(--brand-primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
               )}
             </div>
             {editingOverride ? (
@@ -1230,7 +1230,7 @@ export default function SchedulePage() {
                   style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const, marginBottom: '10px', marginTop: '4px' }}
                 />
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={saveOverride} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Save</button>
+                  <button onClick={saveOverride} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Save</button>
                   <button onClick={() => setEditingOverride(false)} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                 </div>
               </div>

@@ -131,7 +131,7 @@ export default function BackupsPanel({
       </p>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-        <button type="button" onClick={runNow} disabled={running} style={{ ...btnStyle, background: '#1e6cb5', color: '#fff', border: 'none', opacity: running ? 0.7 : 1 }}>
+        <button type="button" onClick={runNow} disabled={running} style={{ ...btnStyle, background: 'var(--brand-primary)', color: '#fff', border: 'none', opacity: running ? 0.7 : 1 }}>
           {running ? 'Running backup…' : 'Run backup now'}
         </button>
         <button type="button" onClick={load} disabled={loading} style={btnStyle}>

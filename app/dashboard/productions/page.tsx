@@ -98,7 +98,7 @@ const STATUS_DISPLAY: Record<string, string> = {
 // Production type accent colors — sourced from the district site's request types
 const TYPE_COLORS: Record<string, string> = {
   'Photo Headshots': '#e8a020',
-  'Create a Video(Film, Edit, Publish)': '#5ba3e0',
+  'Create a Video(Film, Edit, Publish)': 'var(--brand-primary)',
   'LiveStream Meeting': '#22c55e',
   'Record Meeting': '#9b85e0',
   'Podcast': '#f97316',
@@ -1920,9 +1920,9 @@ function ProductionsPageContent() {
                               fontSize: '12px',
                               padding: '5px 12px',
                               borderRadius: '6px',
-                              border: `0.5px solid ${panelEmailTemplate === t.id ? '#1e6cb5' : border}`,
+                              border: `0.5px solid ${panelEmailTemplate === t.id ? 'var(--brand-primary)' : border}`,
                               background: panelEmailTemplate === t.id ? 'rgba(30,108,181,0.12)' : cardBg,
-                              color: panelEmailTemplate === t.id ? '#5ba3e0' : muted,
+                              color: panelEmailTemplate === t.id ? 'var(--brand-primary)' : muted,
                               cursor: ytTemplateLocked ? 'not-allowed' : 'pointer',
                               opacity: ytTemplateLocked ? 0.45 : 1,
                               fontFamily: 'inherit',
@@ -1935,7 +1935,7 @@ function ProductionsPageContent() {
                     </div>
                   ) : (
                     <p style={{ fontSize: '12px', color: muted, margin: '0 0 14px', padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px', border: `0.5px solid ${border}` }}>
-                      No templates configured. <Link href="/dashboard/settings" style={{ color: '#5ba3e0' }}>Add templates in Settings</Link>.
+                      No templates configured. <Link href="/dashboard/settings" style={{ color: 'var(--brand-primary)' }}>Add templates in Settings</Link>.
                     </p>
                   )}
 
@@ -1956,7 +1956,7 @@ function ProductionsPageContent() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <button type="button" onClick={openPanelOrganizerEmail} disabled={!panelEmailBody} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: panelEmailBody ? '#1e6cb5' : 'var(--surface-2)', color: panelEmailBody ? '#fff' : muted, border: 'none', cursor: panelEmailBody ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>
+                    <button type="button" onClick={openPanelOrganizerEmail} disabled={!panelEmailBody} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: panelEmailBody ? 'var(--brand-primary)' : 'var(--surface-2)', color: panelEmailBody ? '#fff' : muted, border: 'none', cursor: panelEmailBody ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>
                       ✉ Open in Outlook
                     </button>
                     <button type="button" onClick={() => setShowPanelEmailModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>

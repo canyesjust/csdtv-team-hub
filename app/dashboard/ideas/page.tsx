@@ -332,7 +332,7 @@ export default function IdeasPage() {
             display: 'none',
             background: 'none',
             border: 'none',
-            color: '#5ba3e0',
+            color: 'var(--brand-primary)',
             cursor: 'pointer',
             fontSize: '14px',
             fontFamily: 'inherit',
@@ -469,7 +469,7 @@ export default function IdeasPage() {
                   fontSize: '14px',
                   padding: '10px 20px',
                   borderRadius: '10px',
-                  background: '#1e6cb5',
+                  background: 'var(--brand-primary)',
                   color: '#fff',
                   border: 'none',
                   cursor: 'pointer',
@@ -575,7 +575,7 @@ export default function IdeasPage() {
             fontSize: '14px',
             padding: '10px 18px',
             borderRadius: '10px',
-            background: '#1e6cb5',
+            background: 'var(--brand-primary)',
             color: '#fff',
             border: 'none',
             cursor: 'pointer',
@@ -604,7 +604,7 @@ export default function IdeasPage() {
         }}
       >
         When an idea is ready for the district workflow, create it in the productions system — it will appear under{' '}
-        <Link href="/dashboard/productions" style={{ color: '#5ba3e0', textDecoration: 'none' }}>
+        <Link href="/dashboard/productions" style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}>
           Productions
         </Link>{' '}
         as <strong style={{ fontWeight: 600, color: text }}>Idea / Request</strong>.
@@ -629,9 +629,9 @@ export default function IdeasPage() {
                   fontSize: '14px',
                   padding: '8px 14px',
                   borderRadius: '8px',
-                  border: `0.5px solid ${tab === t ? '#1e6cb5' : border}`,
+                  border: `0.5px solid ${tab === t ? 'var(--brand-primary)' : border}`,
                   background: tab === t ? 'rgba(30,108,181,0.12)' : cardBg,
-                  color: tab === t ? '#5ba3e0' : muted,
+                  color: tab === t ? 'var(--brand-primary)' : muted,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                   fontWeight: tab === t ? 600 : 500,
@@ -727,7 +727,7 @@ export default function IdeasPage() {
                           ? 'rgba(30,108,181,0.15)'
                           : 'rgba(30,108,181,0.06)'
                         : cardBg,
-                      border: `0.5px solid ${isSelected ? '#1e6cb5' : border}`,
+                      border: `0.5px solid ${isSelected ? 'var(--brand-primary)' : border}`,
                       borderRadius: '12px',
                       cursor: 'pointer',
                       transition: 'all 0.15s',
@@ -856,7 +856,7 @@ export default function IdeasPage() {
         .article-content strong { font-weight: 600; }
         .article-content em { font-style: italic; color: ${muted}; }
         .article-content hr { border: none; border-top: 0.5px solid ${border}; margin: 28px 0; }
-        .article-content a { color: #5ba3e0; }
+        .article-content a { color: var(--brand-primary); }
       `}</style>
     </div>
   )

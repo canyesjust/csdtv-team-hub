@@ -369,7 +369,7 @@ export default function KnowledgeArticlesImportModal({
               minHeight: '44px',
               padding: '10px',
               borderRadius: '8px',
-              background: '#1e6cb5',
+              background: 'var(--brand-primary)',
               color: '#fff',
               border: 'none',
               cursor: validCount === 0 ? 'default' : 'pointer',

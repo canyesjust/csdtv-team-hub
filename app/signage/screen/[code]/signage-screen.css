@@ -1930,3 +1930,20 @@
 /* Zoned 2 v2 — center the weather on its card. */
 .cic-screen.layout-zoned2 .cic-z2-wx { justify-content: center; }
 .cic-screen.layout-zoned2 .cic-z2-wxmeta { justify-content: center; }
+
+/* Zoned 2 — nicer clear-night: glowing stars + a moon with craters. */
+.cic-screen.layout-zoned2 .z2wx-star { width: 0.26vmax; height: 0.26vmax; box-shadow: 0 0 0.5vmax rgba(255, 255, 255, 0.6); }
+.cic-screen.layout-zoned2 .z2wx-moon {
+  background:
+    radial-gradient(circle at 64% 32%, rgba(150, 168, 196, 0.5) 0 0.32vmax, transparent 0.42vmax),
+    radial-gradient(circle at 40% 62%, rgba(150, 168, 196, 0.42) 0 0.46vmax, transparent 0.56vmax),
+    radial-gradient(circle at 70% 66%, rgba(150, 168, 196, 0.38) 0 0.26vmax, transparent 0.36vmax),
+    radial-gradient(circle at 35% 35%, #f6f9ff, #cdd8ea);
+  box-shadow: 0 0 1.6vmax rgba(200, 215, 255, 0.35);
+}
+
+/* Zoned 2 — weather scene polish: keep clouds below the header, softer snow. */
+.cic-screen.layout-zoned2 .z2wx-scene .c1 { top: 4.5vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .c2 { top: 8vmax; }
+.cic-screen.layout-zoned2 .z2wx-snow { opacity: 0.85; background-image: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0.22vmax, transparent 0.3vmax); background-size: 3.2vmax 3.2vmax; }
+.cic-screen.layout-zoned2 .z2wx-rain { opacity: 0.55; }

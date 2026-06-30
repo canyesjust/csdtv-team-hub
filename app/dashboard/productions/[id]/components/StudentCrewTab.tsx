@@ -332,7 +332,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
         <p style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 6px' }}>🎬 Student crew not yet enabled</p>
         <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px' }}>Turn this on to manage student sign-ups for this production. You&apos;ll get a public URL students can use to claim crew positions.</p>
         {isManager ? (
-          <button onClick={enableCrew} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Enable student crew</button>
+          <button onClick={enableCrew} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Enable student crew</button>
         ) : (
           <p style={{ fontSize: '13px', color: muted, margin: 0 }}>(Manager-only)</p>
         )}
@@ -355,9 +355,9 @@ export default function StudentCrewTab({ productionId, productionNumber, product
       <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
         <div style={{ flex: 1, minWidth: '200px' }}>
           <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 4px' }}>Public sign-up URL</p>
-          <p style={{ fontSize: '13px', color: '#5ba3e0', margin: 0, fontFamily: 'monospace', wordBreak: 'break-all' as const }}>{publicUrl}</p>
+          <p style={{ fontSize: '13px', color: 'var(--brand-primary)', margin: 0, fontFamily: 'monospace', wordBreak: 'break-all' as const }}>{publicUrl}</p>
         </div>
-        <button onClick={copyUrl} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>📋 Copy</button>
+        <button onClick={copyUrl} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(30,108,181,0.1)', color: 'var(--brand-primary)', border: '0.5px solid rgba(30,108,181,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>📋 Copy</button>
         <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, textDecoration: 'none' }}>↗ Preview</a>
         {isManager && (
           <button onClick={disableCrew} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Disable</button>
@@ -456,7 +456,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
           {isManager && (
             <div style={{ display: 'flex', gap: '6px' }}>
               <input value={newReq} onChange={e => setNewReq(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRequirement() } }} placeholder="Add a requirement (e.g. Bring a water bottle)" style={{ ...inputStyle, flex: 1, fontSize: '13px' }} />
-              <button onClick={addRequirement} disabled={!newReq.trim()} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: newReq.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newReq.trim() ? '#fff' : muted, border: 'none', cursor: newReq.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+              <button onClick={addRequirement} disabled={!newReq.trim()} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: newReq.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: newReq.trim() ? '#fff' : muted, border: 'none', cursor: newReq.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
             </div>
           )}
         </div>
@@ -476,7 +476,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
         )}
 
         {isManager && (
-          <button onClick={saveForm} disabled={savingForm} style={{ fontSize: '13px', padding: '8px 18px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: savingForm ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+          <button onClick={saveForm} disabled={savingForm} style={{ fontSize: '13px', padding: '8px 18px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: savingForm ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
             {savingForm ? 'Saving...' : 'Save event details'}
           </button>
         )}
@@ -487,7 +487,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 600, color: text, margin: 0 }}>Roles needed</h3>
           {isManager && !showAddSlot && !editingSlotId && (
-            <button onClick={() => { setShowAddSlot(true); setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' }) }} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Add role</button>
+            <button onClick={() => { setShowAddSlot(true); setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' }) }} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Add role</button>
           )}
         </div>
 
@@ -522,7 +522,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
               <input value={slotForm.notes} onChange={e => setSlotForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Switcher ends earlier than the rest of the crew" style={inputStyle} />
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button onClick={editingSlotId ? saveSlot : addSlot} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{editingSlotId ? 'Save' : 'Add role'}</button>
+              <button onClick={editingSlotId ? saveSlot : addSlot} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{editingSlotId ? 'Save' : 'Add role'}</button>
               <button onClick={() => { setShowAddSlot(false); setEditingSlotId(null) }} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             </div>
           </div>
@@ -548,7 +548,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
                   </div>
                   {isManager && (
                     <span>
-                      <button onClick={() => startEditSlot(slot)} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'transparent', color: '#5ba3e0', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', marginRight: '4px' }}>Edit</button>
+                      <button onClick={() => startEditSlot(slot)} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'transparent', color: 'var(--brand-primary)', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', marginRight: '4px' }}>Edit</button>
                       <button onClick={() => deleteSlot(slot.id, role?.name || 'this role')} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
                     </span>
                   )}

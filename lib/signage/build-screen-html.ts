@@ -358,7 +358,7 @@ function wxSceneHtml(cls: string): string {
   if (cls === 'sunny') return `<div class="z2wx-scene"></div>`
   if (cls === 'night') {
     let stars = ''
-    for (let i = 0; i < 14; i++) stars += `<span class="z2wx-star" style="left:${(i * 37) % 94 + 3}%;top:${(i * 23) % 58 + 6}%;animation-delay:${(i % 5) * 0.6}s"></span>`
+    for (let i = 0; i < 12; i++) stars += `<span class="z2wx-star" style="left:${(i * 37) % 92 + 4}%;top:${(i * 19) % 34 + 4}%;animation-delay:${(i % 5) * 0.6}s"></span>`
     return `<div class="z2wx-scene">${stars}</div>`
   }
   const precip = cls === 'rain' || cls === 'storm' ? `<div class="z2wx-rain"></div>` : cls === 'snow' ? `<div class="z2wx-snow"></div>` : ''

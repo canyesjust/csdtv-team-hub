@@ -169,7 +169,7 @@ export default function ContactsReviewPage() {
             return (
               <div key={it.id} style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'rgba(30,108,181,0.12)', color: '#5ba3e0' }}>{TYPE_LABEL[it.interaction_type] || 'Email'}</span>
+                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'rgba(30,108,181,0.12)', color: 'var(--brand-primary)' }}>{TYPE_LABEL[it.interaction_type] || 'Email'}</span>
                   {isNew
                     ? <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>New contact</span>
                     : <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: dark ? 'rgba(255,255,255,0.06)' : '#eef2f7', color: muted }}>Existing contact</span>}
@@ -205,14 +205,14 @@ export default function ContactsReviewPage() {
 
                 {it.body_raw && (
                   <details style={{ marginBottom: '12px' }}>
-                    <summary style={{ fontSize: '13px', color: '#5ba3e0', cursor: 'pointer' }}>View email body</summary>
+                    <summary style={{ fontSize: '13px', color: 'var(--brand-primary)', cursor: 'pointer' }}>View email body</summary>
                     <pre style={{ fontSize: '13px', color: text, margin: '8px 0 0', padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', borderRadius: '8px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', maxHeight: '260px', overflow: 'auto' }}>{it.body_raw}</pre>
                   </details>
                 )}
 
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                   <button onClick={() => reject(it)} disabled={busy} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: '0.5px solid rgba(239,68,68,0.3)', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? 0.6 : 1 }}>Reject</button>
-                  <button onClick={() => approve(it)} disabled={busy} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: busy ? 0.6 : 1 }}>{busy ? 'Saving...' : 'Approve'}</button>
+                  <button onClick={() => approve(it)} disabled={busy} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: busy ? 0.6 : 1 }}>{busy ? 'Saving...' : 'Approve'}</button>
                 </div>
               </div>
             )

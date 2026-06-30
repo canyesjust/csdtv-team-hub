@@ -644,7 +644,7 @@ export default function ProductionDetailPage() {
           </tr>
         </table>
         <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;margin-bottom:16px;font-size:13px">
-          <tr><td style="padding:10px 14px" colspan="2"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:4px">Location</div><div style="font-weight:600;font-size:15px">${escapeHtml(venue)}</div>${address ? `<div style="color:#6b7280;margin-top:2px">${escapeHtml(address)}</div>` : ''}${address ? `<div style="margin-top:6px"><a href="https://maps.google.com/?q=${encodeURIComponent(address)}" style="color:#1e6cb5;text-decoration:none;font-size:12px">📍 Open in Google Maps</a></div>` : ''}</td></tr>
+          <tr><td style="padding:10px 14px" colspan="2"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:4px">Location</div><div style="font-weight:600;font-size:15px">${escapeHtml(venue)}</div>${address ? `<div style="color:#6b7280;margin-top:2px">${escapeHtml(address)}</div>` : ''}${address ? `<div style="margin-top:6px"><a href="https://maps.google.com/?q=${encodeURIComponent(address)}" style="color:var(--brand-primary);text-decoration:none;font-size:12px">📍 Open in Google Maps</a></div>` : ''}</td></tr>
         </table>
         <table style="width:100%;margin-bottom:16px"><tr><td style="vertical-align:top;width:50%;padding-right:8px">
           <table style="width:100%;border:1px solid #e0e0e0;border-radius:4px;border-collapse:collapse;font-size:13px">
@@ -1533,7 +1533,7 @@ export default function ProductionDetailPage() {
   if (!production) return (
     <div style={{ textAlign: 'center' as const, padding: '60px 20px' }}>
       <p style={{ color: muted }}>Production not found</p>
-      <Link href="/dashboard/productions" style={{ color: '#5ba3e0' }}>Back</Link>
+      <Link href="/dashboard/productions" style={{ color: 'var(--brand-primary)' }}>Back</Link>
     </div>
   )
 
@@ -1734,7 +1734,7 @@ export default function ProductionDetailPage() {
               <p style={{ fontSize: '13px', color: muted, margin: 0, wordBreak: 'break-all' as const }}>
                 {production.organizer_name}
                 {production.organizer_email && (
-                  <> · <a href={`mailto:${production.organizer_email}`} style={{ color: '#5ba3e0', textDecoration: 'none' }}>{production.organizer_email}</a></>
+                  <> · <a href={`mailto:${production.organizer_email}`} style={{ color: 'var(--brand-primary)', textDecoration: 'none' }}>{production.organizer_email}</a></>
                 )}
               </p>
             )}
@@ -1901,9 +1901,9 @@ export default function ProductionDetailPage() {
                         fontSize: '12px',
                         padding: '5px 12px',
                         borderRadius: '6px',
-                        border: `0.5px solid ${emailTemplate === t.id ? '#1e6cb5' : border}`,
+                        border: `0.5px solid ${emailTemplate === t.id ? 'var(--brand-primary)' : border}`,
                         background: emailTemplate === t.id ? 'rgba(30,108,181,0.12)' : cardBg,
-                        color: emailTemplate === t.id ? '#5ba3e0' : muted,
+                        color: emailTemplate === t.id ? 'var(--brand-primary)' : muted,
                         cursor: ytTemplateLocked ? 'not-allowed' : 'pointer',
                         opacity: ytTemplateLocked ? 0.45 : 1,
                         fontFamily: 'inherit',
@@ -1916,7 +1916,7 @@ export default function ProductionDetailPage() {
               </div>
             ) : (
               <p style={{ fontSize: '12px', color: muted, margin: '0 0 14px', padding: '10px 12px', background: dark ? 'rgba(255,255,255,0.02)' : '#f8fafc', borderRadius: '8px', border: `0.5px solid ${border}` }}>
-                No templates configured. <Link href="/dashboard/settings" style={{ color: '#5ba3e0' }}>Add templates in Settings</Link>.
+                No templates configured. <Link href="/dashboard/settings" style={{ color: 'var(--brand-primary)' }}>Add templates in Settings</Link>.
               </p>
             )}
 
@@ -1937,7 +1937,7 @@ export default function ProductionDetailPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button onClick={openOrganizerEmail} disabled={!emailBody} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: emailBody ? '#1e6cb5' : 'var(--surface-2)', color: emailBody ? '#fff' : muted, border: 'none', cursor: emailBody ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>
+              <button onClick={openOrganizerEmail} disabled={!emailBody} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: emailBody ? 'var(--brand-primary)' : 'var(--surface-2)', color: emailBody ? '#fff' : muted, border: 'none', cursor: emailBody ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>
                 ✉ Open in Outlook
               </button>
               <button onClick={() => setShowEmailModal(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>

@@ -301,7 +301,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={handleSignOut}
-            style={{ background: '#1e6cb5', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ background: 'var(--brand-primary)', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}
           >
             Sign out
           </button>
@@ -337,7 +337,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px',
       borderRadius: '8px', fontSize: '15px', marginBottom: '2px', textDecoration: 'none',
       borderLeft: isActive(href) ? '2px solid var(--brand-primary)' : '2px solid transparent',
-      background: isActive(href) ? 'var(--status-info-bg)' : 'transparent',
+      background: isActive(href) ? 'var(--nav-active-bg)' : 'transparent',
       color: isActive(href) ? 'var(--brand-primary-strong)' : muted,
       fontWeight: isActive(href) ? 600 : 450, minHeight: '40px',
       transition: 'background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard)',
@@ -414,8 +414,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             {moreItemsResolved.map(item => (
-              <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', textDecoration: 'none', marginBottom: '4px', background: isActive(item.href) ? 'var(--status-info-bg)' : 'transparent', color: isActive(item.href) ? 'var(--brand-primary-strong)' : text }}>
-                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: isActive(item.href) ? 'var(--status-info-bg)' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive(item.href) ? 'var(--brand-primary-strong)' : muted }}>
+              <Link key={item.href} href={item.href} onClick={() => setShowMore(false)} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 12px', borderRadius: '12px', textDecoration: 'none', marginBottom: '4px', background: isActive(item.href) ? 'var(--nav-active-bg)' : 'transparent', color: isActive(item.href) ? 'var(--brand-primary-strong)' : text }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: isActive(item.href) ? 'var(--nav-active-bg)' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive(item.href) ? 'var(--brand-primary-strong)' : muted }}>
                   <Icon type={item.icon} size={18} />
                 </div>
                 <span style={{ fontSize: '15px', fontWeight: 500 }}>{item.label}</span>

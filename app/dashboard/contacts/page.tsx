@@ -305,7 +305,7 @@ export default function ContactsPage() {
               <span style={{ fontSize: '12px', padding: '1px 8px', borderRadius: '10px', background: 'rgba(245,158,11,0.18)', color: '#f59e0b' }}>{pendingReviewCount}</span>
             </Link>
           )}
-          <label style={{ fontSize: '14px', padding: '10px 16px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', cursor: scanning ? 'wait' : 'pointer', fontWeight: 500, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', opacity: scanning ? 0.7 : 1 }}>
+          <label style={{ fontSize: '14px', padding: '10px 16px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', cursor: scanning ? 'wait' : 'pointer', fontWeight: 500, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', opacity: scanning ? 0.7 : 1 }}>
             {scanning ? 'Scanning...' : '📷 Scan card'}
             <input type="file" accept="image/*" capture="environment" onChange={e => { if (e.target.files?.[0]) handleScan(e.target.files[0]); e.target.value = '' }} style={{ display: 'none' }} disabled={scanning} />
           </label>
@@ -333,7 +333,7 @@ export default function ContactsPage() {
           <div style={{ marginBottom: '10px' }}>
             <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Tags</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {TAG_OPTIONS.map(tag => (<button key={tag} onClick={() => toggleTag(tag)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '20px', border: `0.5px solid ${form.tags.includes(tag) ? '#1e6cb5' : border}`, background: form.tags.includes(tag) ? 'rgba(30,108,181,0.15)' : 'transparent', color: form.tags.includes(tag) ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>{tag}</button>))}
+              {TAG_OPTIONS.map(tag => (<button key={tag} onClick={() => toggleTag(tag)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '20px', border: `0.5px solid ${form.tags.includes(tag) ? 'var(--brand-primary)' : border}`, background: form.tags.includes(tag) ? 'rgba(30,108,181,0.15)' : 'transparent', color: form.tags.includes(tag) ? 'var(--brand-primary)' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>{tag}</button>))}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -349,7 +349,7 @@ export default function ContactsPage() {
             </div>
             <div style={{ flex: 1 }} />
             <button onClick={() => { setShowAdd(false); setEditingId(null) }} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-            <button onClick={saveContact} disabled={!form.name || saving} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: form.name ? '#1e6cb5' : 'var(--surface-2)', color: form.name ? '#fff' : muted, border: 'none', cursor: form.name ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : editingId ? 'Update' : 'Save contact'}</button>
+            <button onClick={saveContact} disabled={!form.name || saving} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: form.name ? 'var(--brand-primary)' : 'var(--surface-2)', color: form.name ? '#fff' : muted, border: 'none', cursor: form.name ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : editingId ? 'Update' : 'Save contact'}</button>
           </div>
         </div>
       )}
@@ -413,16 +413,16 @@ export default function ContactsPage() {
                     <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{c.last_contacted_at ? `Last contact: ${relativeDate(c.last_contacted_at)}` : 'No contact logged'}</p>
                   </div>
                   <div style={{ display: 'flex', gap: '4px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {(c.tags || []).slice(0, 2).map(t => (<span key={t} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0' }}>{t}</span>))}
+                    {(c.tags || []).slice(0, 2).map(t => (<span key={t} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: 'rgba(30,108,181,0.1)', color: 'var(--brand-primary)' }}>{t}</span>))}
                     {sc && <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: `${sc}20`, color: sc }}>{c.follow_up_status}</span>}
                   </div>
                 </div>
                 {isExpanded && (
                   <div style={{ padding: '0 16px 14px', borderTop: `0.5px solid ${border}` }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', padding: '12px 0' }}>
-                      {c.email && <div><span style={{ fontSize: '11px', color: muted }}>Email</span><br /><a href={`mailto:${c.email}`} style={{ fontSize: '14px', color: '#5ba3e0', textDecoration: 'none' }}>{c.email}</a></div>}
-                      {c.phone && <div><span style={{ fontSize: '11px', color: muted }}>Phone</span><br /><a href={`tel:${c.phone}`} style={{ fontSize: '14px', color: '#5ba3e0', textDecoration: 'none' }}>{c.phone}</a></div>}
-                      {c.website && <div><span style={{ fontSize: '11px', color: muted }}>Website</span><br /><a href={c.website.startsWith('http') ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: '#5ba3e0', textDecoration: 'none' }}>{c.website}</a></div>}
+                      {c.email && <div><span style={{ fontSize: '11px', color: muted }}>Email</span><br /><a href={`mailto:${c.email}`} style={{ fontSize: '14px', color: 'var(--brand-primary)', textDecoration: 'none' }}>{c.email}</a></div>}
+                      {c.phone && <div><span style={{ fontSize: '11px', color: muted }}>Phone</span><br /><a href={`tel:${c.phone}`} style={{ fontSize: '14px', color: 'var(--brand-primary)', textDecoration: 'none' }}>{c.phone}</a></div>}
+                      {c.website && <div><span style={{ fontSize: '11px', color: muted }}>Website</span><br /><a href={c.website.startsWith('http') ? c.website : `https://${c.website}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '14px', color: 'var(--brand-primary)', textDecoration: 'none' }}>{c.website}</a></div>}
                     </div>
                     {c.notes && <p style={{ fontSize: '14px', color: text, margin: '0 0 10px', padding: '8px 12px', background: dark ? 'rgba(255,255,255,0.03)' : '#f1f5f9', borderRadius: '8px' }}>{c.notes}</p>}
 
@@ -441,7 +441,7 @@ export default function ContactsPage() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: text }}>Interactions</span>
                         {logOpenFor !== c.id && (
-                          <button onClick={() => openLogForm(c.id)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Log interaction</button>
+                          <button onClick={() => openLogForm(c.id)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Log interaction</button>
                         )}
                       </div>
 
@@ -465,7 +465,7 @@ export default function ContactsPage() {
                           </div>
                           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                             <button onClick={() => setLogOpenFor(null)} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                            <button onClick={() => saveInteraction(c.id)} disabled={savingInteraction} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: savingInteraction ? 0.7 : 1 }}>{savingInteraction ? 'Saving...' : 'Save'}</button>
+                            <button onClick={() => saveInteraction(c.id)} disabled={savingInteraction} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: savingInteraction ? 0.7 : 1 }}>{savingInteraction ? 'Saving...' : 'Save'}</button>
                           </div>
                         </div>
                       )}
@@ -489,7 +489,7 @@ export default function ContactsPage() {
                                   <input value={intEditForm.summary} onChange={e => setIntEditForm(p => ({ ...p, summary: e.target.value }))} placeholder="Summary" style={{ ...inputStyle, marginBottom: '8px' }} />
                                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                                     <button onClick={() => setEditingInteractionId(null)} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                                    <button onClick={() => saveEditInteraction(c.id, it.id)} disabled={savingInteraction} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: savingInteraction ? 0.7 : 1 }}>{savingInteraction ? 'Saving...' : 'Save'}</button>
+                                    <button onClick={() => saveEditInteraction(c.id, it.id)} disabled={savingInteraction} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, opacity: savingInteraction ? 0.7 : 1 }}>{savingInteraction ? 'Saving...' : 'Save'}</button>
                                   </div>
                                 </div>
                               ) : (

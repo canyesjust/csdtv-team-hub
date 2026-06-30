@@ -125,7 +125,7 @@ export default function OnboardingChecklist({
                             marginTop: '6px',
                             fontSize: '13px',
                             fontWeight: 500,
-                            color: '#5ba3e0',
+                            color: 'var(--brand-primary)',
                             textDecoration: 'none',
                           }}
                         >

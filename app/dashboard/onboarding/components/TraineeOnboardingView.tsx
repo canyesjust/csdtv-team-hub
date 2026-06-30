@@ -239,7 +239,7 @@ export default function TraineeOnboardingView() {
                 style={{
                   width: `${pct}%`,
                   height: '100%',
-                  background: pct === 100 ? '#22c55e' : '#1e6cb5',
+                  background: pct === 100 ? '#22c55e' : 'var(--brand-primary)',
                   borderRadius: '3px',
                 }}
               />
@@ -324,7 +324,7 @@ export default function TraineeOnboardingView() {
                   fontSize: '14px',
                   padding: '12px 20px',
                   borderRadius: '10px',
-                  background: canSubmitForSignoff(instances) ? '#1e6cb5' : 'var(--surface-2)',
+                  background: canSubmitForSignoff(instances) ? 'var(--brand-primary)' : 'var(--surface-2)',
                   color: canSubmitForSignoff(instances) ? '#fff' : muted,
                   border: 'none',
                   cursor: canSubmitForSignoff(instances) ? 'pointer' : 'not-allowed',

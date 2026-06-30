@@ -204,7 +204,7 @@ export default function ManagerOverview() {
                   style={{
                     width: `${pct}%`,
                     height: '100%',
-                    background: pct === 100 ? '#22c55e' : '#1e6cb5',
+                    background: pct === 100 ? '#22c55e' : 'var(--brand-primary)',
                   }}
                 />
               </div>
@@ -220,7 +220,7 @@ export default function ManagerOverview() {
                 borderRadius: '8px',
                 background: hoverBg,
                 border: `0.5px solid ${border}`,
-                color: '#5ba3e0',
+                color: 'var(--brand-primary)',
                 textDecoration: 'none',
               }}
             >
@@ -236,7 +236,7 @@ export default function ManagerOverview() {
               width: '100%',
               padding: '10px',
               borderRadius: '8px',
-              background: isStarting ? 'var(--surface-2)' : '#1e6cb5',
+              background: isStarting ? 'var(--surface-2)' : 'var(--brand-primary)',
               color: isStarting ? muted : '#fff',
               border: 'none',
               cursor: isStarting ? 'wait' : 'pointer',
@@ -285,7 +285,7 @@ export default function ManagerOverview() {
             fontWeight: 500,
             padding: '10px 16px',
             borderRadius: '8px',
-            background: '#1e6cb5',
+            background: 'var(--brand-primary)',
             color: '#fff',
             textDecoration: 'none',
           }}

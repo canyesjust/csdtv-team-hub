@@ -78,7 +78,7 @@ export default function SearchPanel({ onClose }: Props) {
   }
 
   const typeColor = (type: SearchResult['type']) => {
-    if (type === 'production') return '#5ba3e0'
+    if (type === 'production') return 'var(--brand-primary)'
     if (type === 'task') return '#e8a020'
     if (type === 'idea') return '#22c55e'
     return '#9b85e0'
@@ -105,7 +105,7 @@ export default function SearchPanel({ onClose }: Props) {
             style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: '15px', color: text, fontFamily: 'inherit' }}
             onKeyDown={e => e.key === 'Escape' && onClose()}
           />
-          {loading && <div style={{ width: '14px', height: '14px', border: `2px solid ${border}`, borderTopColor: '#5ba3e0', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />}
+          {loading && <div style={{ width: '14px', height: '14px', border: `2px solid ${border}`, borderTopColor: 'var(--brand-primary)', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />}
           <button onClick={onClose} style={{ background: 'none', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontSize: '13px', padding: '3px 8px', borderRadius: '4px', fontFamily: 'inherit' }}>Esc</button>
         </div>
 

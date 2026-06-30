@@ -214,7 +214,7 @@ export default function VideoDetailPage() {
   if (!video) return (
     <div style={{ textAlign: 'center' as const, padding: '60px 20px' }}>
       <p style={{ color: muted }}>Video not found</p>
-      <Link href="/dashboard/videos" style={{ color: '#5ba3e0' }}>Back to library</Link>
+      <Link href="/dashboard/videos" style={{ color: 'var(--brand-primary)' }}>Back to library</Link>
     </div>
   )
 
@@ -229,7 +229,7 @@ export default function VideoDetailPage() {
 
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-      <button onClick={() => router.push('/dashboard/videos')} style={{ background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px', padding: 0 }}>
+      <button onClick={() => router.push('/dashboard/videos')} style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px', padding: 0 }}>
         ← Video library
       </button>
 
@@ -245,7 +245,7 @@ export default function VideoDetailPage() {
         </div>
         <h1 style={{ fontSize: '24px', fontWeight: 600, color: text, margin: '0 0 6px' }}>{video.title}</h1>
         {video.productions && (
-          <Link href={`/dashboard/productions/${video.productions.production_number}`} style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none' }}>
+          <Link href={`/dashboard/productions/${video.productions.production_number}`} style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none' }}>
             🎬 Production #{video.productions.production_number} — {video.productions.title}
           </Link>
         )}
@@ -266,7 +266,7 @@ export default function VideoDetailPage() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: `1px solid ${border}` }}>
         {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{ background: 'none', border: 'none', borderBottom: tab === t.key ? '2px solid #5ba3e0' : '2px solid transparent', padding: '10px 18px', fontSize: '14px', fontWeight: tab === t.key ? 600 : 400, color: tab === t.key ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>
+          <button key={t.key} onClick={() => setTab(t.key)} style={{ background: 'none', border: 'none', borderBottom: tab === t.key ? '2px solid var(--brand-primary)' : '2px solid transparent', padding: '10px 18px', fontSize: '14px', fontWeight: tab === t.key ? 600 : 400, color: tab === t.key ? 'var(--brand-primary)' : muted, cursor: 'pointer', fontFamily: 'inherit' }}>
             {t.label}
           </button>
         ))}
@@ -295,7 +295,7 @@ export default function VideoDetailPage() {
                 const inserts = defaults.map((title, i) => ({ video_id: videoId, title, sort_order: i }))
                 const { data } = await supabase.from('video_checklist_items').insert(inserts).select('*')
                 if (data) setChecklistItems(data)
-              }} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+              }} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                 Load default export checklist
               </button>
             </div>
@@ -331,7 +331,7 @@ export default function VideoDetailPage() {
               if (!newCheckItem.trim()) return
               const { data } = await supabase.from('video_checklist_items').insert({ video_id: videoId, title: newCheckItem.trim(), sort_order: checklistItems.length }).select('*').single()
               if (data) { setChecklistItems(prev => [...prev, data]); setNewCheckItem('') }
-            }} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: newCheckItem.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newCheckItem.trim() ? '#fff' : muted, border: 'none', cursor: newCheckItem.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
+            }} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: newCheckItem.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: newCheckItem.trim() ? '#fff' : muted, border: 'none', cursor: newCheckItem.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
           </div>
         </div>
       )}
@@ -405,7 +405,7 @@ export default function VideoDetailPage() {
               <div style={{ marginBottom: '12px' }}><label style={labelStyle}>Script</label><textarea value={editForm.script || ''} onChange={e => setEditForm(f => ({ ...f, script: e.target.value }))} placeholder="Paste script or shot list" style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' as const, fontFamily: 'monospace' }} /></div>
               <div style={{ marginBottom: '16px' }}><label style={labelStyle}>Notes</label><textarea value={editForm.notes || ''} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const }} /></div>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={saveEdit} style={{ padding: '10px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>Save</button>
+                <button onClick={saveEdit} style={{ padding: '10px 20px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>Save</button>
                 <button onClick={() => setEditing(false)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>Cancel</button>
               </div>
             </div>
@@ -419,7 +419,7 @@ export default function VideoDetailPage() {
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 600, color: text, margin: 0 }}>Add person</h3>
-              <button onClick={() => setShowCsvPaste(!showCsvPaste)} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <button onClick={() => setShowCsvPaste(!showCsvPaste)} style={{ fontSize: '12px', color: 'var(--brand-primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {showCsvPaste ? 'Single entry' : 'Paste CSV list'}
               </button>
             </div>
@@ -428,7 +428,7 @@ export default function VideoDetailPage() {
                 <p style={{ fontSize: '12px', color: muted, margin: '0 0 8px' }}>Paste a list — one person per line. Format: Name, Role, School, Student/Employee # (comma or tab separated). Header row is auto-skipped.</p>
                 <textarea value={csvPaste} onChange={e => setCsvPaste(e.target.value)} placeholder={"Jane Smith, Teacher, Hillcrest Elementary, E12345\nJohn Doe, Student, Midvale Middle, S67890\nSarah Johnson, Principal, Corner Canyon High"} style={{ ...inputStyle, minHeight: '100px', resize: 'vertical' as const, fontFamily: 'monospace', fontSize: '13px', marginBottom: '10px' }} />
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button onClick={importCsv} disabled={!csvPaste.trim()} style={{ padding: '10px 16px', borderRadius: '8px', background: csvPaste.trim() ? '#1e6cb5' : 'var(--surface-2)', color: csvPaste.trim() ? '#fff' : muted, border: 'none', cursor: csvPaste.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+                  <button onClick={importCsv} disabled={!csvPaste.trim()} style={{ padding: '10px 16px', borderRadius: '8px', background: csvPaste.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: csvPaste.trim() ? '#fff' : muted, border: 'none', cursor: csvPaste.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
                     Import {csvPaste.trim() ? `(${csvPaste.trim().split('\n').filter(l => l.trim() && l.trim().toLowerCase().split(/[,\t]/)[0] !== 'name').length} people)` : ''}
                   </button>
                   <span style={{ fontSize: '12px', color: muted }}>All imported as "Pending" release — update individually after</span>
@@ -441,7 +441,7 @@ export default function VideoDetailPage() {
                 <div style={{ flex: 1, minWidth: '120px' }}><label style={labelStyle}>School</label><input value={newTalent.school} onChange={e => setNewTalent(f => ({ ...f, school: e.target.value }))} style={inputStyle} /></div>
                 <div style={{ minWidth: '120px' }}><label style={labelStyle}>Student/Emp #</label><input value={newTalent.student_employee_number} onChange={e => setNewTalent(f => ({ ...f, student_employee_number: e.target.value }))} placeholder="Optional" style={inputStyle} /></div>
                 <div style={{ minWidth: '120px' }}><label style={labelStyle}>Release</label><select value={newTalent.release_status} onChange={e => setNewTalent(f => ({ ...f, release_status: e.target.value }))} style={inputStyle}>{RELEASE_STATUSES.map(s => <option key={s} value={s}>{RELEASE_LABELS[s].label}</option>)}</select></div>
-                <button onClick={addTalent} disabled={!newTalent.name} style={{ padding: '10px 16px', borderRadius: '8px', background: newTalent.name ? '#1e6cb5' : 'var(--surface-2)', color: newTalent.name ? '#fff' : muted, border: 'none', cursor: newTalent.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
+                <button onClick={addTalent} disabled={!newTalent.name} style={{ padding: '10px 16px', borderRadius: '8px', background: newTalent.name ? 'var(--brand-primary)' : 'var(--surface-2)', color: newTalent.name ? '#fff' : muted, border: 'none', cursor: newTalent.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
               </div>
             )}
           </div>
@@ -489,7 +489,7 @@ export default function VideoDetailPage() {
               <div style={{ minWidth: '120px' }}><label style={labelStyle}>Type</label><select value={newFile.file_type} onChange={e => setNewFile(f => ({ ...f, file_type: e.target.value }))} style={inputStyle}>{FILE_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}</select></div>
               <div style={{ flex: 1, minWidth: '140px' }}><label style={labelStyle}>Name *</label><input value={newFile.file_name} onChange={e => setNewFile(f => ({ ...f, file_name: e.target.value }))} placeholder="e.g. Final script v2" style={inputStyle} /></div>
               <div style={{ flex: 2, minWidth: '200px' }}><label style={labelStyle}>URL *</label><input value={newFile.file_url} onChange={e => setNewFile(f => ({ ...f, file_url: e.target.value }))} placeholder="Google Drive link or URL" style={inputStyle} /></div>
-              <button onClick={addFile} disabled={!newFile.file_name || !newFile.file_url} style={{ padding: '10px 16px', borderRadius: '8px', background: newFile.file_name && newFile.file_url ? '#1e6cb5' : 'var(--surface-2)', color: newFile.file_name && newFile.file_url ? '#fff' : muted, border: 'none', cursor: newFile.file_name && newFile.file_url ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
+              <button onClick={addFile} disabled={!newFile.file_name || !newFile.file_url} style={{ padding: '10px 16px', borderRadius: '8px', background: newFile.file_name && newFile.file_url ? 'var(--brand-primary)' : 'var(--surface-2)', color: newFile.file_name && newFile.file_url ? '#fff' : muted, border: 'none', cursor: newFile.file_name && newFile.file_url ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
             </div>
           </div>
           {files.length === 0 ? (
@@ -499,7 +499,7 @@ export default function VideoDetailPage() {
               {files.map((file, i) => (
                 <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: i < files.length - 1 ? `0.5px solid ${border}` : 'none' }}>
                   <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'var(--surface-2)', color: muted, fontWeight: 500, textTransform: 'capitalize' as const }}>{file.file_type.replace('_', ' ')}</span>
-                  <a href={file.file_url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, fontSize: '14px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{file.file_name}</a>
+                  <a href={file.file_url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, fontSize: '14px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{file.file_name}</a>
                   <span style={{ fontSize: '12px', color: muted }}>{new Date(file.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                   <button onClick={() => removeFile(file.id)} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: 0.7 }}>Remove</button>
                 </div>
@@ -518,7 +518,7 @@ export default function VideoDetailPage() {
               <div style={{ minWidth: '140px' }}><label style={labelStyle}>Platform</label><select value={newDest.platform} onChange={e => setNewDest(f => ({ ...f, platform: e.target.value }))} style={inputStyle}>{PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
               <div style={{ flex: 2, minWidth: '200px' }}><label style={labelStyle}>URL</label><input value={newDest.url} onChange={e => setNewDest(f => ({ ...f, url: e.target.value }))} placeholder="https://..." style={inputStyle} /></div>
               <div style={{ flex: 1, minWidth: '140px' }}><label style={labelStyle}>Notes</label><input value={newDest.notes} onChange={e => setNewDest(f => ({ ...f, notes: e.target.value }))} placeholder="Optional" style={inputStyle} /></div>
-              <button onClick={addDestination} style={{ padding: '10px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
+              <button onClick={addDestination} style={{ padding: '10px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500, minHeight: '42px' }}>Add</button>
             </div>
           </div>
           {destinations.length === 0 ? (
@@ -531,7 +531,7 @@ export default function VideoDetailPage() {
                     <span style={{ fontSize: '14px', fontWeight: 600, color: text }}>{dest.platform}</span>
                     <button onClick={() => removeDestination(dest.id)} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: 0.7 }}>Remove</button>
                   </div>
-                  {dest.url && <a href={dest.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', color: '#5ba3e0', textDecoration: 'none', wordBreak: 'break-all' as const, display: 'block', marginBottom: '6px' }}>{dest.url}</a>}
+                  {dest.url && <a href={dest.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', color: 'var(--brand-primary)', textDecoration: 'none', wordBreak: 'break-all' as const, display: 'block', marginBottom: '6px' }}>{dest.url}</a>}
                   {dest.notes && <p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>{dest.notes}</p>}
                   {dest.published_at && <p style={{ fontSize: '12px', color: muted, margin: 0, opacity: 0.7 }}>Published {formatDate(dest.published_at)}</p>}
                 </div>

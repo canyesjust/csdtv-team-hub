@@ -62,7 +62,7 @@ const NOTIF_SETTINGS: { label: string; desc: string; emailKey: keyof Notificatio
   { label: 'New production synced', desc: 'When productions sync from the site', emailKey: 'notify_new_production_email', inappKey: 'notify_new_production_inapp' },
 ]
 
-const AVATAR_COLORS = ['#e8a020', '#5ba3e0', '#22c55e', '#9b85e0', '#ef4444', '#f97316', '#06b6d4', '#ec4899']
+const AVATAR_COLORS = ['#e8a020', 'var(--brand-primary)', '#22c55e', '#9b85e0', '#ef4444', '#f97316', '#06b6d4', '#ec4899']
 
 function generateTempPassword(): string {
   const year = new Date().getFullYear()
@@ -102,7 +102,7 @@ export default function SettingsPage() {
   const [invitePassword, setInvitePassword] = useState('')
   const [inviteRole, setInviteRole] = useState('Staff')
   const [inviteHubInterface, setInviteHubInterface] = useState<'default' | 'production_focus'>('default')
-  const [inviteColor, setInviteColor] = useState('#5ba3e0')
+  const [inviteColor, setInviteColor] = useState('var(--brand-primary)')
   const [inviting, setInviting] = useState(false)
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState('')
@@ -675,7 +675,7 @@ export default function SettingsPage() {
   }
 
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
-    <button onClick={() => onChange(!checked)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: checked ? '#1e6cb5' : (dark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'), border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+    <button onClick={() => onChange(!checked)} style={{ width: '40px', height: '22px', borderRadius: '11px', background: checked ? 'var(--brand-primary)' : (dark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'), border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
       <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#fff', position: 'absolute', top: '3px', left: checked ? '21px' : '3px', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
     </button>
   )
@@ -849,7 +849,7 @@ export default function SettingsPage() {
                 fontSize: '13px',
                 padding: '8px 14px',
                 borderRadius: '999px',
-                border: `1px solid ${active ? '#1e6cb5' : border}`,
+                border: `1px solid ${active ? 'var(--brand-primary)' : border}`,
                 background: active ? 'rgba(30,108,181,0.2)' : cardBg,
                 color: active ? '#8dc4ff' : muted,
                 cursor: 'pointer',
@@ -887,7 +887,7 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
-            <button onClick={saveProfile} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save profile</button>
+            <button onClick={saveProfile} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save profile</button>
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -936,7 +936,7 @@ export default function SettingsPage() {
             if (error) setChangePwMsg(error.message)
             else { setChangePwMsg('Password updated!'); setChangePw(''); setChangePw2('') }
             setChangePwSaving(false)
-          }} disabled={changePwSaving || !changePw || changePw !== changePw2} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: changePw && changePw === changePw2 ? '#1e6cb5' : 'var(--surface-2)', color: changePw && changePw === changePw2 ? '#fff' : muted, border: 'none', cursor: changePw && changePw === changePw2 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+          }} disabled={changePwSaving || !changePw || changePw !== changePw2} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: changePw && changePw === changePw2 ? 'var(--brand-primary)' : 'var(--surface-2)', color: changePw && changePw === changePw2 ? '#fff' : muted, border: 'none', cursor: changePw && changePw === changePw2 ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
             {changePwSaving ? 'Saving...' : 'Update password'}
           </button>
         </div>
@@ -964,7 +964,7 @@ export default function SettingsPage() {
             </div>
           </div>
         ))}
-        <button onClick={saveNotifPrefs} style={{ marginTop: '14px', fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save preferences</button>
+        <button onClick={saveNotifPrefs} style={{ marginTop: '14px', fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save preferences</button>
       </div>
 
       {/* Daily briefing email preview */}
@@ -982,7 +982,7 @@ export default function SettingsPage() {
               fontSize: '14px',
               padding: '10px 20px',
               borderRadius: '10px',
-              background: digestPreviewLoading ? 'var(--surface-2)' : '#1e6cb5',
+              background: digestPreviewLoading ? 'var(--surface-2)' : 'var(--brand-primary)',
               color: digestPreviewLoading ? muted : '#fff',
               border: 'none',
               cursor: digestPreviewLoading ? 'default' : 'pointer',
@@ -1045,7 +1045,7 @@ export default function SettingsPage() {
                   padding: '8px 14px',
                   borderRadius: '8px',
                   border: `0.5px solid ${border}`,
-                  background: digestPreviewMode === 'html' ? '#1e6cb5' : 'transparent',
+                  background: digestPreviewMode === 'html' ? 'var(--brand-primary)' : 'transparent',
                   color: digestPreviewMode === 'html' ? '#fff' : muted,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -1062,7 +1062,7 @@ export default function SettingsPage() {
                   padding: '8px 14px',
                   borderRadius: '8px',
                   border: `0.5px solid ${border}`,
-                  background: digestPreviewMode === 'text' ? '#1e6cb5' : 'transparent',
+                  background: digestPreviewMode === 'text' ? 'var(--brand-primary)' : 'transparent',
                   color: digestPreviewMode === 'text' ? '#fff' : muted,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -1132,7 +1132,7 @@ export default function SettingsPage() {
             href="/signage"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontSize: '14px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 600 }}
+            style={{ fontSize: '14px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
           >
             Production calendar signage →
           </a>
@@ -1140,7 +1140,7 @@ export default function SettingsPage() {
             href={taskSignageHref}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontSize: '14px', color: '#5ba3e0', textDecoration: 'none', fontWeight: 600 }}
+            style={{ fontSize: '14px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
           >
             Task ops signage →
           </a>
@@ -1251,7 +1251,7 @@ export default function SettingsPage() {
                           toast(result.error || 'Failed to send invite', 'error')
                         }
                       } catch { toast('Failed to send invite') }
-                    }} style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: '#5ba3e0', border: '0.5px solid rgba(30,108,181,0.2)', cursor: 'pointer', fontFamily: 'inherit' }}>Send invite</AsyncButton>
+                    }} style={{ marginLeft: '6px', fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(30,108,181,0.1)', color: 'var(--brand-primary)', border: '0.5px solid rgba(30,108,181,0.2)', cursor: 'pointer', fontFamily: 'inherit' }}>Send invite</AsyncButton>
                   )}
                 </p>
               </div>
@@ -1395,7 +1395,7 @@ export default function SettingsPage() {
                           fontSize: '14px',
                           padding: '8px 14px',
                           borderRadius: '8px',
-                          background: '#1e6cb5',
+                          background: 'var(--brand-primary)',
                           color: '#fff',
                           border: 'none',
                           cursor: settingPasswordMemberId === member.id ? 'wait' : 'pointer',
@@ -1436,7 +1436,7 @@ export default function SettingsPage() {
                         fontSize: '14px',
                         padding: '8px 14px',
                         borderRadius: '8px',
-                        background: '#1e6cb5',
+                        background: 'var(--brand-primary)',
                         color: '#fff',
                         border: 'none',
                         cursor: savingTeamMemberId === member.id ? 'wait' : 'pointer',
@@ -1539,7 +1539,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-            <button onClick={inviteUser} disabled={inviting || !inviteEmail} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: inviteEmail ? '#1e6cb5' : 'var(--surface-2)', color: inviteEmail ? '#fff' : muted, border: 'none', cursor: inviteEmail ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            <button onClick={inviteUser} disabled={inviting || !inviteEmail} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: inviteEmail ? 'var(--brand-primary)' : 'var(--surface-2)', color: inviteEmail ? '#fff' : muted, border: 'none', cursor: inviteEmail ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
               {inviting
                 ? 'Adding…'
                 : invitePassword.trim().length >= MIN_PASSWORD_LENGTH
@@ -1572,7 +1572,7 @@ export default function SettingsPage() {
             <p style={{ fontSize: '11px', color: muted, margin: '0 0 6px' }}>Receives notification when a production is marked complete</p>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input value={adminEmail} onChange={e => setAdminEmail(e.target.value)} placeholder="admin.assistant@canyonsdistrict.org" style={{ ...inputStyle, flex: 1, fontSize: '14px' }} />
-              <button onClick={saveAdminEmail} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>
+              <button onClick={saveAdminEmail} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const }}>
                 {adminEmailSaved ? '✓ Saved' : 'Save'}
               </button>
             </div>
@@ -1602,7 +1602,7 @@ export default function SettingsPage() {
               </p>
             </div>
             {!showNewTpl && !editingTplId && (
-              <button onClick={startNewTpl} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
+              <button onClick={startNewTpl} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
                 + New template
               </button>
             )}
@@ -1613,7 +1613,7 @@ export default function SettingsPage() {
             <p style={{ fontSize: '11px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.5px', margin: '0 0 8px' }}>Available variables</p>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {TEMPLATE_VARIABLES.map(v => (
-                <span key={v.key} title={v.desc} style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '5px', background: dark ? 'rgba(91,163,224,0.1)' : 'rgba(91,163,224,0.08)', color: '#5ba3e0', fontFamily: 'monospace', cursor: 'help' }}>{v.key}</span>
+                <span key={v.key} title={v.desc} style={{ fontSize: '12px', padding: '3px 8px', borderRadius: '5px', background: dark ? 'rgba(91,163,224,0.1)' : 'rgba(91,163,224,0.08)', color: 'var(--brand-primary)', fontFamily: 'monospace', cursor: 'help' }}>{v.key}</span>
               ))}
             </div>
             <p style={{ fontSize: '11px', color: muted, margin: '8px 0 0', lineHeight: 1.4 }}>Hover for description. Variables auto-fill from the production when you send. <code style={{ fontSize: '11px', padding: '1px 4px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff', borderRadius: '3px' }}>{'{{youtube_link}}'}</code> uses the livestream/video URL synced from the productions site (not Team Hub links or YouTube API).</p>
@@ -1636,7 +1636,7 @@ export default function SettingsPage() {
                 <textarea value={tplForm.body} onChange={e => setTplForm(f => ({ ...f, body: e.target.value }))} placeholder="Hi {{name}}, here's the link..." style={{ ...inputStyle, minHeight: '180px', resize: 'vertical' as const, lineHeight: 1.5, fontSize: '13px', whiteSpace: 'pre-wrap' as const, fontFamily: 'inherit' }} />
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={saveTpl} disabled={savingTpl} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: savingTpl ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                <button onClick={saveTpl} disabled={savingTpl} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: savingTpl ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                   {savingTpl ? 'Saving...' : (showNewTpl ? 'Create template' : 'Save changes')}
                 </button>
                 <button onClick={cancelTplEdit} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -1661,7 +1661,7 @@ export default function SettingsPage() {
                     <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0 }}>{t.label}</p>
                     <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{t.subject}</p>
                   </div>
-                  <button onClick={() => startEditTpl(t)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#5ba3e0', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Edit</button>
+                  <button onClick={() => startEditTpl(t)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: 'var(--brand-primary)', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Edit</button>
                   <button onClick={() => deleteTpl(t.id, t.label)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Remove</button>
                 </div>
               ))}
@@ -1704,7 +1704,7 @@ export default function SettingsPage() {
                     <input value={tierForm.description} onChange={e => setTierForm(f => ({ ...f, description: e.target.value }))} placeholder="e.g. For students with attendance issues" style={{ ...inputStyle, fontSize: '14px' }} />
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={saveTier} disabled={savingTier} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: savingTier ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
+                    <button onClick={saveTier} disabled={savingTier} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: savingTier ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
                       {savingTier ? 'Saving...' : 'Save changes'}
                     </button>
                     <button onClick={cancelTierEdit} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
@@ -1719,7 +1719,7 @@ export default function SettingsPage() {
                     </p>
                     {t.description && <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>{t.description}</p>}
                   </div>
-                  <button onClick={() => startEditTier(t)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#5ba3e0', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Edit</button>
+                  <button onClick={() => startEditTier(t)} style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: 'var(--brand-primary)', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px' }}>Edit</button>
                 </div>
               ))}
             </div>
@@ -1754,7 +1754,7 @@ export default function SettingsPage() {
                 <option value="department">Department</option>
               </select>
             </div>
-            <button onClick={addSchool} disabled={!newSchoolCode.trim() || !newSchoolName.trim()} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: newSchoolCode && newSchoolName ? '#1e6cb5' : 'var(--surface-2)', color: newSchoolCode && newSchoolName ? '#fff' : muted, border: 'none', cursor: newSchoolCode && newSchoolName ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+            <button onClick={addSchool} disabled={!newSchoolCode.trim() || !newSchoolName.trim()} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: newSchoolCode && newSchoolName ? 'var(--brand-primary)' : 'var(--surface-2)', color: newSchoolCode && newSchoolName ? '#fff' : muted, border: 'none', cursor: newSchoolCode && newSchoolName ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
               Add
             </button>
           </div>
@@ -1787,7 +1787,7 @@ export default function SettingsPage() {
                   {editingSchool === school.id ? (
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                       <input value={editSchoolName} onChange={e => setEditSchoolName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') updateSchool(school.id); if (e.key === 'Escape') setEditingSchool(null) }} autoFocus style={{ ...inputStyle, fontSize: '14px', flex: 1, padding: '6px 10px' }} />
-                      <button type="button" onClick={() => updateSchool(school.id)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+                      <button type="button" onClick={() => updateSchool(school.id)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
                       <button type="button" onClick={() => setEditingSchool(null)} style={{ fontSize: '13px', padding: '5px 12px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                     </div>
                   ) : (
@@ -1803,7 +1803,7 @@ export default function SettingsPage() {
                       >
                         {schoolBrandingId === school.id ? 'Close' : 'Colors'}
                       </button>
-                      <button type="button" onClick={() => { setSchoolBrandingId(null); setEditingSchool(school.id); setEditSchoolName(school.name) }} style={{ fontSize: '12px', color: '#5ba3e0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
+                      <button type="button" onClick={() => { setSchoolBrandingId(null); setEditingSchool(school.id); setEditSchoolName(school.name) }} style={{ fontSize: '12px', color: 'var(--brand-primary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
                       <button type="button" onClick={async () => { if (await confirmDialog({ message: `Remove "${school.name}"?`, tone: 'danger', confirmLabel: 'Remove' })) deleteSchool(school.id) }} style={{ fontSize: '12px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
                     </div>
                   )}
@@ -1834,7 +1834,7 @@ export default function SettingsPage() {
                       <input value={brandForm.mascot} onChange={e => setBrandForm(prev => ({ ...prev, mascot: e.target.value }))} placeholder="Hawks" style={{ ...inputStyle, fontSize: '13px', padding: '8px 10px', minHeight: '40px', maxWidth: '320px' }} />
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <button type="button" disabled={brandSaving} onClick={saveSchoolBranding} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: brandSaving ? 'var(--surface-2)' : '#1e6cb5', color: '#fff', border: 'none', cursor: brandSaving ? 'default' : 'pointer', fontFamily: 'inherit' }}>{brandSaving ? 'Saving…' : 'Save colors'}</button>
+                      <button type="button" disabled={brandSaving} onClick={saveSchoolBranding} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: brandSaving ? 'var(--surface-2)' : 'var(--brand-primary)', color: '#fff', border: 'none', cursor: brandSaving ? 'default' : 'pointer', fontFamily: 'inherit' }}>{brandSaving ? 'Saving…' : 'Save colors'}</button>
                       <button type="button" disabled={brandSaving} onClick={() => setSchoolBrandingId(null)} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                     </div>
                   </div>

@@ -155,7 +155,7 @@ export default function KitDetailPage() {
     return (
       <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '24px', color: muted }}>
         Kit not found.
-        <button onClick={() => router.push('/dashboard/equipment')} style={{ background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', marginLeft: '8px', fontFamily: 'inherit' }}>Back</button>
+        <button onClick={() => router.push('/dashboard/equipment')} style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', marginLeft: '8px', fontFamily: 'inherit' }}>Back</button>
       </div>
     )
   }
@@ -163,7 +163,7 @@ export default function KitDetailPage() {
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '24px' }}>
       <button onClick={() => router.push('/dashboard/equipment')}
-        style={{ background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px', padding: 0 }}>
+        style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px', padding: 0 }}>
         ← Equipment
       </button>
 
@@ -177,7 +177,7 @@ export default function KitDetailPage() {
         <div style={{ display: 'flex', gap: '8px' }}>
           {items.length > 0 && allAvailable && canManage && (
             <button onClick={() => setShowCheckout(true)} style={{
-              background: '#1e6cb5', border: 'none', borderRadius: '10px', color: '#fff',
+              background: 'var(--brand-primary)', border: 'none', borderRadius: '10px', color: '#fff',
               padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px',
             }}>Check Out Kit</button>
           )}
@@ -201,13 +201,13 @@ export default function KitDetailPage() {
               return (
                 <div key={eq.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${border}` }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#5ba3e0', fontWeight: 600 }}>{eq.asset_tag}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--brand-primary)', fontWeight: 600 }}>{eq.asset_tag}</span>
                     <span style={{ fontSize: '14px', color: text }}>{eq.name}</span>
                     {eq.brand && <span style={{ fontSize: '12px', color: muted }}>{eq.brand}</span>}
                     <span style={{ padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 600, background: sc.bg, color: sc.text }}>{eq.status.replace('_', ' ')}</span>
                   </div>
                   <button onClick={() => handleAddItem(eq.id)} style={{
-                    background: '#1e6cb5', border: 'none', borderRadius: '8px', color: '#fff',
+                    background: 'var(--brand-primary)', border: 'none', borderRadius: '8px', color: '#fff',
                     padding: '4px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit',
                   }}>Add</button>
                 </div>
@@ -234,7 +234,7 @@ export default function KitDetailPage() {
           return (
             <div key={ki.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: i < items.length - 1 ? `1px solid ${border}` : 'none', cursor: 'pointer' }} onClick={() => router.push(`/dashboard/equipment/${eq.asset_tag}`)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                <span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#5ba3e0', fontWeight: 600, minWidth: '44px' }}>{eq.asset_tag}</span>
+                <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--brand-primary)', fontWeight: 600, minWidth: '44px' }}>{eq.asset_tag}</span>
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: 500, color: text }}>{eq.name}</div>
                   <div style={{ fontSize: '12px', color: muted }}>{[eq.brand, eq.model].filter(Boolean).join(' · ') || '—'}</div>
@@ -278,7 +278,7 @@ export default function KitDetailPage() {
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
               <button onClick={handleKitCheckout} disabled={!borrowerName.trim()} style={{
-                background: borrowerName.trim() ? '#1e6cb5' : '#333', border: 'none', borderRadius: '10px',
+                background: borrowerName.trim() ? 'var(--brand-primary)' : '#333', border: 'none', borderRadius: '10px',
                 color: '#fff', padding: '12px 24px', fontSize: '14px', fontWeight: 600,
                 cursor: borrowerName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', flex: 1, minHeight: '44px',
               }}>Check Out All {items.length} Items</button>

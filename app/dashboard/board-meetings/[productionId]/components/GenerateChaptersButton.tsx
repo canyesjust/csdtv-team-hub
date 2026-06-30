@@ -161,7 +161,7 @@ export default function GenerateChaptersButton({ productionId }: { productionId:
                 <button
                   type="button"
                   onClick={copy}
-                  style={{ marginTop: '12px', padding: '10px 20px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  style={{ marginTop: '12px', padding: '10px 20px', background: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   Copy to clipboard
                 </button>

@@ -340,8 +340,8 @@ export default function StudentsPage() {
       background: 'transparent',
       cursor: 'pointer',
       fontFamily: 'inherit',
-      color: activeTab === tab ? '#5ba3e0' : muted,
-      borderBottom: activeTab === tab ? '2px solid #1e6cb5' : '2px solid transparent',
+      color: activeTab === tab ? 'var(--brand-primary)' : muted,
+      borderBottom: activeTab === tab ? '2px solid var(--brand-primary)' : '2px solid transparent',
       fontWeight: activeTab === tab ? 500 : 400,
       whiteSpace: 'nowrap' as const,
       minHeight: '44px',
@@ -399,7 +399,7 @@ export default function StudentsPage() {
               {grades.map(g => <option key={g} value={String(g)}>Grade {g}</option>)}
             </select>
             {isManager && (
-              <button onClick={startAdd} style={{ fontSize: '14px', padding: '10px 16px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px', whiteSpace: 'nowrap' as const }}>+ Add student</button>
+              <button onClick={startAdd} style={{ fontSize: '14px', padding: '10px 16px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px', whiteSpace: 'nowrap' as const }}>+ Add student</button>
             )}
             {isManager && (
               <button onClick={() => setShowImport(true)} style={{ fontSize: '14px', padding: '10px 16px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px', whiteSpace: 'nowrap' as const }}>📥 Import CSV</button>
@@ -450,7 +450,7 @@ export default function StudentsPage() {
                         <td style={{ padding: '12px 14px', textAlign: 'right' as const, whiteSpace: 'nowrap' as const }}>
                           {isManager ? (
                             <span>
-                              <button onClick={() => startEdit(s)} style={{ fontSize: '13px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: '#5ba3e0', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
+                              <button onClick={() => startEdit(s)} style={{ fontSize: '13px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: 'var(--brand-primary)', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Edit</button>
                               <button onClick={() => toggleActive(s)} style={{ fontSize: '13px', padding: '5px 10px', borderRadius: '6px', background: 'transparent', color: muted, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>{s.active ? 'Deactivate' : 'Activate'}</button>
                             </span>
                           ) : <span style={{ fontSize: '12px', color: muted }}>View only</span>}
@@ -534,7 +534,7 @@ export default function StudentsPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={saveStudent} disabled={saving} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+              <button onClick={saveStudent} disabled={saving} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
                 {saving ? 'Saving...' : (editingId ? 'Save changes' : 'Add student')}
               </button>
               <button onClick={closeForm} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
@@ -572,7 +572,7 @@ export default function StudentsPage() {
             <div style={{ marginBottom: '12px' }}>
               <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Or paste CSV here</label>
               <textarea value={csvInput} onChange={e => setCsvInput(e.target.value)} placeholder="Name,Student Number,Email,Parent Name,Parent Email,Parent Phone,Grade" style={{ ...inputStyle, minHeight: '120px', fontFamily: 'monospace', fontSize: '12px' }} />
-              <button onClick={previewCSV} disabled={!csvInput.trim()} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: csvInput.trim() ? '#1e6cb5' : 'var(--surface-2)', color: csvInput.trim() ? '#fff' : muted, border: 'none', cursor: csvInput.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', marginTop: '8px' }}>Preview</button>
+              <button onClick={previewCSV} disabled={!csvInput.trim()} style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: csvInput.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: csvInput.trim() ? '#fff' : muted, border: 'none', cursor: csvInput.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', marginTop: '8px' }}>Preview</button>
             </div>
 
             {parsedRows.length > 0 && (
@@ -592,7 +592,7 @@ export default function StudentsPage() {
             )}
 
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={importCSV} disabled={importing || parsedRows.filter(r => !r.error).length === 0} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: parsedRows.filter(r => !r.error).length > 0 ? '#1e6cb5' : 'var(--surface-2)', color: parsedRows.filter(r => !r.error).length > 0 ? '#fff' : muted, border: 'none', cursor: parsedRows.filter(r => !r.error).length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
+              <button onClick={importCSV} disabled={importing || parsedRows.filter(r => !r.error).length === 0} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: parsedRows.filter(r => !r.error).length > 0 ? 'var(--brand-primary)' : 'var(--surface-2)', color: parsedRows.filter(r => !r.error).length > 0 ? '#fff' : muted, border: 'none', cursor: parsedRows.filter(r => !r.error).length > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>
                 {importing ? 'Importing...' : `Import ${parsedRows.filter(r => !r.error).length} students`}
               </button>
               <button onClick={() => { setShowImport(false); setCsvInput(''); setParsedRows([]) }} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>

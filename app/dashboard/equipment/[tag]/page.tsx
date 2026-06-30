@@ -351,14 +351,14 @@ export default function EquipmentDetailPage() {
     <div style={{ textAlign: 'center' as const, padding: '60px 20px' }}>
       <p style={{ fontSize: '18px', color: text, fontWeight: 500 }}>Equipment not found</p>
       <p style={{ fontSize: '14px', color: muted, margin: '8px 0 20px' }}>No item with asset tag &quot;{tag}&quot;</p>
-      <button onClick={() => router.push('/dashboard/equipment')} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Back to equipment</button>
+      <button onClick={() => router.push('/dashboard/equipment')} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Back to equipment</button>
     </div>
   )
 
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '0 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <button onClick={() => router.push('/dashboard/equipment')} style={{ background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit' }}>← Equipment</button>
+        <button onClick={() => router.push('/dashboard/equipment')} style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit' }}>← Equipment</button>
         {savedMsg && <span style={{ fontSize: '13px', color: '#22c55e', marginLeft: 'auto' }}>{savedMsg}</span>}
       </div>
 
@@ -407,7 +407,7 @@ export default function EquipmentDetailPage() {
           )}
           <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
             {canLoan && item.status === 'available' && !itemIsPower && (
-              <button onClick={() => setShowCheckout(true)} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Check out</button>
+              <button onClick={() => setShowCheckout(true)} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Check out</button>
             )}
             {canEdit && (
             <button onClick={() => setEditing(!editing)} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: cardBg, color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -440,7 +440,7 @@ export default function EquipmentDetailPage() {
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
                   <button onClick={() => setDupOpen(false)} disabled={dupSaving} style={{ padding: '10px 16px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: text, cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>Cancel</button>
-                  <button onClick={() => void duplicateItem()} disabled={!dupTag || dupSaving} style={{ padding: '10px 20px', borderRadius: '8px', background: dupTag && !dupSaving ? '#1e6cb5' : 'var(--surface-2)', color: dupTag && !dupSaving ? '#fff' : muted, border: 'none', cursor: dupTag && !dupSaving ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>{dupSaving ? 'Creating…' : 'Create copy'}</button>
+                  <button onClick={() => void duplicateItem()} disabled={!dupTag || dupSaving} style={{ padding: '10px 20px', borderRadius: '8px', background: dupTag && !dupSaving ? 'var(--brand-primary)' : 'var(--surface-2)', color: dupTag && !dupSaving ? '#fff' : muted, border: 'none', cursor: dupTag && !dupSaving ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>{dupSaving ? 'Creating…' : 'Create copy'}</button>
                 </div>
               </div>
             </div>
@@ -458,7 +458,7 @@ export default function EquipmentDetailPage() {
             <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Note</p><input value={checkoutNote} onChange={e => setCheckoutNote(e.target.value)} placeholder="Optional" style={inputStyle} /></div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={handleCheckout} disabled={!borrowerName.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: borrowerName.trim() ? '#1e6cb5' : 'var(--surface-2)', color: borrowerName.trim() ? '#fff' : muted, border: 'none', cursor: borrowerName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Confirm checkout</button>
+            <button onClick={handleCheckout} disabled={!borrowerName.trim()} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: borrowerName.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: borrowerName.trim() ? '#fff' : muted, border: 'none', cursor: borrowerName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontWeight: 500 }}>Confirm checkout</button>
             <button onClick={() => setShowCheckout(false)} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
           </div>
         </div>
@@ -477,13 +477,13 @@ export default function EquipmentDetailPage() {
             <div><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Condition</p><select value={editForm.condition} onChange={e => setEditForm(f => ({ ...f, condition: normalizeEquipmentCondition(e.target.value) }))} style={inputStyle}>{EQUIPMENT_CONDITION_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
           </div>
           <div style={{ marginBottom: '12px' }}><p style={{ fontSize: '12px', color: muted, margin: '0 0 4px' }}>Notes</p><textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Equipment notes..." style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' as const }} /></div>
-          <button onClick={saveEdit} disabled={saving} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : 'Save changes'}</button>
+          <button onClick={saveEdit} disabled={saving} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{saving ? 'Saving...' : 'Save changes'}</button>
         </div>
       )}
 
       <div style={{ display: 'flex', borderBottom: `0.5px solid ${border}`, marginBottom: '16px', flexWrap: 'wrap' as const }}>
         {(['info', 'power', 'loans', 'activity'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ fontSize: '14px', padding: '10px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', color: tab === t ? '#5ba3e0' : muted, borderBottom: tab === t ? '2px solid #1e6cb5' : '2px solid transparent', fontWeight: tab === t ? 500 : 400, textTransform: 'capitalize' as const }}>
+          <button key={t} onClick={() => setTab(t)} style={{ fontSize: '14px', padding: '10px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', color: tab === t ? 'var(--brand-primary)' : muted, borderBottom: tab === t ? '2px solid var(--brand-primary)' : '2px solid transparent', fontWeight: tab === t ? 500 : 400, textTransform: 'capitalize' as const }}>
             {t === 'power'
               ? `Power${!itemIsPower ? ` (${linkedPowerCables.length})` : ''}`
               : t === 'loans' ? `Loan history (${loans.length})` : t === 'activity' ? `Activity (${activity.length})` : 'Details'}
@@ -535,7 +535,7 @@ export default function EquipmentDetailPage() {
             <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 0', borderBottom: `1px solid ${border}` }}>
               {c.photo_url ? <img src={c.photo_url} alt="" width={60} height={60} style={{ objectFit: 'cover', borderRadius: '8px', border: `1px solid ${border}` }} /> : <div style={{ width: 60, height: 60, borderRadius: '8px', background: inputBg }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <button type="button" onClick={() => router.push(`/dashboard/equipment/${c.asset_tag}`)} style={{ background: 'none', border: 'none', padding: 0, color: '#5ba3e0', fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace', fontSize: '14px' }}>{c.asset_tag}</button>
+                <button type="button" onClick={() => router.push(`/dashboard/equipment/${c.asset_tag}`)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 700, cursor: 'pointer', fontFamily: 'monospace', fontSize: '14px' }}>{c.asset_tag}</button>
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: muted }}>{[c.power_brand || c.brand, formatPowerSpecShort(c)].filter(Boolean).join(' · ') || c.name}</p>
               </div>
               {canEdit && (
@@ -546,7 +546,7 @@ export default function EquipmentDetailPage() {
           {canEdit && (
             <div style={{ marginTop: '16px' }}>
               {!showPowerAdd ? (
-                <button type="button" onClick={() => setShowPowerAdd(true)} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Add power cable</button>
+                <button type="button" onClick={() => setShowPowerAdd(true)} style={{ fontSize: '14px', padding: '10px 18px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Add power cable</button>
               ) : (
                 <div style={{ marginTop: '12px', padding: '16px', borderRadius: '12px', border: `1px solid ${border}`, background: inputBg }}>
                   <p style={{ fontSize: '13px', fontWeight: 600, color: text, margin: '0 0 12px' }}>New power cable linked to this device</p>
@@ -564,7 +564,7 @@ export default function EquipmentDetailPage() {
                     <div><label style={{ fontSize: '12px', color: muted }}>Barrel size</label><input value={powerForm.power_barrel_size} onChange={e => setPowerForm(f => ({ ...f, power_barrel_size: e.target.value }))} style={inputStyle} /></div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                    <button type="button" disabled={powerSaving} onClick={savePowerFromDevice} style={{ fontSize: '14px', padding: '8px 16px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: powerSaving ? 'default' : 'pointer', fontFamily: 'inherit' }}>{powerSaving ? 'Saving…' : 'Save'}</button>
+                    <button type="button" disabled={powerSaving} onClick={savePowerFromDevice} style={{ fontSize: '14px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: powerSaving ? 'default' : 'pointer', fontFamily: 'inherit' }}>{powerSaving ? 'Saving…' : 'Save'}</button>
                     <button type="button" onClick={() => setShowPowerAdd(false)} style={{ fontSize: '14px', padding: '8px 16px', borderRadius: '8px', background: 'transparent', color: muted, border: `1px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
                   </div>
                 </div>
@@ -582,7 +582,7 @@ export default function EquipmentDetailPage() {
               {parentDevice.photo_url && <img src={parentDevice.photo_url} alt="" width={72} height={72} style={{ objectFit: 'cover', borderRadius: '10px', border: `1px solid ${border}` }} />}
               <div>
                 <p style={{ margin: 0, fontSize: '13px', color: muted }}>Device</p>
-                <button type="button" onClick={() => router.push(`/dashboard/equipment/${parentDevice.asset_tag}`)} style={{ background: 'none', border: 'none', padding: 0, color: '#5ba3e0', fontWeight: 700, cursor: 'pointer', fontSize: '16px', fontFamily: 'inherit' }}>{parentDevice.asset_tag} — {parentDevice.name}</button>
+                <button type="button" onClick={() => router.push(`/dashboard/equipment/${parentDevice.asset_tag}`)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 700, cursor: 'pointer', fontSize: '16px', fontFamily: 'inherit' }}>{parentDevice.asset_tag} — {parentDevice.name}</button>
               </div>
               {canEdit && (
                 <button type="button" onClick={() => unlinkPowerCable(item.id)} style={{ fontSize: '13px', padding: '8px 14px', borderRadius: '8px', border: `1px solid ${border}`, background: 'transparent', color: muted, cursor: 'pointer', fontFamily: 'inherit' }}>Unlink from device</button>
@@ -632,7 +632,7 @@ export default function EquipmentDetailPage() {
             const ago = days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : `${mins}m ago`
             return (
               <div key={a.id} style={{ padding: '12px 20px', borderBottom: i < activity.length - 1 ? `1px solid ${border}` : 'none', display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px' }}>
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#5ba3e0', marginTop: '6px', flexShrink: 0 }} />
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--brand-primary)', marginTop: '6px', flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <span style={{ color: text, fontWeight: 500 }}>{a.user?.name || 'System'}</span>
                   <span style={{ color: muted }}> {a.action.replace('_', ' ')}</span>

@@ -306,7 +306,7 @@ export default function SignageSubmissionsPage() {
                     </span>
                   </div>
                   <p style={{ fontSize: '14px', color: text, margin: '0 0 4px' }}>
-                    {row.submitter_name} · <a href={`mailto:${row.submitter_email}`} style={{ color: '#5ba3e0' }}>{row.submitter_email}</a>
+                    {row.submitter_name} · <a href={`mailto:${row.submitter_email}`} style={{ color: 'var(--brand-primary)' }}>{row.submitter_email}</a>
                   </p>
                   {row.department && (
                     <p style={{ fontSize: '14px', color: muted, margin: '0 0 4px' }}>{row.department}</p>

@@ -192,7 +192,7 @@ export default function ChecklistTab({ c }: { c: PTabCtx }) {
                         {item.title}
                         {item.kb_article_id && (() => {
                           const kb = kbArticles.find(a => a.id === item.kb_article_id)
-                          return kb ? <Link href="/dashboard/library?tab=articles" style={{ fontSize: '11px', color: '#5ba3e0', marginLeft: '6px', textDecoration: 'none' }}>📖 {kb.title}</Link> : null
+                          return kb ? <Link href="/dashboard/library?tab=articles" style={{ fontSize: '11px', color: 'var(--brand-primary)', marginLeft: '6px', textDecoration: 'none' }}>📖 {kb.title}</Link> : null
                         })()}
                       </span>
                       <select value={item.kb_article_id || ''} onChange={e => {

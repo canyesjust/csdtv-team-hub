@@ -490,7 +490,7 @@ export default function EquipmentPage() {
             onClick={() => router.push('/dashboard/equipment/scan')}
             style={{
               background: 'var(--surface-2)', border: `1px solid ${border}`, borderRadius: '10px',
-              padding: '10px 16px', fontSize: '14px', color: '#5ba3e0', cursor: 'pointer',
+              padding: '10px 16px', fontSize: '14px', color: 'var(--brand-primary)', cursor: 'pointer',
               fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px',
             }}
           >
@@ -500,7 +500,7 @@ export default function EquipmentPage() {
             <button
               onClick={() => { setShowPowerForm(false); setShowAddForm(!showAddForm) }}
               style={{
-                background: '#1e6cb5', border: 'none', borderRadius: '10px',
+                background: 'var(--brand-primary)', border: 'none', borderRadius: '10px',
                 padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer',
                 fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px',
               }}
@@ -512,7 +512,7 @@ export default function EquipmentPage() {
             <button
               onClick={() => { setShowAddForm(false); setShowPowerForm(!showPowerForm) }}
               style={{
-                background: '#1e6cb5', border: 'none', borderRadius: '10px',
+                background: 'var(--brand-primary)', border: 'none', borderRadius: '10px',
                 padding: '10px 16px', fontSize: '14px', color: '#fff', cursor: 'pointer',
                 fontFamily: 'inherit', fontWeight: 600, minHeight: '44px', display: 'flex', alignItems: 'center', gap: '6px',
               }}
@@ -530,7 +530,7 @@ export default function EquipmentPage() {
           onClick={() => { setListMode('regular'); setPowerSub('all'); setShowPowerForm(false) }}
           style={{
             padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${border}`,
-            background: listMode === 'regular' ? '#1e6cb5' : cardBg, color: listMode === 'regular' ? '#fff' : muted,
+            background: listMode === 'regular' ? 'var(--brand-primary)' : cardBg, color: listMode === 'regular' ? '#fff' : muted,
           }}
         >
           All equipment
@@ -540,7 +540,7 @@ export default function EquipmentPage() {
           onClick={() => { setListMode('power'); setShowAddForm(false) }}
           style={{
             padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${border}`,
-            background: listMode === 'power' ? '#1e6cb5' : cardBg, color: listMode === 'power' ? '#fff' : muted,
+            background: listMode === 'power' ? 'var(--brand-primary)' : cardBg, color: listMode === 'power' ? '#fff' : muted,
           }}
         >
           Power cables
@@ -640,7 +640,7 @@ export default function EquipmentPage() {
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button onClick={saveNewItem} disabled={!addForm.asset_tag || !addForm.name || addSaving}
-              style={{ padding: '10px 20px', borderRadius: '8px', background: addForm.asset_tag && addForm.name ? '#1e6cb5' : 'var(--surface-2)', color: addForm.asset_tag && addForm.name ? '#fff' : muted, border: 'none', cursor: addForm.asset_tag && addForm.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+              style={{ padding: '10px 20px', borderRadius: '8px', background: addForm.asset_tag && addForm.name ? 'var(--brand-primary)' : 'var(--surface-2)', color: addForm.asset_tag && addForm.name ? '#fff' : muted, border: 'none', cursor: addForm.asset_tag && addForm.name ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
               {addSaving ? 'Saving...' : 'Save item'}
             </button>
             <button onClick={() => setShowAddForm(false)}
@@ -720,7 +720,7 @@ export default function EquipmentPage() {
             <textarea value={powerForm.notes} onChange={e => setPowerForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional — cable length, etc." style={{ width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', minHeight: '56px', resize: 'vertical' as const }} />
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button type="button" onClick={savePowerCable} disabled={powerSaving} style={{ padding: '10px 20px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: powerSaving ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
+            <button type="button" onClick={savePowerCable} disabled={powerSaving} style={{ padding: '10px 20px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: powerSaving ? 'default' : 'pointer', fontFamily: 'inherit', fontSize: '14px', fontWeight: 500 }}>
               {powerSaving ? 'Saving…' : 'Save power cable'}
             </button>
             <button type="button" onClick={() => setShowPowerForm(false)} style={{ padding: '10px 20px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>Cancel</button>
@@ -731,7 +731,7 @@ export default function EquipmentPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total', value: stats.total, color: '#5ba3e0' },
+          { label: 'Total', value: stats.total, color: 'var(--brand-primary)' },
           { label: 'Available', value: stats.available, color: '#22c55e' },
           { label: 'Checked Out', value: stats.checkedOut, color: '#f59e0b' },
           { label: 'Broken', value: stats.broken, color: '#ef4444' },
@@ -753,9 +753,9 @@ export default function EquipmentPage() {
             key={t}
             onClick={() => setTab(t)}
             style={{
-              background: 'none', border: 'none', borderBottom: tab === t ? '2px solid #5ba3e0' : '2px solid transparent',
+              background: 'none', border: 'none', borderBottom: tab === t ? '2px solid var(--brand-primary)' : '2px solid transparent',
               padding: '10px 18px', fontSize: '14px', fontWeight: tab === t ? 600 : 400,
-              color: tab === t ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit',
+              color: tab === t ? 'var(--brand-primary)' : muted, cursor: 'pointer', fontFamily: 'inherit',
               textTransform: 'capitalize' as const,
             }}
           >
@@ -804,7 +804,7 @@ export default function EquipmentPage() {
               Showing {filtered.length} of {listMode === 'power' ? equipment.filter(isPowerCableRow).length : equipment.filter(e => !isPowerCableRow(e)).length}{' '}
               {listMode === 'power' ? 'power cables' : 'items'}
               <button onClick={() => { setSearch(''); setFilterCategory(''); setFilterStatus(''); setFilterSite(''); setListMode('regular'); setPowerSub('all') }}
-                style={{ background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '13px', marginLeft: '8px', fontFamily: 'inherit' }}>
+                style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '13px', marginLeft: '8px', fontFamily: 'inherit' }}>
                 Clear filters
               </button>
             </p>
@@ -832,14 +832,14 @@ export default function EquipmentPage() {
                     onMouseEnter={ev => (ev.currentTarget.style.background = dark ? '#111d33' : '#f0f4ff')}
                     onMouseLeave={ev => (ev.currentTarget.style.background = 'transparent')}
                   >
-                    <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '13px', color: '#5ba3e0' }}>{e.asset_tag}</span>
+                    <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '13px', color: 'var(--brand-primary)' }}>{e.asset_tag}</span>
                     <span>{e.photo_url ? <img src={e.photo_url} alt="" loading="lazy" decoding="async" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', display: 'block' }} /> : <span style={{ width: '36px', height: '36px', borderRadius: '6px', background: dark ? '#111d33' : '#f0f4ff', display: 'block' }} />}</span>
                     <span style={{ color: muted, fontSize: '13px' }}>{e.power_brand || e.brand || '—'}</span>
                     <span style={{ fontWeight: 500, fontSize: '13px' }}>{e.name}{e.power_input_connector ? <span style={{ color: muted, fontWeight: 400 }}> · {e.power_input_connector}</span> : null}</span>
                     <span style={{ color: muted, fontSize: '12px' }}>{formatPowerSpecShort(e) || '—'}</span>
                     <span style={{ fontSize: '12px' }}>
                       {parent ? (
-                        <span style={{ color: '#5ba3e0', fontWeight: 600 }} onClick={ev => { ev.stopPropagation(); router.push(`/dashboard/equipment/${parent.asset_tag}`) }}>{parent.asset_tag}</span>
+                        <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }} onClick={ev => { ev.stopPropagation(); router.push(`/dashboard/equipment/${parent.asset_tag}`) }}>{parent.asset_tag}</span>
                       ) : (
                         <span style={{ padding: '2px 8px', borderRadius: '6px', background: 'rgba(251,191,36,0.15)', color: '#fbbf24', fontWeight: 700 }}>Orphan</span>
                       )}
@@ -862,7 +862,7 @@ export default function EquipmentPage() {
               const sc = statusColor(e.status)
               return (
                 <div key={e.id} onClick={() => router.push(`/dashboard/equipment/${e.asset_tag}`)} className="csdtv-eq-row" style={{ display: 'grid', gridTemplateColumns: '80px 44px 1fr 140px 160px 110px 90px 60px', padding: '12px 16px', borderBottom: i < filtered.length - 1 ? `1px solid ${border}` : 'none', cursor: 'pointer', alignItems: 'center', fontSize: '14px', color: text, transition: 'background 0.15s' }} onMouseEnter={ev => (ev.currentTarget.style.background = dark ? '#111d33' : '#f0f4ff')} onMouseLeave={ev => (ev.currentTarget.style.background = 'transparent')}>
-                  <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '13px', color: '#5ba3e0' }}>{e.asset_tag}</span>
+                  <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '13px', color: 'var(--brand-primary)' }}>{e.asset_tag}</span>
                   <span>{e.photo_url ? <img src={e.photo_url} alt="" loading="lazy" decoding="async" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover', display: 'block' }} /> : <span style={{ width: '36px', height: '36px', borderRadius: '6px', background: dark ? '#111d33' : '#f0f4ff', display: 'block' }} />}</span>
                   <span style={{ fontWeight: 500 }}>{e.name}</span>
                   <span style={{ color: muted, fontSize: '13px' }}>{e.brand || '—'}</span>
@@ -873,7 +873,7 @@ export default function EquipmentPage() {
                   <span style={{ color: muted, fontSize: '12px' }}>{formatEquipmentSite(e.site)}</span>
                   <span>
                     {e.status === 'available' && (
-                      <button onClick={ev => { ev.stopPropagation(); setCheckoutItem(e) }} style={{ background: '#1e6cb5', border: 'none', borderRadius: '8px', color: '#fff', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Loan</button>
+                      <button onClick={ev => { ev.stopPropagation(); setCheckoutItem(e) }} style={{ background: 'var(--brand-primary)', border: 'none', borderRadius: '8px', color: '#fff', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit' }}>Loan</button>
                     )}
                   </span>
                 </div>
@@ -890,7 +890,7 @@ export default function EquipmentPage() {
           {canManageKits && (
             <div style={{ marginBottom: '16px' }}>
               {!showKitForm ? (
-                <button onClick={() => setShowKitForm(true)} style={{ background: '#1e6cb5', border: 'none', borderRadius: '10px', color: '#fff', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px' }}>+ New Kit</button>
+                <button onClick={() => setShowKitForm(true)} style={{ background: 'var(--brand-primary)', border: 'none', borderRadius: '10px', color: '#fff', padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px' }}>+ New Kit</button>
               ) : (
                 <div style={{ background: cardBg, borderRadius: '14px', padding: '20px', border: `1px solid ${border}` }}>
                   <div style={{ fontSize: '15px', fontWeight: 600, color: text, marginBottom: '12px' }}>Create Kit</div>
@@ -899,7 +899,7 @@ export default function EquipmentPage() {
                     <input placeholder="Description (optional)" value={kitDesc} onChange={e => setKitDesc(e.target.value)} style={{ ...inputStyle, flex: '1 1 250px' }} />
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={handleCreateKit} disabled={!kitName.trim()} style={{ background: kitName.trim() ? '#1e6cb5' : '#333', border: 'none', borderRadius: '10px', color: '#fff', padding: '10px 20px', fontSize: '14px', cursor: kitName.trim() ? 'pointer' : 'default', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px' }}>Create</button>
+                    <button onClick={handleCreateKit} disabled={!kitName.trim()} style={{ background: kitName.trim() ? 'var(--brand-primary)' : '#333', border: 'none', borderRadius: '10px', color: '#fff', padding: '10px 20px', fontSize: '14px', cursor: kitName.trim() ? 'pointer' : 'default', fontWeight: 600, fontFamily: 'inherit', minHeight: '44px' }}>Create</button>
                     <button onClick={() => { setShowKitForm(false); setKitName(''); setKitDesc('') }} style={{ background: 'none', border: `1px solid ${border}`, borderRadius: '10px', color: muted, padding: '10px 20px', fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
                   </div>
                 </div>
@@ -927,7 +927,7 @@ export default function EquipmentPage() {
                   {kitItems.length > 0 && (
                     <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {kitItems.slice(0, 5).map((ki: any) => (
-                        <span key={ki.equipment_id} style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', background: dark ? '#111d33' : '#f0f4ff', color: '#5ba3e0', fontWeight: 500 }}>{ki.equipment?.asset_tag} — {ki.equipment?.name}</span>
+                        <span key={ki.equipment_id} style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', background: dark ? '#111d33' : '#f0f4ff', color: 'var(--brand-primary)', fontWeight: 500 }}>{ki.equipment?.asset_tag} — {ki.equipment?.name}</span>
                       ))}
                       {kitItems.length > 5 && <span style={{ fontSize: '11px', color: muted }}>+{kitItems.length - 5} more</span>}
                     </div>
@@ -973,7 +973,7 @@ export default function EquipmentPage() {
                 <div key={loan.id} style={{ background: cardBg, borderRadius: '14px', padding: '16px 20px', border: `1px solid ${isOverdue ? '#ef4444' : border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ flex: '1 1 300px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                      {loan.equipment && <span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#5ba3e0', fontWeight: 600 }}>{loan.equipment.asset_tag}</span>}
+                      {loan.equipment && <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--brand-primary)', fontWeight: 600 }}>{loan.equipment.asset_tag}</span>}
                       <span style={{ fontSize: '15px', fontWeight: 500, color: text }}>{loan.equipment?.name || loan.kit?.name || 'Unknown'}</span>
                       {isOverdue && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '10px', fontWeight: 700, background: dark ? '#3b1515' : '#fee2e2', color: '#ef4444', textTransform: 'uppercase' as const }}>Overdue</span>}
                     </div>
@@ -1023,7 +1023,7 @@ export default function EquipmentPage() {
               >
                 <div style={{ flex: '1 1 300px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: '13px', color: '#5ba3e0', fontWeight: 600 }}>{eq.asset_tag}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--brand-primary)', fontWeight: 600 }}>{eq.asset_tag}</span>
                     <span style={{ fontSize: '15px', fontWeight: 500, color: text }}>{eq.name}</span>
                     <span
                       style={{
@@ -1112,7 +1112,7 @@ export default function EquipmentPage() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-              <button onClick={handleCheckout} disabled={!borrowerName.trim()} style={{ background: borrowerName.trim() ? '#1e6cb5' : '#333', border: 'none', borderRadius: '10px', color: '#fff', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: borrowerName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', flex: 1, minHeight: '44px' }}>Confirm Checkout</button>
+              <button onClick={handleCheckout} disabled={!borrowerName.trim()} style={{ background: borrowerName.trim() ? 'var(--brand-primary)' : '#333', border: 'none', borderRadius: '10px', color: '#fff', padding: '12px 24px', fontSize: '14px', fontWeight: 600, cursor: borrowerName.trim() ? 'pointer' : 'default', fontFamily: 'inherit', flex: 1, minHeight: '44px' }}>Confirm Checkout</button>
               <button onClick={() => { setCheckoutItem(null); setBorrowerName(''); setBorrowerInfo(''); setDueDate('') }} style={{ background: 'none', border: `1px solid ${border}`, borderRadius: '10px', color: muted, padding: '12px 24px', fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
             </div>
           </div>

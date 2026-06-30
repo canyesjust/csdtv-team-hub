@@ -263,7 +263,7 @@ export default function MotionVotePanel({
     opacity: busy || disabled ? 0.6 : 1,
   }
 
-  const primaryBtn: React.CSSProperties = { ...btn, background: '#1e6cb5', color: '#fff', border: 'none' }
+  const primaryBtn: React.CSSProperties = { ...btn, background: 'var(--brand-primary)', color: '#fff', border: 'none' }
   const dangerBtn: React.CSSProperties = { ...btn, background: '#8b1a1a', color: '#fff', border: 'none' }
 
   if (!showPanel) {
@@ -424,7 +424,7 @@ function ActiveMotionBlock({
 
   return (
     <div>
-      <p style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 700, color: isVoting ? '#1e6cb5' : '#e8a020' }}>
+      <p style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 700, color: isVoting ? 'var(--brand-primary)' : '#e8a020' }}>
         {stepLabel}
       </p>
 
@@ -626,18 +626,18 @@ function VoteBlock({
 
   return (
     <div>
-      <p style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 700, color: '#1e6cb5' }}>Voting open on dais</p>
+      <p style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 700, color: 'var(--brand-primary)' }}>Voting open on dais</p>
       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
         <button
           type="button"
-          style={{ ...btn, flex: 1, background: voteMode === 'voice' ? '#1e6cb5' : cardBg, color: voteMode === 'voice' ? '#fff' : text }}
+          style={{ ...btn, flex: 1, background: voteMode === 'voice' ? 'var(--brand-primary)' : cardBg, color: voteMode === 'voice' ? '#fff' : text }}
           onClick={() => setVoteMode('voice')}
         >
           Voice
         </button>
         <button
           type="button"
-          style={{ ...btn, flex: 1, background: voteMode === 'roll_call' ? '#1e6cb5' : cardBg, color: voteMode === 'roll_call' ? '#fff' : text }}
+          style={{ ...btn, flex: 1, background: voteMode === 'roll_call' ? 'var(--brand-primary)' : cardBg, color: voteMode === 'roll_call' ? '#fff' : text }}
           onClick={() => setVoteMode('roll_call')}
         >
           Roll call

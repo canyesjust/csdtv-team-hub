@@ -68,7 +68,7 @@ export default function EquipmentScanPage() {
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '24px' }}>
       <button onClick={() => { stopCamera(); router.push('/dashboard/equipment') }}
-        style={{ background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px', padding: 0 }}>
+        style={{ background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px', padding: 0 }}>
         ← Equipment
       </button>
 
@@ -109,7 +109,7 @@ export default function EquipmentScanPage() {
           <button
             onClick={handleLookup}
             disabled={!tagInput.trim() || searching}
-            style={{ background: tagInput.trim() ? '#1e6cb5' : (dark ? '#333' : '#e2e8f0'), border: 'none', borderRadius: '12px', color: tagInput.trim() ? '#fff' : muted, padding: '14px', fontSize: '15px', cursor: tagInput.trim() ? 'pointer' : 'default', fontWeight: 600, fontFamily: 'inherit', width: '100%', marginTop: '16px', minHeight: '50px' }}
+            style={{ background: tagInput.trim() ? 'var(--brand-primary)' : (dark ? '#333' : '#e2e8f0'), border: 'none', borderRadius: '12px', color: tagInput.trim() ? '#fff' : muted, padding: '14px', fontSize: '15px', cursor: tagInput.trim() ? 'pointer' : 'default', fontWeight: 600, fontFamily: 'inherit', width: '100%', marginTop: '16px', minHeight: '50px' }}
           >
             {searching ? 'Searching...' : 'Look Up'}
           </button>

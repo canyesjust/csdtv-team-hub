@@ -73,7 +73,7 @@ interface CurrentUser { id: string; name: string; role: string }
 
 const CATEGORIES = ['Process', 'Reference', 'Policy', 'Workflow', 'Other']
 const CAT_STYLES: Record<string, { bg: string; color: string }> = {
-  Process:   { bg: 'rgba(30,108,181,0.12)',  color: '#5ba3e0' },
+  Process:   { bg: 'rgba(30,108,181,0.12)',  color: 'var(--brand-primary)' },
   Reference: { bg: 'rgba(100,116,139,0.12)', color: '#94a3b8' },
   Policy:    { bg: 'rgba(155,133,224,0.12)', color: '#9b85e0' },
   Workflow:  { bg: 'rgba(34,197,94,0.12)',   color: '#22c55e' },
@@ -325,7 +325,7 @@ export default function KnowledgeArticlesTab() {
   }
 
   const tbBtn = (label: string, action: () => void, active: boolean, extraStyle?: React.CSSProperties) => (
-    <button key={label} onClick={action} style={{ fontSize: '13px', padding: '4px 10px', borderRadius: '6px', border: `0.5px solid ${active ? '#1e6cb5' : border}`, background: active ? 'rgba(30,108,181,0.15)' : 'transparent', color: active ? '#5ba3e0' : muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '30px', ...extraStyle }}>
+    <button key={label} onClick={action} style={{ fontSize: '13px', padding: '4px 10px', borderRadius: '6px', border: `0.5px solid ${active ? 'var(--brand-primary)' : border}`, background: active ? 'rgba(30,108,181,0.15)' : 'transparent', color: active ? 'var(--brand-primary)' : muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '30px', ...extraStyle }}>
       {label}
     </button>
   )
@@ -352,7 +352,7 @@ export default function KnowledgeArticlesTab() {
             else clearArticleSelection()
           }}
           className="mobile-back-btn"
-          style={{ display: 'none', background: 'none', border: 'none', color: '#5ba3e0', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', padding: '4px 0', minHeight: '44px', alignItems: 'center', gap: '6px' }}
+          style={{ display: 'none', background: 'none', border: 'none', color: 'var(--brand-primary)', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit', padding: '4px 0', minHeight: '44px', alignItems: 'center', gap: '6px' }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
           Back
@@ -425,7 +425,7 @@ export default function KnowledgeArticlesTab() {
               />
             </div>
             <div style={{ display: 'flex', gap: '8px', margin: '14px 20px 20px' }}>
-              <button onClick={saveArticle} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save article</button>
+              <button onClick={saveArticle} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '44px' }}>Save article</button>
               <button type="button" onClick={cancelCompose} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '44px' }}>Cancel</button>
               {saveError && <span style={{ fontSize: '13px', color: '#ef4444' }}>{saveError}</span>}
             </div>
@@ -536,7 +536,7 @@ export default function KnowledgeArticlesTab() {
                 fontSize: '14px',
                 padding: '10px 18px',
                 borderRadius: '10px',
-                background: '#1e6cb5',
+                background: 'var(--brand-primary)',
                 color: '#fff',
                 border: 'none',
                 cursor: 'pointer',
@@ -578,7 +578,7 @@ export default function KnowledgeArticlesTab() {
               const active = catFilter === cat
               const cs = cat !== 'all' ? CAT_STYLES[cat] : null
               return (
-                <button key={cat} onClick={() => setCatFilter(cat)} style={{ fontSize: '14px', padding: '6px 14px', borderRadius: '8px', border: `0.5px solid ${active && cs ? cs.color : border}`, background: active && cs ? cs.bg : active ? '#1e6cb5' : cardBg, color: active && cs ? cs.color : active ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
+                <button key={cat} onClick={() => setCatFilter(cat)} style={{ fontSize: '14px', padding: '6px 14px', borderRadius: '8px', border: `0.5px solid ${active && cs ? cs.color : border}`, background: active && cs ? cs.bg : active ? 'var(--brand-primary)' : cardBg, color: active && cs ? cs.color : active ? '#fff' : muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>
                   {cat === 'all' ? 'All' : cat}
                 </button>
               )
@@ -637,7 +637,7 @@ export default function KnowledgeArticlesTab() {
                 const isSelected = selected?.id === article.id
                 const editedBy = article.editor?.name || article.author?.name
                 return (
-                  <div key={article.id} onClick={() => openArticle(article)} style={{ padding: '14px 16px', background: isSelected ? (dark ? 'rgba(30,108,181,0.15)' : 'rgba(30,108,181,0.06)') : cardBg, border: `0.5px solid ${isSelected ? '#1e6cb5' : border}`, borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }}
+                  <div key={article.id} onClick={() => openArticle(article)} style={{ padding: '14px 16px', background: isSelected ? (dark ? 'rgba(30,108,181,0.15)' : 'rgba(30,108,181,0.06)') : cardBg, border: `0.5px solid ${isSelected ? 'var(--brand-primary)' : border}`, borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s' }}
                     onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = hoverBg }}
                     onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = cardBg }}
                   >
@@ -775,7 +775,7 @@ export default function KnowledgeArticlesTab() {
           position: absolute; left: 0;
           width: 22px; height: 22px;
           background: rgba(30,108,181,0.12);
-          color: #5ba3e0;
+          color: var(--brand-primary);
           border-radius: 50%;
           font-size: 12px; font-weight: 600;
           display: flex; align-items: center; justify-content: center;

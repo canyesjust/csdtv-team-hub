@@ -126,7 +126,7 @@ export default function CommentsSection({ entityType, entityId, currentUserId, t
   const renderBody = (body: string) => {
     return body.split(/(@\w+)/g).map((part, i) => {
       if (part.startsWith('@')) {
-        return <span key={i} style={{ color: '#5ba3e0', fontWeight: 500 }}>{part}</span>
+        return <span key={i} style={{ color: 'var(--brand-primary)', fontWeight: 500 }}>{part}</span>
       }
       return part
     })
@@ -145,7 +145,7 @@ export default function CommentsSection({ entityType, entityId, currentUserId, t
             const user = c.user || team.find(t => t.id === c.user_id)
             return (
               <div key={c.id} style={{ display: 'flex', gap: '10px', padding: '10px 0', borderBottom: `0.5px solid ${border}` }}>
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: (user as any)?.avatar_color || '#5ba3e0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: (user as any)?.avatar_color || 'var(--brand-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
                   {((user as any)?.name || '?').slice(0, 2).toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -186,7 +186,7 @@ export default function CommentsSection({ entityType, entityId, currentUserId, t
             style={{ flex: 1, background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '13px', color: text, fontFamily: 'inherit', outline: 'none', resize: 'none' as const, minHeight: '38px', maxHeight: '120px', boxSizing: 'border-box' as const }}
             rows={1}
           />
-          <button onClick={postComment} disabled={!newComment.trim() || posting} style={{ padding: '9px 14px', borderRadius: '8px', background: newComment.trim() ? '#1e6cb5' : 'var(--surface-2)', color: newComment.trim() ? '#fff' : muted, border: 'none', cursor: newComment.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500, flexShrink: 0, minHeight: '38px' }}>
+          <button onClick={postComment} disabled={!newComment.trim() || posting} style={{ padding: '9px 14px', borderRadius: '8px', background: newComment.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: newComment.trim() ? '#fff' : muted, border: 'none', cursor: newComment.trim() ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '13px', fontWeight: 500, flexShrink: 0, minHeight: '38px' }}>
             {posting ? '...' : 'Post'}
           </button>
         </div>
