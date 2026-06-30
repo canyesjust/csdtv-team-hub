@@ -614,20 +614,6 @@ function Zoned2Weather({ weather }: { weather: { tempF: number | null; condition
   )
 }
 
-function SpotCard({ items }: { items: NonNullable<ScreenFeed['spotlight']> }) {
-  const cur = items[0]
-  return (
-    <div className="cic-rail cic-z2-spot">
-      <div className="cic-railhd">CSDtv Spotlight <span className="sub">Latest</span></div>
-      <div className="cic-z2-thumb">
-        <img src={cur.thumb} alt="" />
-        {cur.duration && cur.duration !== '0:00' ? <span className="cic-z2-dur">{cur.duration}</span> : null}
-      </div>
-      <div className="cic-z2-sptitle">{cur.title}</div>
-    </div>
-  )
-}
-
 function BoardCard({ board }: { board: NonNullable<ScreenFeed['board_next']> }) {
   return (
     <div className="cic-rail cic-z2-spot">
@@ -676,8 +662,7 @@ function LiveCard({ live }: { live: NonNullable<ScreenFeed['csdtv_live']> }) {
   )
 }
 
-function Zoned2Rotator({ spotlight, board, closures, announcements, live }: {
-  spotlight?: ScreenFeed['spotlight']
+function Zoned2Rotator({ board, closures, announcements, live }: {
   board?: ScreenFeed['board_next']
   closures?: ScreenFeed['closures']
   announcements: FeedAnnouncement[]
@@ -685,7 +670,6 @@ function Zoned2Rotator({ spotlight, board, closures, announcements, live }: {
 }) {
   const cards: ReactNode[] = []
   if (live) cards.push(<LiveCard key="live" live={live} />)
-  if (spotlight && spotlight.length) cards.push(<SpotCard key="spot" items={spotlight} />)
   if (board) cards.push(<BoardCard key="board" board={board} />)
   if (closures && closures.length) cards.push(<ClosuresCard key="cl" closures={closures} />)
   if (announcements.length) cards.push(<AnnCard key="ann" announcements={announcements} />)
@@ -1106,7 +1090,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
                 dateStr={now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               />
               <Zoned2Weather weather={feed.weather} />
-              <Zoned2Rotator spotlight={feed.spotlight} board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
+              <Zoned2Rotator board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
             </div>
           </div>
           <Zoned2News items={feed.news ?? []} />

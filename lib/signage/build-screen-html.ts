@@ -395,15 +395,6 @@ function zoned2Weather(w: Feed['weather']): string {
   )
 }
 
-function spotCardHtml(v: NonNullable<Feed['spotlight']>[number]): string {
-  const dur = v.duration && v.duration !== '0:00' ? `<span class="cic-z2-dur">${esc(v.duration)}</span>` : ''
-  return (
-    `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight <span class="sub">Latest</span></div>` +
-    `<div class="cic-z2-thumb"><img src="${esc(v.thumb)}" alt="">${dur}</div>` +
-    `<div class="cic-z2-sptitle">${esc(v.title)}</div></div>`
-  )
-}
-
 function boardCardHtml(b: NonNullable<Feed['board_next']>): string {
   return (
     `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Next board meeting</div>` +
@@ -436,7 +427,6 @@ function liveCardHtml(live: NonNullable<Feed['csdtv_live']>): string {
 function zoned2Rail(feed: Feed): string {
   const cards: string[] = []
   if (feed.csdtv_live) cards.push(liveCardHtml(feed.csdtv_live))
-  if (feed.spotlight && feed.spotlight.length) cards.push(spotCardHtml(feed.spotlight[0]))
   if (feed.board_next) cards.push(boardCardHtml(feed.board_next))
   if (feed.closures && feed.closures.length) cards.push(closuresCardHtml(feed.closures))
   if (feed.announcements.length) cards.push(annCardHtml(feed.announcements))
