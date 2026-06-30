@@ -108,12 +108,12 @@ export async function POST(request: NextRequest) {
   let result = await callGenerator(system, user)
   if (result.error) return NextResponse.json({ error: result.error }, { status: 502 })
 
-  let check = validateSlideHtml(result.html || '', { wordCap })
+  let check = validateSlideHtml(result.html || '', { wordCap, headlineOverride })
   if (!check.ok) {
     const retryUser = `${user}\n\nThe previous attempt failed these readability rules — fix them and return only the corrected HTML:\n- ${check.failures.join('\n- ')}`
     result = await callGenerator(system, retryUser)
     if (result.error) return NextResponse.json({ error: result.error }, { status: 502 })
-    check = validateSlideHtml(result.html || '', { wordCap })
+    check = validateSlideHtml(result.html || '', { wordCap, headlineOverride })
     if (!check.ok) {
       return NextResponse.json(
         { error: 'Could not produce a slide that meets the readability rules. Try simplifying the prompt.', failures: check.failures },

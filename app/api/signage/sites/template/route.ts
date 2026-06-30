@@ -26,6 +26,16 @@ export async function POST(request: NextRequest) {
   if (body.brand_title !== undefined) update.brand_title = body.brand_title || null
   if (body.brand_subtitle !== undefined) update.brand_subtitle = body.brand_subtitle || null
   if (body.logo_url !== undefined) update.logo_url = body.logo_url || null
+  // Per-location weather setup (edited on the "Location & weather" page).
+  if (body.center_name !== undefined) update.center_name = String(body.center_name).slice(0, 120) || 'Canyons School District'
+  if (body.weather_lat !== undefined) {
+    const lat = Number(body.weather_lat)
+    if (Number.isFinite(lat) && lat >= -90 && lat <= 90) update.weather_lat = lat
+  }
+  if (body.weather_lon !== undefined) {
+    const lon = Number(body.weather_lon)
+    if (Number.isFinite(lon) && lon >= -180 && lon <= 180) update.weather_lon = lon
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No template fields provided' }, { status: 400 })
@@ -35,7 +45,7 @@ export async function POST(request: NextRequest) {
     .from('signage_sites')
     .update(update)
     .eq('id', siteId)
-    .select('id, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, show_calendar_ticker, brand_title, brand_subtitle, logo_url')
+    .select('id, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, show_calendar_ticker, brand_title, brand_subtitle, logo_url, center_name, weather_lat, weather_lon')
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ site: data })

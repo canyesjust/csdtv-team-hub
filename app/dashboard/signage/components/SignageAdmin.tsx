@@ -304,8 +304,10 @@ export function SignageAnnouncementIconPicker({ value, onChange, lbl }: Announce
 }
 
 type SignageNavItem = { href: string; label: string; managerOnly?: boolean }
-type SignageNavGroup = { key: string; label: string; href?: string; items: SignageNavItem[] }
+type SignageNavGroup = { key: string; label: string; href?: string; admin?: boolean; items: SignageNavItem[] }
 
+// Groups above the `admin` group follow the active location. The admin group is
+// global — it manages every location and ignores the active-location picker.
 const SIGNAGE_NAV: SignageNavGroup[] = [
   { key: 'overview', label: '', items: [{ href: '/dashboard/signage/overview', label: 'Overview', managerOnly: true }] },
   {
@@ -328,18 +330,22 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     ],
   },
   {
-    key: 'live',
-    label: 'Live',
-    items: [{ href: '/dashboard/signage/live', label: 'Live takeover', managerOnly: true }],
+    key: 'location',
+    label: 'This location',
+    items: [
+      { href: '/dashboard/signage/template', label: 'Branding & template', managerOnly: true },
+      { href: '/dashboard/signage/location', label: 'Location & weather', managerOnly: true },
+      { href: '/dashboard/signage/live', label: 'Live takeover', managerOnly: true },
+    ],
   },
   {
-    key: 'settings',
-    label: 'Settings',
+    key: 'admin',
+    label: 'Admin · all locations',
+    admin: true,
     items: [
-      { href: '/dashboard/signage/sites', label: 'Sites & locations', managerOnly: true },
-      { href: '/dashboard/signage/template', label: 'Template', managerOnly: true },
+      { href: '/dashboard/signage/sites', label: 'Locations', managerOnly: true },
       { href: '/dashboard/signage/access', label: 'Access', managerOnly: true },
-      { href: '/dashboard/signage/settings', label: 'Signage settings', managerOnly: true },
+      { href: '/dashboard/signage/settings', label: 'Global settings', managerOnly: true },
     ],
   },
 ]
@@ -362,6 +368,9 @@ export function SignageRail({ active, isManager, accent }: { active: string; isM
   const idle = '#eef2fa'
   const heading = '#e2a23f'
 
+  const adminIdle = '#dce7f5'
+  const adminAccent = '#7fb2d8'
+
   const isActive = (href: string) => active === href || active.startsWith(`${href}/`)
 
   // Every group is always visible; each group keeps only the destinations this user can reach.
@@ -369,43 +378,58 @@ export function SignageRail({ active, isManager, accent }: { active: string; isM
     .map(g => ({ ...g, items: g.items.filter(it => isManager || !it.managerOnly) }))
     .filter(g => g.items.length > 0)
 
+  const renderItem = (it: SignageNavItem, idleColor: string) => {
+    const on = isActive(it.href)
+    return (
+      <Link
+        key={it.href}
+        href={it.href}
+        prefetch
+        aria-current={on ? 'page' : undefined}
+        className={`sig-rail-item${on ? ' sig-rail-on' : ''}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '8px 11px',
+          borderRadius: 9,
+          fontSize: 13.5,
+          marginBottom: 1,
+          textDecoration: 'none',
+          fontWeight: on ? 600 : 500,
+          color: on ? readableText(accent) : idleColor,
+          background: on ? accent : 'transparent',
+        }}
+      >
+        {it.label}
+      </Link>
+    )
+  }
+
   return (
     <nav aria-label="Signage sections">
-      {groups.map(g => (
-        <div key={g.key} style={{ marginBottom: 10 }}>
-          {g.label && (
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1.3, textTransform: 'uppercase', color: heading, margin: '12px 6px 5px', padding: '11px 0 0 5px', borderTop: '1px solid rgba(255,255,255,0.10)' }}>
-              {g.label}
-            </p>
-          )}
-          {g.items.map(it => {
-            const on = isActive(it.href)
-            return (
-              <Link
-                key={it.href}
-                href={it.href}
-                prefetch
-                aria-current={on ? 'page' : undefined}
-                className={`sig-rail-item${on ? ' sig-rail-on' : ''}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '8px 11px',
-                  borderRadius: 9,
-                  fontSize: 13.5,
-                  marginBottom: 1,
-                  textDecoration: 'none',
-                  fontWeight: on ? 600 : 500,
-                  color: on ? readableText(accent) : idle,
-                  background: on ? accent : 'transparent',
-                }}
-              >
-                {it.label}
-              </Link>
-            )
-          })}
-        </div>
-      ))}
+      {groups.map(g =>
+        g.admin ? (
+          // Global section — manages every location, ignores the active-location picker.
+          <div key={g.key} style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 6px 5px', padding: '12px 0 0 5px', borderTop: '2px solid rgba(120,160,210,0.28)' }}>
+              <span aria-hidden style={{ color: adminAccent, fontSize: 13, lineHeight: 1 }}>🌐</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1.3, textTransform: 'uppercase', color: adminAccent }}>{g.label}</span>
+            </div>
+            <div style={{ background: 'rgba(90,140,190,0.10)', borderRadius: 10, padding: 4 }}>
+              {g.items.map(it => renderItem(it, adminIdle))}
+            </div>
+          </div>
+        ) : (
+          <div key={g.key} style={{ marginBottom: 10 }}>
+            {g.label && (
+              <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1.3, textTransform: 'uppercase', color: heading, margin: '12px 6px 5px', padding: '11px 0 0 5px', borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+                {g.label}
+              </p>
+            )}
+            {g.items.map(it => renderItem(it, idle))}
+          </div>
+        ),
+      )}
     </nav>
   )
 }

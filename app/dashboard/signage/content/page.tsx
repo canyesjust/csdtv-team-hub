@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { confirmDialog } from '@/lib/confirm'
 import { createClient } from '@/lib/supabase'
@@ -83,6 +83,7 @@ export default function SignageContentPage() {
   }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [fullPreview, setFullPreview] = useState<{ html?: string; img?: string; video?: string } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [addFile, setAddFile] = useState<File | null>(null)
@@ -118,7 +119,7 @@ export default function SignageContentPage() {
       .order('created_at', { ascending: false })
     const list = (data as ContentRow[]) || []
     setRows(list)
-    setExpandedId(list[0]?.id ?? null)
+    setExpandedId(null) // master-detail: nothing selected on open (no auto-expanded card)
     setTabLoading(false)
   }, [supabase, activeSiteId])
 
@@ -475,202 +476,302 @@ export default function SignageContentPage() {
 
       {tabLoading ? (
         <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>Loading…</div>
+      ) : !displayRows.length ? (
+        <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>No {tab} items.</div>
       ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {displayRows.map(row => {
-            const e = getEdit(row)
-            const lc = contentLifecycle(row.start_date, row.end_date, today)
-            const showStatus = tab === 'approved' && lc !== 'none'
-            const expanded = expandedId === row.id
-            const isHtml = row.type === 'html'
-            const isVideoRow = row.type === 'video'
-            // Prefer a real thumbnail; fall back to the image itself, or a video
-            // poster frame (#t hint) for videos uploaded without a thumbnail.
-            const previewImg = !isHtml && row.thumb_path
-              ? signageMediaPublicUrl(row.thumb_path)
-              : (!isHtml && !isVideoRow && row.media_path ? signageMediaPublicUrl(row.media_path) : null)
-            const previewVideo = isVideoRow && !row.thumb_path && row.media_path
-              ? `${signageMediaPublicUrl(row.media_path)}#t=0.5`
-              : null
-            const fileName = row.media_path ? mediaFileName(row.media_path) : 'HTML slide'
-
-            if (!expanded) {
+        <div className="sig-content-split">
+          <div className="sig-content-tiles">
+            {displayRows.map(row => {
+              const e = getEdit(row)
+              const lc = contentLifecycle(row.start_date, row.end_date, today)
+              const showStatus = tab === 'approved' && lc !== 'none'
+              const selected = expandedId === row.id
+              const fileName = row.media_path ? mediaFileName(row.media_path) : 'HTML slide'
+              const typeChip = row.type === 'html' ? 'HTML' : row.type === 'video' ? 'Video' : 'Image'
+              const dateLine = row.start_date
+                ? `${formatSignageDate(row.start_date)}–${formatSignageDate(row.end_date)}`
+                : 'No dates'
               return (
-                <button
+                <div
                   key={row.id}
-                  type="button"
-                  onClick={() => setExpandedId(row.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selected}
+                  onClick={() => setExpandedId(selected ? null : row.id)}
+                  onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); setExpandedId(selected ? null : row.id) } }}
                   style={{
                     ...s.card,
                     marginTop: 0,
-                    borderLeft: showStatus ? `4px solid ${LIFECYCLE_META[lc].color}` : undefined,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 14,
+                    padding: 0,
+                    overflow: 'hidden',
                     textAlign: 'left',
                     cursor: 'pointer',
-                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    ...(selected ? { border: '2px solid #2a7fb8' } : {}),
                   }}
                 >
-                  <div style={{ ...s.thumb, width: 64, height: 40 }}>
-                    {previewImg ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={previewImg} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                    ) : previewVideo ? (
-                      <video src={previewVideo} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                    ) : (
-                      <span style={{ fontSize: 11, fontWeight: 600 }}>{isHtml ? 'HTML' : 'VIDEO'}</span>
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#0a1f3c', overflow: 'hidden' }}>
+                    <SlidePreview row={row} />
                     {showStatus && (
-                      <span style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 20, marginBottom: 3, color: LIFECYCLE_META[lc].color, background: LIFECYCLE_META[lc].bg }}>{LIFECYCLE_META[lc].label}</span>
+                      <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, color: '#fff', background: LIFECYCLE_META[lc].color }}>{LIFECYCLE_META[lc].label}</span>
                     )}
-                    <div style={{ fontSize: 14, fontWeight: 500, color: s.text }}>{e.title || fileName}</div>
-                    <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{submitterLine(row)}</div>
+                    <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 5, color: '#fff', background: 'rgba(0,0,0,0.55)' }}>{typeChip}</span>
                   </div>
-                  <span style={{ fontSize: 18, color: '#9aa0ab' }}>▾</span>
-                </button>
-              )
-            }
-
-            return (
-              <div key={row.id} style={{ ...s.card, borderLeft: showStatus ? `4px solid ${LIFECYCLE_META[lc].color}` : undefined }}>
-                <div style={{ display: 'flex', gap: 14 }}>
-                  <div style={{ ...s.thumb, width: 150, height: 84, overflow: 'hidden', padding: isHtml ? 8 : 0 }}>
-                    {previewImg ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={previewImg} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                    ) : previewVideo ? (
-                      <video src={previewVideo} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                    ) : (
-                      <div style={{ fontSize: 11, color: s.muted, overflow: 'hidden', height: '100%' }}>
-                        {e.html_body.slice(0, 120) || 'HTML slide'}
-                      </div>
-                    )}
+                  <div style={{ padding: '8px 10px' }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: s.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title || fileName}</div>
+                    <div style={{ fontSize: 11.5, color: s.muted, marginTop: 2 }}>{dateLine}</div>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {showStatus && (
-                      <span style={{ display: 'inline-block', fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 20, marginBottom: 4, color: LIFECYCLE_META[lc].color, background: LIFECYCLE_META[lc].bg }}>{LIFECYCLE_META[lc].label}</span>
-                    )}
-                    <input
-                      value={e.title}
-                      onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, title: ev.target.value } }))}
-                      placeholder="Title"
-                      style={{ ...s.input, fontWeight: 500, fontSize: 15, marginBottom: 4 }}
-                    />
-                    {submitterLine(row) && (
-                      <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{submitterLine(row)}</div>
-                    )}
-                    {requestLine(row) && (
-                      <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{requestLine(row)}</div>
-                    )}
-                  </div>
-                  {rows.length > 1 && (
-                    <button type="button" onClick={() => setExpandedId(null)} style={{ ...s.btn, alignSelf: 'flex-start', padding: '4px 8px' }} aria-label="Collapse">
-                      ▴
-                    </button>
-                  )}
                 </div>
+              )
+            })}
+          </div>
 
-                <div style={s.divider}>
-                  <SignageTargetingPicker
-                    areas={areas}
-                    screens={screens}
-                    value={e}
-                    onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, ...v } }))}
-                    lbl={s.lbl}
-                  />
-                  <div style={{ ...s.row, marginTop: 12 }}>
-                    <div style={{ flex: 1, minWidth: 130 }}>
-                      <p style={s.lbl}>Start date</p>
-                      <SignageDateInput value={e.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, start_date: v } }))} style={s.input} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 130 }}>
-                      <p style={s.lbl}>End date</p>
-                      <SignageDateInput value={e.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={s.input} min={e.start_date || undefined} />
-                    </div>
-                    <div style={{ width: 90 }}>
-                      <p style={s.lbl}>Priority</p>
-                      <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={s.input} />
-                    </div>
-                    <div style={{ width: 110 }}>
-                      <p style={s.lbl}>Show for (sec)</p>
-                      <input
-                        type="number"
-                        min={SIGNAGE_MIN_DISPLAY_SECONDS}
-                        max={SIGNAGE_MAX_DISPLAY_SECONDS}
-                        value={e.display_seconds}
-                        onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, display_seconds: parseInt(ev.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS } }))}
-                        style={s.input}
-                      />
-                    </div>
+          <div className="sig-content-detail">
+            {(() => {
+              const row = displayRows.find(r => r.id === expandedId)
+              if (!row) {
+                return (
+                  <div style={{ ...s.card, color: s.muted, textAlign: 'center', padding: 28 }}>
+                    Select a piece of content to edit.
                   </div>
-                  {isHtml && (
-                    <div style={{ marginTop: 12 }}>
-                      <p style={s.lbl}>HTML</p>
-                      <textarea
-                        value={e.html_body}
-                        onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, html_body: ev.target.value } }))}
-                        rows={8}
-                        style={s.textarea}
-                      />
-                    </div>
-                  )}
-                  <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
-                    <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
-                    Full-screen takeover
-                  </label>
-
-                  {tab === 'pending' && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-                      <button type="button" onClick={() => { setRejectId(row.id); setRejectReason('') }} style={s.btn}>Reject</button>
-                      <button type="button" disabled={busy === row.id} onClick={() => void approve(row)} style={s.btnPrimary}>✓ Approve</button>
-                    </div>
-                  )}
-                  {tab === 'approved' && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-                      <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={s.btnPrimary}>Save changes</button>
-                    </div>
-                  )}
-                  {tab === 'rejected' && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-                      <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={s.btn}>Save changes</button>
-                      <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row, { status: 'approved', reject_reason: null })} style={s.btnPrimary}>Re-approve</button>
-                    </div>
-                  )}
-
-                  {rejectId === row.id && (
-                    <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                      <input value={rejectReason} onChange={ev => setRejectReason(ev.target.value)} placeholder="Reject reason" style={{ ...s.input, flex: 1 }} />
-                      <button type="button" onClick={() => void reject(row)} style={s.btn}>Confirm reject</button>
-                    </div>
-                  )}
-
-                  {row.reject_reason && tab === 'rejected' && (
-                    <div style={{ marginTop: 8, color: '#ef4444', fontSize: 13 }}>{row.reject_reason}</div>
-                  )}
-
-                  {isManager && tab !== 'pending' && (
+                )
+              }
+              const e = getEdit(row)
+              const lc = contentLifecycle(row.start_date, row.end_date, today)
+              const showStatus = tab === 'approved' && lc !== 'none'
+              const isHtml = row.type === 'html'
+              const isVideoRow = row.type === 'video'
+              const previewImg = !isHtml && row.thumb_path
+                ? signageMediaPublicUrl(row.thumb_path)
+                : (!isHtml && !isVideoRow && row.media_path ? signageMediaPublicUrl(row.media_path) : null)
+              const previewVideo = isVideoRow && row.media_path
+                ? `${signageMediaPublicUrl(row.media_path)}#t=0.5`
+                : null
+              return (
+                <div style={{ ...s.card, borderLeft: showStatus ? `4px solid ${LIFECYCLE_META[lc].color}` : undefined }}>
+                  <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#0a1f3c', borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
+                    <SlidePreview row={row} edit={isHtml ? { html_body: e.html_body } : undefined} fit="contain" />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <button
                       type="button"
-                      onClick={async () => {
-                        if (!(await confirmDialog({ message: 'Delete this content?', tone: 'danger' }))) return
-                        await fetch(`/api/signage/content/${row.id}`, { method: 'DELETE' })
-                        void refreshAll()
-                      }}
-                      style={{ ...s.btn, marginTop: 12, color: '#ef4444', borderColor: '#ef4444' }}
+                      onClick={() => setFullPreview(isHtml ? { html: e.html_body } : previewImg ? { img: previewImg } : previewVideo ? { video: previewVideo } : null)}
+                      style={{ ...s.btn, padding: '4px 10px', fontSize: 12 }}
                     >
-                      Delete
+                      ⛶ Full preview
                     </button>
+                    {showStatus && (
+                      <span style={{ fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 20, color: LIFECYCLE_META[lc].color, background: LIFECYCLE_META[lc].bg }}>{LIFECYCLE_META[lc].label}</span>
+                    )}
+                  </div>
+                  <input
+                    value={e.title}
+                    onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, title: ev.target.value } }))}
+                    placeholder="Title"
+                    style={{ ...s.input, fontWeight: 500, fontSize: 15, marginBottom: 4 }}
+                  />
+                  {submitterLine(row) && (
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{submitterLine(row)}</div>
                   )}
+                  {requestLine(row) && (
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{requestLine(row)}</div>
+                  )}
+
+                  <div style={s.divider}>
+                    <SignageTargetingPicker
+                      areas={areas}
+                      screens={screens}
+                      value={e}
+                      onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, ...v } }))}
+                      lbl={s.lbl}
+                    />
+                    <div style={{ ...s.row, marginTop: 12 }}>
+                      <div style={{ flex: 1, minWidth: 130 }}>
+                        <p style={s.lbl}>Start date</p>
+                        <SignageDateInput value={e.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, start_date: v } }))} style={s.input} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 130 }}>
+                        <p style={s.lbl}>End date</p>
+                        <SignageDateInput value={e.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={s.input} min={e.start_date || undefined} />
+                      </div>
+                      <div style={{ width: 90 }}>
+                        <p style={s.lbl}>Priority</p>
+                        <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={s.input} />
+                      </div>
+                      <div style={{ width: 110 }}>
+                        <p style={s.lbl}>Show for (sec)</p>
+                        <input
+                          type="number"
+                          min={SIGNAGE_MIN_DISPLAY_SECONDS}
+                          max={SIGNAGE_MAX_DISPLAY_SECONDS}
+                          value={e.display_seconds}
+                          onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, display_seconds: parseInt(ev.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS } }))}
+                          style={s.input}
+                        />
+                      </div>
+                    </div>
+                    {isHtml && (
+                      <div style={{ marginTop: 12 }}>
+                        <p style={s.lbl}>HTML</p>
+                        <textarea
+                          value={e.html_body}
+                          onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, html_body: ev.target.value } }))}
+                          rows={8}
+                          style={s.textarea}
+                        />
+                      </div>
+                    )}
+                    <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
+                      <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
+                      Full-screen takeover
+                    </label>
+
+                    {tab === 'pending' && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                        <button type="button" onClick={() => { setRejectId(row.id); setRejectReason('') }} style={s.btn}>Reject</button>
+                        <button type="button" disabled={busy === row.id} onClick={() => void approve(row)} style={s.btnPrimary}>✓ Approve</button>
+                      </div>
+                    )}
+                    {tab === 'approved' && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                        <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={s.btnPrimary}>Save changes</button>
+                      </div>
+                    )}
+                    {tab === 'rejected' && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                        <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row)} style={s.btn}>Save changes</button>
+                        <button type="button" disabled={busy === row.id} onClick={() => void saveEdit(row, { status: 'approved', reject_reason: null })} style={s.btnPrimary}>Re-approve</button>
+                      </div>
+                    )}
+
+                    {rejectId === row.id && (
+                      <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                        <input value={rejectReason} onChange={ev => setRejectReason(ev.target.value)} placeholder="Reject reason" style={{ ...s.input, flex: 1 }} />
+                        <button type="button" onClick={() => void reject(row)} style={s.btn}>Confirm reject</button>
+                      </div>
+                    )}
+
+                    {row.reject_reason && tab === 'rejected' && (
+                      <div style={{ marginTop: 8, color: '#ef4444', fontSize: 13 }}>{row.reject_reason}</div>
+                    )}
+
+                    {isManager && tab !== 'pending' && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!(await confirmDialog({ message: 'Delete this content?', tone: 'danger' }))) return
+                          await fetch(`/api/signage/content/${row.id}`, { method: 'DELETE' })
+                          setExpandedId(null)
+                          void refreshAll()
+                        }}
+                        style={{ ...s.btn, marginTop: 12, color: '#ef4444', borderColor: '#ef4444' }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-          {!rows.length && <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>No {tab} items.</div>}
+              )
+            })()}
+          </div>
         </div>
       )}
+
+      {fullPreview && (
+        <div
+          onClick={() => setFullPreview(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(2,8,18,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div onClick={ev => ev.stopPropagation()} style={{ width: 'min(92vw, 1280px)', aspectRatio: '16 / 9', background: '#0a1f3c', borderRadius: 12, overflow: 'hidden', position: 'relative', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            {fullPreview.html != null ? (
+              <ScaledSlide html={fullPreview.html} />
+            ) : fullPreview.img ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={fullPreview.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ) : fullPreview.video ? (
+              <video src={fullPreview.video} controls autoPlay style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ) : null}
+          </div>
+          <button type="button" onClick={() => setFullPreview(null)} style={{ position: 'fixed', top: 20, right: 24, fontSize: 26, color: '#fff', background: 'transparent', border: 'none', cursor: 'pointer' }} aria-label="Close preview">×</button>
+        </div>
+      )}
+
+      <style>{`
+        .sig-content-split { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        .sig-content-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; align-content: start; }
+        @media (min-width: 860px) {
+          .sig-content-split { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+          .sig-content-detail { position: sticky; top: 80px; }
+        }
+      `}</style>
     </SignagePageShell>
   )
+}
+
+/**
+ * Render a slide's HTML at its true 1920x1080 canvas, then CSS-scale it down to
+ * fit the container. This makes the slide look exactly like it does on a real
+ * screen — instead of letting its vh/vw units reflow to a tiny iframe viewport.
+ * The parent must be position:relative with a 16:9 aspect ratio.
+ */
+function ScaledSlide({ html }: { html: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(0)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => setScale(el.clientWidth / 1920)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'absolute', inset: 0, overflow: 'hidden', background: '#0a1f3c' }}>
+      <iframe
+        title=""
+        srcDoc={html}
+        sandbox="allow-scripts"
+        scrolling="no"
+        style={{ width: 1920, height: 1080, border: 0, pointerEvents: 'none', transformOrigin: 'top left', transform: `scale(${scale})` }}
+      />
+    </div>
+  )
+}
+
+/**
+ * Live preview of a content item. HTML slides render in a sandboxed iframe (the
+ * real slide, scaled to the box — generated slides use vmin/vh/vw so they fit any
+ * size). Images/videos show their thumbnail. `fit` is cover for tiles, contain
+ * for the detail panel. The parent must be position:relative with a fixed aspect.
+ */
+function SlidePreview({ row, edit, fit = 'cover' }: { row: ContentRow; edit?: { html_body: string }; fit?: 'cover' | 'contain' }) {
+  const isHtml = row.type === 'html'
+  const isVideo = row.type === 'video'
+  const html = (edit?.html_body ?? row.html_body ?? '').trim()
+  // Debounce the doc so the iframe doesn't reload on every keystroke while editing.
+  const [docHtml, setDocHtml] = useState(html)
+  useEffect(() => {
+    const t = setTimeout(() => setDocHtml(html), 350)
+    return () => clearTimeout(t)
+  }, [html])
+  const thumb = !isHtml && row.thumb_path ? signageMediaPublicUrl(row.thumb_path) : null
+  const img = !isHtml && !isVideo && row.media_path ? signageMediaPublicUrl(row.media_path) : null
+  const posterVideo = isVideo && row.media_path ? `${signageMediaPublicUrl(row.media_path)}#t=0.5` : null
+  const fill = { position: 'absolute' as const, inset: 0, width: '100%', height: '100%' }
+  const placeholder = { ...fill, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9fb3cf', fontSize: 12, fontWeight: 600, letterSpacing: 1 }
+
+  if (isHtml) {
+    if (!docHtml) return <div style={placeholder}>HTML slide</div>
+    return <ScaledSlide html={docHtml} />
+  }
+  if (thumb || img) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={(thumb || img) as string} alt="" style={{ ...fill, objectFit: fit }} />
+  }
+  if (posterVideo) {
+    return <video src={posterVideo} muted playsInline preload="metadata" style={{ ...fill, objectFit: fit }} />
+  }
+  return <div style={placeholder}>No preview</div>
 }

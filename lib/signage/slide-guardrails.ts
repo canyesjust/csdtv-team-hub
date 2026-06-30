@@ -69,7 +69,9 @@ export function buildSlidePrompt(p: SlidePromptParams): { system: string; user: 
     'Hard requirements:',
     `- The slide fills a ${p.canvas.w}x${p.canvas.h} (${p.orientation}) area. Size everything in vmin/vh/vw, never fixed px.`,
     '- Headline text is at least 12% of the canvas height; no text smaller than 2%.',
-    `- Use at most ${wordCap} words total and at most 3 distinct text blocks. Be sparse; this is glanceable signage, not a document.`,
+    `- Every slide MUST contain readable text: a clear headline (the main message, at least 3 words) AND at least one supporting line beneath it. Never produce a text-free, headline-only, or image-only slide.`,
+    `- Use between 2 and 3 distinct text blocks and at most ${wordCap} words total. Be sparse; this is glanceable signage, not a document.`,
+    '- For announcements, events, and alerts, include the key details the message implies — date, time, and/or location — in the supporting text.',
     '- All text must have at least 7:1 contrast against what is behind it. If text sits over imagery or a busy background, add a solid or gradient scrim behind it.',
     '- Keep all content within a 5% safe margin on every edge.',
     `- Motion level: ${p.motion}. Animations must loop seamlessly, never flash faster than 3 times per second, and fit within a ${p.dwellSeconds}-second loop. If motion is "none", produce a static slide.`,
@@ -112,9 +114,17 @@ export function wordCount(html: string): number {
  * guardrails; contrast is enforced via the prompt + sandbox + human approval
  * (true contrast needs a render and is checked by reviewers, not here).
  */
-export function validateSlideHtml(html: string, opts: { wordCap: number }): ValidationResult {
+// Floor so every sign carries real text — a headline plus at least one
+// supporting line, never a bare title or an image-only slide.
+export const MIN_WORDS = 5
+
+export function validateSlideHtml(
+  html: string,
+  opts: { wordCap: number; minWords?: number; headlineOverride?: string | null },
+): ValidationResult {
   const failures: string[] = []
   const h = (html || '').trim()
+  const minWords = opts.minWords ?? MIN_WORDS
 
   if (!h.toLowerCase().includes('<!doctype html') && !h.toLowerCase().includes('<html')) {
     failures.push('Output is not a complete HTML document.')
@@ -123,8 +133,17 @@ export function validateSlideHtml(html: string, opts: { wordCap: number }): Vali
     failures.push('Uses fixed px font sizes — must use vmin/vh/vw so it scales on any screen.')
   }
   const words = wordCount(h)
+  if (words < minWords) {
+    failures.push(`Too little text: ${words} words. Every sign needs a headline and at least one supporting line (min ${minWords} words).`)
+  }
   if (words > opts.wordCap) {
     failures.push(`Too much text: ${words} words (max ${opts.wordCap}). Cut it down.`)
+  }
+  if (opts.headlineOverride) {
+    const wanted = visibleText(opts.headlineOverride).toLowerCase()
+    if (wanted && !visibleText(h).toLowerCase().includes(wanted)) {
+      failures.push(`The required headline "${opts.headlineOverride}" is missing — it must appear as text on the slide.`)
+    }
   }
   if (EXTERNAL_URL.test(h) || CSS_REMOTE.test(h)) {
     failures.push('References an external/remote resource — everything must be inlined (offline-safe).')
