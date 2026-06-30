@@ -458,7 +458,7 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
         <SignageRail active={pathname} isManager={isManager} accent={accent} />
       </aside>
 
-      <div className="sig-main" style={{ minWidth: 0 }}>
+      <div className="sig-main" style={{ minWidth: 0, maxWidth: 1040, width: '100%' }}>
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Signage · <span style={{ color: text, fontWeight: 600 }}>{title}</span></div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 3px', color: text, letterSpacing: '-0.4px' }}>{title}</h1>
