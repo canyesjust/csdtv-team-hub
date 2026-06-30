@@ -397,11 +397,10 @@ function zoned2Weather(w: Feed['weather']): string {
 
 function spotCardHtml(v: NonNullable<Feed['spotlight']>[number]): string {
   const dur = v.duration && v.duration !== '0:00' ? `<span class="cic-z2-dur">${esc(v.duration)}</span>` : ''
-  const views = typeof v.views === 'number' && v.views > 0 ? ` · ${v.views.toLocaleString()} views` : ''
   return (
     `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight <span class="sub">Latest</span></div>` +
     `<div class="cic-z2-thumb"><img src="${esc(v.thumb)}" alt="">${dur}</div>` +
-    `<div class="cic-z2-sptitle">${esc(v.title)}</div><div class="cic-z2-spmeta">${esc(v.kind ?? 'CSDtv')}${esc(views)}</div></div>`
+    `<div class="cic-z2-sptitle">${esc(v.title)}</div></div>`
   )
 }
 

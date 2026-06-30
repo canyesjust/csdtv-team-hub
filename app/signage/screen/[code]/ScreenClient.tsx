@@ -624,9 +624,6 @@ function SpotCard({ items }: { items: NonNullable<ScreenFeed['spotlight']> }) {
         {cur.duration && cur.duration !== '0:00' ? <span className="cic-z2-dur">{cur.duration}</span> : null}
       </div>
       <div className="cic-z2-sptitle">{cur.title}</div>
-      <div className="cic-z2-spmeta">
-        {cur.kind ?? 'CSDtv'}{typeof cur.views === 'number' && cur.views > 0 ? ` · ${cur.views.toLocaleString()} views` : ''}
-      </div>
     </div>
   )
 }
