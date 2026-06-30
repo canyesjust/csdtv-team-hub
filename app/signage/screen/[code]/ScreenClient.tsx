@@ -529,8 +529,9 @@ function Zoned2Brand({ tag, logoUrl, clock, dateStr }: { tag: string; logoUrl: s
   return (
     <header className="cic-z2-brand">
       <div className="cic-z2-brand-left">
-        <div className="cic-z2-logo">{logoUrl ? <img src={logoUrl} alt="" /> : 'C'}</div>
-        <div className="cic-z2-word">Canyons <b>School District</b></div>
+        {logoUrl
+          ? <img className="cic-z2-brandlogo" src={logoUrl} alt="Canyons School District" />
+          : <div className="cic-z2-word">Canyons <b>School District</b></div>}
         <div className="cic-z2-brand-div" />
         <div className="cic-z2-brand-tag">{tag}</div>
       </div>

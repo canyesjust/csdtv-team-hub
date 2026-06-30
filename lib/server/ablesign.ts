@@ -223,7 +223,7 @@ export function registerScreen(input: {
   description?: string
 }, creds?: AbleSignCreds) {
   return asFetch<AbleSignScreen>('POST', '/screens', {
-    registrationCode: input.registrationCode.trim().toUpperCase(),
+    registrationCode: input.registrationCode.trim(),
     title: input.title,
     orientation: input.orientation || 'landscape',
     description: input.description,

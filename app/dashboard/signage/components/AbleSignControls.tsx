@@ -169,8 +169,8 @@ function AbleSignLinkPanel({
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input
             value={pairCode}
-            onChange={e => setPairCode(e.target.value.toUpperCase().slice(0, 6))}
-            placeholder="ABC123"
+            onChange={e => setPairCode(e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 6))}
+            placeholder="code from TV"
             style={{ ...s.input, width: 120, letterSpacing: '0.08em' }}
             disabled={busy}
           />

@@ -40,6 +40,7 @@ async function scheduleTickerSafe(service: SupabaseClient, today: string): Promi
   }
 }
 
+const DISTRICT_LOGO_URL = 'https://www.canyonsdistrict.org/wp-content/uploads/2022/05/CanyonsLogoWhiteLong.png'
 const DISTRICT_NEWS_FEED = 'https://rss.app/feeds/hR9Of3ZD4b0Rw2Bg.xml'
 const DISTRICT_NEWS_FALLBACK: string[] = [
   'Canyons Names Patricia Larkin as New Director of Career and Technical Education',
@@ -345,7 +346,7 @@ export async function buildScreenFeed(
           : null,
         brand_title: site?.brand_title ?? null,
         brand_subtitle: site?.brand_subtitle ?? null,
-        logo_url: site?.logo_url ?? null,
+        logo_url: resolvedLayout === 'zoned2' ? (site?.logo_url ?? DISTRICT_LOGO_URL) : (site?.logo_url ?? null),
       },
       template: {
         show_weather: site?.show_weather ?? true,

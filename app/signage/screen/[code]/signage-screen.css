@@ -1798,3 +1798,6 @@
 .cic-screen.layout-zoned2 .cic-z2-news-cta .url { font-weight: 600; font-size: 1.35vmax; color: var(--accent); text-align: right; }
 .cic-screen.layout-zoned2 .cic-z2-qr { width: 8vh; height: 8vh; background: #fff; border-radius: 0.5vmax; flex: none; overflow: hidden; }
 .cic-screen.layout-zoned2 .cic-z2-qr img { width: 100%; height: 100%; display: block; }
+
+/* Zoned 2 — real district logo in the brand bar (replaces the placeholder tile). */
+.cic-screen.layout-zoned2 .cic-z2-brandlogo { height: 5vh; width: auto; display: block; }

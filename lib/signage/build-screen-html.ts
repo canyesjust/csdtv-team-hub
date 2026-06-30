@@ -68,11 +68,14 @@ async function imageToDataUri(
   const buf = await fetchBuffer(url)
   if (!buf) return null
   try {
-    const out = await sharp(buf)
-      .rotate()
-      .resize({ width: opts.maxWidth, withoutEnlargement: true })
-      .jpeg({ quality: opts.quality, mozjpeg: true })
-      .toBuffer()
+    const meta = await sharp(buf).metadata()
+    const pipeline = sharp(buf).rotate().resize({ width: opts.maxWidth, withoutEnlargement: true })
+    if (meta.hasAlpha) {
+      // Preserve transparency (e.g. logo PNGs) — JPEG would flatten alpha to black.
+      const out = await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer()
+      return `data:image/png;base64,${out.toString('base64')}`
+    }
+    const out = await pipeline.jpeg({ quality: opts.quality, mozjpeg: true }).toBuffer()
     return `data:image/jpeg;base64,${out.toString('base64')}`
   } catch {
     return null
@@ -321,11 +324,10 @@ const NEWS_QR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAXIAAAFyCAIAAABnR
 
 function zoned2Brand(opts: { tag: string; logoUrl: string | null; dateStr: string }): string {
   const logo = opts.logoUrl
-    ? `<div class="cic-z2-logo"><img src="${esc(opts.logoUrl)}" alt=""></div>`
-    : `<div class="cic-z2-logo">C</div>`
+    ? `<img class="cic-z2-brandlogo" src="${esc(opts.logoUrl)}" alt="Canyons School District">`
+    : `<div class="cic-z2-word">Canyons <b>School District</b></div>`
   return (
     `<header class="cic-z2-brand"><div class="cic-z2-brand-left">${logo}` +
-    `<div class="cic-z2-word">Canyons <b>School District</b></div>` +
     `<div class="cic-z2-brand-div"></div><div class="cic-z2-brand-tag">${esc(opts.tag)}</div></div>` +
     `<div class="cic-z2-brand-right"><div class="cic-z2-onair"><span class="dot"></span> On Air</div>` +
     `<div class="cic-z2-clock"><div class="cic-z2-time" data-clock></div><div class="cic-z2-date">${esc(opts.dateStr)}</div></div></div></header>`
