@@ -303,7 +303,9 @@ function slideInner(item: Feed['media'][number]): string {
     return `<img src="${esc(item.url)}" alt="${esc(item.title || '')}">`
   }
   if (item.type === 'html' && item.html) {
-    return `<div class="cic-html-slide">${item.html}</div>`
+    // Iframe (not a div) so the slide's vh/vw units measure this media zone,
+    // not the whole screen. srcdoc entity-decodes back into the iframe document.
+    return `<iframe class="cic-html-slide" srcdoc="${esc(item.html)}" sandbox="allow-scripts" scrolling="no"></iframe>`
   }
   return ''
 }
@@ -711,10 +713,12 @@ function runtimeScript(feed: Feed): string {
         img.src = item.url; img.alt = '';
         return img;
       }
-      var div = document.createElement('div');
-      div.className = 'cic-html-slide';
-      div.innerHTML = item.html || '';
-      return div;
+      var frame = document.createElement('iframe');
+      frame.className = 'cic-html-slide';
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.setAttribute('scrolling', 'no');
+      frame.srcdoc = item.html || '';
+      return frame;
     }
     function setDots(){
       for(var i=0;i<dots.length;i++){

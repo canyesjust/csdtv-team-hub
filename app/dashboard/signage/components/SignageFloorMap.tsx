@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import type { TargetingValue } from './SignageAdmin'
+import { useSignage } from './SignageProvider'
 
 type MapScreen = {
   id: string
@@ -59,6 +60,7 @@ export default function SignageFloorMap(props: Props) {
   const { mode } = props
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const { activeSiteId } = useSignage()
   const [screens, setScreens] = useState<MapScreen[]>([])
   const [areas, setAreas] = useState<MapArea[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,12 +75,16 @@ export default function SignageFloorMap(props: Props) {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      // Scope to the active location so switching sites shows that site's screens.
+      if (!activeSiteId) { setScreens([]); setAreas([]); setLoading(false); return }
+      setLoading(true)
       const [scRes, arRes] = await Promise.all([
         supabase
           .from('signage_screens')
           .select('id, code, name, area_id, building, floor, active, pos_x, pos_y, ablesign_screen_id, ablesign_online')
+          .eq('site_id', activeSiteId)
           .order('name'),
-        supabase.from('signage_areas').select('id, name, floor').order('sort_order'),
+        supabase.from('signage_areas').select('id, name, floor').eq('site_id', activeSiteId).order('sort_order'),
       ])
       if (cancelled) return
       setScreens((scRes.data as MapScreen[]) || [])
@@ -86,7 +92,7 @@ export default function SignageFloorMap(props: Props) {
       setLoading(false)
     })()
     return () => { cancelled = true }
-  }, [supabase, reloadSignal])
+  }, [supabase, reloadSignal, activeSiteId])
 
   const areaColor = useMemo(() => {
     const m = new Map<string, string>()

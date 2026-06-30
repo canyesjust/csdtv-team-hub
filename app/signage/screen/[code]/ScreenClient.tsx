@@ -386,7 +386,10 @@ function MediaSlide({
         />
       )}
       {item.type === 'html' && item.html && (
-        <div className="cic-html-slide" dangerouslySetInnerHTML={{ __html: item.html }} />
+        // Render in an iframe so the slide's vh/vw/vmin units measure THIS media
+        // zone (16:9), not the whole screen — otherwise it renders full-screen
+        // and gets cropped inside a zoned layout's media cell.
+        <iframe className="cic-html-slide" title={item.title || ''} srcDoc={item.html} sandbox="allow-scripts" scrolling="no" />
       )}
     </div>
   )

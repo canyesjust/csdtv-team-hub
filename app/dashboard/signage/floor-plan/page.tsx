@@ -10,6 +10,7 @@ import {
   type AbleSignScreenFields,
 } from '../components/AbleSignControls'
 import { SignagePageShell, useSignageAdminStyles } from '../components/SignageAdmin'
+import { useSignage } from '../components/SignageProvider'
 import SignageFloorMap from '../components/SignageFloorMap'
 import Link from 'next/link'
 
@@ -34,21 +35,25 @@ export default function SignageFloorPlanPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
+  const { activeSiteId } = useSignage()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [screens, setScreens] = useState<Screen[]>([])
   const [reloadKey, setReloadKey] = useState(0)
 
   const loadScreens = useCallback(async () => {
+    // Scope to the active location so the plan + list change with the site switcher.
+    if (!activeSiteId) { setScreens([]); setLoading(false); return }
     const { data } = await supabase
       .from('signage_screens')
       .select('id, code, name, building, floor, active, ablesign_screen_id, ablesign_webapp_id, ablesign_html_webapp_id, ablesign_html_dirty_at, ablesign_synced_at, ablesign_online, ablesign_heartbeat_at')
+      .eq('site_id', activeSiteId)
       .order('building')
       .order('floor')
       .order('name')
     setScreens(data || [])
     setLoading(false)
-  }, [supabase])
+  }, [supabase, activeSiteId])
 
   useEffect(() => { void loadScreens() }, [loadScreens])
 
@@ -89,7 +94,10 @@ export default function SignageFloorPlanPage() {
         {loading ? (
           <div style={{ color: s.muted, padding: 8 }}>Loading…</div>
         ) : !screens.length ? (
-          <div style={{ color: s.muted, padding: 8 }}>No screens yet.</div>
+          <div style={{ color: s.muted, padding: 8 }}>
+            No screens at this location yet.{' '}
+            <Link href="/dashboard/signage/screens" style={{ color: s.text, fontWeight: 500 }}>Add a screen</Link> to place it on the plan.
+          </div>
         ) : (
           <table style={s.tbl}>
             <thead>

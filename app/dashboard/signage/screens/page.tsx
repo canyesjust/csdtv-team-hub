@@ -270,40 +270,51 @@ export default function SignageScreensPage() {
 
       {loading ? (
         <div style={{ color: s.muted, padding: 16 }}>Loading screens…</div>
+      ) : !screens.length ? (
+        <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No screens at this location yet.</div>
       ) : (
         <>
-          <SignageListHint color={s.muted}>Click a screen to edit.</SignageListHint>
-          {screens.map(sc => {
-            const meta = [
-              areaName(sc.area_id),
-              layoutLabel(sc.layout),
-              orientationLabel(sc.orientation),
-              sc.accepts_takeover ? 'Takeover on' : 'Takeover off',
-            ].filter(v => v && v !== '—').join(' · ')
-            const statusText = sc.ablesign_screen_id
-              ? `${sc.ablesign_online ? 'Online' : 'Offline'}${sc.ablesign_synced_at ? ` · synced ${formatSignageDate(sc.ablesign_synced_at)}` : ''}`
-              : 'Not linked to AbleSign'
-            return (
-              <div key={sc.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <AbleSignStatusDot online={sc.ablesign_screen_id ? sc.ablesign_online : null} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <SignageRowEditButton onClick={() => startEdit(sc)} textColor={s.text} fontWeight={600}>
-                    {sc.name}{!sc.active && <span style={{ color: s.muted, fontWeight: 400 }}> (inactive)</span>}
-                  </SignageRowEditButton>
-                  <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>{meta}</div>
-                  <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{statusText}</div>
+          <SignageListHint color={s.muted}>Click a screen to edit. Each tile shows what&rsquo;s on it right now.</SignageListHint>
+          <div className="sig-screen-tiles">
+            {screens.map(sc => {
+              const selected = editId === sc.id
+              const statusText = sc.ablesign_screen_id ? (sc.ablesign_online ? 'Online' : 'Offline') : 'Not linked'
+              const meta = [areaName(sc.area_id), layoutLabel(sc.layout)].filter(v => v && v !== '—').join(' · ')
+              return (
+                <div key={sc.id} style={{ ...s.card, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', ...(selected ? { border: '2px solid #2a7fb8' } : {}) }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Edit ${sc.name}`}
+                    onClick={() => startEdit(sc)}
+                    onKeyDown={ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); startEdit(sc) } }}
+                    style={{ position: 'relative', aspectRatio: '16 / 9', background: '#04263f', cursor: 'pointer', overflow: 'hidden' }}
+                  >
+                    <iframe src={signageScreenUrl(sc.code)} title={sc.name} loading="lazy" scrolling="no" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0, pointerEvents: 'none' }} />
+                    {!sc.active && (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,12,22,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cdd8ea', fontSize: 12, fontWeight: 600 }}>Inactive</div>
+                    )}
+                    <span style={{ position: 'absolute', top: 6, left: 6, display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(2,12,22,0.62)', borderRadius: 20, padding: '2px 8px 2px 6px', fontSize: 10.5, color: '#fff' }}>
+                      <AbleSignStatusDot online={sc.ablesign_screen_id ? sc.ablesign_online : null} />{statusText}
+                    </span>
+                  </div>
+                  <div style={{ padding: '8px 11px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <button type="button" onClick={() => startEdit(sc)} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', color: s.text, fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>{sc.name}</button>
+                      <div style={{ fontSize: 11.5, color: s.muted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{meta || `/${sc.code}`}</div>
+                    </div>
+                    <button type="button" onClick={() => copyUrl(sc.code)} style={s.btnSmall} title="Copy full URL">Copy</button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <span style={{ fontSize: 12, color: '#9aa0ab', fontFamily: 'ui-monospace, monospace' }}>/{sc.code}</span>
-                  <button type="button" onClick={() => copyUrl(sc.code)} style={s.btnSmall} title="Copy full URL">Copy URL</button>
-                </div>
-              </div>
-            )
-          })}
-          {!screens.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No screens yet.</div>}
+              )
+            })}
+          </div>
         </>
       )}
 
+      <style>{`
+        .sig-screen-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+      `}</style>
     </SignagePageShell>
   )
 }
