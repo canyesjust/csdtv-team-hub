@@ -12,6 +12,7 @@ import SignageTargetingPicker, {
   type TargetingValue,
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
+import CreateWithAI from '../components/CreateWithAI'
 import { SIGNAGE_DEFAULT_DISPLAY_SECONDS, SIGNAGE_MAX_DISPLAY_SECONDS, SIGNAGE_MIN_DISPLAY_SECONDS } from '@/lib/signage/content-display'
 import { signageMediaPublicUrl, CIC_SUBMIT_URL } from '@/lib/signage/constants'
 import { prepareSignageImageFile, captureVideoPoster, SIGNAGE_MAX_VIDEO_BYTES } from '@/lib/signage/client-image-upload'
@@ -67,6 +68,7 @@ export default function SignageContentPage() {
   const [counts, setCounts] = useState(EMPTY_COUNTS)
   const [countsLoaded, setCountsLoaded] = useState(false)
   const [showPast, setShowPast] = useState(false)
+  const [showAI, setShowAI] = useState(false)
   const didInitTab = useRef(false)
   const [tabLoading, setTabLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -367,6 +369,7 @@ export default function SignageContentPage() {
 
   return (
     <SignagePageShell title="Content" subtitle="Images, videos & slides on the screens">
+      {showAI && <CreateWithAI onClose={() => setShowAI(false)} onSaved={() => { void refreshAll() }} />}
       <div style={{ ...s.card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Share the submission link</div>
@@ -390,9 +393,12 @@ export default function SignageContentPage() {
           </label>
         )}
         {isManager && (
-          <button type="button" onClick={() => setShowAdd(v => !v)} style={{ ...s.btnPrimary, marginLeft: 'auto' }}>
-            {showAdd ? 'Cancel add' : '+ Add content'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+            <button type="button" onClick={() => setShowAI(true)} style={{ ...s.btn, fontWeight: 500 }}>✨ Create with AI</button>
+            <button type="button" onClick={() => setShowAdd(v => !v)} style={s.btnPrimary}>
+              {showAdd ? 'Cancel add' : '+ Add content'}
+            </button>
+          </div>
         )}
       </div>
 

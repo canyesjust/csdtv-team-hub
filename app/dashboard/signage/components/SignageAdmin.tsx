@@ -358,8 +358,9 @@ function readableText(hex: string): string {
 
 export function SignageRail({ active, isManager, accent }: { active: string; isManager: boolean; accent: string }) {
   // The rail is always the dark navy surface (matches the standalone-tool design).
-  const idle = '#9fb3cf'
-  const heading = '#6e83a6'
+  // Bright links read as the clickable items; gold dividers mark the sections.
+  const idle = '#eef2fa'
+  const heading = '#e2a23f'
 
   const isActive = (href: string) => active === href || active.startsWith(`${href}/`)
 
@@ -373,7 +374,7 @@ export function SignageRail({ active, isManager, accent }: { active: string; isM
       {groups.map(g => (
         <div key={g.key} style={{ marginBottom: 10 }}>
           {g.label && (
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: heading, margin: '6px 10px 4px' }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1.3, textTransform: 'uppercase', color: heading, margin: '12px 6px 5px', padding: '11px 0 0 5px', borderTop: '1px solid rgba(255,255,255,0.10)' }}>
               {g.label}
             </p>
           )}
@@ -394,7 +395,7 @@ export function SignageRail({ active, isManager, accent }: { active: string; isM
                   fontSize: 13.5,
                   marginBottom: 1,
                   textDecoration: 'none',
-                  fontWeight: on ? 600 : 450,
+                  fontWeight: on ? 600 : 500,
                   color: on ? readableText(accent) : idle,
                   background: on ? accent : 'transparent',
                 }}
@@ -434,7 +435,7 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
     <div className="sig-shell">
       {/* Persistent dark signage rail — every section visible at once, no hidden tab rows. */}
       <aside className="sig-rail" style={{ background: '#0b1324', borderRadius: 14, padding: 12 }}>
-        <span style={{ display: 'block', fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: '#6e83a6', fontWeight: 700, margin: '0 4px 5px' }}>Active location</span>
+        <span style={{ display: 'block', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: '#8da6cc', fontWeight: 700, margin: '0 4px 6px' }}>Active location</span>
         {sites.length > 1 ? (
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(255,255,255,0.09)', borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '8px 28px 8px 11px', background: 'rgba(255,255,255,0.05)', marginBottom: 14 }}>
             <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 0 3px ${accent}33` }} />

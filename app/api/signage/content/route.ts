@@ -36,6 +36,11 @@ export async function POST(request: NextRequest) {
   const displaySeconds = clampDisplaySeconds(form.get('display_seconds'))
   const contentType = String(form.get('content_type') ?? 'image').trim()
   const htmlBody = String(form.get('html_body') ?? '').trim()
+  const source = String(form.get('source') ?? '').trim() || null
+  const statusInput = String(form.get('status') ?? 'approved').trim()
+  const status = statusInput === 'pending' ? 'pending' : 'approved'
+  let genMeta: unknown = null
+  try { const g = form.get('gen_meta'); if (g) genMeta = JSON.parse(String(g)) } catch { genMeta = null }
   const image = form.get('image')
   const video = form.get('video')
 
@@ -125,7 +130,9 @@ export async function POST(request: NextRequest) {
     thumb_path: thumbPath,
     html_body: storedHtml,
     display_seconds: displaySeconds,
-    status: 'approved',
+    status,
+    source,
+    gen_meta: genMeta,
     start_date: startDate,
     end_date: endDate,
     all_screens: allScreens,
