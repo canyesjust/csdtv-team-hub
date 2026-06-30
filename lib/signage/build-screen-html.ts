@@ -434,11 +434,14 @@ function zoned2Rail(feed: Feed): string {
 }
 
 function zoned2News(items: string[]): string {
-  const headline = items.length ? items[0] : 'Canyons School District'
+  const list = items.length ? items.slice(0, 8) : ['Canyons School District']
+  const layers = list
+    .map((h, i) => `<div class="cic-z2-headline${i === 0 ? ' show' : ''}" data-z2news><span>${esc(h)}</span></div>`)
+    .join('')
   return (
     `<footer class="cic-z2-news"><div class="cic-z2-news-badge">` +
     `<span class="cic-z2-news-w"><span class="dot"></span>NEWS</span></div>` +
-    `<div class="cic-z2-news-rot"><div class="cic-z2-headline show" data-z2news><span>${esc(headline)}</span></div></div>` +
+    `<div class="cic-z2-news-rot">${layers}</div>` +
     `<div class="cic-z2-news-cta"><div><div class="lead">Scan for more</div><div class="url">canyonsdistrict.org/news</div></div>` +
     `<div class="cic-z2-qr"><img src="${NEWS_QR}" alt=""></div></div></footer>`
   )
@@ -654,6 +657,17 @@ function runtimeScript(feed: Feed): string {
         z2cards[z2i].style.display = '';
       }, 9000);
     }
+  }
+
+  // ---- Zoned 2 news headline rotation ----
+  var z2news = document.querySelectorAll('[data-z2news]');
+  if(z2news.length > 1){
+    var ni = 0;
+    setInterval(function(){
+      z2news[ni].classList.remove('show');
+      ni = (ni + 1) % z2news.length;
+      z2news[ni].classList.add('show');
+    }, 8000);
   }
 
   // ---- Wayfinding heading rotation ----
