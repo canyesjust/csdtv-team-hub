@@ -8,18 +8,14 @@ import {
   SignageDeleteButton,
   SignageListHint,
   SignagePageShell,
-  SignageRowEditButton,
   deleteSignageItem,
-  formatSignageDate,
   layoutLabel,
-  orientationLabel,
   useSignageAdminStyles,
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import { signageScreenUrl, SIGNAGE_THEMES } from '@/lib/signage/constants'
 import {
   AbleSignScreenPanel,
-  AbleSignStatusDot,
   AbleSignSyncAllButton,
 } from '../components/AbleSignControls'
 
@@ -135,12 +131,13 @@ export default function SignageScreensPage() {
         </button>
       </div>
 
-      <div style={{ ...s.card, marginBottom: 16, padding: '12px 14px', background: s.infoBg, borderColor: s.infoBorder }}>
-        <p style={{ margin: 0, fontSize: 13, color: s.text, lineHeight: 1.55 }}>
-          Each screen has a <strong>layout</strong> (how content is arranged) and an optional <strong>area</strong> (which building zone it represents).
-          Directory entries are managed on the Wayfinding page and appear on any screen linked to that area — at the bottom of the announcements column on <strong>Zoned</strong> screens, or as the main directory on <strong>Wayfinding</strong> layout screens.
+      <details style={{ marginBottom: 16 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 12.5, color: s.muted, listStyle: 'revert' }}>How screens work</summary>
+        <p style={{ margin: '8px 0 0', fontSize: 12.5, color: s.muted, lineHeight: 1.55, maxWidth: 760 }}>
+          Each screen has a <strong style={{ color: s.text }}>layout</strong> (how content is arranged) and an optional <strong style={{ color: s.text }}>area</strong> (which building zone it represents).
+          Directory entries are managed on the Wayfinding page and appear on any screen linked to that area — at the bottom of the announcements column on <strong style={{ color: s.text }}>Zoned</strong> screens, or as the main directory on <strong style={{ color: s.text }}>Wayfinding</strong> layout screens.
         </p>
-      </div>
+      </details>
 
       {showForm && (
         <div style={{ ...s.card, marginBottom: 20 }}>
@@ -278,7 +275,11 @@ export default function SignageScreensPage() {
           <div className="sig-screen-tiles">
             {screens.map(sc => {
               const selected = editId === sc.id
-              const statusText = sc.ablesign_screen_id ? (sc.ablesign_online ? 'Online' : 'Offline') : 'Not linked'
+              const online = sc.ablesign_screen_id ? sc.ablesign_online : null
+              const statusText = online === true ? 'Online' : online === false ? 'Offline' : 'Not linked'
+              // Offline is the signal a manager scans for — make it loud (red);
+              // online is a calm green; unlinked stays neutral.
+              const pillBg = online === true ? 'rgba(22,128,87,0.95)' : online === false ? 'rgba(200,52,45,0.96)' : 'rgba(2,12,22,0.7)'
               const meta = [areaName(sc.area_id), layoutLabel(sc.layout)].filter(v => v && v !== '—').join(' · ')
               return (
                 <div key={sc.id} style={{ ...s.card, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', ...(selected ? { border: '2px solid #2a7fb8' } : {}) }}>
@@ -294,8 +295,8 @@ export default function SignageScreensPage() {
                     {!sc.active && (
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(2,12,22,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cdd8ea', fontSize: 12, fontWeight: 600 }}>Inactive</div>
                     )}
-                    <span style={{ position: 'absolute', top: 6, left: 6, display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(2,12,22,0.62)', borderRadius: 20, padding: '2px 8px 2px 6px', fontSize: 10.5, color: '#fff' }}>
-                      <AbleSignStatusDot online={sc.ablesign_screen_id ? sc.ablesign_online : null} />{statusText}
+                    <span style={{ position: 'absolute', top: 6, left: 6, display: 'inline-flex', alignItems: 'center', gap: 5, background: pillBg, borderRadius: 20, padding: '3px 9px', fontSize: 10.5, fontWeight: 600, letterSpacing: 0.2, color: '#fff' }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', opacity: 0.9 }} />{statusText}
                     </span>
                   </div>
                   <div style={{ padding: '8px 11px', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -313,7 +314,7 @@ export default function SignageScreensPage() {
       )}
 
       <style>{`
-        .sig-screen-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+        .sig-screen-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
       `}</style>
     </SignagePageShell>
   )
