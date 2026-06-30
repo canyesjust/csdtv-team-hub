@@ -6,6 +6,7 @@ import { formatMonthDay } from '@/lib/format-date'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../components/Loader'
+import FilePickButton from '@/components/FilePickButton'
 import { toast } from '@/lib/toast'
 import { canAddOrEditEquipment, canManageEquipmentKits } from '@/lib/equipment-access'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
@@ -107,6 +108,7 @@ export default function EquipmentDetailPage() {
   const [dueDate, setDueDate] = useState('')
   const [checkoutNote, setCheckoutNote] = useState('')
   const [editing, setEditing] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
   const [editForm, setEditForm] = useState({ name: '', brand: '', model: '', serial_number: '', status: '', site: '', condition: '', notes: '' })
   // Duplicate: copy this item into a brand-new entry under a tag the user enters.
   const [dupOpen, setDupOpen] = useState(false)
@@ -159,6 +161,33 @@ export default function EquipmentDetailPage() {
   const canEdit = canAddOrEditEquipment(userRole)
   const canLoan = canManageEquipmentKits(userRole)
   const itemIsPower = item ? isPowerCableRow(item) : false
+
+  const uploadPhoto = async (file: File) => {
+    if (!item) return
+    setPhotoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.set('photo', file)
+      fd.set('equipment_id', item.id)
+      const res = await fetch('/api/equipment/upload-photo', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast(data.error || 'Upload failed', 'error'); return }
+      const { error } = await supabase
+        .from('equipment')
+        .update({ photo_url: data.publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', item.id)
+      if (error) { toast(error.message, 'error'); return }
+      if (userId) {
+        await supabase.from('equipment_activity').insert({ equipment_id: item.id, action: 'updated', detail: 'Photo updated', user_id: userId })
+      }
+      toast('Photo updated', 'success')
+      loadData()
+    } catch {
+      toast('Upload failed', 'error')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
 
   const unlinkPowerCable = async (cableId: string) => {
     if (!canEdit) return
@@ -362,10 +391,26 @@ export default function EquipmentDetailPage() {
         {savedMsg && <span style={{ fontSize: '13px', color: '#22c55e', marginLeft: 'auto' }}>{savedMsg}</span>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: item.photo_url ? '200px 1fr' : '1fr', gap: '20px', marginBottom: '20px' }}>
-        {item.photo_url && (
-          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px' }}>
-            <img src={item.photo_url} alt={item.name} style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }} />
+      <div style={{ display: 'grid', gridTemplateColumns: (item.photo_url || canEdit) ? '200px 1fr' : '1fr', gap: '20px', marginBottom: '20px' }}>
+        {(item.photo_url || canEdit) && (
+          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', justifyContent: 'center', padding: '12px' }}>
+            {item.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.photo_url} alt={item.name} style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain' }} />
+            ) : (
+              <div style={{ width: '100%', height: '150px', borderRadius: '10px', background: inputBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: muted, fontSize: '13px' }}>No photo</div>
+            )}
+            {canEdit && (
+              <div style={{ width: '100%', textAlign: 'center' }}>
+                <FilePickButton
+                  accept="image/png,image/jpeg,image/webp"
+                  label={item.photo_url ? 'Replace photo' : 'Upload photo'}
+                  changeLabel={photoUploading ? 'Uploading…' : (item.photo_url ? 'Replace photo' : 'Upload photo')}
+                  onChange={f => { if (f) void uploadPhoto(f) }}
+                />
+                {photoUploading && <div style={{ fontSize: '12px', color: muted, marginTop: '6px' }}>Uploading…</div>}
+              </div>
+            )}
           </div>
         )}
         <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: '14px', padding: '20px' }}>
