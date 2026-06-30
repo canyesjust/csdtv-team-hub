@@ -334,43 +334,110 @@ function zoned2Brand(opts: { tag: string; logoUrl: string | null; dateStr: strin
   )
 }
 
-function zoned2Weather(icon: string, tempF: number | null, condition: string): string {
-  const cond = condition ? `<div class="cic-z2-cond">${esc(condition)}</div>` : ''
+function wxClassHtml(condition: string): string {
+  const t = (condition || '').toLowerCase()
+  if (/thunder|storm|t-storm/.test(t)) return 'storm'
+  if (/snow|sleet|blizzard|flurr|wintry/.test(t)) return 'snow'
+  if (/rain|shower|drizzle/.test(t)) return 'rain'
+  if (/cloud|overcast/.test(t)) return 'cloudy'
+  const hour = Number(new Date().toLocaleString('en-US', { timeZone: 'America/Denver', hour: '2-digit', hour12: false }))
+  if (hour < 6 || hour >= 20) return 'night'
+  return 'sunny'
+}
+
+function wxIconHtml(cls: string): string {
+  if (cls === 'sunny') {
+    let rays = ''
+    for (let i = 0; i < 12; i++) rays += `<span style="transform:rotate(${i * 30}deg) translateY(-2.7vmax)"></span>`
+    return `<div class="z2wx-sun"><div class="z2wx-rays">${rays}</div><div class="z2wx-core"></div></div>`
+  }
+  if (cls === 'night') return `<div class="z2wx-moon"></div>`
+  return `<div class="z2wx-cloud z2wx-cloud-ico"></div>`
+}
+
+function wxSceneHtml(cls: string): string {
+  if (cls === 'sunny') return `<div class="z2wx-scene"></div>`
+  if (cls === 'night') {
+    let stars = ''
+    for (let i = 0; i < 14; i++) stars += `<span class="z2wx-star" style="left:${(i * 37) % 94 + 3}%;top:${(i * 23) % 58 + 6}%;animation-delay:${(i % 5) * 0.6}s"></span>`
+    return `<div class="z2wx-scene">${stars}</div>`
+  }
+  const precip = cls === 'rain' || cls === 'storm' ? `<div class="z2wx-rain"></div>` : cls === 'snow' ? `<div class="z2wx-snow"></div>` : ''
+  const flash = cls === 'storm' ? `<div class="z2wx-flash"></div>` : ''
+  return `<div class="z2wx-scene"><span class="z2wx-cloud c1"></span><span class="z2wx-cloud c2"></span>${precip}${flash}</div>`
+}
+
+function zoned2Weather(w: Feed['weather']): string {
+  const cls = wxClassHtml(w.condition)
+  const cond = w.condition ? `<div class="cic-z2-cond">${esc(w.condition)}</div>` : ''
+  const meta =
+    (w.high != null ? `<span>High <b>${esc(w.high)}°</b></span>` : '') +
+    (w.low != null ? `<span>Low <b>${esc(w.low)}°</b></span>` : '') +
+    (w.windMph != null ? `<span>Wind <b>${esc(w.windMph)} mph</b></span>` : '')
   return (
-    `<div class="cic-rail cic-z2-weather"><div class="cic-railhd">Sandy, Utah <span class="sub">Now</span></div>` +
-    `<div class="cic-z2-wx"><div class="cic-z2-wxico" aria-hidden>${esc(icon)}</div>` +
-    `<div><div class="cic-z2-temp">${tempF != null ? esc(tempF) : '--'}<sup>°</sup></div>${cond}</div></div></div>`
+    `<div class="cic-rail cic-z2-weather z2wx-${cls}">${wxSceneHtml(cls)}` +
+    `<div class="cic-railhd">Sandy, Utah <span class="sub">Now</span></div>` +
+    `<div class="cic-z2-wx"><div class="cic-z2-wxico" aria-hidden>${wxIconHtml(cls)}</div>` +
+    `<div><div class="cic-z2-temp">${w.tempF != null ? esc(w.tempF) : '--'}<sup>°</sup></div>${cond}</div></div>` +
+    `<div class="cic-z2-wxmeta">${meta}</div></div>`
   )
 }
 
-function zoned2Spot(feed: Feed): string {
-  const live = feed.csdtv_live
-  const spotlight = feed.spotlight ?? []
-  if (live) {
-    return (
-      `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Now on CSDtv <span class="sub">Live</span></div>` +
-      `<span class="cic-z2-livepill"><span class="cic-z2-livedot"></span>Live</span>` +
-      `<div class="cic-z2-live-title">${esc(live.title)}</div><div class="cic-z2-live-sub">Watch live on CSDtv</div></div>`
-    )
-  }
-  if (spotlight.length) {
-    const v = spotlight[0]
-    const dur = v.duration && v.duration !== '0:00' ? `<span class="cic-z2-dur">${esc(v.duration)}</span>` : ''
-    const views = typeof v.views === 'number' && v.views > 0 ? ` · ${v.views.toLocaleString()} views` : ''
-    return (
-      `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight <span class="sub">Latest</span></div>` +
-      `<div class="cic-z2-thumb"><img src="${esc(v.thumb)}" alt="">${dur}</div>` +
-      `<div class="cic-z2-sptitle">${esc(v.title)}</div><div class="cic-z2-spmeta">${esc(v.kind ?? 'CSDtv')}${esc(views)}</div></div>`
-    )
-  }
-  return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight</div><div class="cic-empty-muted">No videos yet</div></div>`
+function spotCardHtml(v: NonNullable<Feed['spotlight']>[number]): string {
+  const dur = v.duration && v.duration !== '0:00' ? `<span class="cic-z2-dur">${esc(v.duration)}</span>` : ''
+  const views = typeof v.views === 'number' && v.views > 0 ? ` · ${v.views.toLocaleString()} views` : ''
+  return (
+    `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight <span class="sub">Latest</span></div>` +
+    `<div class="cic-z2-thumb"><img src="${esc(v.thumb)}" alt="">${dur}</div>` +
+    `<div class="cic-z2-sptitle">${esc(v.title)}</div><div class="cic-z2-spmeta">${esc(v.kind ?? 'CSDtv')}${esc(views)}</div></div>`
+  )
+}
+
+function boardCardHtml(b: NonNullable<Feed['board_next']>): string {
+  return (
+    `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Next board meeting</div>` +
+    `<div class="cic-z2-bm-day">${esc(b.date)}</div><div class="cic-z2-bm-title">${esc(b.title)}</div>` +
+    `<div class="cic-z2-bm-row">${esc(b.time)} · District Office</div><span class="cic-z2-bm-pill">Open to the public</span></div>`
+  )
+}
+
+function closuresCardHtml(cl: NonNullable<Feed['closures']>): string {
+  const rows = cl.slice(0, 4).map(c => `<div class="cic-z2-cl-row"><span class="cic-z2-cl-date">${esc(c.date)}</span><span class="cic-z2-cl-lbl">${esc(c.label)}</span></div>`).join('')
+  return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Upcoming closures <span class="sub">Canyons calendar</span></div>${rows}</div>`
+}
+
+function annCardHtml(anns: Feed['announcements']): string {
+  const rows = anns.slice(0, 4).map(a => {
+    const sub = a.subtitle ? `<div class="cic-z2-ann-s">${esc(a.subtitle)}</div>` : ''
+    return `<div class="cic-z2-ann-row"><span class="cic-ann-icon" aria-hidden>${esc(announcementIconEmoji(a.icon))}</span><div><div class="cic-z2-ann-t">${esc(a.title)}</div>${sub}</div></div>`
+  }).join('')
+  return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Announcements</div>${rows}</div>`
+}
+
+function liveCardHtml(live: NonNullable<Feed['csdtv_live']>): string {
+  return (
+    `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Now on CSDtv <span class="sub">Live</span></div>` +
+    `<span class="cic-z2-livepill"><span class="cic-z2-livedot"></span>Live</span>` +
+    `<div class="cic-z2-live-title">${esc(live.title)}</div><div class="cic-z2-live-sub">Watch live on CSDtv</div></div>`
+  )
+}
+
+function zoned2Rail(feed: Feed): string {
+  const cards: string[] = []
+  if (feed.csdtv_live) cards.push(liveCardHtml(feed.csdtv_live))
+  if (feed.spotlight && feed.spotlight.length) cards.push(spotCardHtml(feed.spotlight[0]))
+  if (feed.board_next) cards.push(boardCardHtml(feed.board_next))
+  if (feed.closures && feed.closures.length) cards.push(closuresCardHtml(feed.closures))
+  if (feed.announcements.length) cards.push(annCardHtml(feed.announcements))
+  if (!cards.length) cards.push(`<div class="cic-rail cic-z2-spot"><div class="cic-empty-muted">—</div></div>`)
+  const inner = cards.map((c, i) => `<div class="cic-z2-rotcard" data-z2card${i === 0 ? '' : ' style="display:none"'}>${c}</div>`).join('')
+  return `<div class="cic-z2-rotwrap" data-z2rot>${inner}</div>`
 }
 
 function zoned2News(items: string[]): string {
   const headline = items.length ? items[0] : 'Canyons School District'
   return (
     `<footer class="cic-z2-news"><div class="cic-z2-news-badge">` +
-    `<span class="cic-z2-news-k">Canyons School District</span>` +
     `<span class="cic-z2-news-w"><span class="dot"></span>NEWS</span></div>` +
     `<div class="cic-z2-news-rot"><div class="cic-z2-headline show" data-z2news><span>${esc(headline)}</span></div></div>` +
     `<div class="cic-z2-news-cta"><div><div class="lead">Scan for more</div><div class="url">canyonsdistrict.org/news</div></div>` +
@@ -458,7 +525,7 @@ function composeBody(feed: Feed): string {
       `<div class="cic-zoned-stage cic-zoned2-stage">` +
       zoned2Brand({ tag: areaLabel, logoUrl: s.logo_url, dateStr }) +
       `<div class="cic-body">${mediaCarousel(feed.media, { overlayHtml: scan })}` +
-      `<div class="cic-railcol">${zoned2Weather(weatherIcon, tempF, feed.weather.condition)}${zoned2Spot(feed)}</div></div>` +
+      `<div class="cic-railcol">${zoned2Weather(feed.weather)}${zoned2Rail(feed)}</div></div>` +
       zoned2News(feed.news ?? []) +
       `</div>`
     )
@@ -576,6 +643,20 @@ function runtimeScript(feed: Feed): string {
   }
   renderClock();
   setInterval(renderClock, 1000);
+
+  // ---- Zoned 2 rail card rotation ----
+  var z2rot = document.querySelector('[data-z2rot]');
+  if(z2rot){
+    var z2cards = z2rot.querySelectorAll('[data-z2card]');
+    if(z2cards.length > 1){
+      var z2i = 0;
+      setInterval(function(){
+        z2cards[z2i].style.display = 'none';
+        z2i = (z2i + 1) % z2cards.length;
+        z2cards[z2i].style.display = '';
+      }, 9000);
+    }
+  }
 
   // ---- Wayfinding heading rotation ----
   var headingEl = document.querySelector('[data-wayheading]');

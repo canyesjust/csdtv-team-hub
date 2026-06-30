@@ -17,7 +17,7 @@ export type { ScreenFeed as ScreenFeedPayload }
 
 const WEATHER_TIMEOUT_MS = 1800
 
-const weatherFallback: SignageWeather = { tempF: null, condition: '', icon: '🌤' }
+const weatherFallback: SignageWeather = { tempF: null, condition: '', icon: '🌤', high: null, low: null, windMph: null }
 
 async function weatherWithTimeout(lat: number, lon: number): Promise<SignageWeather> {
   try {
@@ -100,6 +100,63 @@ async function loadDistrictNews(): Promise<string[]> {
   } catch {
     return districtNewsCache?.items ?? DISTRICT_NEWS_FALLBACK
   }
+}
+
+// District closures (2026-27). Update yearly. Dates are local calendar dates.
+type ClosureDef = { start: string; end?: string; label: string }
+const DISTRICT_CLOSURES: ClosureDef[] = [
+  { start: '2026-07-03', label: 'Summer Friday — closed' },
+  { start: '2026-07-06', label: 'Independence Day — closed' },
+  { start: '2026-07-10', label: 'Summer Friday — closed' },
+  { start: '2026-07-17', label: 'Summer Friday — closed' },
+  { start: '2026-07-24', label: 'Pioneer Day — closed' },
+  { start: '2026-09-07', label: 'Labor Day — closed' },
+  { start: '2026-10-15', label: 'District closed to public' },
+  { start: '2026-10-16', label: 'Fall Recess — closed' },
+  { start: '2026-11-25', label: 'District closed to public' },
+  { start: '2026-11-26', end: '2026-11-27', label: 'Thanksgiving Recess — closed' },
+  { start: '2026-12-21', end: '2026-12-23', label: 'District closed to public' },
+  { start: '2026-12-24', end: '2026-12-25', label: 'Winter Recess — closed' },
+  { start: '2026-12-28', end: '2026-12-31', label: 'Winter Recess — closed' },
+  { start: '2027-01-01', label: 'New Year’s Day — closed' },
+  { start: '2027-01-18', label: 'Martin Luther King Jr. Day — closed' },
+  { start: '2027-02-15', label: 'Presidents’ Day — closed' },
+  { start: '2027-04-07', label: 'District closed to public' },
+  { start: '2027-04-08', end: '2027-04-09', label: 'Spring Recess — closed' },
+  { start: '2027-05-31', label: 'Memorial Day — closed' },
+  { start: '2027-06-11', label: 'Summer Friday — closed' },
+  { start: '2027-06-18', label: 'Summer Friday — closed' },
+  { start: '2027-06-21', label: 'Juneteenth — closed' },
+  { start: '2027-06-25', label: 'Summer Friday — closed' },
+]
+
+function parseYmd(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function formatClosureDate(start: string, end?: string): string {
+  const withWd: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }
+  const noWd: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
+  const s = parseYmd(start)
+  if (!end) return s.toLocaleDateString('en-US', withWd)
+  const e = parseYmd(end)
+  if (s.getMonth() === e.getMonth()) return `${s.toLocaleDateString('en-US', noWd)}–${e.getDate()}`
+  return `${s.toLocaleDateString('en-US', noWd)} – ${e.toLocaleDateString('en-US', noWd)}`
+}
+
+function upcomingClosures(limit = 5): { date: string; label: string }[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const out: { date: string; label: string }[] = []
+  for (const c of DISTRICT_CLOSURES) {
+    const end = parseYmd(c.end ?? c.start)
+    end.setHours(23, 59, 59, 999)
+    if (end.getTime() < today.getTime()) continue
+    out.push({ date: formatClosureDate(c.start, c.end), label: c.label })
+    if (out.length >= limit) break
+  }
+  return out
 }
 
 export async function buildScreenFeed(
@@ -284,8 +341,10 @@ export async function buildScreenFeed(
   let spotlight: NonNullable<ScreenFeed['spotlight']> = []
   let csdtv_live: ScreenFeed['csdtv_live'] = null
   let news: string[] = []
+  let closures: { date: string; label: string }[] = []
+  let board_next: ScreenFeed['board_next'] = null
   if (resolvedLayout === 'zoned2') {
-    // CSDtv Spotlight — latest published, public videos.
+    // CSDtv Spotlight — latest published, public videos (board-meeting recordings excluded).
     try {
       const spotRes = await service
         .from('videos')
@@ -293,7 +352,7 @@ export async function buildScreenFeed(
         .eq('status', 'Published')
         .eq('visibility', 'Public')
         .order('date_published', { ascending: false, nullsFirst: false })
-        .limit(8)
+        .limit(12)
       spotlight = (spotRes.data ?? [])
         .map((v: Record<string, unknown>) => ({
           id: String(v.id),
@@ -303,11 +362,38 @@ export async function buildScreenFeed(
           views: (v.youtube_views as number) ?? null,
           duration: (v.youtube_duration as string) ?? null,
         }))
-        .filter(v => v.thumb && v.title)
+        .filter(v => v.thumb && v.title && !/board meeting/i.test(v.title))
         .slice(0, 5)
     } catch {
       spotlight = []
     }
+
+    // Next board meeting (upcoming).
+    try {
+      const bmRes = await service
+        .from('board_meetings')
+        .select('scheduled_public_start, productions(title)')
+        .gte('scheduled_public_start', new Date().toISOString())
+        .order('scheduled_public_start', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      const start = bmRes.data?.scheduled_public_start as string | undefined
+      if (start) {
+        const dt = new Date(start)
+        const prod = (bmRes.data as { productions?: { title?: string | null } | { title?: string | null }[] | null }).productions
+        const title = (Array.isArray(prod) ? prod[0]?.title : prod?.title) ?? 'Board of Education Meeting'
+        board_next = {
+          date: dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Denver' }),
+          time: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }),
+          title,
+        }
+      }
+    } catch {
+      board_next = null
+    }
+
+    // Upcoming district closures from the calendar.
+    closures = upcomingClosures(5)
 
     // Now on CSDtv — a board meeting currently broadcasting live.
     try {
@@ -365,6 +451,8 @@ export async function buildScreenFeed(
       spotlight,
       csdtv_live,
       news,
+      closures,
+      board_next,
     },
   }
 }

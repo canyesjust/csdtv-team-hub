@@ -1792,7 +1792,7 @@
 .cic-screen.layout-zoned2 .cic-z2-news-rot { flex: 1; position: relative; overflow: hidden; }
 .cic-screen.layout-zoned2 .cic-z2-headline { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 2.4vmax; opacity: 0; transition: opacity .6s ease; }
 .cic-screen.layout-zoned2 .cic-z2-headline.show { opacity: 1; }
-.cic-screen.layout-zoned2 .cic-z2-headline span { font-weight: 700; font-size: 2.4vmax; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-headline span { font-weight: 700; font-size: 2.7vmax; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cic-screen.layout-zoned2 .cic-z2-news-cta { flex: none; display: flex; align-items: center; gap: 1.2vmax; padding: 0 1.8vmax; border-left: 1px solid var(--line); }
 .cic-screen.layout-zoned2 .cic-z2-news-cta .lead { font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; font-size: 1.1vmax; color: var(--csd-yellow); text-align: right; }
 .cic-screen.layout-zoned2 .cic-z2-news-cta .url { font-weight: 600; font-size: 1.35vmax; color: var(--accent); text-align: right; }
@@ -1801,3 +1801,83 @@
 
 /* Zoned 2 — real district logo in the brand bar (replaces the placeholder tile). */
 .cic-screen.layout-zoned2 .cic-z2-brandlogo { height: 5vh; width: auto; display: block; }
+
+/* =========================================================================
+   Zoned 2 — animated weather scenes + rotating card modules.
+   ========================================================================= */
+.cic-screen.layout-zoned2 .cic-z2-weather { position: relative; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-weather > .cic-railhd,
+.cic-screen.layout-zoned2 .cic-z2-weather > .cic-z2-wx,
+.cic-screen.layout-zoned2 .cic-z2-weather > .cic-z2-wxmeta { position: relative; z-index: 2; }
+.cic-screen.layout-zoned2 .z2wx-scene { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+
+/* condition background tints */
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-sunny { background: linear-gradient(160deg, #0a4a73, #063a5c); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-cloudy { background: linear-gradient(160deg, #0c3a55, #06314f); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-rain { background: linear-gradient(160deg, #0a2f49, #04263f); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-snow { background: linear-gradient(160deg, #123d57, #0a2c42); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-storm { background: linear-gradient(160deg, #10202f, #070f18); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-night { background: linear-gradient(160deg, #0a1a30, #04101f); }
+
+/* icon box now holds CSS shapes, not an emoji */
+.cic-screen.layout-zoned2 .cic-z2-wxico { position: relative; width: 6.5vmax; height: 6.5vmax; flex: none; font-size: 0; }
+
+/* sun */
+.cic-screen.layout-zoned2 .z2wx-sun { position: absolute; inset: 0; }
+.cic-screen.layout-zoned2 .z2wx-core { position: absolute; inset: 1.7vmax; border-radius: 50%; background: radial-gradient(circle at 38% 38%, #ffe0a0, #fbae42); }
+.cic-screen.layout-zoned2 .z2wx-rays { position: absolute; inset: 0; animation: z2spin 22s linear infinite; }
+.cic-screen.layout-zoned2 .z2wx-rays span { position: absolute; left: 50%; top: 50%; width: 0.35vmax; height: 1.1vmax; margin: -0.55vmax 0 0 -0.18vmax; background: #fbae42; border-radius: 0.3vmax; }
+@keyframes z2spin { to { transform: rotate(360deg); } }
+
+/* moon */
+.cic-screen.layout-zoned2 .z2wx-moon { position: absolute; inset: 1.5vmax; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f3f6ff, #c7d3e6); box-shadow: 0 0 1.4vmax rgba(220, 230, 255, 0.32); }
+
+/* clouds (icon + scene) */
+.cic-screen.layout-zoned2 .z2wx-cloud { background: #cfe0ee; border-radius: 5vmax; position: absolute; }
+.cic-screen.layout-zoned2 .z2wx-cloud::before,
+.cic-screen.layout-zoned2 .z2wx-cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
+.cic-screen.layout-zoned2 .z2wx-cloud-ico { left: 0.6vmax; top: 2.5vmax; width: 5vmax; height: 1.7vmax; opacity: 0.95; }
+.cic-screen.layout-zoned2 .z2wx-cloud-ico::before { width: 2.3vmax; height: 2.3vmax; top: -1.1vmax; left: 0.7vmax; }
+.cic-screen.layout-zoned2 .z2wx-cloud-ico::after { width: 1.7vmax; height: 1.7vmax; top: -0.8vmax; left: 2.6vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .z2wx-cloud { opacity: 0.42; }
+.cic-screen.layout-zoned2 .z2wx-scene .c1 { width: 6vmax; height: 1.9vmax; top: 2vmax; left: -7vmax; animation: z2drift 16s linear infinite; }
+.cic-screen.layout-zoned2 .z2wx-scene .c1::before { width: 2.6vmax; height: 2.6vmax; top: -1.2vmax; left: 0.9vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .c1::after { width: 1.9vmax; height: 1.9vmax; top: -0.8vmax; left: 3.1vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .c2 { width: 4.5vmax; height: 1.5vmax; top: 6vmax; left: -6vmax; opacity: 0.26; animation: z2drift 26s linear infinite; animation-delay: -8s; }
+.cic-screen.layout-zoned2 .z2wx-scene .c2::before { width: 2vmax; height: 2vmax; top: -1vmax; left: 0.7vmax; }
+@keyframes z2drift { to { transform: translateX(36vmax); } }
+
+/* rain / snow / storm / stars */
+.cic-screen.layout-zoned2 .z2wx-scene .z2wx-rain { position: absolute; inset: 0; opacity: 0.5; background: repeating-linear-gradient(105deg, rgba(159,208,239,0) 0 0.45vmax, rgba(159,208,239,0.5) 0.45vmax 0.52vmax); background-size: 1vmax 1vmax; animation: z2rain 0.5s linear infinite; }
+@keyframes z2rain { from { background-position: 0 0; } to { background-position: -1vmax 2vmax; } }
+.cic-screen.layout-zoned2 .z2wx-scene .z2wx-snow { position: absolute; inset: 0; opacity: 0.75; background-image: radial-gradient(circle, rgba(255,255,255,0.9) 0.16vmax, transparent 0.2vmax); background-size: 2.4vmax 2.4vmax; animation: z2snow 6s linear infinite; }
+@keyframes z2snow { to { background-position: 1vmax 14vmax; } }
+.cic-screen.layout-zoned2 .z2wx-flash { position: absolute; inset: 0; background: #fff; opacity: 0; animation: z2flash 6s linear infinite; }
+@keyframes z2flash { 0%, 92%, 100% { opacity: 0; } 93% { opacity: 0.4; } 94% { opacity: 0; } 96% { opacity: 0.55; } 97% { opacity: 0; } }
+.cic-screen.layout-zoned2 .z2wx-star { position: absolute; width: 0.3vmax; height: 0.3vmax; border-radius: 50%; background: #fff; animation: z2tw 3s ease-in-out infinite; }
+@keyframes z2tw { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+
+/* rotating card wrapper */
+.cic-screen.layout-zoned2 .cic-z2-rotwrap { flex: 1; min-height: 0; display: flex; }
+.cic-screen.layout-zoned2 .cic-z2-rotcard { flex: 1; min-width: 0; display: flex; animation: z2fade 0.5s ease; }
+.cic-screen.layout-zoned2 .cic-z2-rotcard > .cic-rail { flex: 1; }
+@keyframes z2fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* board meeting card */
+.cic-screen.layout-zoned2 .cic-z2-bm-day { font-weight: 900; font-size: 3.4vmax; line-height: 1; color: var(--csd-yellow); margin-top: 0.5vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bm-title { font-weight: 700; font-size: 1.7vmax; margin-top: 0.7vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-bm-row { font-size: 1.4vmax; color: #dcefff; margin-top: 1vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bm-pill { display: inline-block; background: var(--accent); color: #06304d; font-weight: 800; font-size: 1.1vmax; padding: 0.4vmax 0.9vmax; border-radius: 0.5vmax; margin-top: 1.3vmax; }
+
+/* closures card */
+.cic-screen.layout-zoned2 .cic-z2-cl-row { display: flex; gap: 1.1vmax; align-items: baseline; padding: 0.7vmax 0; border-bottom: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-cl-row:last-child { border-bottom: none; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { font-weight: 900; font-size: 1.5vmax; color: var(--csd-yellow); min-width: 7.5vmax; font-variant-numeric: tabular-nums; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { font-size: 1.35vmax; color: #e4f3fc; }
+
+/* announcements card */
+.cic-screen.layout-zoned2 .cic-z2-ann-row { display: flex; gap: 0.9vmax; padding: 0.7vmax 0; border-bottom: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-ann-row:last-child { border-bottom: none; }
+.cic-screen.layout-zoned2 .cic-z2-ann-row .cic-ann-icon { font-size: 1.7vmax; color: var(--accent); flex: none; }
+.cic-screen.layout-zoned2 .cic-z2-ann-t { font-weight: 700; font-size: 1.45vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-ann-s { font-size: 1.2vmax; color: var(--muted); margin-top: 0.2vmax; }

@@ -5,6 +5,9 @@ export type SignageWeather = {
   tempF: number | null
   condition: string
   icon: string
+  high: number | null
+  low: number | null
+  windMph: number | null
 }
 
 type CacheEntry = { at: number; lat: number; lon: number; data: SignageWeather }
@@ -85,6 +88,28 @@ async function fetchNearestObservation(stationsUrl: string): Promise<SignageWeat
     tempF: celsiusToFahrenheit(tempC),
     condition,
     icon: weatherIconFromShortForecast(condition),
+    high: null,
+    low: null,
+    windMph: null,
+  }
+}
+
+function parseWindMph(s: string | undefined): number | null {
+  const m = (s || '').match(/(\d+)/)
+  return m ? Number(m[1]) : null
+}
+
+async function fetchDailyExtremes(forecastUrl: string): Promise<{ high: number | null; low: number | null; windMph: number | null }> {
+  const fc = await nwsJson<{
+    properties?: { periods?: Array<{ isDaytime: boolean; temperature: number; windSpeed: string }> }
+  }>(forecastUrl)
+  const periods = fc?.properties?.periods ?? []
+  const day = periods.find(p => p.isDaytime)
+  const night = periods.find(p => !p.isDaytime)
+  return {
+    high: day ? day.temperature : night ? night.temperature : null,
+    low: night ? night.temperature : null,
+    windMph: parseWindMph(day?.windSpeed ?? periods[0]?.windSpeed),
   }
 }
 
@@ -99,6 +124,9 @@ async function fetchCurrentHourly(hourlyUrl: string, nowMs: number): Promise<Sig
     tempF: period.temperature,
     condition: period.shortForecast,
     icon: weatherIconFromShortForecast(period.shortForecast),
+    high: null,
+    low: null,
+    windMph: null,
   }
 }
 
@@ -108,11 +136,12 @@ export async function fetchSignageWeather(lat: number, lon: number): Promise<Sig
     return cache.data
   }
 
-  const fallback: SignageWeather = { tempF: null, condition: 'Weather unavailable', icon: '🌤' }
+  const fallback: SignageWeather = { tempF: null, condition: 'Weather unavailable', icon: '🌤', high: null, low: null, windMph: null }
 
   try {
     const points = await nwsJson<{
       properties?: {
+        forecast?: string
         forecastHourly?: string
         observationStations?: string
         timeZone?: string
@@ -120,7 +149,7 @@ export async function fetchSignageWeather(lat: number, lon: number): Promise<Sig
     }>(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`)
     if (!points?.properties) return fallback
 
-    const { forecastHourly, observationStations } = points.properties
+    const { forecast, forecastHourly, observationStations } = points.properties
     const nowMs = Date.now()
 
     // Prefer live station reading; fall back to the current hourly period (not 12-hr "Tonight" low/high).
@@ -132,6 +161,14 @@ export async function fetchSignageWeather(lat: number, lon: number): Promise<Sig
       data = await fetchCurrentHourly(forecastHourly, nowMs)
     }
     if (!data) return fallback
+
+    // Merge today's high/low + wind from the daily forecast.
+    if (forecast) {
+      try {
+        const ext = await fetchDailyExtremes(forecast)
+        data = { ...data, high: ext.high, low: ext.low, windMph: ext.windMph ?? data.windMph }
+      } catch { /* keep base reading */ }
+    }
 
     cache = { at: now, lat, lon, data }
     return data

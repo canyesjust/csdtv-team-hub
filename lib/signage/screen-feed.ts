@@ -71,6 +71,10 @@ export type ScreenFeed = {
   csdtv_live?: { title: string; channel: number | null } | null
   /** Zoned 2 only: district news headlines (from the district news RSS). */
   news?: string[]
+  /** Zoned 2 only: upcoming district closures (from the district calendar). */
+  closures?: { date: string; label: string }[]
+  /** Zoned 2 only: the next upcoming board meeting. */
+  board_next?: { date: string; time: string; title: string } | null
   offline?: boolean
 }
 

@@ -49,10 +49,12 @@ export type ScreenFeed = {
   visitors: FeedVisitor[]
   live: { live: true; hls_url: string; label: string | null } | { live: false }
   board_takeover?: { mode: 'preroll' | 'live'; url: string; audio: boolean; label: string | null }
-  weather: { tempF: number | null; condition: string; icon: string }
+  weather: { tempF: number | null; condition: string; icon: string; high: number | null; low: number | null; windMph: number | null }
   spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]
   csdtv_live?: { title: string; channel: number | null } | null
   news?: string[]
+  closures?: { date: string; label: string }[]
+  board_next?: { date: string; time: string; title: string } | null
   offline?: boolean
 }
 
@@ -521,7 +523,6 @@ function ScanToWatch({ title }: { title: string | null }) {
   )
 }
 
-const Z2_SPOT_MS = 8_000
 const Z2_NEWS_MS = 8_000
 const NEWS_QR = 'data:image/png;base64,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'
 
@@ -543,65 +544,172 @@ function Zoned2Brand({ tag, logoUrl, clock, dateStr }: { tag: string; logoUrl: s
   )
 }
 
-function Zoned2Weather({ weather }: { weather: { tempF: number | null; condition: string; icon: string } }) {
+function wxClass(condition: string): string {
+  const t = (condition || '').toLowerCase()
+  if (/thunder|storm|t-storm/.test(t)) return 'storm'
+  if (/snow|sleet|blizzard|flurr|wintry/.test(t)) return 'snow'
+  if (/rain|shower|drizzle/.test(t)) return 'rain'
+  if (/cloud|overcast/.test(t)) return 'cloudy'
+  const h = new Date().getHours()
+  if (h < 6 || h >= 20) return 'night'
+  return 'sunny'
+}
+
+function Zoned2WxIcon({ cls }: { cls: string }) {
+  if (cls === 'sunny') {
+    return (
+      <div className="z2wx-sun">
+        <div className="z2wx-rays">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <span key={i} style={{ transform: `rotate(${i * 30}deg) translateY(-2.7vmax)` }} />
+          ))}
+        </div>
+        <div className="z2wx-core" />
+      </div>
+    )
+  }
+  if (cls === 'night') return <div className="z2wx-moon" />
+  return <div className="z2wx-cloud z2wx-cloud-ico" />
+}
+
+function Zoned2WxScene({ cls }: { cls: string }) {
+  if (cls === 'sunny') return <div className="z2wx-scene" aria-hidden />
+  if (cls === 'night') {
+    return (
+      <div className="z2wx-scene" aria-hidden>
+        {Array.from({ length: 14 }).map((_, i) => (
+          <span key={i} className="z2wx-star" style={{ left: `${(i * 37) % 94 + 3}%`, top: `${(i * 23) % 58 + 6}%`, animationDelay: `${(i % 5) * 0.6}s` }} />
+        ))}
+      </div>
+    )
+  }
   return (
-    <div className="cic-rail cic-z2-weather">
+    <div className="z2wx-scene" aria-hidden>
+      <span className="z2wx-cloud c1" /><span className="z2wx-cloud c2" />
+      {(cls === 'rain' || cls === 'storm') && <div className="z2wx-rain" />}
+      {cls === 'snow' && <div className="z2wx-snow" />}
+      {cls === 'storm' && <div className="z2wx-flash" />}
+    </div>
+  )
+}
+
+function Zoned2Weather({ weather }: { weather: { tempF: number | null; condition: string; icon: string; high: number | null; low: number | null; windMph: number | null } }) {
+  const cls = wxClass(weather.condition)
+  return (
+    <div className={`cic-rail cic-z2-weather z2wx-${cls}`}>
+      <Zoned2WxScene cls={cls} />
       <div className="cic-railhd">Sandy, Utah <span className="sub">Now</span></div>
       <div className="cic-z2-wx">
-        <div className="cic-z2-wxico" aria-hidden>{weather.icon}</div>
+        <div className="cic-z2-wxico" aria-hidden><Zoned2WxIcon cls={cls} /></div>
         <div>
           <div className="cic-z2-temp">{weather.tempF != null ? weather.tempF : '--'}<sup>°</sup></div>
           {weather.condition ? <div className="cic-z2-cond">{weather.condition}</div> : null}
         </div>
       </div>
+      <div className="cic-z2-wxmeta">
+        {weather.high != null ? <span>High <b>{weather.high}°</b></span> : null}
+        {weather.low != null ? <span>Low <b>{weather.low}°</b></span> : null}
+        {weather.windMph != null ? <span>Wind <b>{weather.windMph} mph</b></span> : null}
+      </div>
     </div>
   )
 }
 
-function Zoned2Spot({ spotlight, live }: { spotlight?: ScreenFeed['spotlight']; live?: ScreenFeed['csdtv_live'] }) {
-  const items = spotlight ?? []
-  const [spot, setSpot] = useState(0)
-  useEffect(() => {
-    if (items.length <= 1) return
-    const t = setInterval(() => setSpot(i => (i + 1) % items.length), Z2_SPOT_MS)
-    return () => clearInterval(t)
-  }, [items.length])
-  const cur = items.length ? items[spot % items.length] : undefined
-  if (live) {
-    return (
-      <div className="cic-rail cic-z2-spot">
-        <div className="cic-railhd">Now on CSDtv <span className="sub">Live</span></div>
-        <span className="cic-z2-livepill"><span className="cic-z2-livedot" />Live</span>
-        <div className="cic-z2-live-title">{live.title}</div>
-        <div className="cic-z2-live-sub">Watch live on CSDtv</div>
-      </div>
-    )
-  }
+function SpotCard({ items }: { items: NonNullable<ScreenFeed['spotlight']> }) {
+  const cur = items[0]
   return (
     <div className="cic-rail cic-z2-spot">
       <div className="cic-railhd">CSDtv Spotlight <span className="sub">Latest</span></div>
-      {cur ? (
-        <>
-          <div className="cic-z2-thumb">
-            <img src={cur.thumb} alt="" />
-            {cur.duration && cur.duration !== '0:00' ? <span className="cic-z2-dur">{cur.duration}</span> : null}
-          </div>
-          <div className="cic-z2-sptitle">{cur.title}</div>
-          <div className="cic-z2-spmeta">
-            {cur.kind ?? 'CSDtv'}{typeof cur.views === 'number' && cur.views > 0 ? ` · ${cur.views.toLocaleString()} views` : ''}
-          </div>
-        </>
-      ) : (
-        <div className="cic-empty-muted">No videos yet</div>
-      )}
+      <div className="cic-z2-thumb">
+        <img src={cur.thumb} alt="" />
+        {cur.duration && cur.duration !== '0:00' ? <span className="cic-z2-dur">{cur.duration}</span> : null}
+      </div>
+      <div className="cic-z2-sptitle">{cur.title}</div>
+      <div className="cic-z2-spmeta">
+        {cur.kind ?? 'CSDtv'}{typeof cur.views === 'number' && cur.views > 0 ? ` · ${cur.views.toLocaleString()} views` : ''}
+      </div>
     </div>
   )
+}
+
+function BoardCard({ board }: { board: NonNullable<ScreenFeed['board_next']> }) {
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">Next board meeting</div>
+      <div className="cic-z2-bm-day">{board.date}</div>
+      <div className="cic-z2-bm-title">{board.title}</div>
+      <div className="cic-z2-bm-row">{board.time} · District Office</div>
+      <span className="cic-z2-bm-pill">Open to the public</span>
+    </div>
+  )
+}
+
+function ClosuresCard({ closures }: { closures: NonNullable<ScreenFeed['closures']> }) {
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">Upcoming closures <span className="sub">Canyons calendar</span></div>
+      {closures.slice(0, 4).map((c, i) => (
+        <div key={i} className="cic-z2-cl-row"><span className="cic-z2-cl-date">{c.date}</span><span className="cic-z2-cl-lbl">{c.label}</span></div>
+      ))}
+    </div>
+  )
+}
+
+function AnnCard({ announcements }: { announcements: FeedAnnouncement[] }) {
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">Announcements</div>
+      {announcements.slice(0, 4).map(a => (
+        <div key={a.id} className="cic-z2-ann-row">
+          <AnnouncementIcon icon={a.icon} />
+          <div><div className="cic-z2-ann-t">{a.title}</div>{a.subtitle ? <div className="cic-z2-ann-s">{a.subtitle}</div> : null}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LiveCard({ live }: { live: NonNullable<ScreenFeed['csdtv_live']> }) {
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">Now on CSDtv <span className="sub">Live</span></div>
+      <span className="cic-z2-livepill"><span className="cic-z2-livedot" />Live</span>
+      <div className="cic-z2-live-title">{live.title}</div>
+      <div className="cic-z2-live-sub">Watch live on CSDtv</div>
+    </div>
+  )
+}
+
+function Zoned2Rotator({ spotlight, board, closures, announcements, live }: {
+  spotlight?: ScreenFeed['spotlight']
+  board?: ScreenFeed['board_next']
+  closures?: ScreenFeed['closures']
+  announcements: FeedAnnouncement[]
+  live?: ScreenFeed['csdtv_live']
+}) {
+  const cards: ReactNode[] = []
+  if (live) cards.push(<LiveCard key="live" live={live} />)
+  if (spotlight && spotlight.length) cards.push(<SpotCard key="spot" items={spotlight} />)
+  if (board) cards.push(<BoardCard key="board" board={board} />)
+  if (closures && closures.length) cards.push(<ClosuresCard key="cl" closures={closures} />)
+  if (announcements.length) cards.push(<AnnCard key="ann" announcements={announcements} />)
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (cards.length <= 1) return
+    const t = setInterval(() => setI(x => (x + 1) % cards.length), 9000)
+    return () => clearInterval(t)
+  }, [cards.length])
+  if (!cards.length) return <div className="cic-rail cic-z2-spot"><div className="cic-empty-muted">—</div></div>
+  const active = i % cards.length
+  return <div className="cic-z2-rotcard" key={active}>{cards[active]}</div>
 }
 
 function Zoned2News({ items }: { items: string[] }) {
   const list = items.length ? items : ['Canyons School District']
   const [idx, setIdx] = useState(0)
   const [vis, setVis] = useState(true)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const textRef = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     if (list.length <= 1) return
     const t = setInterval(() => {
@@ -610,14 +718,31 @@ function Zoned2News({ items }: { items: string[] }) {
     }, Z2_NEWS_MS)
     return () => clearInterval(t)
   }, [list.length])
+  // Fit the headline as large as possible without clipping (no ellipsis).
+  useEffect(() => {
+    const box = boxRef.current, t = textRef.current
+    if (!box || !t) return
+    const fit = () => {
+      const vmax = Math.max(window.innerWidth, window.innerHeight) / 100
+      let s = 3.6 * vmax
+      const min = 1.6 * vmax
+      t.style.fontSize = `${s}px`
+      let guard = 0
+      while (guard < 400 && s > min && (t.scrollHeight > box.clientHeight + 1 || t.scrollWidth > box.clientWidth + 1)) {
+        s -= 1; t.style.fontSize = `${s}px`; guard++
+      }
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [idx, list])
   return (
     <footer className="cic-z2-news">
       <div className="cic-z2-news-badge">
-        <span className="cic-z2-news-k">Canyons School District</span>
         <span className="cic-z2-news-w"><span className="dot" />NEWS</span>
       </div>
-      <div className="cic-z2-news-rot">
-        <div className={`cic-z2-headline${vis ? ' show' : ''}`}><span>{list[idx]}</span></div>
+      <div className="cic-z2-news-rot" ref={boxRef}>
+        <div className={`cic-z2-headline${vis ? ' show' : ''}`}><span ref={textRef}>{list[idx]}</span></div>
       </div>
       <div className="cic-z2-news-cta">
         <div>
@@ -979,7 +1104,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             />
             <div className="cic-railcol">
               <Zoned2Weather weather={feed.weather} />
-              <Zoned2Spot spotlight={feed.spotlight} live={feed.csdtv_live} />
+              <Zoned2Rotator spotlight={feed.spotlight} board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
             </div>
           </div>
           <Zoned2News items={feed.news ?? []} />
