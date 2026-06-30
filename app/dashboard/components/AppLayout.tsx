@@ -64,6 +64,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = useState('')
   const [userRole, setUserRole] = useState('')
   const [userDashboardProfile, setUserDashboardProfile] = useState('default')
+  const [userSignageRole, setUserSignageRole] = useState<string | null>(null)
   const [userColor, setUserColor] = useState('#e8a020')
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
@@ -136,6 +137,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [])
 
   const dark = theme === 'dark'
+  // Signage runs as a standalone tool: no Hub sidebar/mobile nav, its own top bar.
+  // Scoped so /dashboard/signage-submissions (a separate Hub page) keeps Hub chrome.
+  const isSignage = pathname === '/dashboard/signage' || pathname.startsWith('/dashboard/signage/')
+  // Signage-only editors have no Hub to return to.
+  const signageOnly = userSignageRole === 'editor'
   const bg       = 'var(--bg-main)'
   const sidebar  = 'var(--bg-sidebar)'
   const border   = 'var(--border-subtle)'
@@ -158,10 +164,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         role: string
         avatar_color: string | null
         dashboard_profile?: string | null
+        signage_role?: string | null
       }) => {
         setUserName(row.name)
         setUserRole(row.role)
         setUserDashboardProfile(row.dashboard_profile ?? 'default')
+        setUserSignageRole(row.signage_role ?? null)
         setUserColor(row.avatar_color || '#e8a020')
         setUserId(row.id)
         setAccessState('ready')
@@ -178,6 +186,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               role: string
               avatar_color: string | null
               dashboard_profile?: string | null
+              signage_role?: string | null
             }
             actor?: { name: string }
           }
@@ -205,7 +214,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       const emailNorm = email.trim().toLowerCase()
       const { data: teamByEmail, error: emailLookupErr } = await supabase
         .from('team')
-        .select('id, name, role, avatar_color, dashboard_profile, supabase_user_id')
+        .select('id, name, role, avatar_color, dashboard_profile, signage_role, supabase_user_id')
         .eq('email', emailNorm)
         .maybeSingle()
 
@@ -232,7 +241,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       const { data: byUid, error: uidErr } = await supabase
         .from('team')
-        .select('id, name, role, avatar_color, dashboard_profile')
+        .select('id, name, role, avatar_color, dashboard_profile, signage_role')
         .eq('supabase_user_id', user.id)
         .maybeSingle()
 
@@ -379,9 +388,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: bg, color: text, fontFamily: 'var(--font-sans)' }}>
 
-      <aside className="csdtv-sidebar sidebar-bg" style={{ width: '236px', flexShrink: 0, position: 'fixed', top: 0, left: 0, height: '100vh', borderRight: `0.5px solid ${border}`, display: 'none', flexDirection: 'column', boxShadow: 'var(--shadow-soft)' }}>
-        {sidebarContent()}
-      </aside>
+      {!isSignage && (
+        <aside className="csdtv-sidebar sidebar-bg" style={{ width: '236px', flexShrink: 0, position: 'fixed', top: 0, left: 0, height: '100vh', borderRight: `0.5px solid ${border}`, display: 'none', flexDirection: 'column', boxShadow: 'var(--shadow-soft)' }}>
+          {sidebarContent()}
+        </aside>
+      )}
 
       {mobileOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setMobileOpen(false)}>
@@ -421,7 +432,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="csdtv-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div className={`csdtv-main${isSignage ? ' csdtv-main--full' : ''}`} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {isSignage ? (
+          <header style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', borderBottom: `0.5px solid ${border}`, background: 'var(--bg-topbar)', backdropFilter: 'blur(8px)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></svg>
+              </span>
+              <div style={{ lineHeight: 1.15 }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: text }}>CSDtv Signage</div>
+                <div className="csdtv-search-label" style={{ fontSize: '11px', color: muted }}>Digital signage manager</div>
+              </div>
+            </div>
+            <div style={{ flex: 1 }} />
+            {!signageOnly && (
+              <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '7px', border: `0.5px solid ${border}`, background: 'var(--surface-2)', color: text, padding: '9px 13px', borderRadius: '10px', fontSize: '13px', fontWeight: 500, textDecoration: 'none', minHeight: '40px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                <span className="csdtv-search-label">Return to Hub</span>
+              </Link>
+            )}
+            <button onClick={toggleTheme} style={{ width: '40px', height: '40px', borderRadius: '10px', background: iconBg, border: `0.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', flexShrink: 0 }}>
+              {dark ? '☀️' : '🌙'}
+            </button>
+            {userName && (
+              <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: userColor, color: '#071020', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>{userName.slice(0, 2).toUpperCase()}</span>
+            )}
+          </header>
+        ) : (
         <header style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', borderBottom: `0.5px solid ${border}`, background: 'var(--bg-topbar)', backdropFilter: 'blur(8px)' }}>
           <button className="csdtv-hamburger" onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', display: 'none', padding: '4px', minWidth: '44px', minHeight: '44px', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -442,6 +479,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {dark ? '☀️' : '🌙'}
           </button>
         </header>
+        )}
 
         {viewAs && (
           <ImpersonationBanner
@@ -507,9 +545,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           from { opacity: 0; transform: translateY(-12px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        .csdtv-main--full { margin-left: 0 !important; }
+        .csdtv-main--full .csdtv-mobile-nav { display: none !important; }
         @media (min-width: 768px) {
           .csdtv-sidebar { display: flex !important; }
           .csdtv-main { margin-left: 236px !important; }
+          .csdtv-main--full { margin-left: 0 !important; }
           .csdtv-hamburger { display: none !important; }
           .csdtv-mobile-nav { display: none !important; }
           .csdtv-content { padding: 20px 24px !important; }

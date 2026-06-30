@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi, requireSignageApproverApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi, requireSignageApproverApi } from '@/lib/signage/server-auth'
 import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { emailSignageSubmitterDecision } from '@/lib/signage/email'
@@ -94,7 +94,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
   const { id } = await params

@@ -3,7 +3,7 @@ import { getTeamRowForAuthUser } from '@/lib/server/auth'
 import { getActiveImpersonationForActor } from '@/lib/server/impersonation'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
-export type EffectiveTeamRow = { id: string; role: string; dashboard_profile: string }
+export type EffectiveTeamRow = { id: string; role: string; dashboard_profile: string; signage_role: string | null }
 
 /** Real signed-in team row (never impersonated). */
 export async function getActorTeamRow(
@@ -16,6 +16,7 @@ export async function getActorTeamRow(
     id: row.id,
     role: row.role,
     dashboard_profile: row.dashboard_profile ?? 'default',
+    signage_role: row.signage_role ?? null,
   }
 }
 
@@ -36,7 +37,7 @@ export async function getEffectiveTeamRow(
 
   const { data: subject } = await service
     .from('team')
-    .select('id, role, dashboard_profile')
+    .select('id, role, dashboard_profile, signage_role')
     .eq('id', session.subject_team_id)
     .maybeSingle()
 
@@ -45,5 +46,6 @@ export async function getEffectiveTeamRow(
     id: subject.id,
     role: subject.role,
     dashboard_profile: subject.dashboard_profile ?? 'default',
+    signage_role: subject.signage_role ?? null,
   }
 }

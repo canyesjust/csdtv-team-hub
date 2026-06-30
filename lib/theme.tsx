@@ -8,16 +8,16 @@ const ThemeContext = createContext<{
   theme: Theme
   toggleTheme: () => void
 }>({
-  theme: 'dark',
+  theme: 'light',
   toggleTheme: () => {}
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark')
+  const [theme, setTheme] = useState<Theme>('light')
 
   useEffect(() => {
     const stored = localStorage.getItem('csdtv-theme') as Theme
-    const initial = stored || 'dark'
+    const initial = stored || 'light'
     setTheme(initial)
     applyTheme(initial)
   }, [])

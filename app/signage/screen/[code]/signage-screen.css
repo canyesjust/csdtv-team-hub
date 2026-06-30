@@ -1792,7 +1792,7 @@
 .cic-screen.layout-zoned2 .cic-z2-news-rot { flex: 1; position: relative; overflow: hidden; }
 .cic-screen.layout-zoned2 .cic-z2-headline { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 2.4vmax; opacity: 0; transition: opacity .6s ease; }
 .cic-screen.layout-zoned2 .cic-z2-headline.show { opacity: 1; }
-.cic-screen.layout-zoned2 .cic-z2-headline span { font-weight: 700; font-size: 2.7vmax; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-headline span { font-weight: 700; font-size: 2.1vmax; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cic-screen.layout-zoned2 .cic-z2-news-cta { flex: none; display: flex; align-items: center; gap: 1.2vmax; padding: 0 1.8vmax; border-left: 1px solid var(--line); }
 .cic-screen.layout-zoned2 .cic-z2-news-cta .lead { font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; font-size: 1.1vmax; color: var(--csd-yellow); text-align: right; }
 .cic-screen.layout-zoned2 .cic-z2-news-cta .url { font-weight: 600; font-size: 1.35vmax; color: var(--accent); text-align: right; }
@@ -1881,3 +1881,52 @@
 .cic-screen.layout-zoned2 .cic-z2-ann-row .cic-ann-icon { font-size: 1.7vmax; color: var(--accent); flex: none; }
 .cic-screen.layout-zoned2 .cic-z2-ann-t { font-weight: 700; font-size: 1.45vmax; line-height: 1.15; }
 .cic-screen.layout-zoned2 .cic-z2-ann-s { font-size: 1.2vmax; color: var(--muted); margin-top: 0.2vmax; }
+
+/* =========================================================================
+   Zoned 2 — layout v2: no top bar, slim rail, maximized 16:9, brand/clock box.
+   ========================================================================= */
+.cic-screen.layout-zoned2 .cic-z2-mediacell { flex: 1; min-width: 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+.cic-screen.layout-zoned2 .cic-z2-mediacell .cic-media16 { height: auto; width: min(100cqw, 177.78cqh); flex: none; }
+.cic-screen.layout-zoned2 .cic-railcol { flex: none; width: 21vw; }
+
+.cic-screen.layout-zoned2 .cic-z2-brandbox { flex: none; background: var(--navy); text-align: center; padding: 1.3vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-logo { width: 78%; height: auto; display: block; margin: 0 auto 0.9vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-row { display: flex; align-items: center; justify-content: center; gap: 0.8vmax; border-top: 1px solid var(--line); padding-top: 0.9vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-time { font-weight: 800; font-size: 2.6vmax; line-height: 1; font-variant-numeric: tabular-nums; }
+.cic-screen.layout-zoned2 .cic-z2-bb-date { font-size: 1.2vmax; color: var(--accent); margin-top: 0.4vmax; text-align: center; }
+
+/* Zoned 2 v2 — tighten weather/brand sizing for the slim rail so the rotating card has room. */
+.cic-screen.layout-zoned2 .cic-rail { padding: 1.1vmax; }
+.cic-screen.layout-zoned2 .cic-z2-brandbox { padding: 1vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-logo { width: 64%; margin-bottom: 0.7vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-time { font-size: 2.3vmax; }
+.cic-screen.layout-zoned2 .cic-z2-temp { font-size: 4.8vmax; }
+.cic-screen.layout-zoned2 .cic-z2-temp sup { font-size: 2vmax; top: -1.9vmax; }
+.cic-screen.layout-zoned2 .cic-z2-wxico { width: 6vmax; height: 6vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cond { font-size: 1.45vmax; }
+.cic-screen.layout-zoned2 .cic-z2-wxmeta { gap: 0.9vmax; font-size: 1.1vmax; margin-top: 1vh; padding-top: 0.9vh; }
+.cic-screen.layout-zoned2 .cic-z2-sptitle { font-size: 1.6vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { min-width: 6.5vmax; font-size: 1.35vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { font-size: 1.2vmax; }
+
+/* Zoned 2 v2 — stack closure date over label (fits the slim rail without wrapping wide). */
+.cic-screen.layout-zoned2 .cic-z2-cl-row { display: block; padding: 0.5vmax 0; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { display: block; min-width: 0; font-size: 1.15vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { display: block; font-size: 1.3vmax; margin-top: 0.05vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-ann-t { font-size: 1.3vmax; }
+.cic-screen.layout-zoned2 .cic-z2-ann-s { font-size: 1.1vmax; }
+
+/* Zoned 2 v2 — closures: label one line at full rail width. */
+.cic-screen.layout-zoned2 .cic-z2-cl-row { padding: 0.45vmax 0; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { font-size: 1.0vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { font-size: 1.1vmax; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
+/* Zoned 2 v2 — tighten closure rows so all fit the slim rail. */
+.cic-screen.layout-zoned2 .cic-z2-cl-date { line-height: 1; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { line-height: 1.05; }
+.cic-screen.layout-zoned2 .cic-z2-cl-row { padding: 0.38vmax 0; }
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-railhd { margin-bottom: 0.7vmax; }
+
+/* Zoned 2 v2 — center the weather on its card. */
+.cic-screen.layout-zoned2 .cic-z2-wx { justify-content: center; }
+.cic-screen.layout-zoned2 .cic-z2-wxmeta { justify-content: center; }

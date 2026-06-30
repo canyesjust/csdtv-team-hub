@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
   const body = await request.json()

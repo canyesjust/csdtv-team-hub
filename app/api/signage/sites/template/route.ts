@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +8,7 @@ const LAYOUTS = ['full_bleed', 'zoned', 'zoned2', 'wayfinding']
 // POST { site_id, default_layout, show_*, brand_title, brand_subtitle, logo_url }
 // Updates only the template columns for a site (leaves name/colors/etc. alone).
 export async function POST(request: NextRequest) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
   const siteId = body.site_id ? String(body.site_id) : ''

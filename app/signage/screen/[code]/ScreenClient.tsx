@@ -526,21 +526,17 @@ function ScanToWatch({ title }: { title: string | null }) {
 const Z2_NEWS_MS = 8_000
 const NEWS_QR = 'data:image/png;base64,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'
 
-function Zoned2Brand({ tag, logoUrl, clock, dateStr }: { tag: string; logoUrl: string | null; clock: string; dateStr: string }) {
+function Zoned2BrandBox({ logoUrl, clock, dateStr }: { logoUrl: string | null; clock: string; dateStr: string }) {
   return (
-    <header className="cic-z2-brand">
-      <div className="cic-z2-brand-left">
-        {logoUrl
-          ? <img className="cic-z2-brandlogo" src={logoUrl} alt="Canyons School District" />
-          : <div className="cic-z2-word">Canyons <b>School District</b></div>}
-        <div className="cic-z2-brand-div" />
-        <div className="cic-z2-brand-tag">{tag}</div>
+    <div className="cic-rail cic-z2-brandbox">
+      {logoUrl
+        ? <img className="cic-z2-bb-logo" src={logoUrl} alt="Canyons School District" />
+        : <div className="cic-z2-word">Canyons <b>School District</b></div>}
+      <div className="cic-z2-bb-row">
+        <span className="cic-z2-bb-time">{clock}</span>
       </div>
-      <div className="cic-z2-brand-right">
-        <div className="cic-z2-onair"><span className="dot" /> On Air</div>
-        <div className="cic-z2-clock"><div className="cic-z2-time">{clock}</div><div className="cic-z2-date">{dateStr}</div></div>
-      </div>
-    </header>
+      <div className="cic-z2-bb-date">{dateStr}</div>
+    </div>
   )
 }
 
@@ -647,8 +643,8 @@ function BoardCard({ board }: { board: NonNullable<ScreenFeed['board_next']> }) 
 function ClosuresCard({ closures }: { closures: NonNullable<ScreenFeed['closures']> }) {
   return (
     <div className="cic-rail cic-z2-spot">
-      <div className="cic-railhd">Upcoming closures <span className="sub">Canyons calendar</span></div>
-      {closures.slice(0, 4).map((c, i) => (
+      <div className="cic-railhd">Calendar <span className="sub">Upcoming</span></div>
+      {closures.slice(0, 3).map((c, i) => (
         <div key={i} className="cic-z2-cl-row"><span className="cic-z2-cl-date">{c.date}</span><span className="cic-z2-cl-lbl">{c.label}</span></div>
       ))}
     </div>
@@ -724,8 +720,8 @@ function Zoned2News({ items }: { items: string[] }) {
     if (!box || !t) return
     const fit = () => {
       const vmax = Math.max(window.innerWidth, window.innerHeight) / 100
-      let s = 3.6 * vmax
-      const min = 1.6 * vmax
+      let s = 2.8 * vmax
+      const min = 1.4 * vmax
       t.style.fontSize = `${s}px`
       let guard = 0
       while (guard < 400 && s > min && (t.scrollHeight > box.clientHeight + 1 || t.scrollWidth > box.clientWidth + 1)) {
@@ -1088,21 +1084,22 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
       {/* 1b. Zoned 2 — district-branded landscape (CSDtv office screens) */}
       {layout === 'zoned2' && showZones && !portrait && (
         <div className="cic-zoned-stage cic-zoned2-stage">
-          <Zoned2Brand
-            tag={areaLabel}
-            logoUrl={logoUrl}
-            clock={clock}
-            dateStr={now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          />
           <div className="cic-body">
-            <MediaCarousel
-              media={feed.media}
-              index={mediaIndex}
-              imageSeconds={imageSeconds}
-              onAdvance={advanceMedia}
-              overlay={currentMedia?.type === 'video' ? <ScanToWatch title={currentMedia.title} /> : null}
-            />
+            <div className="cic-z2-mediacell">
+              <MediaCarousel
+                media={feed.media}
+                index={mediaIndex}
+                imageSeconds={imageSeconds}
+                onAdvance={advanceMedia}
+                overlay={currentMedia?.type === 'video' ? <ScanToWatch title={currentMedia.title} /> : null}
+              />
+            </div>
             <div className="cic-railcol">
+              <Zoned2BrandBox
+                logoUrl={logoUrl}
+                clock={clock}
+                dateStr={now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              />
               <Zoned2Weather weather={feed.weather} />
               <Zoned2Rotator spotlight={feed.spotlight} board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
             </div>

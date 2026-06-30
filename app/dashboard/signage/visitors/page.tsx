@@ -30,6 +30,7 @@ export default function SignageVisitorsPage() {
   const [form, setForm] = useState(emptyForm)
   const [editId, setEditId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showPast, setShowPast] = useState(false)
 
   const resetForm = () => {
     setForm(emptyForm)
@@ -54,6 +55,14 @@ export default function SignageVisitorsPage() {
       LIFECYCLE_RANK[singleDateLifecycle(a.visit_date, today)] - LIFECYCLE_RANK[singleDateLifecycle(b.visit_date, today)]
       || (b.visit_date || '').localeCompare(a.visit_date || '')
     ), [rows, today])
+  const hasPast = useMemo(
+    () => liveRows.some(r => singleDateLifecycle(r.visit_date, today) === 'expired'),
+    [liveRows, today],
+  )
+  const visibleRows = useMemo(
+    () => showPast ? liveRows : liveRows.filter(r => singleDateLifecycle(r.visit_date, today) !== 'expired'),
+    [liveRows, showPast, today],
+  )
 
   const approve = async (r: VisitorRow) => {
     const res = await fetch('/api/signage/visitors', {
@@ -179,8 +188,16 @@ export default function SignageVisitorsPage() {
               ))}
             </div>
           )}
-          <SignageListHint color={s.muted}>Click a name to edit.</SignageListHint>
-          {liveRows.map(r => (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <SignageListHint color={s.muted}>Click a name to edit.</SignageListHint>
+            {hasPast && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: s.muted, cursor: 'pointer' }}>
+                <input type="checkbox" checked={showPast} onChange={e => setShowPast(e.target.checked)} />
+                Show past
+              </label>
+            )}
+          </div>
+          {visibleRows.map(r => (
             <div key={r.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={avatarStyle} aria-hidden>{initials(r.name)}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -196,7 +213,11 @@ export default function SignageVisitorsPage() {
                 : <span style={{ fontSize: 12, color: s.muted }}>Off</span>}
             </div>
           ))}
-          {!liveRows.length && <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>No visitors yet.</div>}
+          {!visibleRows.length && (
+            <div style={{ color: s.muted, padding: 16, textAlign: 'center' }}>
+              {liveRows.length ? 'No current or upcoming visitors.' : 'No visitors yet.'}
+            </div>
+          )}
         </>
       )}
     </SignagePageShell>

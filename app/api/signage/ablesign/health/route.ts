@@ -8,7 +8,7 @@ import { AbleSignApiError, listAllScreens, type AbleSignScreen } from '@/lib/ser
 import { deriveAbleSignOnline, writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
 import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
 import { verifySignageCron } from '@/lib/signage/ablesign-cron'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
 export const dynamic = 'force-dynamic'
@@ -92,7 +92,7 @@ async function refreshAbleSignHealth() {
 export async function GET(request: NextRequest) {
   const isCron = verifySignageCron(request)
   if (!isCron) {
-    const auth = await requireManagerApi()
+    const auth = await requireSignageEditorApi()
     if ('error' in auth) return auth.error
   }
 

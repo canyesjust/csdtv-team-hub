@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import {
@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
 
 /** Manager direct upload — creates approved content with targeting. */
 export async function POST(request: NextRequest) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 

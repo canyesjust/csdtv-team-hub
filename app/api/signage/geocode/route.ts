@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,7 @@ type GeocodeResult = {
  *   GET /api/signage/geocode?q=Sandy  ->  { lat, lon, label }
  */
 export async function GET(request: NextRequest) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
 
   const q = new URL(request.url).searchParams.get('q')?.trim()

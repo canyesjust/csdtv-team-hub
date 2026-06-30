@@ -10,13 +10,32 @@ type AccessState = 'loading' | 'ok' | 'denied'
 
 export type SignageSite = { id: string; name: string; slug: string; accent: string | null }
 
-type SiteSelectRow = { id: string; name: string; slug: string; accent_color: string | null; bg_color: string | null }
+type SiteSelectRow = { id: string; name: string; slug: string; bg_color: string | null; school_code: string | null }
 
-function mapSite(r: SiteSelectRow): SignageSite {
-  return { id: r.id, name: r.name, slug: r.slug, accent: r.accent_color || r.bg_color || null }
+// A location's rail/chip color is its MAIN brand color: the school's
+// primary_color (authoritative, from the schools table) wins, then the site's
+// saved bg_color, otherwise a Canyons-navy default is applied where it's used.
+// The yellow accent_color is intentionally not used for the rail.
+function mapSite(r: SiteSelectRow, schoolPrimary: Map<string, string>): SignageSite {
+  const code = (r.school_code || '').toLowerCase()
+  return { id: r.id, name: r.name, slug: r.slug, accent: schoolPrimary.get(code) || r.bg_color || null }
 }
 
-const SITE_SELECT = 'id, name, slug, accent_color, bg_color'
+const SITE_SELECT = 'id, name, slug, bg_color, school_code'
+
+async function loadSchoolPrimary(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Map<string, string>> {
+  const { data } = await supabase
+    .from('schools')
+    .select('code, primary_color')
+    .not('primary_color', 'is', null)
+  const map = new Map<string, string>()
+  for (const row of (data as { code: string | null; primary_color: string | null }[]) || []) {
+    if (row.code && row.primary_color) map.set(row.code.toLowerCase(), row.primary_color)
+  }
+  return map
+}
 
 const SITE_STORAGE_KEY = 'cic-signage-active-site'
 
@@ -65,12 +84,11 @@ export function SignageProvider({ children }: { children: ReactNode }) {
   }, [supabase, activeSiteId])
 
   const refreshSites = useCallback(async () => {
-    const { data } = await supabase
-      .from('signage_sites')
-      .select(SITE_SELECT)
-      .eq('active', true)
-      .order('sort_order')
-    setSites(((data as SiteSelectRow[]) || []).map(mapSite))
+    const [{ data }, schoolPrimary] = await Promise.all([
+      supabase.from('signage_sites').select(SITE_SELECT).eq('active', true).order('sort_order'),
+      loadSchoolPrimary(supabase),
+    ])
+    setSites(((data as SiteSelectRow[]) || []).map(r => mapSite(r, schoolPrimary)))
   }, [supabase])
 
   const setActiveSite = useCallback((id: string) => {
@@ -88,30 +106,32 @@ export function SignageProvider({ children }: { children: ReactNode }) {
 
       const { data: user } = await supabase
         .from('team')
-        .select('id, role, signage_approver')
+        .select('id, role, signage_approver, signage_role')
         .eq('supabase_user_id', session.user.id)
         .single()
       if (cancelled) return
 
-      const manager = user?.role === 'Manager'
+      const managerRole = user?.role === 'Manager'
+      const signageEditor = user?.signage_role === 'editor'
       const approver = Boolean(user?.signage_approver)
-      setIsManager(manager)
+      // Editors can manage all signage pages; approvers get the limited content view.
+      const canManage = managerRole || signageEditor
+      setIsManager(canManage)
       setIsApprover(approver)
-      if (!manager && !approver) { setAccess('denied'); return }
+      if (!canManage && !approver) { setAccess('denied'); return }
 
-      const { data: siteRows } = await supabase
-        .from('signage_sites')
-        .select(SITE_SELECT)
-        .eq('active', true)
-        .order('sort_order')
+      const [{ data: siteRows }, schoolPrimary] = await Promise.all([
+        supabase.from('signage_sites').select(SITE_SELECT).eq('active', true).order('sort_order'),
+        loadSchoolPrimary(supabase),
+      ])
       if (cancelled) return
 
-      let list: SignageSite[] = ((siteRows as SiteSelectRow[]) || []).map(mapSite)
+      let list: SignageSite[] = ((siteRows as SiteSelectRow[]) || []).map(r => mapSite(r, schoolPrimary))
 
       // Non-managers are scoped to the sites they've been granted access to.
       // If they have no explicit grants, fall back to all active sites so an
       // approver who predates the access model isn't locked out.
-      if (!manager && user?.id) {
+      if (!managerRole && user?.id) {
         const { data: accessRows } = await supabase
           .from('signage_site_access')
           .select('site_id')

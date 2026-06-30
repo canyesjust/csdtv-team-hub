@@ -7,7 +7,7 @@ import { toast } from '@/lib/toast'
 import { SignagePageShell, useSignageAdminStyles } from '../components/SignageAdmin'
 
 type SiteRow = { id: string; name: string; slug: string; active: boolean; sort_order: number }
-type TeamMember = { id: string; name: string | null; role: string; signage_approver: boolean }
+type TeamMember = { id: string; name: string | null; role: string; signage_approver: boolean; signage_role: string | null }
 
 export default function SignageAccessPage() {
   const { theme } = useTheme()
@@ -19,11 +19,12 @@ export default function SignageAccessPage() {
   const [access, setAccess] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [savingSite, setSavingSite] = useState<string | null>(null)
+  const [savingRole, setSavingRole] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [siteRes, teamRes, accessRes] = await Promise.all([
       supabase.from('signage_sites').select('id, name, slug, active, sort_order').order('sort_order'),
-      supabase.from('team').select('id, name, role, signage_approver').eq('active', true).order('name'),
+      supabase.from('team').select('id, name, role, signage_approver, signage_role').eq('active', true).order('name'),
       supabase.from('signage_site_access').select('team_id, site_id'),
     ])
     setSites((siteRes.data as SiteRow[]) || [])
@@ -66,6 +67,23 @@ export default function SignageAccessPage() {
     })
   }
 
+  const setEditor = useCallback(async (memberId: string, makeEditor: boolean) => {
+    setSavingRole(memberId)
+    const res = await fetch('/api/signage/approvers', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team_id: memberId, signage_role: makeEditor ? 'editor' : null }),
+    })
+    setSavingRole(null)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast(data.error || 'Could not update role', 'error')
+      return
+    }
+    setTeam(prev => prev.map(m => (m.id === memberId ? { ...m, signage_role: makeEditor ? 'editor' : null } : m)))
+    toast(makeEditor ? 'Signage editor access granted' : 'Signage editor access removed', 'success')
+  }, [])
+
   if (loading) {
     return (
       <SignagePageShell title="Site access" subtitle="Who can manage each location">
@@ -84,6 +102,29 @@ export default function SignageAccessPage() {
 
       {nonManagers.length === 0 && (
         <div style={{ ...s.card, color: s.muted }}>No non-manager team members to assign.</div>
+      )}
+
+      {nonManagers.length > 0 && (
+        <div style={{ ...s.card, marginBottom: 20 }}>
+          <div style={{ fontWeight: 600, color: s.text, fontSize: 14, marginBottom: 2 }}>Signage-only editors</div>
+          <div style={{ fontSize: 12, color: s.muted, marginBottom: 12, lineHeight: 1.5 }}>
+            A signage editor signs in to this tool only — no other part of the Hub. Pair with a site grant below to scope them to specific locations.
+          </div>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {nonManagers.map(m => (
+              <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: s.text }}>
+                <input
+                  type="checkbox"
+                  checked={m.signage_role === 'editor'}
+                  disabled={savingRole === m.id}
+                  onChange={e => void setEditor(m.id, e.target.checked)}
+                />
+                {m.name || '(unnamed)'}{' '}
+                <span style={{ fontSize: 11, color: s.muted }}>{m.signage_role === 'editor' ? 'signage editor' : m.role}</span>
+              </label>
+            ))}
+          </div>
+        </div>
       )}
 
       <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>

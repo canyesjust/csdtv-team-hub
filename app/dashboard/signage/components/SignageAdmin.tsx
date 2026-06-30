@@ -307,10 +307,10 @@ type SignageNavItem = { href: string; label: string; managerOnly?: boolean }
 type SignageNavGroup = { key: string; label: string; href?: string; items: SignageNavItem[] }
 
 const SIGNAGE_NAV: SignageNavGroup[] = [
-  { key: 'overview', label: 'Overview', href: '/dashboard/signage/overview', items: [] },
+  { key: 'overview', label: '', items: [{ href: '/dashboard/signage/overview', label: 'Overview', managerOnly: true }] },
   {
-    key: 'publish',
-    label: 'Publish',
+    key: 'content',
+    label: 'Content',
     items: [
       { href: '/dashboard/signage/content', label: 'Content' },
       { href: '/dashboard/signage/announcements', label: 'Announcements', managerOnly: true },
@@ -318,93 +318,85 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     ],
   },
   {
-    key: 'layout',
-    label: 'Layout',
+    key: 'screens',
+    label: 'Screens',
     items: [
       { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
-      { href: '/dashboard/signage/template', label: 'Template', managerOnly: true },
       { href: '/dashboard/signage/floor-plan', label: 'Floor plan', managerOnly: true },
       { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
       { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
     ],
   },
   {
-    key: 'monitor',
-    label: 'Monitor',
-    items: [{ href: '/dashboard/signage/live', label: 'Live view', managerOnly: true }],
+    key: 'live',
+    label: 'Live',
+    items: [{ href: '/dashboard/signage/live', label: 'Live takeover', managerOnly: true }],
   },
   {
-    key: 'setup',
-    label: 'Setup',
+    key: 'settings',
+    label: 'Settings',
     items: [
-      { href: '/dashboard/signage/sites', label: 'Sites', managerOnly: true },
+      { href: '/dashboard/signage/sites', label: 'Sites & locations', managerOnly: true },
+      { href: '/dashboard/signage/template', label: 'Template', managerOnly: true },
       { href: '/dashboard/signage/access', label: 'Access', managerOnly: true },
-      { href: '/dashboard/signage/settings', label: 'Settings', managerOnly: true },
+      { href: '/dashboard/signage/settings', label: 'Signage settings', managerOnly: true },
     ],
   },
 ]
 
-export function SignageSubnav({ active, isManager }: { active: string; isManager: boolean }) {
+/** Pick black or white text for a solid color background so the active item is always legible. */
+function readableText(hex: string): string {
+  const m = (hex || '').replace('#', '')
+  const full = m.length === 3 ? m.split('').map(c => c + c).join('') : m
+  if (full.length < 6) return '#fff'
+  const r = parseInt(full.slice(0, 2), 16)
+  const g = parseInt(full.slice(2, 4), 16)
+  const b = parseInt(full.slice(4, 6), 16)
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return lum > 0.6 ? '#0f2c3f' : '#fff'
+}
+
+export function SignageRail({ active, isManager, accent }: { active: string; isManager: boolean; accent: string }) {
   const { theme } = useTheme()
-  const { text, muted, border, info, infoBg } = useSignageAdminStyles(theme)
+  const { muted, dark } = useSignageAdminStyles(theme)
+  const idle = dark ? '#aebfda' : '#41506b'
 
   const isActive = (href: string) => active === href || active.startsWith(`${href}/`)
 
-  // Each group is visible if it has at least one accessible destination.
+  // Every group is always visible; each group keeps only the destinations this user can reach.
   const groups = SIGNAGE_NAV
     .map(g => ({ ...g, items: g.items.filter(it => isManager || !it.managerOnly) }))
-    .filter(g => (g.href ? isManager : g.items.length > 0))
-
-  const groupHref = (g: SignageNavGroup) => g.href ?? g.items[0]?.href ?? '#'
-  const isGroupActive = (g: SignageNavGroup) =>
-    (g.href ? isActive(g.href) : false) || g.items.some(it => isActive(it.href))
-
-  const activeGroup = groups.find(isGroupActive)
+    .filter(g => g.items.length > 0)
 
   return (
-    <nav style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', borderBottom: `1px solid ${border}`, marginBottom: activeGroup?.items.length ? 0 : 4 }}>
-        {groups.map(g => {
-          const on = isGroupActive(g)
-          return (
-            <Link
-              key={g.key}
-              href={groupHref(g)}
-              prefetch
-              style={{
-                padding: '9px 14px',
-                fontSize: 14,
-                fontWeight: on ? 600 : 400,
-                color: on ? info : muted,
-                textDecoration: 'none',
-                borderBottom: `2px solid ${on ? info : 'transparent'}`,
-                marginBottom: -1,
-              }}
-            >
+    <nav aria-label="Signage sections">
+      {groups.map(g => (
+        <div key={g.key} style={{ marginBottom: 10 }}>
+          {g.label && (
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: muted, margin: '6px 10px 4px' }}>
               {g.label}
-            </Link>
-          )
-        })}
-      </div>
-
-      {activeGroup && activeGroup.items.length > 1 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '12px 0 2px' }}>
-          {activeGroup.items.map(it => {
+            </p>
+          )}
+          {g.items.map(it => {
             const on = isActive(it.href)
             return (
               <Link
                 key={it.href}
                 href={it.href}
                 prefetch
+                aria-current={on ? 'page' : undefined}
+                className={`sig-rail-item${on ? ' sig-rail-on' : ''}`}
                 style={{
-                  padding: '5px 12px',
-                  borderRadius: 999,
-                  fontSize: 13,
-                  fontWeight: on ? 500 : 400,
-                  color: on ? info : text,
-                  background: on ? infoBg : 'transparent',
-                  border: `1px solid ${on ? 'transparent' : border}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 11px',
+                  borderRadius: 9,
+                  fontSize: 13.5,
+                  marginBottom: 1,
                   textDecoration: 'none',
+                  fontWeight: on ? 600 : 450,
+                  color: on ? readableText(accent) : idle,
+                  background: on ? accent : 'transparent',
                 }}
               >
                 {it.label}
@@ -412,7 +404,7 @@ export function SignageSubnav({ active, isManager }: { active: string; isManager
             )
           })}
         </div>
-      )}
+      ))}
     </nav>
   )
 }
@@ -433,52 +425,61 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
   const pathname = usePathname()
   const { isManager, sites, activeSiteId, setActiveSite } = useSignage()
   const { theme } = useTheme()
-  const { text, muted, border, inputBg } = useSignageTheme(theme)
+  const { text, muted, border, inputBg, cardBg, dark } = useSignageTheme(theme)
   const activeSite = sites.find(s => s.id === activeSiteId)
 
-  const accent = activeSite?.accent || '#94a3b8'
+  const accent = activeSite?.accent || '#065687'
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <SignageSubnav active={pathname} isManager={isManager} />
+    <div className="sig-shell">
+      {/* Persistent signage rail — every section is visible at once, no hidden tab rows. */}
+      <aside className="sig-rail" style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 14, padding: 12 }}>
+        <span style={{ display: 'block', fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: muted, fontWeight: 700, margin: '0 4px 5px' }}>Active location</span>
+        {sites.length > 1 ? (
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '8px 28px 8px 11px', background: inputBg, marginBottom: 14 }}>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 0 3px ${accent}22` }} />
+            <select
+              value={activeSiteId}
+              onChange={e => setActiveSite(e.target.value)}
+              aria-label="Active location"
+              style={{ appearance: 'none', WebkitAppearance: 'none', background: 'transparent', border: 'none', color: text, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none', width: '100%' }}
+            >
+              {sites.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+            </select>
+            <span style={{ position: 'absolute', right: 10, color: muted, pointerEvents: 'none', fontSize: 11 }}>▾</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '8px 12px', background: inputBg, marginBottom: 14 }}>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0 }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{activeSite?.name || 'Digital signage'}</span>
+          </div>
+        )}
+        <SignageRail active={pathname} isManager={isManager} accent={accent} />
+      </aside>
+
+      <div className="sig-main" style={{ minWidth: 0 }}>
+        <div style={{ marginBottom: 18 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 3px', color: text }}>{title}</h1>
+          <p style={{ fontSize: 13, color: muted, margin: 0 }}>
+            {activeSite && (
+              <span style={{ color: text, fontWeight: 600 }}>{activeSite.name}</span>
+            )}
+            {activeSite ? ' · ' : ''}
+            {subtitle ?? 'Digital signage'}
+          </p>
         </div>
-        {/* Active location — always visible so it's never ambiguous which school you're editing. */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0, paddingTop: 2 }}>
-          <span style={{ fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: muted, fontWeight: 700 }}>Active location</span>
-          {sites.length > 1 ? (
-            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '7px 30px 7px 11px', background: inputBg }}>
-              <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 0 3px ${accent}22` }} />
-              <select
-                value={activeSiteId}
-                onChange={e => setActiveSite(e.target.value)}
-                aria-label="Active location"
-                style={{ appearance: 'none', WebkitAppearance: 'none', background: 'transparent', border: 'none', color: text, fontSize: 15, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}
-              >
-                {sites.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
-              </select>
-              <span style={{ position: 'absolute', right: 11, color: muted, pointerEvents: 'none', fontSize: 11 }}>▾</span>
-            </div>
-          ) : (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '7px 12px', background: inputBg }}>
-              <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0 }} />
-              <span style={{ fontSize: 15, fontWeight: 700, color: text }}>{activeSite?.name || 'Digital signage'}</span>
-            </div>
-          )}
-        </div>
+        {children}
       </div>
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 3px', color: text }}>{title}</h1>
-        <p style={{ fontSize: 13, color: muted, margin: 0 }}>
-          {activeSite && (
-            <span style={{ color: text, fontWeight: 600 }}>{activeSite.name}</span>
-          )}
-          {activeSite ? ' · ' : ''}
-          {subtitle ?? 'Digital signage'}
-        </p>
-      </div>
-      {children}
+
+      <style>{`
+        .sig-shell { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        .sig-rail-item { transition: background .12s ease, color .12s ease; }
+        .sig-rail-item:not(.sig-rail-on):hover { background: ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(6,86,135,0.07)'}; color: ${dark ? '#ecf3ff' : '#112a3d'}; }
+        @media (min-width: 900px) {
+          .sig-shell { grid-template-columns: 226px minmax(0, 1fr); gap: 22px; align-items: start; }
+          .sig-rail { position: sticky; top: 72px; }
+        }
+      `}</style>
     </div>
   )
 }

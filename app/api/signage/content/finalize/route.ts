@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { clampDisplaySeconds } from '@/lib/signage/content-display'
 
@@ -15,7 +15,7 @@ const SAFE_THUMB = /^[a-f0-9-]+-thumb\.jpg$/i
  * content row that points at those objects.
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 

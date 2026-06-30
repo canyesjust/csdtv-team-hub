@@ -68,6 +68,7 @@ export default function SignageAnnouncementsPage() {
   const [targeting, setTargeting] = useState<TargetingValue>(emptyTargeting)
   const [editId, setEditId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showPast, setShowPast] = useState(false)
 
   const resetForm = () => {
     setForm(emptyForm)
@@ -156,6 +157,10 @@ export default function SignageAnnouncementsPage() {
   const today = useMemo(() => todayISO(), [])
   const pendingRows = useMemo(() => rows.filter(r => r.pending), [rows])
   const liveRows = useMemo(() => rows.filter(r => !r.pending), [rows])
+  const hasPast = useMemo(
+    () => liveRows.some(r => dateRangeLifecycle(r.start_date, r.end_date, today) === 'expired'),
+    [liveRows, today],
+  )
 
   const areaNameById = useMemo(() => new Map(areas.map(a => [a.id, a.name])), [areas])
   const screenNameById = useMemo(() => new Map(screens.map(sc => [sc.id, sc.name])), [screens])
@@ -268,8 +273,17 @@ export default function SignageAnnouncementsPage() {
               ))}
             </div>
           )}
-          <SignageListHint color={s.muted}>Click a title to edit.</SignageListHint>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <SignageListHint color={s.muted}>Click a title to edit.</SignageListHint>
+            {hasPast && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: s.muted, cursor: 'pointer' }}>
+                <input type="checkbox" checked={showPast} onChange={e => setShowPast(e.target.checked)} />
+                Show past
+              </label>
+            )}
+          </div>
           {LIFECYCLE_GROUPS.map(group => {
+            if (group.key === 'expired' && !showPast) return null
             const groupRows = liveRows.filter(r => dateRangeLifecycle(r.start_date, r.end_date, today) === group.key)
             if (!groupRows.length) return null
             return (

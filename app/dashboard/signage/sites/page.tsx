@@ -180,7 +180,15 @@ export default function SignageSitesPage() {
   )
 
   return (
-    <SignagePageShell title="Sites" subtitle="Each location is its own signage workspace">
+    <SignagePageShell title="Sites & locations" subtitle="Each location is its own signage workspace">
+      <div style={{ ...s.card, marginBottom: 16, borderLeft: '3px solid #d97706', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <span style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} aria-hidden>ⓘ</span>
+        <div style={{ fontSize: 12.5, color: s.muted, lineHeight: 1.5 }}>
+          <span style={{ color: s.text, fontWeight: 600 }}>Office signage submissions live outside this tool.</span>{' '}
+          The <a href="/dashboard/signage-submissions" style={{ color: s.info, textDecoration: 'none' }}>Office signage</a> approval queue is a separate workflow. Eventually it could be folded in here as another location so there&apos;s one approval queue.
+        </div>
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <a href="/dashboard/signage/sites/new" style={{ ...s.btnPrimary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
           + Add a school

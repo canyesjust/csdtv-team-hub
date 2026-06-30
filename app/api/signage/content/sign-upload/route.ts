@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ const MAX_VIDEO_BYTES = 200 * 1024 * 1024 // 200 MB ceiling for direct uploads
  * uploads to these URLs, then calls /finalize to create the content row.
  */
 export async function POST(request: NextRequest) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 

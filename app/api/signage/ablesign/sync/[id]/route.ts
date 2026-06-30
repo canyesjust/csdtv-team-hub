@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AbleSignApiError } from '@/lib/server/ablesign'
 import { syncHubScreenToAbleSign, writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
 import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +10,7 @@ export async function POST(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 

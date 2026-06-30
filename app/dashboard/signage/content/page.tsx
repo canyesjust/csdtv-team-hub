@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { confirmDialog } from '@/lib/confirm'
 import { createClient } from '@/lib/supabase'
@@ -17,7 +17,7 @@ import { signageMediaPublicUrl, CIC_SUBMIT_URL } from '@/lib/signage/constants'
 import { prepareSignageImageFile, captureVideoPoster, SIGNAGE_MAX_VIDEO_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
-import { dateRangeLifecycle as contentLifecycle, LIFECYCLE_META, LIFECYCLE_RANK } from '@/lib/signage/lifecycle'
+import { dateRangeLifecycle as contentLifecycle, LIFECYCLE_META } from '@/lib/signage/lifecycle'
 
 type ContentRow = {
   id: string
@@ -65,6 +65,9 @@ export default function SignageContentPage() {
   const [tab, setTab] = useState<Tab>('pending')
   const [rows, setRows] = useState<ContentRow[]>([])
   const [counts, setCounts] = useState(EMPTY_COUNTS)
+  const [countsLoaded, setCountsLoaded] = useState(false)
+  const [showPast, setShowPast] = useState(false)
+  const didInitTab = useRef(false)
   const [tabLoading, setTabLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [edits, setEdits] = useState<Record<string, TargetingValue & {
@@ -100,6 +103,7 @@ export default function SignageContentPage() {
       if (st in next) next[st] += 1
     }
     setCounts(next)
+    setCountsLoaded(true)
   }, [supabase, activeSiteId])
 
   const loadTab = useCallback(async (activeTab: Tab) => {
@@ -123,6 +127,14 @@ export default function SignageContentPage() {
   useEffect(() => { void loadCounts() }, [loadCounts])
   useEffect(() => { void loadTab(tab) }, [loadTab, tab])
 
+  // Open on Pending only when something is waiting; otherwise open on Approved
+  // so a clear queue lands on what's actually live. Runs once after counts load.
+  useEffect(() => {
+    if (didInitTab.current || !countsLoaded) return
+    didInitTab.current = true
+    if (counts.pending === 0) setTab('approved')
+  }, [countsLoaded, counts.pending])
+
   const getEdit = (row: ContentRow) => edits[row.id] ?? {
     all_screens: row.all_screens,
     target_area_ids: row.target_area_ids ?? [],
@@ -140,13 +152,22 @@ export default function SignageContentPage() {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }, [])
-  const displayRows = useMemo(() =>
-    tab === 'approved'
-      ? [...rows].sort((a, b) =>
-          LIFECYCLE_RANK[contentLifecycle(a.start_date, a.end_date, today)] -
-          LIFECYCLE_RANK[contentLifecycle(b.start_date, b.end_date, today)])
-      : rows
-  , [rows, tab, today])
+  // Approved view: show current + upcoming first (soonest dates first, always-on
+  // items last), and hide items whose end date has passed unless "Show past" is on.
+  const displayRows = useMemo(() => {
+    if (tab !== 'approved') return rows
+    const withLc = rows.map(r => ({ r, lc: contentLifecycle(r.start_date, r.end_date, today) }))
+    const visible = showPast ? withLc : withLc.filter(x => x.lc !== 'expired')
+    visible.sort((a, b) => {
+      const grp = (lc: typeof a.lc) => (lc === 'expired' ? 3 : lc === 'none' ? 2 : 0)
+      const g = grp(a.lc) - grp(b.lc)
+      if (g !== 0) return g
+      const sa = a.r.start_date?.slice(0, 10) || '9999-99-99'
+      const sb = b.r.start_date?.slice(0, 10) || '9999-99-99'
+      return sa.localeCompare(sb)
+    })
+    return visible.map(x => x.r)
+  }, [rows, tab, today, showPast])
 
   const saveEdit = async (row: ContentRow, extra?: Record<string, unknown>) => {
     const e = getEdit(row)
@@ -362,6 +383,12 @@ export default function SignageContentPage() {
             {TAB_LABELS[t]} <b style={{ fontWeight: 600 }}>{counts[t]}</b>
           </button>
         ))}
+        {tab === 'approved' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: s.muted, cursor: 'pointer' }}>
+            <input type="checkbox" checked={showPast} onChange={e => setShowPast(e.target.checked)} />
+            Show past
+          </label>
+        )}
         {isManager && (
           <button type="button" onClick={() => setShowAdd(v => !v)} style={{ ...s.btnPrimary, marginLeft: 'auto' }}>
             {showAdd ? 'Cancel add' : '+ Add content'}

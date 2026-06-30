@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AbleSignApiError, listAllScreens } from '@/lib/server/ablesign'
 import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
 
   try {

@@ -4,7 +4,7 @@
  * content-hash skip (force) so staff always get an immediate, fresh push.
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { renderAndPushScreen } from '@/lib/signage/push-screen'
 import { buildScreenHtml } from '@/lib/signage/build-screen-html'
 
@@ -16,7 +16,7 @@ export async function POST(
   _request: NextRequest,
   context: { params: Promise<{ code: string }> },
 ) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 
@@ -37,7 +37,7 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ code: string }> },
 ) {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 

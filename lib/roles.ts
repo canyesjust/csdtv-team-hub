@@ -13,3 +13,11 @@ export function isStudentInternRole(role: string | null | undefined): boolean {
 export function isProductionFocusRole(role: string | null | undefined): boolean {
   return (role || '') === PRODUCTION_FOCUS_ROLE
 }
+
+/** Value stored on `team.signage_role` for a signage-only editor (no other Hub access). */
+export const SIGNAGE_EDITOR_ROLE = 'editor' as const
+
+/** Lands on and is locked to the signage tool. Distinct from `team.role`. */
+export function isSignageEditorRole(signageRole: string | null | undefined): boolean {
+  return (signageRole || '') === SIGNAGE_EDITOR_ROLE
+}

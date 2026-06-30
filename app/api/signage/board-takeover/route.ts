@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireManagerApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 const now = () => new Date().toISOString()
 
 export async function GET() {
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
   const { data } = await service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle()
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  const auth = await requireManagerApi()
+  const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 

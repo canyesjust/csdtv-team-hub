@@ -24,8 +24,8 @@ const MORE_BASE: DashboardNavItem[] = [
 ]
 
 const SIGNAGE: DashboardNavItem = {
-  label: 'CIC Signage',
-  href: '/dashboard/signage/content',
+  label: 'Signage',
+  href: '/dashboard/signage/overview',
   icon: 'tv',
 }
 

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE } from './lib/roles'
+import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE, isSignageEditorRole } from './lib/roles'
 import { isDashboardPathAllowed } from './lib/dashboard-access'
 import { getActorTeamRow, getEffectiveTeamRow } from './lib/server/effective-team'
 
@@ -54,6 +54,8 @@ export async function middleware(request: NextRequest) {
     const role = teamAccess === 'pending-link' ? null : teamAccess.role
     const dashboardProfile =
       teamAccess === 'pending-link' ? null : teamAccess.dashboard_profile
+    const signageRole =
+      teamAccess === 'pending-link' ? null : teamAccess.signage_role
 
     if (teamAccess !== 'pending-link') {
       const actorRow = await getActorTeamRow(supabase, user)
@@ -77,6 +79,16 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = STUDENT_INTERN_HOME_PATH
       return NextResponse.redirect(url)
+    }
+
+    // Signage-only editors are locked to the signage tool; anything else → overview.
+    if (isSignageEditorRole(signageRole)) {
+      const inSignage = pathname === '/dashboard/signage' || pathname.startsWith('/dashboard/signage/')
+      if (!inSignage) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard/signage/overview'
+        return NextResponse.redirect(url)
+      }
     }
 
     if (
