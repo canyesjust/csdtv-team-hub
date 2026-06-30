@@ -136,6 +136,17 @@ async function inlineFeedAssets(feed: Feed): Promise<Feed> {
     }),
   )
 
+  // Inline district-news thumbnails so the bottom rotator works offline too.
+  if (next.news?.length) {
+    next.news = await Promise.all(
+      next.news.map(async n => {
+        if (!n.image) return n
+        const dataUri = await imageToDataUri(n.image, { maxWidth: 480, quality: 70 })
+        return { ...n, image: dataUri ?? null }
+      }),
+    )
+  }
+
   return next
 }
 
@@ -433,10 +444,15 @@ function zoned2Rail(feed: Feed): string {
   return `<div class="cic-z2-rotwrap" data-z2rot>${inner}</div>`
 }
 
-function zoned2News(items: string[]): string {
-  const list = items.length ? items.slice(0, 8) : ['Canyons School District']
+function zoned2News(items: { title: string; image: string | null }[]): string {
+  const list = items.length ? items.slice(0, 8) : [{ title: 'Canyons School District', image: null }]
   const layers = list
-    .map((h, i) => `<div class="cic-z2-headline${i === 0 ? ' show' : ''}" data-z2news><span>${esc(h)}</span></div>`)
+    .map((h, i) => {
+      const thumb = h.image
+        ? `<span class="cic-z2-news-thumb"><img src="${esc(h.image)}" alt=""></span>`
+        : ''
+      return `<div class="cic-z2-headline${i === 0 ? ' show' : ''}" data-z2news>${thumb}<span>${esc(h.title)}</span></div>`
+    })
     .join('')
   return (
     `<footer class="cic-z2-news"><div class="cic-z2-news-badge">` +

@@ -1678,9 +1678,40 @@
   --blue1: #065687;
   --accent: #3abfe8;
   --csd-yellow: #fbae42;
-  --line: rgba(255, 255, 255, 0.08);
-  --muted: #a9c6da;
-  background: var(--navy-2);
+  --line: rgba(255, 255, 255, 0.14);
+  --muted: #b6d0e2;
+  /* Liquid-glass tokens — translucent frosted panels with a bright top edge. */
+  --glass-fill: rgba(255, 255, 255, 0.085);
+  --glass-br: rgba(255, 255, 255, 0.16);
+  --glass-blur: blur(1.5vmax) saturate(155%);
+  --glass-hi: inset 0 0.14vmax 0 rgba(255, 255, 255, 0.30);
+  --glass-shadow: 0 0.7vmax 2.2vmax rgba(0, 0, 0, 0.24);
+  --glass-radius: 1.1vmax;
+  /* Ambient brand-colored glow so the frosted panels have something to refract. */
+  background:
+    radial-gradient(48% 44% at 85% 9%, rgba(74, 162, 222, 0.22), transparent 60%),
+    radial-gradient(46% 42% at 5% 93%, rgba(251, 174, 66, 0.13), transparent 60%),
+    radial-gradient(62% 56% at 50% 55%, rgba(34, 84, 130, 0.30), transparent 72%),
+    var(--navy-2);
+}
+/* One shared glass surface for every panel. */
+.cic-screen.layout-zoned2 .cic-rail,
+.cic-screen.layout-zoned2 .cic-z2-brandbox,
+.cic-screen.layout-zoned2 .cic-z2-news {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-br);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-hi), var(--glass-shadow);
+}
+/* Fallback for players without backdrop-filter: solid translucent panel. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cic-screen.layout-zoned2 .cic-rail,
+  .cic-screen.layout-zoned2 .cic-z2-brandbox,
+  .cic-screen.layout-zoned2 .cic-z2-news {
+    background: rgba(13, 46, 72, 0.92);
+  }
 }
 .cic-screen.layout-zoned2 .cic-zoned2-stage {
   flex: 1;
@@ -1738,10 +1769,11 @@
   aspect-ratio: 16 / 9;
   flex: none;
   position: relative;
-  border-radius: 0.7vmax;
+  border-radius: var(--glass-radius);
   overflow: hidden;
-  border: 1px solid var(--line);
-  background: #04263f;
+  border: 1px solid var(--glass-br);
+  box-shadow: var(--glass-hi), var(--glass-shadow);
+  background: #062338;
 }
 .cic-screen.layout-zoned2 .cic-media16 img,
 .cic-screen.layout-zoned2 .cic-media16 video { object-fit: contain; }
@@ -1755,7 +1787,7 @@
 
 /* rail */
 .cic-screen.layout-zoned2 .cic-railcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1.05vmax; }
-.cic-screen.layout-zoned2 .cic-rail { background: var(--panel); border: 1px solid var(--line); border-radius: 0.7vmax; padding: 1.4vmax; }
+.cic-screen.layout-zoned2 .cic-rail { padding: 1.4vmax; }
 .cic-screen.layout-zoned2 .cic-railhd { font-weight: 700; font-size: 1.3vmax; letter-spacing: 0.18vmax; text-transform: uppercase; color: var(--accent); margin-bottom: 1vmax; display: flex; justify-content: space-between; align-items: baseline; }
 .cic-screen.layout-zoned2 .cic-railhd .sub { color: var(--muted); font-size: 1.2vmax; letter-spacing: 0; }
 
@@ -1784,15 +1816,17 @@
 .cic-screen.layout-zoned2 .cic-z2-live-sub { font-weight: 500; font-size: 1.4vmax; color: var(--muted); margin-top: 0.5vh; }
 
 /* full-headline NEWS rotator band */
-.cic-screen.layout-zoned2 .cic-z2-news { flex: none; height: 15vh; display: flex; align-items: stretch; background: var(--blue1); border: 1px solid var(--line); border-radius: 0.7vmax; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-news { flex: none; height: 15vh; display: flex; align-items: stretch; overflow: hidden; }
 .cic-screen.layout-zoned2 .cic-z2-news-badge { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 0.2vmax; padding: 0 2vmax; border-right: 1px solid var(--line); }
 .cic-screen.layout-zoned2 .cic-z2-news-k { font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; font-size: 1.3vmax; color: var(--accent); white-space: nowrap; }
 .cic-screen.layout-zoned2 .cic-z2-news-w { display: flex; align-items: center; gap: 0.5vmax; font-weight: 900; font-size: 4vmax; line-height: 0.95; }
 .cic-screen.layout-zoned2 .cic-z2-news-w .dot { width: 0.8vmax; height: 0.8vmax; border-radius: 50%; background: var(--csd-yellow); }
 .cic-screen.layout-zoned2 .cic-z2-news-rot { flex: 1; position: relative; overflow: hidden; }
-.cic-screen.layout-zoned2 .cic-z2-headline { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 2.4vmax; opacity: 0; transition: opacity .6s ease; }
+.cic-screen.layout-zoned2 .cic-z2-headline { position: absolute; inset: 0; display: flex; align-items: center; gap: 1.8vmax; padding: 0 2.4vmax; opacity: 0; transition: opacity .6s ease; }
 .cic-screen.layout-zoned2 .cic-z2-headline.show { opacity: 1; }
-.cic-screen.layout-zoned2 .cic-z2-headline span { font-weight: 700; font-size: 2.1vmax; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-news-thumb { flex: none; height: 10.5vh; aspect-ratio: 16 / 10; border-radius: 0.6vmax; overflow: hidden; background: #04263f; border: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-news-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cic-screen.layout-zoned2 .cic-z2-headline > span:not(.cic-z2-news-thumb) { flex: 1; min-width: 0; font-weight: 700; font-size: 2.1vmax; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .cic-screen.layout-zoned2 .cic-z2-news-cta { flex: none; display: flex; align-items: center; gap: 1.2vmax; padding: 0 1.8vmax; border-left: 1px solid var(--line); }
 .cic-screen.layout-zoned2 .cic-z2-news-cta .lead { font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; font-size: 1.1vmax; color: var(--csd-yellow); text-align: right; }
 .cic-screen.layout-zoned2 .cic-z2-news-cta .url { font-weight: 600; font-size: 1.35vmax; color: var(--accent); text-align: right; }
@@ -1811,13 +1845,14 @@
 .cic-screen.layout-zoned2 .cic-z2-weather > .cic-z2-wxmeta { position: relative; z-index: 2; }
 .cic-screen.layout-zoned2 .z2wx-scene { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
 
-/* condition background tints */
-.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-sunny { background: linear-gradient(160deg, #0a4a73, #063a5c); }
-.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-cloudy { background: linear-gradient(160deg, #0c3a55, #06314f); }
-.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-rain { background: linear-gradient(160deg, #0a2f49, #04263f); }
-.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-snow { background: linear-gradient(160deg, #123d57, #0a2c42); }
-.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-storm { background: linear-gradient(160deg, #10202f, #070f18); }
-.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-night { background: linear-gradient(160deg, #0a1a30, #04101f); }
+/* Condition mood tints — kept translucent so they layer over the frosted glass
+   fill (sky color + animated scene, without becoming an opaque colored box). */
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-sunny { background: linear-gradient(160deg, rgba(58, 191, 232, 0.16), rgba(6, 58, 92, 0.04)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-cloudy { background: linear-gradient(160deg, rgba(120, 156, 184, 0.14), rgba(6, 49, 79, 0.04)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-rain { background: linear-gradient(160deg, rgba(40, 96, 138, 0.18), rgba(4, 38, 63, 0.05)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-snow { background: linear-gradient(160deg, rgba(150, 192, 222, 0.18), rgba(10, 44, 66, 0.05)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-storm { background: linear-gradient(160deg, rgba(12, 22, 33, 0.34), rgba(7, 15, 24, 0.12)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-night { background: linear-gradient(160deg, rgba(12, 30, 56, 0.30), rgba(4, 16, 31, 0.10)), var(--glass-fill); }
 
 /* icon box now holds CSS shapes, not an emoji */
 .cic-screen.layout-zoned2 .cic-z2-wxico { position: relative; width: 6.5vmax; height: 6.5vmax; flex: none; font-size: 0; }
@@ -1889,7 +1924,7 @@
 .cic-screen.layout-zoned2 .cic-z2-mediacell .cic-media16 { height: auto; width: min(100cqw, 177.78cqh); flex: none; }
 .cic-screen.layout-zoned2 .cic-railcol { flex: none; width: 21vw; }
 
-.cic-screen.layout-zoned2 .cic-z2-brandbox { flex: none; background: var(--navy); text-align: center; padding: 1.3vmax; }
+.cic-screen.layout-zoned2 .cic-z2-brandbox { flex: none; text-align: center; padding: 1.3vmax; }
 .cic-screen.layout-zoned2 .cic-z2-bb-logo { width: 78%; height: auto; display: block; margin: 0 auto 0.9vmax; }
 .cic-screen.layout-zoned2 .cic-z2-bb-row { display: flex; align-items: center; justify-content: center; gap: 0.8vmax; border-top: 1px solid var(--line); padding-top: 0.9vmax; }
 .cic-screen.layout-zoned2 .cic-z2-bb-time { font-weight: 800; font-size: 2.6vmax; line-height: 1; font-variant-numeric: tabular-nums; }

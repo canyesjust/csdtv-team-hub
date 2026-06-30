@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
-import { SignagePageShell, useSignageAdminStyles, formatSignageDate } from '../components/SignageAdmin'
+import { SignagePageShell, useSignageAdminStyles } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
-import { dateRangeLifecycle, singleDateLifecycle, todayISO, LifecyclePill, type Lifecycle } from '@/lib/signage/lifecycle'
+import { dateRangeLifecycle, todayISO, LifecyclePill, type Lifecycle } from '@/lib/signage/lifecycle'
 
 type ReviewKind = 'content' | 'announcement' | 'visitor'
 type ReviewItem = {
@@ -141,12 +141,28 @@ export default function SignageOverviewPage() {
     void load()
   }
 
-  const metric = (label: string, value: string, accent?: string) => (
-    <div style={{ background: s.dark ? 'rgba(255,255,255,0.03)' : '#f4f6fa', borderRadius: 10, padding: '12px 14px' }}>
-      <p style={{ fontSize: 12, color: s.muted, margin: '0 0 4px' }}>{label}</p>
-      <p style={{ fontSize: 23, fontWeight: 600, margin: 0, color: accent || s.text }}>{value}</p>
+  const metric = (label: string, value: string, subtitle: string, tone?: 'ok' | 'warn') => (
+    <div style={{ ...s.card, padding: '16px 18px' }}>
+      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', color: s.muted, margin: '0 0 8px' }}>{label}</p>
+      <p style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-1px', margin: 0, color: tone === 'ok' ? '#16a34a' : tone === 'warn' ? '#d97706' : s.text }}>{value}</p>
+      <p style={{ fontSize: 12, color: s.muted, margin: '6px 0 0' }}>{subtitle}</p>
     </div>
   )
+
+  const thumb = (kind: string) => {
+    const isAnn = kind.toLowerCase().includes('announc')
+    return (
+      <span style={{ width: 38, height: 38, borderRadius: 9, background: s.infoBg, color: s.info, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {isAnn ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l16-5v12L3 13z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        )}
+      </span>
+    )
+  }
+
+  const showingNow = showing.filter(x => x.lifecycle === 'active').length
 
   return (
     <SignagePageShell title="Overview" subtitle="Everything at a glance">
@@ -154,56 +170,68 @@ export default function SignageOverviewPage() {
         <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>Loading…</div>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
-            {metric('Screens online', `${screensOnline}/${screensTotal}`)}
-            {metric('Showing now', String(showing.filter(x => x.lifecycle === 'active').length))}
-            {metric('Pending review', String(review.length), review.length ? '#d97706' : undefined)}
-            {metric('Live announcements', String(liveAnnCount))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+            {metric('Screens online', `${screensOnline}/${screensTotal}`, screensTotal > 0 && screensOnline === screensTotal ? 'All displays reporting' : `${Math.max(screensTotal - screensOnline, 0)} offline`, screensTotal > 0 && screensOnline === screensTotal ? 'ok' : undefined)}
+            {metric('Showing now', String(showingNow), 'Items in rotation')}
+            {metric('Pending review', String(review.length), review.length ? 'Waiting on you' : 'Nothing waiting', review.length ? 'warn' : undefined)}
+            {metric('Live announcements', String(liveAnnCount), 'Currently scheduled')}
           </div>
 
-          <div style={{ ...s.card, marginBottom: 14, borderLeft: review.length ? '3px solid #d97706' : `1px solid ${s.border}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: review.length ? 6 : 0 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: s.text }}>Needs your review{review.length ? ` (${review.length})` : ''}</span>
+          {review.length > 0 && (
+            <div style={{ ...s.card, marginBottom: 20, borderLeft: '3px solid #d97706' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: s.text }}>Needs your review ({review.length})</span>
+              {review.map(item => (
+                <div key={`${item.kind}-${item.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 0', borderTop: `1px solid ${s.border}`, marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                    {thumb(item.kind)}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: s.text }}>{item.title}</div>
+                      <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{item.meta}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button type="button" onClick={() => void approve(item)} style={s.btnPrimary}>Approve</button>
+                    <button type="button" onClick={() => void reject(item)} style={{ ...s.btn, color: '#ef4444', borderColor: 'transparent', background: 'transparent' }}>Reject</button>
+                  </div>
+                </div>
+              ))}
             </div>
-            {review.length === 0 ? (
-              <p style={{ fontSize: 13, color: s.muted, margin: 0 }}>Nothing waiting — you&apos;re all caught up.</p>
-            ) : review.map(item => (
-              <div key={`${item.kind}-${item.id}`} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '9px 0', borderTop: `1px solid ${s.border}` }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: s.text }}>{item.title}</div>
-                  <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{item.meta}</div>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button type="button" onClick={() => void approve(item)} style={s.btnPrimary}>Approve</button>
-                  <button type="button" onClick={() => void reject(item)} style={{ ...s.btn, color: '#ef4444', borderColor: 'transparent', background: 'transparent' }}>Reject</button>
-                </div>
-              </div>
-            ))}
-          </div>
+          )}
 
-          <div style={{ ...s.card, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: s.text }}>Showing now &amp; coming up</span>
-              <Link href={`${BASE}/live`} prefetch style={{ ...s.btn, textDecoration: 'none', fontSize: 11 }}>Open live view</Link>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.6fr) minmax(0, 1fr)', gap: 16, alignItems: 'start' }} className="sig-ov-grid">
+            <div style={{ ...s.card }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: s.text }}>Showing now &amp; coming up</span>
+                <Link href={`${BASE}/live`} prefetch style={{ fontSize: 13, fontWeight: 500, color: s.info, textDecoration: 'none' }}>Open live view →</Link>
+              </div>
+              {showing.length === 0 ? (
+                <p style={{ fontSize: 13, color: s.muted, margin: '8px 0 0' }}>Nothing scheduled right now.</p>
+              ) : showing.slice(0, 8).map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: `1px solid ${s.border}` }}>
+                  {thumb(item.kind)}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: s.text }}>{item.label}</div>
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{item.kind} · {item.lifecycle === 'active' ? 'Showing now' : 'Scheduled'}</div>
+                  </div>
+                  <LifecyclePill lifecycle={item.lifecycle} />
+                </div>
+              ))}
             </div>
-            {showing.length === 0 ? (
-              <p style={{ fontSize: 13, color: s.muted, margin: '8px 0 0' }}>Nothing scheduled right now.</p>
-            ) : showing.slice(0, 8).map(item => (
-              <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 0', borderTop: `1px solid ${s.border}` }}>
-                <div style={{ minWidth: 0 }}>
-                  <span style={{ fontSize: 13, color: s.text }}>{item.label}</span>
-                  <span style={{ fontSize: 12, color: s.muted, marginLeft: 8 }}>{item.kind}</span>
+
+            <div style={{ ...s.card }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: s.text, marginBottom: 12 }}>Quick actions</div>
+              <Link href={`${BASE}/content`} prefetch style={{ ...s.btn, textDecoration: 'none', display: 'block', textAlign: 'center', marginBottom: 8 }}>+ Add content</Link>
+              <Link href={`${BASE}/announcements`} prefetch style={{ ...s.btn, textDecoration: 'none', display: 'block', textAlign: 'center', marginBottom: 8 }}>New announcement</Link>
+              <Link href={`${BASE}/visitors`} prefetch style={{ ...s.btn, textDecoration: 'none', display: 'block', textAlign: 'center' }}>Add visitor</Link>
+              {review.length === 0 && (
+                <div style={{ marginTop: 12, background: 'var(--bg-warning, #fff7ed)', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, lineHeight: 1.5 }}>
+                  Needs your review: nothing waiting — you&apos;re all caught up.
                 </div>
-                <LifecyclePill lifecycle={item.lifecycle} />
-              </div>
-            ))}
+              )}
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Link href={`${BASE}/content`} prefetch style={{ ...s.btnPrimary, textDecoration: 'none' }}>+ Add content</Link>
-            <Link href={`${BASE}/announcements`} prefetch style={{ ...s.btn, textDecoration: 'none' }}>New announcement</Link>
-            <Link href={`${BASE}/visitors`} prefetch style={{ ...s.btn, textDecoration: 'none' }}>Add visitor</Link>
-          </div>
+          <style>{`@media (max-width: 760px) { .sig-ov-grid { grid-template-columns: 1fr !important; } }`}</style>
         </>
       )}
     </SignagePageShell>

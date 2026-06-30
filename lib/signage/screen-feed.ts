@@ -69,8 +69,8 @@ export type ScreenFeed = {
   spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]
   /** Zoned 2 only: a board meeting currently live ("Now on CSDtv"). */
   csdtv_live?: { title: string; channel: number | null } | null
-  /** Zoned 2 only: district news headlines (from the district news RSS). */
-  news?: string[]
+  /** Zoned 2 only: district news headlines + thumbnails (from the district news RSS). */
+  news?: { title: string; image: string | null }[]
   /** Zoned 2 only: upcoming district closures (from the district calendar). */
   closures?: { date: string; label: string }[]
   /** Zoned 2 only: the next upcoming board meeting. */

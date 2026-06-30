@@ -357,9 +357,9 @@ function readableText(hex: string): string {
 }
 
 export function SignageRail({ active, isManager, accent }: { active: string; isManager: boolean; accent: string }) {
-  const { theme } = useTheme()
-  const { muted, dark } = useSignageAdminStyles(theme)
-  const idle = dark ? '#aebfda' : '#41506b'
+  // The rail is always the dark navy surface (matches the standalone-tool design).
+  const idle = '#9fb3cf'
+  const heading = '#6e83a6'
 
   const isActive = (href: string) => active === href || active.startsWith(`${href}/`)
 
@@ -373,7 +373,7 @@ export function SignageRail({ active, isManager, accent }: { active: string; isM
       {groups.map(g => (
         <div key={g.key} style={{ marginBottom: 10 }}>
           {g.label && (
-            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: muted, margin: '6px 10px 4px' }}>
+            <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: heading, margin: '6px 10px 4px' }}>
               {g.label}
             </p>
           )}
@@ -425,33 +425,33 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
   const pathname = usePathname()
   const { isManager, sites, activeSiteId, setActiveSite } = useSignage()
   const { theme } = useTheme()
-  const { text, muted, border, inputBg, cardBg, dark } = useSignageTheme(theme)
+  const { text, muted } = useSignageTheme(theme)
   const activeSite = sites.find(s => s.id === activeSiteId)
 
   const accent = activeSite?.accent || '#065687'
 
   return (
     <div className="sig-shell">
-      {/* Persistent signage rail — every section is visible at once, no hidden tab rows. */}
-      <aside className="sig-rail" style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: 14, padding: 12 }}>
-        <span style={{ display: 'block', fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: muted, fontWeight: 700, margin: '0 4px 5px' }}>Active location</span>
+      {/* Persistent dark signage rail — every section visible at once, no hidden tab rows. */}
+      <aside className="sig-rail" style={{ background: '#0b1324', borderRadius: 14, padding: 12 }}>
+        <span style={{ display: 'block', fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: '#6e83a6', fontWeight: 700, margin: '0 4px 5px' }}>Active location</span>
         {sites.length > 1 ? (
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '8px 28px 8px 11px', background: inputBg, marginBottom: 14 }}>
-            <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 0 3px ${accent}22` }} />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(255,255,255,0.09)', borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '8px 28px 8px 11px', background: 'rgba(255,255,255,0.05)', marginBottom: 14 }}>
+            <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 0 3px ${accent}33` }} />
             <select
               value={activeSiteId}
               onChange={e => setActiveSite(e.target.value)}
               aria-label="Active location"
-              style={{ appearance: 'none', WebkitAppearance: 'none', background: 'transparent', border: 'none', color: text, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none', width: '100%' }}
+              style={{ appearance: 'none', WebkitAppearance: 'none', background: 'transparent', border: 'none', color: '#e8eefb', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', outline: 'none', width: '100%' }}
             >
-              {sites.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+              {sites.map(st => <option key={st.id} value={st.id} style={{ color: '#111' }}>{st.name}</option>)}
             </select>
-            <span style={{ position: 'absolute', right: 10, color: muted, pointerEvents: 'none', fontSize: 11 }}>▾</span>
+            <span style={{ position: 'absolute', right: 10, color: '#8a9cbd', pointerEvents: 'none', fontSize: 11 }}>▾</span>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '8px 12px', background: inputBg, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(255,255,255,0.09)', borderLeft: `4px solid ${accent}`, borderRadius: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.05)', marginBottom: 14 }}>
             <span style={{ width: 11, height: 11, borderRadius: '50%', background: accent, flexShrink: 0 }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{activeSite?.name || 'Digital signage'}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#e8eefb' }}>{activeSite?.name || 'Digital signage'}</span>
           </div>
         )}
         <SignageRail active={pathname} isManager={isManager} accent={accent} />
@@ -459,7 +459,8 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
 
       <div className="sig-main" style={{ minWidth: 0 }}>
         <div style={{ marginBottom: 18 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 3px', color: text }}>{title}</h1>
+          <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Signage · <span style={{ color: text, fontWeight: 600 }}>{title}</span></div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 3px', color: text, letterSpacing: '-0.4px' }}>{title}</h1>
           <p style={{ fontSize: 13, color: muted, margin: 0 }}>
             {activeSite && (
               <span style={{ color: text, fontWeight: 600 }}>{activeSite.name}</span>
@@ -474,10 +475,10 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
       <style>{`
         .sig-shell { display: grid; grid-template-columns: 1fr; gap: 16px; }
         .sig-rail-item { transition: background .12s ease, color .12s ease; }
-        .sig-rail-item:not(.sig-rail-on):hover { background: ${dark ? 'rgba(255,255,255,0.06)' : 'rgba(6,86,135,0.07)'}; color: ${dark ? '#ecf3ff' : '#112a3d'}; }
+        .sig-rail-item:not(.sig-rail-on):hover { background: rgba(255,255,255,0.07); color: #fff; }
         @media (min-width: 900px) {
-          .sig-shell { grid-template-columns: 226px minmax(0, 1fr); gap: 22px; align-items: start; }
-          .sig-rail { position: sticky; top: 72px; }
+          .sig-shell { grid-template-columns: 232px minmax(0, 1fr); gap: 24px; align-items: start; }
+          .sig-rail { position: sticky; top: 72px; align-self: start; }
         }
       `}</style>
     </div>

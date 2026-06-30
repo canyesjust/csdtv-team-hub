@@ -42,14 +42,15 @@ async function scheduleTickerSafe(service: SupabaseClient, today: string): Promi
 
 const DISTRICT_LOGO_URL = 'https://www.canyonsdistrict.org/wp-content/uploads/2022/05/CanyonsLogoWhiteLong.png'
 const DISTRICT_NEWS_FEED = 'https://rss.app/feeds/hR9Of3ZD4b0Rw2Bg.xml'
-const DISTRICT_NEWS_FALLBACK: string[] = [
-  'Canyons Names Patricia Larkin as New Director of Career and Technical Education',
-  'Building the Future: Students Watch Trades Campus Take Shape at Canyons Innovation Center',
-  'Board Appoints Union Middle’s Angi Holden as New Director of CSD Middle Schools',
-  'Canyons Announces Administrative Appointments for 2026-2027',
-  'Corner Canyon High Student Brings Home Historic Glass at International DECA Competition',
+type DistrictNewsItem = { title: string; image: string | null }
+const DISTRICT_NEWS_FALLBACK: DistrictNewsItem[] = [
+  { title: 'Canyons Names Patricia Larkin as New Director of Career and Technical Education', image: null },
+  { title: 'Building the Future: Students Watch Trades Campus Take Shape at Canyons Innovation Center', image: null },
+  { title: 'Board Appoints Union Middle’s Angi Holden as New Director of CSD Middle Schools', image: null },
+  { title: 'Canyons Announces Administrative Appointments for 2026-2027', image: null },
+  { title: 'Corner Canyon High Student Brings Home Historic Glass at International DECA Competition', image: null },
 ]
-let districtNewsCache: { at: number; items: string[] } | null = null
+let districtNewsCache: { at: number; items: DistrictNewsItem[] } | null = null
 const DISTRICT_NEWS_TTL_MS = 10 * 60 * 1000
 
 function decodeNewsTitle(raw: string): string {
@@ -70,7 +71,7 @@ function decodeNewsTitle(raw: string): string {
 }
 
 /** District news headlines for the Zoned 2 bottom rotator (cached ~10 min). */
-async function loadDistrictNews(): Promise<string[]> {
+async function loadDistrictNews(): Promise<DistrictNewsItem[]> {
   if (districtNewsCache && Date.now() - districtNewsCache.at < DISTRICT_NEWS_TTL_MS) {
     return districtNewsCache.items
   }
@@ -82,19 +83,31 @@ async function loadDistrictNews(): Promise<string[]> {
     if (!res.ok) throw new Error('news ' + res.status)
     const xml = await res.text()
     const blocks = xml.split(/<item[\s>]/i).slice(1)
-    const titles: string[] = []
+    const items: DistrictNewsItem[] = []
     const seen = new Set<string>()
     for (const block of blocks) {
       const m = block.match(/<title>([\s\S]*?)<\/title>/i)
       if (!m) continue
       const t = decodeNewsTitle(m[1])
-      if (t && !seen.has(t)) {
-        seen.add(t)
-        titles.push(t)
+      if (!t || seen.has(t)) continue
+      seen.add(t)
+      // Article thumbnail: prefer <media:content url> / <media:thumbnail url>,
+      // fall back to the first <img src> inside the item (e.g. the description).
+      let image: string | null = null
+      const mc = block.match(/<media:(?:content|thumbnail)[^>]*\burl="([^"]+)"/i)
+      if (mc) image = mc[1]
+      if (!image) {
+        const enc = block.match(/<enclosure[^>]*\burl="([^"]+)"[^>]*type="image/i)
+        if (enc) image = enc[1]
       }
-      if (titles.length >= 8) break
+      if (!image) {
+        const im = block.match(/<img[^>]*\bsrc="([^"]+)"/i)
+        if (im) image = im[1]
+      }
+      items.push({ title: t, image })
+      if (items.length >= 8) break
     }
-    const out = titles.length ? titles : DISTRICT_NEWS_FALLBACK
+    const out = items.length ? items : DISTRICT_NEWS_FALLBACK
     districtNewsCache = { at: Date.now(), items: out }
     return out
   } catch {
@@ -340,7 +353,7 @@ export async function buildScreenFeed(
   const resolvedLayout = resolveScreenLayout(screen.layout, site?.default_layout)
   let spotlight: NonNullable<ScreenFeed['spotlight']> = []
   let csdtv_live: ScreenFeed['csdtv_live'] = null
-  let news: string[] = []
+  let news: DistrictNewsItem[] = []
   let closures: { date: string; label: string }[] = []
   let board_next: ScreenFeed['board_next'] = null
   if (resolvedLayout === 'zoned2') {

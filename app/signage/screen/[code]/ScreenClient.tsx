@@ -52,7 +52,7 @@ export type ScreenFeed = {
   weather: { tempF: number | null; condition: string; icon: string; high: number | null; low: number | null; windMph: number | null }
   spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]
   csdtv_live?: { title: string; channel: number | null } | null
-  news?: string[]
+  news?: { title: string; image: string | null }[]
   closures?: { date: string; label: string }[]
   board_next?: { date: string; time: string; title: string } | null
   offline?: boolean
@@ -700,8 +700,8 @@ function Zoned2Rotator({ spotlight, board, closures, announcements, live }: {
   return <div className="cic-z2-rotcard" key={active}>{cards[active]}</div>
 }
 
-function Zoned2News({ items }: { items: string[] }) {
-  const list = items.length ? items : ['Canyons School District']
+function Zoned2News({ items }: { items: { title: string; image: string | null }[] }) {
+  const list = items.length ? items : [{ title: 'Canyons School District', image: null }]
   const [idx, setIdx] = useState(0)
   const [vis, setVis] = useState(true)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -738,7 +738,12 @@ function Zoned2News({ items }: { items: string[] }) {
         <span className="cic-z2-news-w"><span className="dot" />NEWS</span>
       </div>
       <div className="cic-z2-news-rot" ref={boxRef}>
-        <div className={`cic-z2-headline${vis ? ' show' : ''}`}><span ref={textRef}>{list[idx]}</span></div>
+        <div className={`cic-z2-headline${vis ? ' show' : ''}`}>
+          {list[idx].image ? (
+            <span className="cic-z2-news-thumb"><img src={list[idx].image as string} alt="" /></span>
+          ) : null}
+          <span ref={textRef}>{list[idx].title}</span>
+        </div>
       </div>
       <div className="cic-z2-news-cta">
         <div>

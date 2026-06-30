@@ -69,6 +69,25 @@ export async function processSignageImage(buffer: Buffer): Promise<{ main: Buffe
   const meta = await image.metadata()
   if (!meta.width || !meta.height) throw new Error('Invalid image')
 
+  // Preserve transparency: JPEG has no alpha channel, so a transparent PNG
+  // (e.g. a school logo) would be flattened to a solid black background. When
+  // the source has an alpha channel, encode as PNG instead so it stays clear.
+  if (meta.hasAlpha) {
+    const main = await image
+      .resize({ width: MAX_IMAGE_WIDTH, withoutEnlargement: true })
+      .png({ compressionLevel: 9, palette: true })
+      .toBuffer()
+    const thumb = await sharp(buffer)
+      .rotate()
+      .resize({ width: THUMB_WIDTH, withoutEnlargement: true })
+      .png({ compressionLevel: 9, palette: true })
+      .toBuffer()
+    if (main.length > MAX_IMAGE_BYTES) {
+      throw new Error('Image too large after compression')
+    }
+    return { main, thumb, ext: 'png', contentType: 'image/png' }
+  }
+
   const main = await image
     .resize({ width: MAX_IMAGE_WIDTH, withoutEnlargement: true })
     .jpeg({ quality: 82, mozjpeg: true })

@@ -98,6 +98,18 @@ function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number): Promise<B
   })
 }
 
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) {
+        reject(new Error('Could not compress image.'))
+        return
+      }
+      resolve(blob)
+    }, 'image/png')
+  })
+}
+
 /** Resize/compress in the browser so uploads fit platform body limits. */
 export async function prepareSignageImageFile(file: File): Promise<File> {
   const mime = file.type.trim().toLowerCase()
@@ -130,6 +142,21 @@ export async function prepareSignageImageFile(file: File): Promise<File> {
 
   ctx.drawImage(img, 0, 0, width, height)
 
+  const base = file.name.replace(/\.[^.]+$/, '') || 'signage-image'
+
+  // Keep transparency for PNG/WebP sources — re-encoding to JPEG would flatten
+  // any transparent areas (e.g. a logo) to solid black. PNG is lossless, so we
+  // can't shrink it with a quality knob; if it's still over the cap, ask for a
+  // smaller file rather than silently destroying the alpha channel.
+  const sourceHasAlpha = mime === 'image/png' || mime === 'image/webp' || ext === 'png' || ext === 'webp'
+  if (sourceHasAlpha) {
+    const pngBlob = await canvasToPngBlob(canvas)
+    if (pngBlob.size > SIGNAGE_MAX_UPLOAD_BYTES) {
+      throw new Error('Transparent image is too large. Use a smaller file or lower resolution (max 4 MB).')
+    }
+    return new File([pngBlob], `${base}.png`, { type: 'image/png', lastModified: Date.now() })
+  }
+
   let quality = START_QUALITY
   let blob = await canvasToJpegBlob(canvas, quality)
   while (blob.size > SIGNAGE_MAX_UPLOAD_BYTES && quality > MIN_QUALITY) {
@@ -141,6 +168,5 @@ export async function prepareSignageImageFile(file: File): Promise<File> {
     throw new Error('Image is too large. Use a smaller file or lower resolution (max 4 MB).')
   }
 
-  const base = file.name.replace(/\.[^.]+$/, '') || 'signage-image'
   return new File([blob], `${base}.jpg`, { type: 'image/jpeg', lastModified: Date.now() })
 }
