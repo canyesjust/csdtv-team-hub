@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser, isManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { checkRateLimit } from '@/lib/server/rate-limit'
+import { timingSafeEqualStr } from '@/lib/server/security'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,22 +10,41 @@ const BUCKET = 'school-logos'
 
 // Step 2 of a logo upload: after the browser uploaded directly to storage, record
 // (or replace) the school_logos row. Verifies the object exists before saving.
+//
+// Authorized for a logged-in manager OR a reviewer with a valid BRAND_REVIEW_KEY.
+// Review-key uploads are rate-limited since they are unauthenticated.
 export async function POST(request: Request) {
-  const teamUser = await getAuthenticatedTeamUser()
-  if (!teamUser || !isManagerRole(teamUser.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const service = getServiceSupabaseClient()
   if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
 
-  const body = await request.json().catch(() => ({})) as { code?: string; category?: string; name?: string; format?: string; path?: string }
+  const body = await request.json().catch(() => ({})) as { code?: string; category?: string; name?: string; format?: string; path?: string; key?: string }
   const code = String(body.code || '').trim()
   const category = String(body.category || '').trim().slice(0, 60)
   const name = String(body.name || '').trim().slice(0, 120)
-  const format = body.format === 'png' || body.format === 'jpg' || body.format === 'svg' ? body.format : null
+  const format = body.format === 'png' || body.format === 'jpg' || body.format === 'svg' || body.format === 'docx' ? body.format : null
   const path = String(body.path || '')
+
+  const teamUser = await getAuthenticatedTeamUser()
+  const isManager = !!(teamUser && isManagerRole(teamUser.role))
+  const reviewKey = process.env.BRAND_REVIEW_KEY
+  const viaReviewKey = !isManager && !!reviewKey && timingSafeEqualStr(body.key, reviewKey)
+  if (!isManager && !viaReviewKey) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (viaReviewKey) {
+    const rl = await checkRateLimit(request, { scope: 'brand_upload_review', max: 20, windowMs: 60 * 1000 })
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: 'Too many uploads. Please wait a minute.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      )
+    }
+  }
 
   if (!code || !category || !name || !format) {
     return NextResponse.json({ error: 'Missing code, category, name, or format' }, { status: 400 })
+  }
+  if (format === 'docx' && category.toLowerCase() !== 'letterhead') {
+    return NextResponse.json({ error: 'Word documents can only be added to the Letterhead category' }, { status: 400 })
   }
   if (!path.startsWith(`${code}/`) || !path.endsWith(`.${format}`)) {
     return NextResponse.json({ error: 'Invalid upload path' }, { status: 400 })

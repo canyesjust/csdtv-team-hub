@@ -5,6 +5,21 @@ import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE, isSignageEditorRole } fr
 import { isDashboardPathAllowed } from './lib/dashboard-access'
 import { getActorTeamRow, getEffectiveTeamRow } from './lib/server/effective-team'
 
+const BRAND_REVIEW_COOKIE = 'csd_brand_review'
+
+// Edge-runtime helpers (no Node `Buffer`/`crypto` module available here).
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function safeEqualHex(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let result = 0
+  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return result === 0
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -36,6 +51,25 @@ export async function middleware(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+
+  // The /brand password gate itself runs in the server layout (app/brand/layout.tsx),
+  // which can read the DB-backed password. Here we only translate a valid review link
+  // (?review=KEY) into a review cookie so review users pass that server gate on the
+  // first load and on later navigations that drop the ?review= param.
+  if (pathname === '/brand' || pathname.startsWith('/brand/')) {
+    const reviewParam = request.nextUrl.searchParams.get('review')
+    const reviewKey = process.env.BRAND_REVIEW_KEY
+    if (reviewParam && reviewKey && safeEqualHex(await sha256Hex(reviewParam), await sha256Hex(reviewKey))) {
+      response.cookies.set(BRAND_REVIEW_COOKIE, await sha256Hex(`brand-review:${reviewKey}`), {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 30,
+      })
+    }
+    return response
+  }
 
   const requiresTeam = pathname.startsWith('/dashboard') || pathname.startsWith('/control')
 
@@ -112,5 +146,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/board/:path*', '/control/:path*'],
+  matcher: ['/dashboard/:path*', '/board/:path*', '/control/:path*', '/brand', '/brand/:path*'],
 }

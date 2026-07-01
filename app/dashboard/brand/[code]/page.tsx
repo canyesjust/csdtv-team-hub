@@ -7,24 +7,31 @@ import { createClient } from '@/lib/supabase'
 
 const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
 
-function detectFormat(file: File): 'png' | 'jpg' | 'svg' | null {
+function detectFormat(file: File): 'png' | 'jpg' | 'svg' | 'docx' | null {
   const t = (file.type || '').toLowerCase()
   if (t === 'image/png') return 'png'
   if (t === 'image/jpeg') return 'jpg'
   if (t === 'image/svg+xml') return 'svg'
+  if (t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx'
   const n = file.name.toLowerCase()
   if (n.endsWith('.png')) return 'png'
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
   if (n.endsWith('.svg')) return 'svg'
+  if (n.endsWith('.docx')) return 'docx'
   return null
 }
 
-const CONTENT_TYPE: Record<LogoFormat, string> = { png: 'image/png', jpg: 'image/jpeg', svg: 'image/svg+xml' }
+const CONTENT_TYPE: Record<LogoFormat, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  svg: 'image/svg+xml',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+}
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type LogoFormat = 'png' | 'jpg' | 'svg'
+type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx'
 type Fonts = { heading: string | null; body: string | null; notes: string | null }
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; cover?: boolean; notes?: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; cover?: boolean; notes?: string | null }
 type School = {
   code: string
   name: string
@@ -34,8 +41,18 @@ type School = {
   fonts?: Fonts
 }
 
-const CATEGORY_PRESETS = ['Official', 'Wordmark', 'Team/Sport', 'Specific', 'Other']
+const CATEGORY_PRESETS = ['Official', 'Wordmark', 'Letterhead', 'Team/Sport', 'Specific', 'Other']
 const CATEGORY_ORDER = CATEGORY_PRESETS
+
+// Small placeholder shown for Word documents, which have no image preview.
+function DocBadge() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      <div style={{ width: 40, height: 50, border: '1px solid #185fa5', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#185fa5', background: '#ffffff' }}>DOCX</div>
+      <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)' }}>Word document</span>
+    </div>
+  )
+}
 
 function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }))
@@ -106,7 +123,7 @@ export default function ManageSchoolBrandPage() {
 
   useEffect(() => {
     if (!selected) return
-    const url = selected.png || selected.jpg || selected.svg
+    const url = selected.png || selected.jpg || selected.svg || selected.docx
     if (!url) return
     let cancelled = false
     fetch(url, { method: 'HEAD' })
@@ -219,14 +236,16 @@ export default function ManageSchoolBrandPage() {
     for (const file of files) {
       const format = detectFormat(file)
       if (!format || file.size > MAX_BYTES) { fail++; continue }
+      // Word documents belong to the Letterhead category only (matches the server).
+      if (format === 'docx' && cat.toLowerCase() !== 'letterhead') { fail++; continue }
       const nm = files.length === 1 && name.trim() ? name.trim() : deriveLogoName(file.name)
       const r = await uploadOneFile(file, cat, nm, format)
       if (r) ok++; else fail++
     }
     setBusy(null)
     if (fileRef.current) fileRef.current.value = ''
-    if (ok > 0) { notify(`${ok} logo${ok === 1 ? '' : 's'} uploaded`, 'success'); setName(''); await loadDetail() }
-    if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (must be PNG, JPG, or SVG under 20 MB)`, 'error')
+    if (ok > 0) { notify(`${ok} file${ok === 1 ? '' : 's'} uploaded`, 'success'); setName(''); await loadDetail() }
+    if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (images must be PNG, JPG, or SVG; Word docs (.docx) must use the Letterhead category; max 20 MB)`, 'error')
   }
 
   const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || ''); setEditCustom(false) }
@@ -330,7 +349,7 @@ export default function ManageSchoolBrandPage() {
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Primary wordmark, white" style={input} />
               </label>
             </div>
-            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml" multiple style={{ display: 'none' }} onChange={(e) => onAddFiles(e.target.files)} />
+            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.svg,.docx,image/png,image/jpeg,image/svg+xml,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style={{ display: 'none' }} onChange={(e) => onAddFiles(e.target.files)} />
             <div
               onClick={() => { if (!addBusy) triggerUpload() }}
               onDragOver={(e) => { e.preventDefault(); if (!addBusy) setDragOver(true) }}
@@ -339,7 +358,7 @@ export default function ManageSchoolBrandPage() {
               style={{ border: `2px dashed ${dragOver ? '#185fa5' : 'var(--border-subtle)'}`, borderRadius: 10, background: dragOver ? 'rgba(24,95,165,0.08)' : 'transparent', padding: '22px 14px', textAlign: 'center', cursor: addBusy ? 'default' : 'pointer', color: 'var(--text-muted)', fontSize: 13 }}
             >
               {addBusy ? 'Uploading...' : (
-                <><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Drag PNG, JPG, or SVG files here</span><br />or click to choose</>
+                <><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Drag PNG, JPG, SVG, or .docx files here</span><br />or click to choose (Word docs go in the Letterhead category)</>
               )}
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
@@ -394,6 +413,8 @@ export default function ManageSchoolBrandPage() {
                           {preview ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
+                          ) : l.docx ? (
+                            <DocBadge />
                           ) : (
                             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No preview</span>
                           )}
@@ -443,7 +464,7 @@ export default function ManageSchoolBrandPage() {
                                 <button type="button" onClick={() => setCover(l)} disabled={busy === `cover-${l.category}-${l.name}`} style={{ alignSelf: 'flex-start', padding: '3px 8px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: busy === `cover-${l.category}-${l.name}` ? 'default' : 'pointer' }}>Set as cover</button>
                               )}
                               <div style={{ display: 'flex', gap: 6, marginTop: 'auto', flexWrap: 'wrap' }}>
-                                {(['svg', 'png', 'jpg'] as LogoFormat[]).map((fmt) => {
+                                {(['svg', 'png', 'jpg', 'docx'] as LogoFormat[]).map((fmt) => {
                                   const url = l[fmt]
                                   if (!url) return null
                                   const delBusy = busy === `${l.category}-${l.name}-${fmt}`
@@ -480,6 +501,8 @@ export default function ManageSchoolBrandPage() {
                 {(selected.png || selected.jpg || selected.svg) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={selected.png || selected.jpg || selected.svg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 420, objectFit: 'contain' }} />
+                ) : selected.docx ? (
+                  <DocBadge />
                 ) : (
                   <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No preview</span>
                 )}
@@ -492,8 +515,16 @@ export default function ManageSchoolBrandPage() {
 
               {selected.cover && <p style={{ margin: '14px 0 0', fontSize: 12, fontWeight: 700, color: '#1f9254' }}>★ Cover image</p>}
 
-              <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Image</p>
-              <p style={{ margin: 0, fontSize: 14 }}>{dims ? `${dims.w} × ${dims.h} px` : 'Loading dimensions...'}{fileSize ? ` · ${formatBytes(fileSize)}` : ''}</p>
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>File type</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{[selected.svg && 'SVG', selected.png && 'PNG', selected.jpg && 'JPG', selected.docx && 'Word document (.docx)'].filter(Boolean).join(', ') || 'Unknown'}</p>
+              {(selected.png || selected.jpg || selected.svg) && (
+                <>
+                  <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Dimensions</p>
+                  <p style={{ margin: 0, fontSize: 14 }}>{dims ? `${dims.w} × ${dims.h} px` : 'Loading...'}</p>
+                </>
+              )}
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>File size</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{fileSize ? formatBytes(fileSize) : 'Loading...'}</p>
 
               <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Category</p>
               <p style={{ margin: 0, fontSize: 14 }}>{selected.category}</p>
@@ -517,7 +548,7 @@ export default function ManageSchoolBrandPage() {
                 {!selected.cover && (
                   <button type="button" onClick={async () => { await setCover(selected); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Set as cover</button>
                 )}
-                {(['svg', 'png', 'jpg'] as LogoFormat[]).map((fmt) => (selected[fmt] ? (
+                {(['svg', 'png', 'jpg', 'docx'] as LogoFormat[]).map((fmt) => (selected[fmt] ? (
                   <button key={fmt} type="button" onClick={async () => { await onDelete(selected, fmt); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: '#b42318', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Delete {fmt.toUpperCase()}</button>
                 ) : null))}
               </div>

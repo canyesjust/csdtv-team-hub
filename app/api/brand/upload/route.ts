@@ -93,7 +93,7 @@ export async function DELETE(request: Request) {
   const category = String(params.get('category') || '').trim()
   const name = String(params.get('name') || '').trim()
   const formatRaw = String(params.get('format') || '').trim()
-  const format = formatRaw === 'png' || formatRaw === 'jpg' || formatRaw === 'svg' ? formatRaw : null
+  const format = formatRaw === 'png' || formatRaw === 'jpg' || formatRaw === 'svg' || formatRaw === 'docx' ? formatRaw : null
   if (!code || !category || !name || !format) {
     return NextResponse.json({ error: 'Missing code, category, name, or format' }, { status: 400 })
   }

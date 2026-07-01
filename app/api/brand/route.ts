@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pickHex } from '@/lib/thumbnail-school-brand'
+import { hasBrandSiteAccess } from '@/lib/server/brand-access'
 
 // Public, non-sensitive brand catalog summary (one card per school). Service role is
 // used deliberately to read public brand data; this route takes no user input.
@@ -45,7 +46,7 @@ type LogoRow = {
   school_code: string
   category: string
   name: string
-  format: 'png' | 'jpg' | 'svg'
+  format: 'png' | 'jpg' | 'svg' | 'docx'
   storage_path: string
   sort_order: number
   is_cover: boolean
@@ -63,6 +64,10 @@ function resolveLevel(level: string | null, code: string): BrandLevel {
 }
 
 export async function GET() {
+  if (!(await hasBrandSiteAccess())) {
+    return NextResponse.json({ error: 'Access to the brand library is restricted.' }, { status: 401 })
+  }
+
   const supabase = getServiceSupabaseClient()
   if (!supabase) {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
@@ -101,6 +106,9 @@ export async function GET() {
   for (const row of logoRows) {
     if (!namesByCode.has(row.school_code)) namesByCode.set(row.school_code, new Set())
     namesByCode.get(row.school_code)!.add(`${row.category}||${row.name}`)
+
+    // Word documents (docx) have no image preview, so they can never be a card preview.
+    if (row.format === 'docx') continue
 
     // Preview priority: cover PNG/SVG > cover (any) > SVG (vector, crisp) > Official PNG
     // > any PNG > any file. SVG is served raw; raster previews are CDN-resized.
@@ -151,10 +159,10 @@ export async function GET() {
   const districtRow = allRows.find((r) => r.type === 'district')
   const district = districtRow ? toSummary(districtRow) : null
 
-  // Brand data changes rarely; let the CDN serve a cached copy and revalidate in the
-  // background so visitors do not wait on a full school_logos scan each load.
+  // Access can depend on the per-user cookie/session (when the gate is on) and managers
+  // mutate this data, so never shared-cache it.
   return NextResponse.json(
     { schools, district, departments },
-    { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } },
+    { headers: { 'Cache-Control': 'private, no-store' } },
   )
 }

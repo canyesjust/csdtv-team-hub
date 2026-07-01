@@ -62,7 +62,17 @@ Manager (`/dashboard/brand`, manager-only via client guard + server guards):
 Nav: `lib/dashboard-nav.ts` shows "Brand library" for all roles — managers -> `/dashboard/brand`, everyone else -> `/brand`.
 
 ### Env var (required for the review link)
-`BRAND_REVIEW_KEY` (any random string). Used by `/api/brand/flag`, `/api/brand/review-category`, and surfaced on the Flagged page as the shareable `…/brand?review=KEY`. Set it in `.env.local` (restart dev) and in Vercel (redeploy). Without it the review link is disabled.
+`BRAND_REVIEW_KEY` (any random string). Used by `/api/brand/flag`, `/api/brand/review-category`, `/api/brand/review-rename`, the review-key upload path (`/api/brand/upload/sign` + `/finalize`), and surfaced on the Flagged page as the shareable `…/brand?review=KEY`. Set it in `.env.local` (restart dev) and in Vercel (redeploy). Without it the review link is disabled.
+
+### Public-site password gate (added 2026-07-01)
+The public brand library can be locked behind one shared password.
+
+- Source of truth: `brand_access_config` DB row (a manager sets/changes it under Settings -> Admin -> "Brand library access"), falling back to the `BRAND_SITE_PASSWORD` env var, and if neither is set the gate is OFF (site stays public). Password is stored scrypt-hashed; the access cookie holds an opaque `session_token` that rotates on every change (so changing the password logs everyone out).
+- Enforcement: server layout `app/brand/layout.tsx` calls `hasBrandSiteAccess()` (`lib/server/brand-access.ts`) and renders `BrandAccessGate` when locked. The two public GET APIs (`/api/brand`, `/api/brand/[code]`) also call it and are `no-store`. Signed-in staff bypass; a valid `?review=KEY` sets a review cookie (in middleware) that also bypasses.
+- APIs: `POST /api/brand/access` (verify password, set cookie; rate-limited), `GET/POST/DELETE /api/brand/access-config` (manager-only status/set/clear).
+
+### Letterhead + Word docs (added 2026-07-01)
+`school_logos.format` now allows `docx` (migration `20260701120000_brand_letterhead_docx.sql`). New `Letterhead` category preset; Word docs are only accepted under Letterhead (enforced client + server). docx has no image preview (shows a "DOCX" badge) and is excluded from card thumbnails. Reviewers can also upload (images + letterhead) and rename logos via the review link.
 
 ---
 

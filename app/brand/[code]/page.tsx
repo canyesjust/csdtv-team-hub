@@ -1,8 +1,38 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase'
+
+const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
+
+type UploadFormat = 'png' | 'jpg' | 'svg' | 'docx'
+const CONTENT_TYPE: Record<UploadFormat, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  svg: 'image/svg+xml',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+}
+
+function detectFormat(file: File): UploadFormat | null {
+  const t = (file.type || '').toLowerCase()
+  if (t === 'image/png') return 'png'
+  if (t === 'image/jpeg') return 'jpg'
+  if (t === 'image/svg+xml') return 'svg'
+  if (t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx'
+  const n = file.name.toLowerCase()
+  if (n.endsWith('.png')) return 'png'
+  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
+  if (n.endsWith('.svg')) return 'svg'
+  if (n.endsWith('.docx')) return 'docx'
+  return null
+}
+
+function deriveLogoName(filename: string): string {
+  const base = filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return base || 'Logo'
+}
 
 // If a CDN-resized thumbnail fails (e.g. the source image is too large for the
 // transform service), fall back to the original file once so the logo still shows.
@@ -14,7 +44,7 @@ function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | nu
 }
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; thumb?: string | null; flagged?: boolean; notes?: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; thumb?: string | null; flagged?: boolean; notes?: string | null }
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -45,7 +75,17 @@ const colors = {
   chip: '#eef1f6',
 }
 
-const CATEGORY_ORDER = ['Official', 'Wordmark', 'Team/Sport', 'Specific', 'Other']
+const CATEGORY_ORDER = ['Official', 'Wordmark', 'Letterhead', 'Team/Sport', 'Specific', 'Other']
+
+// Small placeholder shown for Word documents, which have no image preview.
+function DocBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 5 : 8 }}>
+      <div style={{ width: compact ? 40 : 52, height: compact ? 50 : 64, border: `1px solid ${colors.info}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 10 : 12, fontWeight: 800, color: colors.info, background: '#ffffff' }}>DOCX</div>
+      <span style={{ fontSize: compact ? 10.5 : 12, fontWeight: 700, color: colors.muted }}>Word document</span>
+    </div>
+  )
+}
 
 function readableOn(hex: string | null): string {
   if (!hex) return '#ffffff'
@@ -98,8 +138,67 @@ export default function SchoolBrandPage() {
   const [deptOpen, setDeptOpen] = useState<Set<string>>(new Set())
   const [deptLogos, setDeptLogos] = useState<Record<string, Logo[]>>({})
   const [deptLoading, setDeptLoading] = useState<Set<string>>(new Set())
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadCat, setUploadCat] = useState('Official')
+  const [uploadName, setUploadName] = useState('')
+  const [uploadBusy, setUploadBusy] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+  const uploadRef = useRef<HTMLInputElement | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
+
+  const reload = useCallback(async () => {
+    if (!code) return
+    const r = await fetch(`/api/brand/${encodeURIComponent(code)}`, { cache: 'no-store' })
+    const d = await r.json().catch(() => ({}))
+    if (d?.school) { setSchool(d.school as School); setLogos(Array.isArray(d.logos) ? (d.logos as Logo[]) : []) }
+  }, [code])
+
+  // Reviewer upload (key-gated). Uploads go live immediately, like a manager upload.
+  const uploadFiles = async (list: FileList | File[] | null) => {
+    if (!reviewKey) return
+    const files = list ? Array.from(list) : []
+    if (files.length === 0) return
+    const cat = uploadCat.trim() || 'Official'
+    setUploadBusy(true)
+    setUploadMsg(null)
+    let ok = 0
+    let fail = 0
+    const supabase = createClient()
+    for (const file of files) {
+      const format = detectFormat(file)
+      if (!format || file.size > MAX_BYTES) { fail++; continue }
+      if (format === 'docx' && cat.toLowerCase() !== 'letterhead') { fail++; continue }
+      const nm = files.length === 1 && uploadName.trim() ? uploadName.trim() : deriveLogoName(file.name)
+      try {
+        const signRes = await fetch('/api/brand/upload/sign', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, category: cat, name: nm, format, key: reviewKey }),
+        })
+        const sign = await signRes.json().catch(() => ({}))
+        if (!signRes.ok) { fail++; continue }
+        const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: CONTENT_TYPE[format] })
+        if (upErr) { fail++; continue }
+        const finRes = await fetch('/api/brand/upload/finalize', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, category: cat, name: nm, format, path: sign.path, key: reviewKey }),
+        })
+        if (!finRes.ok) { fail++; continue }
+        ok++
+      } catch { fail++ }
+    }
+    setUploadBusy(false)
+    if (uploadRef.current) uploadRef.current.value = ''
+    if (ok > 0) { setUploadName(''); await reload() }
+    setUploadMsg(
+      ok > 0
+        ? `${ok} file${ok === 1 ? '' : 's'} uploaded${fail ? `, ${fail} skipped` : ''}.`
+        : 'No files uploaded. Images must be PNG, JPG, or SVG; Word docs (.docx) must use the Letterhead category. Max 20 MB each.',
+    )
+  }
 
   const toggleDept = (depCode: string) => {
     setDeptOpen((prev) => { const next = new Set(prev); if (next.has(depCode)) next.delete(depCode); else next.add(depCode); return next })
@@ -115,7 +214,7 @@ export default function SchoolBrandPage() {
 
   useEffect(() => {
     if (!selected) return
-    const url = selected.png || selected.jpg || selected.svg
+    const url = selected.png || selected.jpg || selected.svg || selected.docx
     if (!url) return
     let cancelled = false
     fetch(url, { method: 'HEAD' })
@@ -205,6 +304,32 @@ export default function SchoolBrandPage() {
     } catch {
       revert()
       setFlagError('Could not reach the server, so your mark was not saved. Try again.')
+    }
+  }
+
+  const renameLogo = async (l: Logo, nextName: string) => {
+    if (!reviewKey) return
+    const nn = nextName.trim()
+    setRenaming(null)
+    if (!nn || nn === l.name) return
+    const prevName = l.name
+    setFlagError(null)
+    setLogos((prev) => prev.map((x) => (x.category === l.category && x.name === prevName ? { ...x, name: nn } : x)))
+    const revert = () => setLogos((prev) => prev.map((x) => (x.category === l.category && x.name === nn ? { ...x, name: prevName } : x)))
+    try {
+      const res = await fetch('/api/brand/review-rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: reviewKey, code, category: l.category, name: prevName, newName: nn }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        revert()
+        setFlagError(typeof d?.error === 'string' ? d.error : 'Could not rename this logo.')
+      }
+    } catch {
+      revert()
+      setFlagError('Could not rename this logo. Try again.')
     }
   }
 
@@ -298,6 +423,45 @@ export default function SchoolBrandPage() {
               </div>
             )}
 
+            {reviewKey && (
+              <section style={{ border: `1px solid ${colors.border}`, borderRadius: 12, background: colors.cardBg, marginBottom: 22, overflow: 'hidden' }}>
+                <button type="button" onClick={() => setUploadOpen((o) => !o)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '13px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: colors.text }}>
+                  <span style={{ fontSize: 14, fontWeight: 800 }}>Upload a logo or letterhead</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: colors.info }}>{uploadOpen ? 'Hide' : '+ Add file'}</span>
+                </button>
+                {uploadOpen && (
+                  <div style={{ padding: '0 16px 16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 1fr) minmax(180px, 2fr)', gap: 10, marginBottom: 12 }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <span style={{ fontSize: 12, color: colors.muted, fontWeight: 600 }}>Category</span>
+                        <select value={uploadCat} onChange={(e) => setUploadCat(e.target.value)} style={{ height: 36, borderRadius: 8, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.text, fontSize: 13, padding: '0 10px' }}>
+                          {CATEGORY_ORDER.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <span style={{ fontSize: 12, color: colors.muted, fontWeight: 600 }}>Name (optional for drag-and-drop)</span>
+                        <input value={uploadName} onChange={(e) => setUploadName(e.target.value)} placeholder="e.g. Primary wordmark, white" style={{ height: 36, borderRadius: 8, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.text, fontSize: 13, padding: '0 10px', boxSizing: 'border-box' }} />
+                      </label>
+                    </div>
+                    <input ref={uploadRef} type="file" accept=".png,.jpg,.jpeg,.svg,.docx,image/png,image/jpeg,image/svg+xml,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style={{ display: 'none' }} onChange={(e) => uploadFiles(e.target.files)} />
+                    <div
+                      onClick={() => { if (!uploadBusy) uploadRef.current?.click() }}
+                      onDragOver={(e) => { e.preventDefault(); if (!uploadBusy) setDragOver(true) }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={(e) => { e.preventDefault(); setDragOver(false); if (!uploadBusy) uploadFiles(e.dataTransfer.files) }}
+                      style={{ border: `2px dashed ${dragOver ? colors.info : colors.line}`, borderRadius: 10, background: dragOver ? 'rgba(24,95,165,0.08)' : 'transparent', padding: '20px 14px', textAlign: 'center', cursor: uploadBusy ? 'default' : 'pointer', color: colors.muted, fontSize: 13 }}
+                    >
+                      {uploadBusy ? 'Uploading...' : (
+                        <><span style={{ fontWeight: 700, color: colors.text }}>Drag files here</span><br />or click to choose (PNG, JPG, SVG, or .docx for Letterhead)</>
+                      )}
+                    </div>
+                    {uploadMsg && <p style={{ margin: '10px 0 0', fontSize: 12.5, fontWeight: 600, color: colors.muted }}>{uploadMsg}</p>}
+                    <p style={{ margin: '8px 0 0', fontSize: 11.5, color: colors.muted }}>Uploads appear right away. Word documents (.docx) are only allowed in the Letterhead category. Max 20 MB per file.</p>
+                  </div>
+                )}
+              </section>
+            )}
+
             {school.type === 'district' && departments.some((d) => d.logoCount > 0) && (
               <section style={{ marginBottom: 28 }}>
                 <h2 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Departments</h2>
@@ -331,6 +495,8 @@ export default function SchoolBrandPage() {
                                         {preview ? (
                                           // eslint-disable-next-line @next/next/no-img-element
                                           <img src={preview} alt={l.name} loading="lazy" decoding="async" onError={(e) => onThumbError(e, rawPreview)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
+                                        ) : l.docx ? (
+                                          <DocBadge compact />
                                         ) : (
                                           <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                                         )}
@@ -413,17 +579,41 @@ export default function SchoolBrandPage() {
                               {preview ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={preview} alt={l.name} loading="lazy" decoding="async" onError={(e) => onThumbError(e, rawPreview)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
+                              ) : l.docx ? (
+                                <DocBadge />
                               ) : (
                                 <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                               )}
                             </div>
                             <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-                              <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</span>
+                              {reviewKey && renaming === `${l.category}||${l.name}` ? (
+                                <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <input
+                                    autoFocus
+                                    value={renameValue}
+                                    onChange={(e) => setRenameValue(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') renameLogo(l, renameValue); if (e.key === 'Escape') setRenaming(null) }}
+                                    style={{ height: 32, borderRadius: 7, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.text, fontSize: 13, padding: '0 9px', boxSizing: 'border-box' }}
+                                  />
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button type="button" onClick={() => renameLogo(l, renameValue)} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${colors.info}`, background: colors.info, color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                                    <button type="button" onClick={() => setRenaming(null)} style={{ padding: '4px 12px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.muted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, lineHeight: 1.25 }}>{l.name}</span>
+                                  {reviewKey && (
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setRenaming(`${l.category}||${l.name}`); setRenameValue(l.name) }} style={{ flexShrink: 0, padding: '3px 8px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Rename</button>
+                                  )}
+                                </div>
+                              )}
                               {reviewKey ? (
                                 <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                                   <span style={{ fontSize: 12, fontWeight: 700, color: l.flagged ? '#e0282e' : colors.muted }}>
                                     {l.flagged ? 'Marked for deletion - click to undo' : 'Click to mark as old'}
                                   </span>
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer(l) }} style={{ alignSelf: 'flex-start', padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>View file details</button>
                                   <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                                     <span style={{ fontSize: 10.5, color: colors.muted, alignSelf: 'center', marginRight: 2 }}>Category:</span>
                                     {(CATEGORY_ORDER.includes(l.category) ? CATEGORY_ORDER : [...CATEGORY_ORDER, l.category]).map((cat) => {
@@ -442,6 +632,7 @@ export default function SchoolBrandPage() {
                                   {l.svg && <a href={l.svg} style={dlBtn}>SVG</a>}
                                   {l.png && <a href={l.png} style={dlBtn}>PNG</a>}
                                   {l.jpg && <a href={l.jpg} style={dlBtn}>JPG</a>}
+                                  {l.docx && <a href={l.docx} style={dlBtn}>DOCX</a>}
                                 </div>
                               )}
                             </div>
@@ -470,6 +661,8 @@ export default function SchoolBrandPage() {
                 {(selected.png || selected.jpg || selected.svg) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={selected.png || selected.jpg || selected.svg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 440, objectFit: 'contain' }} />
+                ) : selected.docx ? (
+                  <DocBadge />
                 ) : (
                   <span style={{ fontSize: 13, color: colors.muted }}>No preview</span>
                 )}
@@ -479,10 +672,16 @@ export default function SchoolBrandPage() {
                   <button key={m} type="button" onClick={() => setBg(m)} style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${bg === m ? colors.info : colors.line}`, background: bg === m ? colors.info : colors.cardBg, color: bg === m ? '#ffffff' : colors.muted, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{label}</button>
                 ))}
               </div>
-              <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Image</p>
-              <p style={{ margin: 0, fontSize: 14 }}>
-                {dims ? `${dims.w} × ${dims.h} px` : 'Loading dimensions...'}{fileSize ? ` · ${formatBytes(fileSize)}` : ''}
-              </p>
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>File type</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{[selected.svg && 'SVG', selected.png && 'PNG', selected.jpg && 'JPG', selected.docx && 'Word document (.docx)'].filter(Boolean).join(', ') || 'Unknown'}</p>
+              {(selected.png || selected.jpg || selected.svg) && (
+                <>
+                  <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Dimensions</p>
+                  <p style={{ margin: 0, fontSize: 14 }}>{dims ? `${dims.w} × ${dims.h} px` : 'Loading...'}</p>
+                </>
+              )}
+              <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>File size</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{fileSize ? formatBytes(fileSize) : 'Loading...'}</p>
               <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Category</p>
               <p style={{ margin: 0, fontSize: 14 }}>{selected.category}</p>
               {selected.notes && (
@@ -496,7 +695,8 @@ export default function SchoolBrandPage() {
                 {selected.svg && <a href={selected.svg} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>SVG</a>}
                 {selected.png && <a href={selected.png} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>PNG</a>}
                 {selected.jpg && <a href={selected.jpg} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>JPG</a>}
-                {!selected.png && !selected.jpg && !selected.svg && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
+                {selected.docx && <a href={selected.docx} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>DOCX</a>}
+                {!selected.png && !selected.jpg && !selected.svg && !selected.docx && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
               </div>
             </div>
           </div>

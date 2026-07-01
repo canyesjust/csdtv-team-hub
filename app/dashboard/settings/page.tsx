@@ -13,6 +13,7 @@ import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after
 import { PRODUCTION_FOCUS_ROLE } from '@/lib/roles'
 import SignatureAssetsPanel from './components/SignatureAssetsPanel'
 import BackupsPanel from './components/BackupsPanel'
+import BrandAccessPanel from './components/BrandAccessPanel'
 
 interface TeamMember {
   id: string
@@ -1589,6 +1590,12 @@ export default function SettingsPage() {
           cardBg={cardBg}
           inputBg={inputBg}
         />
+      )}
+
+      {isManager && (
+        <div style={{ display: activeTab === 'admin' ? 'block' : 'none' }}>
+          <BrandAccessPanel />
+        </div>
       )}
 
       {/* ── Email Templates ── */}
