@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pickHex } from '@/lib/thumbnail-school-brand'
 import { hasBrandSiteAccess } from '@/lib/server/brand-access'
+import { signBrandUrl } from '@/lib/server/brand-storage'
 
 // Public, non-sensitive brand catalog summary (one card per school). Service role is
 // used deliberately to read public brand data; this route takes no user input.
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const BUCKET = 'school-logos'
 // Card previews are display-only, so serve a small CDN-resized image instead of the
 // full file (some logos are 20 MB). Requires Supabase image transformations (Pro plan).
 const PREVIEW_TRANSFORM = { width: 480, quality: 75, resize: 'contain' as const }
@@ -103,6 +103,7 @@ export async function GET() {
   const previewByCode = new Map<string, string>()
   const previewRawByCode = new Map<string, string>()
   const previewRank = new Map<string, number>()
+  const previewPathByCode = new Map<string, { path: string; isSvg: boolean }>()
   for (const row of logoRows) {
     if (!namesByCode.has(row.school_code)) namesByCode.set(row.school_code, new Set())
     namesByCode.get(row.school_code)!.add(`${row.category}||${row.name}`)
@@ -121,16 +122,18 @@ export async function GET() {
     else if (row.format === 'png') rank = 2
     if (rank > (previewRank.get(row.school_code) ?? -1)) {
       previewRank.set(row.school_code, rank)
-      const raw = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl
-      previewRawByCode.set(row.school_code, raw)
-      previewByCode.set(
-        row.school_code,
-        isSvg
-          ? raw
-          : supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { transform: PREVIEW_TRANSFORM }).data.publicUrl,
-      )
+      previewPathByCode.set(row.school_code, { path: row.storage_path, isSvg })
     }
   }
+
+  // Bucket is private: sign the chosen preview per school (raw + a CDN-resized display
+  // version). Sign concurrently so we do not serialize one round-trip per school.
+  await Promise.all([...previewPathByCode.entries()].map(async ([schoolCode, { path, isSvg }]) => {
+    const raw = await signBrandUrl(supabase, path)
+    if (raw) previewRawByCode.set(schoolCode, raw)
+    const display = isSvg ? raw : await signBrandUrl(supabase, path, { transform: PREVIEW_TRANSFORM })
+    if (display) previewByCode.set(schoolCode, display)
+  }))
 
   const allRows = ((schoolsRes.data ?? []) as SchoolRow[]).filter((r) => r.code && r.name)
   const toSummary = (r: SchoolRow): BrandSchoolSummary => {

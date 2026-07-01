@@ -147,6 +147,7 @@ export default function SchoolBrandPage() {
   const uploadRef = useRef<HTMLInputElement | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [allCategories, setAllCategories] = useState<string[]>([])
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
 
@@ -240,6 +241,18 @@ export default function SchoolBrandPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selected])
 
+  // In review mode, load every category used across the library so the reviewer can
+  // move a logo into any label (not just the presets + this school's categories).
+  useEffect(() => {
+    if (!reviewKey) return
+    let cancelled = false
+    fetch('/api/brand/categories', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled && Array.isArray(d?.categories)) setAllCategories(d.categories as string[]) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [reviewKey])
+
   useEffect(() => {
     // Read after mount so server and client first render match (no hydration mismatch).
     // Persist the review key for the tab so review mode survives navigation between
@@ -270,6 +283,9 @@ export default function SchoolBrandPage() {
   }, [code])
 
   const categories = useMemo(() => orderCategories([...new Set(logos.map((l) => l.category))]), [logos])
+  // Full set of category options for the reviewer: presets + every category used
+  // anywhere in the library, so the same labels are available on every school.
+  const reviewCategoryOptions = useMemo(() => orderCategories([...CATEGORY_ORDER, ...allCategories]), [allCategories])
   const hasVector = useMemo(() => logos.some((l) => Boolean(l.svg)), [logos])
 
   const grouped = useMemo(() => {
@@ -616,7 +632,7 @@ export default function SchoolBrandPage() {
                                   <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer(l) }} style={{ alignSelf: 'flex-start', padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>View file details</button>
                                   <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                                     <span style={{ fontSize: 10.5, color: colors.muted, alignSelf: 'center', marginRight: 2 }}>Category:</span>
-                                    {(CATEGORY_ORDER.includes(l.category) ? CATEGORY_ORDER : [...CATEGORY_ORDER, l.category]).map((cat) => {
+                                    {(reviewCategoryOptions.includes(l.category) ? reviewCategoryOptions : [...reviewCategoryOptions, l.category]).map((cat) => {
                                       const cur = cat === l.category
                                       return (
                                         <button key={cat} type="button" onClick={(e) => { e.stopPropagation(); changeCategory(l, cat) }}

@@ -28,7 +28,7 @@ A "logo" in the UI = a `(school_code, category, name)` group; its PNG and JPG ro
 Level for the gallery is derived from the `level` column (NOT `type`): `Elementary`, `Middle School`->Middle, `High School`->High, `Special School`->Specialty, and a `SPECIALTY_CODES` set (`996,981,180,955,995`) + null -> Specialty. This mapping lives in `app/api/brand/route.ts` and `app/api/brand/[code]/route.ts`.
 
 ### Storage
-Bucket `school-logos`, public read, no public write. Created via migration (no manual SQL needed). Uploads go direct to storage via signed URLs.
+Bucket `school-logos`. Originally public-read; as of migration `20260701140000_brand_bucket_private.sql` it is **private** — files are served only via short-lived signed URLs (1 h TTL) minted server-side in the read routes via `lib/server/brand-storage.ts → signBrandUrl` (prevents permanent hotlinking of a shared link). Uploads still go direct to storage via signed upload URLs. NOTE: apply the bucket-private migration only together with the signed-URL code deploy (it is breaking for any older build still calling `getPublicUrl`).
 
 ### Schools data changes already applied to the DB
 - Added `Canyons Innovation Center` (code `900`, type `school`, level `Special School`).

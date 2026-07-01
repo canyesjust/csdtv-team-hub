@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pickHex } from '@/lib/thumbnail-school-brand'
 import { hasBrandSiteAccess } from '@/lib/server/brand-access'
+import { signBrandUrl } from '@/lib/server/brand-storage'
 
 // Public per-school brand detail. Service role reads public brand data only.
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const BUCKET = 'school-logos'
 // Grid thumbnails are display-only; serve a small CDN-resized image so the page does not
 // download every full-size logo at once. Requires Supabase image transformations (Pro).
 const THUMB_TRANSFORM = { width: 480, quality: 75, resize: 'contain' as const }
@@ -22,6 +22,26 @@ type LogoRow = {
   flagged_for_deletion: boolean
   is_cover: boolean
   notes: string | null
+}
+
+type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx'
+
+type LogoEntry = {
+  category: string
+  name: string
+  sort: number
+  files: Partial<Record<LogoFormat, { path: string; dl: string }>>
+  thumbPath: string | null
+  thumbIsSvg: boolean
+  thumbRank: number
+  flagged: boolean
+  cover: boolean
+  notes: string | null
+  png: string | null
+  jpg: string | null
+  svg: string | null
+  docx: string | null
+  thumb: string | null
 }
 
 const SPECIALTY_CODES = new Set(['996', '981', '180', '955', '995'])
@@ -65,20 +85,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
     .order('sort_order', { ascending: true })
 
   const cleanName = slugify(String(school.name || 'school'))
-  const map = new Map<string, { category: string; name: string; sort: number; png: string | null; jpg: string | null; svg: string | null; docx: string | null; thumb: string | null; thumbRank: number; flagged: boolean; cover: boolean; notes: string | null }>()
+  const map = new Map<string, LogoEntry>()
   for (const row of (logoData ?? []) as LogoRow[]) {
     const key = `${row.category}||${row.name}`
-    if (!map.has(key)) map.set(key, { category: row.category, name: row.name, sort: row.sort_order, png: null, jpg: null, svg: null, docx: null, thumb: null, thumbRank: -1, flagged: false, cover: false, notes: null })
+    if (!map.has(key)) {
+      map.set(key, { category: row.category, name: row.name, sort: row.sort_order, files: {}, thumbPath: null, thumbIsSvg: false, thumbRank: -1, flagged: false, cover: false, notes: null, png: null, jpg: null, svg: null, docx: null, thumb: null })
+    }
     const entry = map.get(key)!
     if (row.flagged_for_deletion) entry.flagged = true
     if (row.is_cover) entry.cover = true
     if (row.notes && !entry.notes) entry.notes = row.notes
     const dl = `${cleanName}-${slugify(row.category)}-${slugify(row.name)}.${row.format}`
-    const url = supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { download: dl }).data.publicUrl
-    if (row.format === 'png') entry.png = url
-    else if (row.format === 'jpg') entry.jpg = url
-    else if (row.format === 'svg') entry.svg = url
-    else entry.docx = url
+    entry.files[row.format] = { path: row.storage_path, dl }
     // One thumbnail per logo for the grid. Prefer SVG (vector, tiny, scales crisply -
     // image transforms do not apply to it), then a CDN-resized PNG, then JPG. Word
     // documents (docx) have no image preview and are never used as a thumbnail.
@@ -86,11 +104,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
     const rank = isSvg ? 3 : row.format === 'png' ? 2 : row.format === 'jpg' ? 1 : -1
     if (rank > entry.thumbRank) {
       entry.thumbRank = rank
-      entry.thumb = isSvg
-        ? supabase.storage.from(BUCKET).getPublicUrl(row.storage_path).data.publicUrl
-        : supabase.storage.from(BUCKET).getPublicUrl(row.storage_path, { transform: THUMB_TRANSFORM }).data.publicUrl
+      entry.thumbPath = row.storage_path
+      entry.thumbIsSvg = isSvg
     }
   }
+
+  // Bucket is private: mint short-lived signed URLs. Sign everything concurrently so a
+  // school with many logos does not serialize dozens of round-trips.
+  const signTasks: Promise<void>[] = []
+  for (const entry of map.values()) {
+    for (const fmt of ['png', 'jpg', 'svg', 'docx'] as LogoFormat[]) {
+      const info = entry.files[fmt]
+      if (!info) continue
+      signTasks.push((async () => { entry[fmt] = await signBrandUrl(supabase, info.path, { download: info.dl }) })())
+    }
+    if (entry.thumbPath) {
+      const path = entry.thumbPath
+      const isSvg = entry.thumbIsSvg
+      signTasks.push((async () => { entry.thumb = await signBrandUrl(supabase, path, isSvg ? undefined : { transform: THUMB_TRANSFORM }) })())
+    }
+  }
+  await Promise.all(signTasks)
 
   const logos = [...map.values()].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
 
@@ -118,8 +152,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
       },
       logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, svg: l.svg, docx: l.docx, thumb: l.thumb, flagged: l.flagged, cover: l.cover, notes: l.notes })),
     },
-    // Never shared-cache the per-school detail: managers mutate it (add/rename/delete)
-    // and must see the change on the very next load, and gated responses are per-user.
+    // Signed URLs are per-request and expire; never shared-cache this response.
     { headers: { 'Cache-Control': 'private, no-store' } },
   )
 }
