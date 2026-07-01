@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
-import { hasBrandSiteAccess } from '@/lib/server/brand-access'
+import { brandGateEnabled, hasBrandSiteAccess } from '@/lib/server/brand-access'
 
 // Distinct logo categories in use across the whole library. Used so the reviewer sees
 // the same full set of category options on every school (not just the presets plus the
@@ -32,8 +32,9 @@ export async function GET() {
     if (batch.length < PAGE) break
   }
 
+  // Categories change rarely; cache when the site is open.
   return NextResponse.json(
     { categories: [...categories] },
-    { headers: { 'Cache-Control': 'private, no-store' } },
+    { headers: { 'Cache-Control': (await brandGateEnabled()) ? 'private, no-store' : 'public, s-maxage=300, stale-while-revalidate=900' } },
   )
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pickHex } from '@/lib/thumbnail-school-brand'
-import { hasBrandSiteAccess } from '@/lib/server/brand-access'
+import { brandGateEnabled, hasBrandSiteAccess } from '@/lib/server/brand-access'
 import { signBrandUrl } from '@/lib/server/brand-storage'
 
 // Public, non-sensitive brand catalog summary (one card per school). Service role is
@@ -42,16 +42,6 @@ type SchoolRow = {
   text_color: string | null
 }
 
-type LogoRow = {
-  school_code: string
-  category: string
-  name: string
-  format: 'png' | 'jpg' | 'svg' | 'docx'
-  storage_path: string
-  sort_order: number
-  is_cover: boolean
-}
-
 const SPECIALTY_CODES = new Set(['996', '981', '180', '955', '995'])
 
 function resolveLevel(level: string | null, code: string): BrandLevel {
@@ -82,53 +72,24 @@ export async function GET() {
 
   if (schoolsRes.error) return NextResponse.json({ error: schoolsRes.error.message }, { status: 500 })
 
-  // Fetch every logo row, paginating past Supabase's 1000-row response cap.
-  const logoRows: LogoRow[] = []
-  const PAGE = 1000
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from('school_logos')
-      .select('school_code, category, name, format, storage_path, sort_order, is_cover')
-      .order('id', { ascending: true })
-      .range(from, from + PAGE - 1)
-    if (error) break
-    const batch = (data ?? []) as LogoRow[]
-    logoRows.push(...batch)
-    if (batch.length < PAGE) break
-  }
+  // Per-school logo count + chosen preview file, computed in one indexed DB query
+  // (see migration 20260701150000) instead of streaming every logo row into the app.
+  const { data: summaryRows, error: rpcErr } = await supabase.rpc('brand_school_summaries')
+  if (rpcErr) return NextResponse.json({ error: rpcErr.message }, { status: 500 })
 
-  // Count distinct logos (by category+name) per school and pick a preview file.
-  // Preview priority: chosen cover PNG > cover (any) > Official PNG > any PNG > any file.
-  const namesByCode = new Map<string, Set<string>>()
-  const previewByCode = new Map<string, string>()
-  const previewRawByCode = new Map<string, string>()
-  const previewRank = new Map<string, number>()
-  const previewPathByCode = new Map<string, { path: string; isSvg: boolean }>()
-  for (const row of logoRows) {
-    if (!namesByCode.has(row.school_code)) namesByCode.set(row.school_code, new Set())
-    namesByCode.get(row.school_code)!.add(`${row.category}||${row.name}`)
-
-    // Word documents (docx) have no image preview, so they can never be a card preview.
-    if (row.format === 'docx') continue
-
-    // Preview priority: cover PNG/SVG > cover (any) > SVG (vector, crisp) > Official PNG
-    // > any PNG > any file. SVG is served raw; raster previews are CDN-resized.
-    const isSvg = row.format === 'svg'
-    let rank = 1
-    if (row.is_cover && (isSvg || row.format === 'png')) rank = 6
-    else if (row.is_cover) rank = 5
-    else if (isSvg) rank = 4
-    else if (row.category.toLowerCase() === 'official' && row.format === 'png') rank = 3
-    else if (row.format === 'png') rank = 2
-    if (rank > (previewRank.get(row.school_code) ?? -1)) {
-      previewRank.set(row.school_code, rank)
-      previewPathByCode.set(row.school_code, { path: row.storage_path, isSvg })
-    }
+  const logoCountByCode = new Map<string, number>()
+  const previewPathByCode = new Map<string, string>()
+  for (const row of (summaryRows ?? []) as { school_code: string; logo_count: number; preview_path: string | null }[]) {
+    logoCountByCode.set(row.school_code, Number(row.logo_count) || 0)
+    if (row.preview_path) previewPathByCode.set(row.school_code, row.preview_path)
   }
 
   // Bucket is private: sign the chosen preview per school (raw + a CDN-resized display
   // version). Sign concurrently so we do not serialize one round-trip per school.
-  await Promise.all([...previewPathByCode.entries()].map(async ([schoolCode, { path, isSvg }]) => {
+  const previewByCode = new Map<string, string>()
+  const previewRawByCode = new Map<string, string>()
+  await Promise.all([...previewPathByCode.entries()].map(async ([schoolCode, path]) => {
+    const isSvg = path.toLowerCase().endsWith('.svg')
     const raw = await signBrandUrl(supabase, path)
     if (raw) previewRawByCode.set(schoolCode, raw)
     const display = isSvg ? raw : await signBrandUrl(supabase, path, { transform: PREVIEW_TRANSFORM })
@@ -153,7 +114,7 @@ export async function GET() {
       },
       preview: previewByCode.get(code) ?? null,
       previewRaw: previewRawByCode.get(code) ?? null,
-      logoCount: namesByCode.get(code)?.size ?? 0,
+      logoCount: logoCountByCode.get(code) ?? 0,
     }
   }
 
@@ -162,10 +123,15 @@ export async function GET() {
   const districtRow = allRows.find((r) => r.type === 'district')
   const district = districtRow ? toSummary(districtRow) : null
 
-  // Access can depend on the per-user cookie/session (when the gate is on) and managers
-  // mutate this data, so never shared-cache it.
+  // When the site is open, let the CDN cache the gallery so repeat loads are instant.
+  // The cache window (<=20 min) stays well under the 1-hour signed-URL lifetime, so
+  // cached URLs never expire before the response does. Managers/reviewers cache-bust
+  // their own requests to stay fresh. When gated, responses are per-user -> no-store.
+  const cacheControl = (await brandGateEnabled())
+    ? 'private, no-store'
+    : 'public, s-maxage=300, stale-while-revalidate=900'
   return NextResponse.json(
     { schools, district, departments },
-    { headers: { 'Cache-Control': 'private, no-store' } },
+    { headers: { 'Cache-Control': cacheControl } },
   )
 }

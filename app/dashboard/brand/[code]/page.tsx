@@ -31,6 +31,7 @@ const CONTENT_TYPE: Record<LogoFormat, string> = {
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx'
 type Fonts = { heading: string | null; body: string | null; notes: string | null }
+type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
 type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; cover?: boolean; notes?: string | null }
 type School = {
   code: string
@@ -39,6 +40,15 @@ type School = {
   city: string | null
   level: BrandLevel
   fonts?: Fonts
+  colors?: Colors
+}
+
+// Coerce a stored value into a valid #rrggbb for a native <input type="color">.
+function toColorInputValue(v: string): string {
+  const t = v.trim()
+  if (/^#[0-9a-f]{6}$/i.test(t)) return t.toLowerCase()
+  if (/^#[0-9a-f]{3}$/i.test(t)) return ('#' + t.slice(1).split('').map((c) => c + c).join('')).toLowerCase()
+  return '#000000'
 }
 
 const CATEGORY_PRESETS = ['Official', 'Wordmark', 'Letterhead', 'Team/Sport', 'Specific', 'Other']
@@ -117,6 +127,8 @@ export default function ManageSchoolBrandPage() {
   const [fontBody, setFontBody] = useState('')
   const [fontNotes, setFontNotes] = useState('')
   const [fontBusy, setFontBusy] = useState(false)
+  const [brandColors, setBrandColors] = useState<{ primary: string; secondary: string; accent: string; text: string }>({ primary: '', secondary: '', accent: '', text: '' })
+  const [colorsBusy, setColorsBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
@@ -149,7 +161,9 @@ export default function ManageSchoolBrandPage() {
 
   const loadDetail = useCallback(async () => {
     if (!code) return
-    const res = await fetch(`/api/brand/${encodeURIComponent(code)}`, { cache: 'no-store' })
+    // Cache-bust so a manager's edits (add/rename/delete/cover/colors) always show
+    // immediately, even though public reads of this endpoint are briefly CDN-cached.
+    const res = await fetch(`/api/brand/${encodeURIComponent(code)}?t=${Date.now()}`, { cache: 'no-store' })
     const d = await res.json().catch(() => ({}))
     if (d?.school) {
       const sc = d.school as School
@@ -158,6 +172,12 @@ export default function ManageSchoolBrandPage() {
       setFontHeading(sc.fonts?.heading || '')
       setFontBody(sc.fonts?.body || '')
       setFontNotes(sc.fonts?.notes || '')
+      setBrandColors({
+        primary: sc.colors?.primary || '',
+        secondary: sc.colors?.secondary || '',
+        accent: sc.colors?.accent || '',
+        text: sc.colors?.text || '',
+      })
     } else setNotFound(true)
     setLoading(false)
   }, [code])
@@ -177,6 +197,24 @@ export default function ManageSchoolBrandPage() {
       notify('Could not save typography', 'error')
     } finally {
       setFontBusy(false)
+    }
+  }
+
+  const saveColors = async () => {
+    setColorsBusy(true)
+    try {
+      const res = await fetch('/api/brand/school', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, primaryColor: brandColors.primary, secondaryColor: brandColors.secondary, accentColor: brandColors.accent, textColor: brandColors.text }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Could not save colors', 'error')
+      else { notify('Brand colors saved', 'success'); await loadDetail() }
+    } catch {
+      notify('Could not save colors', 'error')
+    } finally {
+      setColorsBusy(false)
     }
   }
 
@@ -366,6 +404,23 @@ export default function ManageSchoolBrandPage() {
             </p>
             </div>
             )}
+          </section>
+
+          <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', marginBottom: 24, padding: 16 }}>
+            <h2 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800 }}>Brand colors</h2>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>Shown as swatches on this school&rsquo;s public brand page and guide. Enter a hex value or use the picker; leave a field blank to remove that color.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 360 }}>
+              {(([['primary', 'Primary'], ['secondary', 'Secondary'], ['accent', 'Accent'], ['text', 'Text']]) as ['primary' | 'secondary' | 'accent' | 'text', string][]).map(([slot, label]) => (
+                <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 82, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>
+                  <input type="color" value={toColorInputValue(brandColors[slot])} onChange={(e) => setBrandColors((c) => ({ ...c, [slot]: e.target.value }))} aria-label={`${label} color picker`} style={{ width: 40, height: 34, border: '1px solid var(--border-subtle)', borderRadius: 8, background: 'var(--surface-2)', cursor: 'pointer', padding: 2 }} />
+                  <input value={brandColors[slot]} onChange={(e) => setBrandColors((c) => ({ ...c, [slot]: e.target.value }))} placeholder="#003087 or blank" style={{ ...input, width: 170, fontFamily: 'ui-monospace, monospace' }} />
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <button type="button" disabled={colorsBusy} onClick={saveColors} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: colorsBusy ? 'default' : 'pointer', opacity: colorsBusy ? 0.6 : 1 }}>{colorsBusy ? 'Saving...' : 'Save colors'}</button>
+            </div>
           </section>
 
           <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', marginBottom: 24, padding: 16 }}>

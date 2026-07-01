@@ -57,7 +57,8 @@ export default function ManagerBrandGridPage() {
   useEffect(() => {
     if (access !== 'ok') return
     let cancelled = false
-    fetch('/api/brand', { cache: 'no-store' })
+    // Cache-bust so managers see fresh logo counts/previews right after edits.
+    fetch(`/api/brand?t=${Date.now()}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return
