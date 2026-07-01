@@ -1,32 +1,31 @@
 <!--
   Embed the Canyons brand library on another page (e.g. the district website).
+  Paste this whole block where you want the library to appear.
 
-  1. Replace BRAND_APP_ORIGIN below with the real origin of the brand app
-     (e.g. https://csdtvstaff.org  or  https://brand.canyonsdistrict.org).
-  2. Paste this whole block where you want the library to appear.
-  3. The ?embed=1 flag hides the standalone site's header so it blends in, and the
-     page reports its height so the iframe auto-grows (no inner scrollbar).
+  The ?embed=1 flag hides the standalone site's header so it blends in, and the page
+  reports its height so the iframe auto-grows (no inner scrollbar).
 
   NOTE: the brand library must be OPEN (no site password) for a public embed to work.
   A password would show a login box inside the iframe that cross-site cookies can't get
   past. Signed image URLs still prevent the files from being hotlinked elsewhere.
+
+  If the app ever moves off https://www.csdtvstaff.org, update both URLs below.
 -->
 <iframe
   id="csdtv-brand"
-  src="BRAND_APP_ORIGIN/brand?embed=1"
+  src="https://www.csdtvstaff.org/brand?embed=1"
   title="Canyons School District Brand Library"
   loading="lazy"
+  allow="clipboard-write"
   style="width:100%;border:0;display:block"
   height="1200"
 ></iframe>
 
 <script>
   (function () {
-    // Only trust height messages from the brand app. Replace with the same origin
-    // used in the iframe src above.
-    var BRAND_APP_ORIGIN = 'BRAND_APP_ORIGIN';
     window.addEventListener('message', function (event) {
-      if (event.origin !== BRAND_APP_ORIGIN) return;
+      // Only trust height messages from the brand app.
+      if (event.origin !== 'https://www.csdtvstaff.org') return;
       var data = event.data || {};
       if (data.type === 'csdtv-brand-embed-height' && typeof data.height === 'number') {
         var frame = document.getElementById('csdtv-brand');

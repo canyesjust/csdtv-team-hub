@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useBrandEmbed, brandQuery } from '../useBrandEmbed'
+import { copyText } from '@/lib/copy-text'
 
 const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
 
@@ -45,7 +46,7 @@ function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | nu
 }
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; thumb?: string | null; flagged?: boolean; notes?: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; thumb?: string | null; flagged?: boolean; cover?: boolean; notes?: string | null }
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -99,6 +100,14 @@ function readableOn(hex: string | null): string {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1a1f36' : '#ffffff'
 }
 
+// Coerce a stored value into a valid #rrggbb for a native <input type="color">.
+function toColorInputValue(v: string): string {
+  const t = v.trim()
+  if (/^#[0-9a-f]{6}$/i.test(t)) return t.toLowerCase()
+  if (/^#[0-9a-f]{3}$/i.test(t)) return ('#' + t.slice(1).split('').map((c) => c + c).join('')).toLowerCase()
+  return '#000000'
+}
+
 type PreviewBg = 'check' | 'light' | 'dark'
 function previewBg(mode: PreviewBg): CSSProperties {
   if (mode === 'dark') return { background: '#2b2f3a' }
@@ -149,6 +158,9 @@ export default function SchoolBrandPage() {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [allCategories, setAllCategories] = useState<string[]>([])
+  const [editColors, setEditColors] = useState<{ primary: string; secondary: string; accent: string; text: string }>({ primary: '', secondary: '', accent: '', text: '' })
+  const [colorsBusy, setColorsBusy] = useState(false)
+  const [colorsMsg, setColorsMsg] = useState<string | null>(null)
   const embed = useBrandEmbed()
   const linkQuery = brandQuery(reviewKey, embed)
 
@@ -256,6 +268,18 @@ export default function SchoolBrandPage() {
     return () => { cancelled = true }
   }, [reviewKey])
 
+  // Keep the color editor fields in sync with the loaded school colors.
+  useEffect(() => {
+    if (!school) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEditColors({
+      primary: school.colors.primary || '',
+      secondary: school.colors.secondary || '',
+      accent: school.colors.accent || '',
+      text: school.colors.text || '',
+    })
+  }, [school])
+
   useEffect(() => {
     // Read after mount so server and client first render match (no hydration mismatch).
     // Persist the review key for the tab so review mode survives navigation between
@@ -352,6 +376,52 @@ export default function SchoolBrandPage() {
     }
   }
 
+  const saveColors = async () => {
+    if (!reviewKey || !school) return
+    setColorsBusy(true)
+    setColorsMsg(null)
+    try {
+      const res = await fetch('/api/brand/review-colors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: reviewKey, code, primary: editColors.primary, secondary: editColors.secondary, accent: editColors.accent, text: editColors.text }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setColorsMsg(typeof d?.error === 'string' ? d.error : 'Could not save the colors.')
+        return
+      }
+      const c = (d?.colors || {}) as Partial<Colors>
+      setSchool((s) => (s ? { ...s, colors: { primary: c.primary ?? null, secondary: c.secondary ?? null, accent: c.accent ?? null, text: c.text ?? null } } : s))
+      setColorsMsg('Colors saved.')
+    } catch {
+      setColorsMsg('Could not save the colors. Try again.')
+    } finally {
+      setColorsBusy(false)
+    }
+  }
+
+  const setReviewCover = async (l: Logo) => {
+    if (!reviewKey) return
+    setFlagError(null)
+    setLogos((prev) => prev.map((x) => ({ ...x, cover: x.category === l.category && x.name === l.name })))
+    try {
+      const res = await fetch('/api/brand/cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: reviewKey, code, category: l.category, name: l.name }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        await reload()
+        setFlagError(typeof d?.error === 'string' ? d.error : 'Could not set the main image.')
+      }
+    } catch {
+      await reload()
+      setFlagError('Could not set the main image. Try again.')
+    }
+  }
+
   const changeCategory = async (l: Logo, newCat: string) => {
     if (!reviewKey || newCat === l.category) return
     const prevCat = l.category
@@ -376,12 +446,9 @@ export default function SchoolBrandPage() {
   }
 
   const copyHex = async (key: string, hex: string) => {
-    try {
-      await navigator.clipboard.writeText(hex)
+    if (await copyText(hex)) {
       setCopied(key)
       window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1400)
-    } catch {
-      // ignore
     }
   }
 
@@ -540,12 +607,29 @@ export default function SchoolBrandPage() {
 
             <section style={{ marginBottom: 26 }}>
               <h2 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Brand colors</h2>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {[swatch('primary', 'Primary'), swatch('secondary', 'Secondary'), swatch('accent', 'Accent'), swatch('text', 'Text')].filter(Boolean)}
-                {!school.colors.primary && !school.colors.secondary && !school.colors.accent && !school.colors.text && (
-                  <span style={{ fontSize: 13, color: colors.muted }}>No brand colors on file.</span>
-                )}
-              </div>
+              {reviewKey ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 340 }}>
+                  {(([['primary', 'Primary'], ['secondary', 'Secondary'], ['accent', 'Accent'], ['text', 'Text']]) as ['primary' | 'secondary' | 'accent' | 'text', string][]).map(([slot, label]) => (
+                    <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 78, fontSize: 12, color: colors.muted, fontWeight: 600 }}>{label}</span>
+                      <input type="color" value={toColorInputValue(editColors[slot])} onChange={(e) => setEditColors((c) => ({ ...c, [slot]: e.target.value }))} aria-label={`${label} color picker`} style={{ width: 40, height: 32, border: `1px solid ${colors.line}`, borderRadius: 6, background: colors.cardBg, cursor: 'pointer', padding: 2 }} />
+                      <input value={editColors[slot]} onChange={(e) => setEditColors((c) => ({ ...c, [slot]: e.target.value }))} placeholder="#003087 or blank" style={{ width: 160, height: 32, border: `1px solid ${colors.line}`, borderRadius: 6, padding: '0 8px', fontSize: 13, fontFamily: 'ui-monospace, monospace', color: colors.text, background: colors.cardBg, boxSizing: 'border-box' }} />
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 }}>
+                    <button type="button" disabled={colorsBusy} onClick={saveColors} style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${colors.info}`, background: colors.info, color: '#fff', fontSize: 13, fontWeight: 700, cursor: colorsBusy ? 'default' : 'pointer', opacity: colorsBusy ? 0.6 : 1 }}>{colorsBusy ? 'Saving...' : 'Save colors'}</button>
+                    {colorsMsg && <span style={{ fontSize: 12.5, fontWeight: 600, color: colors.muted }}>{colorsMsg}</span>}
+                  </div>
+                  <p style={{ margin: 0, fontSize: 11.5, color: colors.muted }}>Enter a hex value (e.g. #003087) or use the picker. Leave a field blank to remove that color.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {[swatch('primary', 'Primary'), swatch('secondary', 'Secondary'), swatch('accent', 'Accent'), swatch('text', 'Text')].filter(Boolean)}
+                  {!school.colors.primary && !school.colors.secondary && !school.colors.accent && !school.colors.text && (
+                    <span style={{ fontSize: 13, color: colors.muted }}>No brand colors on file.</span>
+                  )}
+                </div>
+              )}
             </section>
 
             <section>
@@ -632,7 +716,14 @@ export default function SchoolBrandPage() {
                                   <span style={{ fontSize: 12, fontWeight: 700, color: l.flagged ? '#e0282e' : colors.muted }}>
                                     {l.flagged ? 'Marked for deletion - click to undo' : 'Click to mark as old'}
                                   </span>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer(l) }} style={{ alignSelf: 'flex-start', padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>View file details</button>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); openDrawer(l) }} style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>View file details</button>
+                                    {(l.png || l.jpg || l.svg) && (l.cover ? (
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(31,146,84,0.4)', background: 'rgba(31,146,84,0.12)', color: '#1f9254', fontSize: 11.5, fontWeight: 700 }}>★ Main image</span>
+                                    ) : (
+                                      <button type="button" onClick={(e) => { e.stopPropagation(); setReviewCover(l) }} style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Set as main image</button>
+                                    ))}
+                                  </div>
                                   <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                                     <span style={{ fontSize: 10.5, color: colors.muted, alignSelf: 'center', marginRight: 2 }}>Category:</span>
                                     {(reviewCategoryOptions.includes(l.category) ? reviewCategoryOptions : [...reviewCategoryOptions, l.category]).map((cat) => {

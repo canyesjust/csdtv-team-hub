@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import Link from 'next/link'
 import { useBrandEmbed, brandQuery } from './useBrandEmbed'
+import { copyText } from '@/lib/copy-text'
 
 // If a CDN-resized preview fails (e.g. the source image is too large for the transform
 // service), fall back to the original file once so the card still shows a logo.
@@ -116,12 +117,9 @@ export default function BrandLibraryPage() {
   }, [schools, query, level])
 
   const copyHex = async (key: string, hex: string) => {
-    try {
-      await navigator.clipboard.writeText(hex)
+    if (await copyText(hex)) {
       setCopied(key)
       window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1400)
-    } catch {
-      // ignore
     }
   }
 
