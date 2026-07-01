@@ -168,7 +168,9 @@ export default function SchoolBrandPage() {
 
   const reload = useCallback(async () => {
     if (!code) return
-    const r = await fetch(`/api/brand/${encodeURIComponent(code)}`, { cache: 'no-store' })
+    // Cache-bust: after a reviewer edit/upload we need the fresh server state, not the
+    // briefly-cached public copy.
+    const r = await fetch(`/api/brand/${encodeURIComponent(code)}?t=${Date.now()}`, { cache: 'no-store' })
     const d = await r.json().catch(() => ({}))
     if (d?.school) { setSchool(d.school as School); setLogos(Array.isArray(d.logos) ? (d.logos as Logo[]) : []) }
   }, [code])

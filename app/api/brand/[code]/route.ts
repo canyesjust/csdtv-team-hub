@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pickHex } from '@/lib/thumbnail-school-brand'
-import { hasBrandSiteAccess } from '@/lib/server/brand-access'
+import { brandGateEnabled, hasBrandSiteAccess } from '@/lib/server/brand-access'
 import { signBrandUrl } from '@/lib/server/brand-storage'
 
 // Public per-school brand detail. Service role reads public brand data only.
@@ -152,7 +152,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
       },
       logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, svg: l.svg, docx: l.docx, thumb: l.thumb, flagged: l.flagged, cover: l.cover, notes: l.notes })),
     },
-    // Signed URLs are per-request and expire; never shared-cache this response.
-    { headers: { 'Cache-Control': 'private, no-store' } },
+    // Cache public reads briefly (window << the 1-hour signed-URL lifetime, so cached
+    // URLs never expire before the response). Managers/reviewers cache-bust their own
+    // fetches so edits show immediately. When gated, responses are per-user -> no-store.
+    { headers: { 'Cache-Control': (await brandGateEnabled()) ? 'private, no-store' : 'public, s-maxage=60, stale-while-revalidate=300' } },
   )
 }
