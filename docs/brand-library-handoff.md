@@ -71,6 +71,9 @@ The public brand library can be locked behind one shared password.
 - Enforcement: server layout `app/brand/layout.tsx` calls `hasBrandSiteAccess()` (`lib/server/brand-access.ts`) and renders `BrandAccessGate` when locked. The two public GET APIs (`/api/brand`, `/api/brand/[code]`) also call it and are `no-store`. Signed-in staff bypass; a valid `?review=KEY` sets a review cookie (in middleware) that also bypasses.
 - APIs: `POST /api/brand/access` (verify password, set cookie; rate-limited), `GET/POST/DELETE /api/brand/access-config` (manager-only status/set/clear).
 
+### Embedding on another site (added 2026-07-01)
+`/brand` and `/brand/[code]` support an `?embed=1` mode (`app/brand/useBrandEmbed.ts`): it hides the standalone title/chrome, drops the page min-height, and `postMessage`s content height (`type: 'csdtv-brand-embed-height'`) to the parent so an iframe auto-sizes. `?embed=1` (and `?review=`) propagate across internal links via `brandQuery()`. The app sets no `X-Frame-Options`/CSP frame-ancestors (see `next.config.ts`), so framing is allowed. Ready-to-paste parent snippet: `docs/brand-embed-snippet.html`. NOTE: a public embed requires NO site password (a gated iframe breaks on cross-site cookies); signed URLs still prevent file hotlinking.
+
 ### Letterhead + Word docs (added 2026-07-01)
 `school_logos.format` now allows `docx` (migration `20260701120000_brand_letterhead_docx.sql`). New `Letterhead` category preset; Word docs are only accepted under Letterhead (enforced client + server). docx has no image preview (shows a "DOCX" badge) and is excluded from card thumbnails. Reviewers can also upload (images + letterhead) and rename logos via the review link.
 

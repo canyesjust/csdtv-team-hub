@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useBrandEmbed, brandQuery } from '../useBrandEmbed'
 
 const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
 
@@ -148,6 +149,8 @@ export default function SchoolBrandPage() {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [allCategories, setAllCategories] = useState<string[]>([])
+  const embed = useBrandEmbed()
+  const linkQuery = brandQuery(reviewKey, embed)
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
 
@@ -402,9 +405,9 @@ export default function SchoolBrandPage() {
   }
 
   return (
-    <div style={{ background: colors.bg, minHeight: '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <div style={{ maxWidth: 1640, margin: '0 auto', padding: '24px 24px 72px' }}>
-        <Link href={`/brand${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ fontSize: 13, fontWeight: 700, color: colors.info, textDecoration: 'none' }}>{'←'} All schools</Link>
+    <div style={{ background: embed ? 'transparent' : colors.bg, minHeight: embed ? undefined : '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <div style={{ maxWidth: 1640, margin: '0 auto', padding: embed ? '10px 12px 28px' : '24px 24px 72px' }}>
+        <Link href={`/brand${linkQuery}`} style={{ fontSize: 13, fontWeight: 700, color: colors.info, textDecoration: 'none' }}>{'←'} All schools</Link>
 
         {loading ? (
           <p style={{ color: colors.muted, fontSize: 15, padding: '40px 0', textAlign: 'center' }}>Loading...</p>

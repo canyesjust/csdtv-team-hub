@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type SyntheticEvent } from 'react'
 import Link from 'next/link'
+import { useBrandEmbed, brandQuery } from './useBrandEmbed'
 
 // If a CDN-resized preview fails (e.g. the source image is too large for the transform
 // service), fall back to the original file once so the card still shows a logo.
@@ -73,6 +74,8 @@ export default function BrandLibraryPage() {
   const [copied, setCopied] = useState<string | null>(null)
   const [reviewKey, setReviewKey] = useState<string | null>(null)
   const [district, setDistrict] = useState<BrandSchoolSummary | null>(null)
+  const embed = useBrandEmbed()
+  const linkQuery = brandQuery(reviewKey, embed)
 
   useEffect(() => {
     // Read after mount so server and client first render match (no hydration mismatch).
@@ -140,18 +143,20 @@ export default function BrandLibraryPage() {
   }
 
   return (
-    <div style={{ background: colors.bg, minHeight: '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <div style={{ maxWidth: 1840, margin: '0 auto', padding: '28px 24px 72px' }}>
-        <header style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16 }}>
-          {district?.preview && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={district.preview} alt="Canyons School District" onError={(e) => onThumbError(e, district.previewRaw)} style={{ height: 52, width: 'auto', maxWidth: 120, objectFit: 'contain', flexShrink: 0 }} />
-          )}
-          <div>
-            <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.15 }}>Canyons School District Brand Library</h1>
-            <p style={{ margin: '6px 0 0', fontSize: 14, color: colors.muted }}>Pick a school to view and download its logos. Click a color to copy its hex code.</p>
-          </div>
-        </header>
+    <div style={{ background: embed ? 'transparent' : colors.bg, minHeight: embed ? undefined : '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <div style={{ maxWidth: 1840, margin: '0 auto', padding: embed ? '8px 12px 24px' : '28px 24px 72px' }}>
+        {!embed && (
+          <header style={{ marginBottom: 18, display: 'flex', alignItems: 'center', gap: 16 }}>
+            {district?.preview && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={district.preview} alt="Canyons School District" onError={(e) => onThumbError(e, district.previewRaw)} style={{ height: 52, width: 'auto', maxWidth: 120, objectFit: 'contain', flexShrink: 0 }} />
+            )}
+            <div>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, lineHeight: 1.15 }}>Canyons School District Brand Library</h1>
+              <p style={{ margin: '6px 0 0', fontSize: 14, color: colors.muted }}>Pick a school to view and download its logos. Click a color to copy its hex code.</p>
+            </div>
+          </header>
+        )}
 
         {reviewKey && (
           <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, border: '1px solid #f0b429', background: '#fff8e6', color: '#7a5300', fontSize: 13.5, fontWeight: 600 }}>
@@ -160,7 +165,7 @@ export default function BrandLibraryPage() {
         )}
 
         {district && (
-          <Link href={`/brand/${district.code}${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 16, textDecoration: 'none', color: 'inherit', border: `1px solid ${colors.border}`, borderRadius: 14, background: colors.cardBg, padding: '14px 18px', marginBottom: 18 }}>
+          <Link href={`/brand/${district.code}${linkQuery}`} style={{ display: 'flex', alignItems: 'center', gap: 16, textDecoration: 'none', color: 'inherit', border: `1px solid ${colors.border}`, borderRadius: 14, background: colors.cardBg, padding: '14px 18px', marginBottom: 18 }}>
             <div style={{ width: 110, height: 70, ...CHECKER, borderRadius: 10, border: `1px solid ${colors.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
               {district.preview ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -208,7 +213,7 @@ export default function BrandLibraryPage() {
               const swatches = [swatch(s, 'primary'), swatch(s, 'secondary'), swatch(s, 'accent'), swatch(s, 'text')].filter(Boolean)
               return (
                 <div key={s.code} style={{ border: `1px solid ${colors.border}`, borderRadius: 14, background: colors.cardBg, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <Link href={`/brand/${s.code}${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                  <Link href={`/brand/${s.code}${linkQuery}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                     <div style={{ position: 'relative', height: 210, ...(s.preview ? CHECKER : { background: s.colors.primary || '#334155' }), display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderBottom: `1px solid ${colors.line}` }}>
                       <span style={{ position: 'absolute', top: 8, left: 8, fontSize: 11, fontWeight: 700, color: '#ffffff', background: 'rgba(20,30,50,0.78)', borderRadius: 999, padding: '2px 9px' }}>
                         {s.logoCount} {s.logoCount === 1 ? 'logo' : 'logos'}
@@ -236,7 +241,7 @@ export default function BrandLibraryPage() {
                   )}
 
                   <div style={{ marginTop: 'auto', padding: 14 }}>
-                    <Link href={`/brand/${s.code}${reviewKey ? `?review=${encodeURIComponent(reviewKey)}` : ''}`} style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 8, border: `1px solid ${colors.line}`, color: colors.info, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                    <Link href={`/brand/${s.code}${linkQuery}`} style={{ display: 'block', textAlign: 'center', padding: '8px', borderRadius: 8, border: `1px solid ${colors.line}`, color: colors.info, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
                       {s.logoCount > 0 ? `View ${s.logoCount} logo${s.logoCount === 1 ? '' : 's'}` : 'View school'}
                     </Link>
                   </div>
