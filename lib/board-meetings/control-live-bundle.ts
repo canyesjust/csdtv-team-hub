@@ -1,16 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import {
-  getVoteResultRemainingSeconds,
-  isVoteResultActive,
-  listMotionsEnriched,
-} from '@/lib/board-meetings/motion-control'
+import { listMotionsEnriched } from '@/lib/board-meetings/motion-control'
+import { buildMotionLifecycle, buildResultOverlay } from '@/lib/board-meetings/motion-lifecycle'
 import {
   buildPublicLowerThirdPayload,
   normalizeLowerThirdPosition,
 } from '@/lib/board-meetings/lower-third-control'
-import type { ControlBundle, MotionLifecycleState, ResultOverlayState } from '@/lib/board-meetings/types'
-import type { EnrichedMotion } from '@/lib/board-meetings/motion-types'
-import { isMotionDrafting, pickActiveMotions } from '@/lib/board-meetings/motion-active-pick'
+import type { ControlBundle } from '@/lib/board-meetings/types'
 
 const LIVE_EVENT_TYPES = ['meeting_went_live', 'go_live']
 
@@ -27,70 +22,6 @@ export type ControlLivePatch = Pick<
   | 'current_documents'
   | 'channel_assignments'
 >
-
-function buildMotionLifecycle(
-  state: Record<string, unknown> | null,
-  motions: EnrichedMotion[],
-): MotionLifecycleState {
-  const { active, parent, activeRow } = pickActiveMotions(
-    motions,
-    (state?.active_motion_id as string | null | undefined) ?? null,
-    (state?.current_agenda_item_id as string | null | undefined) ?? null,
-  )
-
-  if (!activeRow || !active) {
-    return { state: 'no_motion', active_motion: null, parent_motion: null, recorded_votes_count: 0 }
-  }
-
-  const overlayActive = !!state && isVoteResultActive(state as Parameters<typeof isVoteResultActive>[0])
-
-  const mapState = (): MotionLifecycleState['state'] => {
-    const resultMotionId = state?.active_vote_result_motion_id as string | undefined
-    if (overlayActive && resultMotionId === activeRow.id) return 'pushed'
-    if (activeRow.status === 'voting') return 'voting'
-    if (activeRow.status === 'passed' || activeRow.status === 'failed') return 'voted'
-    if (isMotionDrafting(activeRow)) return 'drafting'
-    if (activeRow.status === 'open_for_discussion') return 'open_for_discussion'
-    return 'closed'
-  }
-
-  return {
-    state: mapState(),
-    active_motion: active,
-    parent_motion: parent,
-    recorded_votes_count: activeRow.votes?.length ?? 0,
-  }
-}
-
-function buildResultOverlay(
-  state: Record<string, unknown> | null,
-  motions: EnrichedMotion[],
-): ResultOverlayState | null {
-  if (!state || !isVoteResultActive(state as Parameters<typeof isVoteResultActive>[0])) {
-    return null
-  }
-
-  const motionId = state.active_vote_result_motion_id as string
-  const motion = motions.find(m => m.id === motionId)
-  if (!motion) return null
-
-  const remaining = getVoteResultRemainingSeconds(state as Parameters<typeof getVoteResultRemainingSeconds>[0])
-  const total = (state.vote_result_duration_seconds as number) ?? 8
-  const startedAt = (state.vote_result_started_at as string) || new Date().toISOString()
-
-  return {
-    active: true,
-    motion_id: motionId,
-    passed: motion.result === 'passed',
-    yea_count: motion.tally.yea ?? 0,
-    nay_count: motion.tally.nay ?? 0,
-    abstain_count: motion.tally.abstain ?? 0,
-    started_at: startedAt,
-    total_duration: total,
-    seconds_remaining: remaining,
-    held: !!(state.vote_result_held),
-  }
-}
 
 /**
  * Fast path for realtime / background sync — skips agenda, utilities, signed photo URLs.

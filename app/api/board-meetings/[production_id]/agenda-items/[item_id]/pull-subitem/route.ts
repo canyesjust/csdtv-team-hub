@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
-import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
-import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
+import { withBoardMeetingProduction } from '@/lib/board-meetings/production-route'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,74 +12,78 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ production_id: string; item_id: string }> },
 ) {
-  const teamUser = await getAuthenticatedTeamUser()
-  if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  return withBoardMeetingProduction(params, async ({ service, productionId, routeParams }) => {
+    const { item_id } = routeParams
 
-  const { production_id, item_id } = await params
-  const service = getServiceSupabaseClient()
-  if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    const body = (await request.json().catch(() => ({}))) as { item_number?: string }
+    const targetNumber = String(body.item_number ?? '')
+    if (!targetNumber) return NextResponse.json({ error: 'item_number is required' }, { status: 400 })
 
-  const prodCheck = await assertBoardMeetingProduction(service, production_id)
-  if ('error' in prodCheck) return NextResponse.json({ error: prodCheck.error }, { status: prodCheck.status || 400 })
+    const { data: consent } = await service
+      .from('board_meeting_agenda_items')
+      .select('id, board_meeting_id, section_number, section_title, sort_order, subitems')
+      .eq('id', item_id)
+      .maybeSingle()
+    if (!consent) return NextResponse.json({ error: 'Consent item not found' }, { status: 404 })
 
-  const body = (await request.json().catch(() => ({}))) as { item_number?: string }
-  const targetNumber = String(body.item_number ?? '')
-  if (!targetNumber) return NextResponse.json({ error: 'item_number is required' }, { status: 400 })
+    // The item must belong to THIS production's board meeting — otherwise a
+    // crafted item_id could reach into another meeting's agenda.
+    const { data: bm } = await service
+      .from('board_meetings')
+      .select('id')
+      .eq('production_id', productionId)
+      .maybeSingle()
+    if (!bm || bm.id !== consent.board_meeting_id) {
+      return NextResponse.json({ error: 'Consent item not found' }, { status: 404 })
+    }
 
-  const { data: consent } = await service
-    .from('board_meeting_agenda_items')
-    .select('id, board_meeting_id, section_number, section_title, sort_order, subitems')
-    .eq('id', item_id)
-    .maybeSingle()
-  if (!consent) return NextResponse.json({ error: 'Consent item not found' }, { status: 404 })
+    const subs: Sub[] = Array.isArray(consent.subitems) ? (consent.subitems as Sub[]) : []
+    const target = subs.find(s => s.item_number === targetNumber)
+    if (!target) return NextResponse.json({ error: 'Sub-item not found' }, { status: 404 })
+    const remaining = subs.filter(s => s.item_number !== targetNumber)
 
-  const subs: Sub[] = Array.isArray(consent.subitems) ? (consent.subitems as Sub[]) : []
-  const target = subs.find(s => s.item_number === targetNumber)
-  if (!target) return NextResponse.json({ error: 'Sub-item not found' }, { status: 404 })
-  const remaining = subs.filter(s => s.item_number !== targetNumber)
+    // Make room right after the consent item.
+    const { data: after } = await service
+      .from('board_meeting_agenda_items')
+      .select('id, sort_order')
+      .eq('board_meeting_id', consent.board_meeting_id)
+      .gt('sort_order', consent.sort_order)
+      .order('sort_order', { ascending: true })
+    for (const row of after || []) {
+      await service.from('board_meeting_agenda_items').update({ sort_order: (row.sort_order as number) + 1 }).eq('id', row.id)
+    }
 
-  // Make room right after the consent item.
-  const { data: after } = await service
-    .from('board_meeting_agenda_items')
-    .select('id, sort_order')
-    .eq('board_meeting_id', consent.board_meeting_id)
-    .gt('sort_order', consent.sort_order)
-    .order('sort_order', { ascending: true })
-  for (const row of after || []) {
-    await service.from('board_meeting_agenda_items').update({ sort_order: (row.sort_order as number) + 1 }).eq('id', row.id)
-  }
+    const { data: created, error: insErr } = await service
+      .from('board_meeting_agenda_items')
+      .insert({
+        board_meeting_id: consent.board_meeting_id,
+        section_number: consent.section_number,
+        section_title: consent.section_title,
+        item_number: target.item_number,
+        sort_order: (consent.sort_order as number) + 1,
+        title: target.title,
+        original_title: target.title,
+        type: 'action',
+        action_requested: true,
+        is_broadcastable: true,
+        consent_block: null,
+        suggested_motion_text: `Move to approve ${target.title}.`,
+      })
+      .select('id')
+      .single()
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
-  const { data: created, error: insErr } = await service
-    .from('board_meeting_agenda_items')
-    .insert({
-      board_meeting_id: consent.board_meeting_id,
-      section_number: consent.section_number,
-      section_title: consent.section_title,
-      item_number: target.item_number,
-      sort_order: (consent.sort_order as number) + 1,
-      title: target.title,
-      original_title: target.title,
-      type: 'action',
-      action_requested: true,
-      is_broadcastable: true,
-      consent_block: null,
-      suggested_motion_text: `Move to approve ${target.title}.`,
-    })
-    .select('id')
-    .single()
-  if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    // Update the consent item: drop the pulled member + re-list the motion text.
+    const listed = remaining.map(s => `${s.item_number}. ${s.title}`).join('; ')
+    await service
+      .from('board_meeting_agenda_items')
+      .update({
+        subitems: remaining,
+        suggested_motion_text: remaining.length ? `Move to approve the Consent Agenda: ${listed}.` : 'Move to approve the Consent Agenda.',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', consent.id)
 
-  // Update the consent item: drop the pulled member + re-list the motion text.
-  const listed = remaining.map(s => `${s.item_number}. ${s.title}`).join('; ')
-  await service
-    .from('board_meeting_agenda_items')
-    .update({
-      subitems: remaining,
-      suggested_motion_text: remaining.length ? `Move to approve the Consent Agenda: ${listed}.` : 'Move to approve the Consent Agenda.',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', consent.id)
-
-  return NextResponse.json({ success: true, new_item_id: created.id })
+    return NextResponse.json({ success: true, new_item_id: created.id })
+  })
 }

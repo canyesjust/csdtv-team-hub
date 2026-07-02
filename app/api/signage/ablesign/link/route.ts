@@ -20,6 +20,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'ablesignScreenId required' }, { status: 400 })
   }
 
+  // No two Hub screens may point at the same AbleSign screen — a duplicate link
+  // breaks online-status tracking and cross-contaminates HTML pushes between the
+  // two screens (this is what happened with West Front / Front Office).
+  const { data: clash } = await service
+    .from('signage_screens')
+    .select('id, name')
+    .eq('ablesign_screen_id', ablesignScreenId)
+    .neq('id', hubScreenId)
+    .maybeSingle()
+  if (clash) {
+    return NextResponse.json(
+      { error: `AbleSign screen ${ablesignScreenId} is already linked to "${clash.name}". Unlink it there first.` },
+      { status: 409 },
+    )
+  }
+
   const { data, error } = await service
     .from('signage_screens')
     .update({ ablesign_screen_id: ablesignScreenId })

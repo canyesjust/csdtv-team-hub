@@ -11,6 +11,7 @@ import type { TasksDashboardPayload } from '@/lib/dashboard/load-tasks-data'
 import { useTasksSummary } from '@/lib/hooks/dashboard-cache'
 import { ZoneHeader } from '../components/ZoneHeader'
 import { uiStyles, statusBadge, statusTone } from '@/lib/ui/styles'
+import { FocusChip, ScopeButton } from '@/lib/ui/filter-buttons'
 import { toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/confirm'
 import AsyncButton from '../components/AsyncButton'
@@ -1012,47 +1013,13 @@ export default function TasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regularFiltered, groupBy, team])
 
-  const focusChip = (key: FocusFilter, label: string, count: number, tone: keyof typeof statusTone | null) => {
-    const active = focusFilter === key
-    const accent = tone ? statusTone[tone].color : muted
-    const accentBg = tone ? statusTone[tone].background : surface2
-    return (
-      <button
-        key={key}
-        onClick={() => setFocusFilter(key)}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: '8px',
-          padding: '8px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 600,
-          border: `1px solid ${active ? accent : border}`,
-          background: active ? accentBg : cardBg,
-          color: active ? accent : muted,
-          cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-          whiteSpace: 'nowrap' as const,
-        }}
-      >
-        <span>{label}</span>
-        <span style={{ fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '999px', background: active ? accentBg : surface2, color: active ? accent : muted, border: active ? `1px solid ${accent}` : 'none' }}>{count}</span>
-      </button>
-    )
-  }
+  const focusChip = (key: FocusFilter, label: string, count: number, tone: keyof typeof statusTone | null) => (
+    <FocusChip key={key} label={label} count={count} tone={tone} active={focusFilter === key} onClick={() => setFocusFilter(key)} />
+  )
 
-  const scopeBtn = (key: Scope, label: string) => {
-    const active = scope === key
-    return (
-      <button
-        onClick={() => setScope(key)}
-        style={{
-          padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-          border: `1px solid ${active ? 'var(--brand-primary)' : border}`,
-          background: active ? 'var(--brand-primary)' : cardBg,
-          color: active ? '#fff' : muted,
-          cursor: 'pointer', fontFamily: 'inherit',
-        }}
-      >
-        {label}
-      </button>
-    )
-  }
+  const scopeBtn = (key: Scope, label: string) => (
+    <ScopeButton key={key} label={label} active={scope === key} onClick={() => setScope(key)} />
+  )
 
   const inputStyle: React.CSSProperties = {
     width: '100%', background: surface2, border: `1px solid ${border}`, borderRadius: '8px',

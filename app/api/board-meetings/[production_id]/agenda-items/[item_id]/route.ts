@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
-import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
-import { assertBoardMeetingProduction } from '@/lib/board-meetings/meeting-api'
+import { withBoardMeetingProduction } from '@/lib/board-meetings/production-route'
 import { normalizeAgendaType } from '@/lib/board-meetings/extraction'
 import {
   buildLiveLockedAgendaPatch,
@@ -18,164 +16,146 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ production_id: string; item_id: string }> },
 ) {
-  const teamUser = await getAuthenticatedTeamUser()
-  if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  return withBoardMeetingProduction(params, async ({ service, teamUser, productionId, routeParams }) => {
+    const { item_id } = routeParams
 
-  const { production_id, item_id } = await params
-  const service = getServiceSupabaseClient()
-  if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    const { data: bm } = await service
+      .from('board_meetings')
+      .select('id, agenda_locked, broadcast_status')
+      .eq('production_id', productionId)
+      .maybeSingle()
 
-  const prodCheck = await assertBoardMeetingProduction(service, production_id)
-  if ('error' in prodCheck) {
-    return NextResponse.json({ error: prodCheck.error }, { status: prodCheck.status || 400 })
-  }
+    if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
 
-  const { data: bm } = await service
-    .from('board_meetings')
-    .select('id, agenda_locked, broadcast_status')
-    .eq('production_id', production_id)
-    .maybeSingle()
+    const { data: item } = await service
+      .from('board_meeting_agenda_items')
+      .select('id')
+      .eq('id', item_id)
+      .eq('board_meeting_id', bm.id)
+      .maybeSingle()
 
-  if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
+    if (!item) return NextResponse.json({ error: 'Agenda item not found' }, { status: 404 })
 
-  const { data: item } = await service
-    .from('board_meeting_agenda_items')
-    .select('id')
-    .eq('id', item_id)
-    .eq('board_meeting_id', bm.id)
-    .maybeSingle()
+    const body = await request.json()
+    let patch: Record<string, unknown>
 
-  if (!item) return NextResponse.json({ error: 'Agenda item not found' }, { status: 404 })
+    if (bm.agenda_locked) {
+      if (!canEditAgendaWhileLocked(bm.broadcast_status)) {
+        return NextResponse.json({ error: 'Agenda is locked' }, { status: 400 })
+      }
+      if (body.presenters !== undefined) {
+        return NextResponse.json({ error: 'Cannot edit presenters while the meeting is in progress' }, { status: 400 })
+      }
+      patch = buildLiveLockedAgendaPatch(body)
+      if (!liveLockedAgendaPatchHasChanges(patch)) {
+        return NextResponse.json({ error: 'No allowed fields to update' }, { status: 400 })
+      }
+      if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
+    } else {
+      patch = { updated_at: new Date().toISOString() }
+      const fields = [
+        'section_number', 'section_title', 'item_number', 'sort_order', 'title', 'original_title',
+        'type', 'action_requested', 'is_broadcastable', 'consent_block', 'notes', 'subitems',
+        'needs_review', 'review_notes', 'suggested_motion_text', 'live_status',
+      ] as const
 
-  const body = await request.json()
-  let patch: Record<string, unknown>
-
-  if (bm.agenda_locked) {
-    if (!canEditAgendaWhileLocked(bm.broadcast_status)) {
-      return NextResponse.json({ error: 'Agenda is locked' }, { status: 400 })
-    }
-    if (body.presenters !== undefined) {
-      return NextResponse.json({ error: 'Cannot edit presenters while the meeting is in progress' }, { status: 400 })
-    }
-    patch = buildLiveLockedAgendaPatch(body)
-    if (!liveLockedAgendaPatchHasChanges(patch)) {
-      return NextResponse.json({ error: 'No allowed fields to update' }, { status: 400 })
-    }
-    if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
-  } else {
-    patch = { updated_at: new Date().toISOString() }
-    const fields = [
-      'section_number', 'section_title', 'item_number', 'sort_order', 'title', 'original_title',
-      'type', 'action_requested', 'is_broadcastable', 'consent_block', 'notes', 'subitems',
-      'needs_review', 'review_notes', 'suggested_motion_text', 'live_status',
-    ] as const
-
-    for (const f of fields) {
-      if (body[f] !== undefined) {
-        if (f === 'suggested_motion_text' && typeof body[f] === 'string') {
-          const trimmed = body[f].trim()
-          patch[f] = trimmed.length > 0 ? trimmed : null
-        } else {
-          patch[f] = body[f]
+      for (const f of fields) {
+        if (body[f] !== undefined) {
+          if (f === 'suggested_motion_text' && typeof body[f] === 'string') {
+            const trimmed = body[f].trim()
+            patch[f] = trimmed.length > 0 ? trimmed : null
+          } else {
+            patch[f] = body[f]
+          }
         }
       }
+      if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
     }
-    if (body.type !== undefined) patch.type = normalizeAgendaType(String(body.type))
-  }
 
-  let { error } = await service.from('board_meeting_agenda_items').update(patch).eq('id', item_id)
+    let { error } = await service.from('board_meeting_agenda_items').update(patch).eq('id', item_id)
 
-  if (error && isMissingSuggestedMotionTextColumn(error) && patch.suggested_motion_text !== undefined) {
-    const { suggested_motion_text: _removed, ...patchWithoutTemplate } = patch
-    ;({ error } = await service
-      .from('board_meeting_agenda_items')
-      .update(patchWithoutTemplate)
-      .eq('id', item_id))
-  }
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  if (!bm.agenda_locked && Array.isArray(body.presenters)) {
-    await service.from('board_meeting_presenters').delete().eq('agenda_item_id', item_id)
-    const presenters = body.presenters as { name: string; title?: string | null }[]
-    if (presenters.length > 0) {
-      await service.from('board_meeting_presenters').insert(
-        presenters.map((p, j) => ({
-          agenda_item_id: item_id,
-          person_id: null,
-          name: p.name,
-          title: p.title ?? null,
-          sort_order: j,
-        })),
-      )
+    if (error && isMissingSuggestedMotionTextColumn(error) && patch.suggested_motion_text !== undefined) {
+      const { suggested_motion_text: _removed, ...patchWithoutTemplate } = patch
+      ;({ error } = await service
+        .from('board_meeting_agenda_items')
+        .update(patchWithoutTemplate)
+        .eq('id', item_id))
     }
-  }
 
-  if (bm.agenda_locked) clearLockedAgendaCache(bm.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  if (
-    patch.suggested_motion_text !== undefined ||
-    patch.type !== undefined ||
-    patch.action_requested !== undefined
-  ) {
-    if (patch.suggested_motion_text !== undefined) {
-      await syncMotionTextForAgendaItem(service, bm.id, item_id)
+    if (!bm.agenda_locked && Array.isArray(body.presenters)) {
+      await service.from('board_meeting_presenters').delete().eq('agenda_item_id', item_id)
+      const presenters = body.presenters as { name: string; title?: string | null }[]
+      if (presenters.length > 0) {
+        await service.from('board_meeting_presenters').insert(
+          presenters.map((p, j) => ({
+            agenda_item_id: item_id,
+            person_id: null,
+            name: p.name,
+            title: p.title ?? null,
+            sort_order: j,
+          })),
+        )
+      }
     }
-    await syncAgendaMotions(service, bm.id, teamUser.id)
-  }
 
-  return NextResponse.json({ success: true })
+    if (bm.agenda_locked) clearLockedAgendaCache(bm.id)
+
+    if (
+      patch.suggested_motion_text !== undefined ||
+      patch.type !== undefined ||
+      patch.action_requested !== undefined
+    ) {
+      if (patch.suggested_motion_text !== undefined) {
+        await syncMotionTextForAgendaItem(service, bm.id, item_id)
+      }
+      await syncAgendaMotions(service, bm.id, teamUser.id)
+    }
+
+    return NextResponse.json({ success: true })
+  })
 }
 
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ production_id: string; item_id: string }> },
 ) {
-  const teamUser = await getAuthenticatedTeamUser()
-  if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (!isStaffOrManagerRole(teamUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  return withBoardMeetingProduction(params, async ({ service, productionId, routeParams }) => {
+    const { item_id } = routeParams
 
-  const { production_id, item_id } = await params
-  const service = getServiceSupabaseClient()
-  if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    const { data: bm } = await service
+      .from('board_meetings')
+      .select('id, agenda_locked')
+      .eq('production_id', productionId)
+      .maybeSingle()
 
-  const prodCheck = await assertBoardMeetingProduction(service, production_id)
-  if ('error' in prodCheck) {
-    return NextResponse.json({ error: prodCheck.error }, { status: prodCheck.status || 400 })
-  }
+    if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
+    if (bm.agenda_locked) {
+      return NextResponse.json({ error: 'Agenda is locked' }, { status: 400 })
+    }
 
-  const { data: bm } = await service
-    .from('board_meetings')
-    .select('id, agenda_locked')
-    .eq('production_id', production_id)
-    .maybeSingle()
-
-  if (!bm) return NextResponse.json({ error: 'Board meeting not found' }, { status: 404 })
-  if (bm.agenda_locked) {
-    return NextResponse.json({ error: 'Agenda is locked' }, { status: 400 })
-  }
-
-  const { error } = await service
-    .from('board_meeting_agenda_items')
-    .delete()
-    .eq('id', item_id)
-    .eq('board_meeting_id', bm.id)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const { data: remaining } = await service
-    .from('board_meeting_agenda_items')
-    .select('id')
-    .eq('board_meeting_id', bm.id)
-    .order('sort_order', { ascending: true })
-
-  for (let i = 0; i < (remaining || []).length; i++) {
-    await service
+    const { error } = await service
       .from('board_meeting_agenda_items')
-      .update({ sort_order: i, updated_at: new Date().toISOString() })
-      .eq('id', remaining![i].id)
-  }
+      .delete()
+      .eq('id', item_id)
+      .eq('board_meeting_id', bm.id)
 
-  return NextResponse.json({ success: true })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    const { data: remaining } = await service
+      .from('board_meeting_agenda_items')
+      .select('id')
+      .eq('board_meeting_id', bm.id)
+      .order('sort_order', { ascending: true })
+
+    for (let i = 0; i < (remaining || []).length; i++) {
+      await service
+        .from('board_meeting_agenda_items')
+        .update({ sort_order: i, updated_at: new Date().toISOString() })
+        .eq('id', remaining![i].id)
+    }
+
+    return NextResponse.json({ success: true })
+  })
 }

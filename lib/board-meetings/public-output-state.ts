@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getActiveQrRemainingSeconds, isQrActive, clearExpiredQrIfNeeded } from '@/lib/board-meetings/qr-control'
+import {
+  getActiveQrRemainingSeconds,
+  isQrActive,
+  clearExpiredQrIfNeeded,
+  type QrStateFields,
+} from '@/lib/board-meetings/qr-control'
 import { buildPublicActiveMotionForOutputs, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import type { PublicActiveMotion, PublicActiveVoteResult } from '@/lib/board-meetings/motion-types'
 import type { PublicPlaylistState } from '@/lib/board-meetings/playlist-types'
@@ -202,7 +207,51 @@ export async function loadAgendaItemSuggestedText(
   return (data?.suggested_motion_text as string | null | undefined) ?? null
 }
 
-async function buildVoteResultOverlay(
+/** Timer payload for the active meeting timer, if one is running. */
+export async function loadActiveTimerPayload(
+  service: SupabaseClient,
+  bstate: Record<string, unknown> | null | undefined,
+): Promise<PublicChannelState['timer']> {
+  if (!bstate?.active_timer_id) return null
+  const { data: timer } = await service
+    .from('meeting_timers')
+    .select('*')
+    .eq('id', bstate.active_timer_id)
+    .is('ended_at', null)
+    .maybeSingle()
+  if (!timer) return null
+  const elapsed = Math.floor((Date.now() - new Date(timer.started_at).getTime()) / 1000)
+  return {
+    label: timer.label || 'Timer',
+    duration_seconds: timer.duration_seconds,
+    remaining_seconds: Math.max(0, timer.duration_seconds - elapsed),
+    started_at: timer.started_at,
+    show_on_broadcast: timer.show_on_broadcast,
+    show_on_speaker_monitor: timer.show_on_speaker_monitor,
+    show_on_dais: timer.show_on_dais,
+  }
+}
+
+/** Active QR payload; clears an expired QR as a side effect (matching prior inline behavior). */
+export async function resolveActiveQr(
+  service: SupabaseClient,
+  boardMeetingId: string,
+  bstate: Record<string, unknown> | null | undefined,
+): Promise<PublicActiveQr | null> {
+  if (!bstate?.active_qr_url) return null
+  const qrState = bstate as unknown as QrStateFields
+  if (isQrActive(qrState)) {
+    return {
+      url: qrState.active_qr_url!,
+      label: qrState.active_qr_label || 'Scan',
+      remaining_seconds: getActiveQrRemainingSeconds(qrState),
+    }
+  }
+  await clearExpiredQrIfNeeded(service, boardMeetingId, qrState)
+  return null
+}
+
+export async function buildVoteResultOverlay(
   service: SupabaseClient,
   boardMeetingId: string,
   broadcastState: Record<string, unknown> | null | undefined,
@@ -367,40 +416,8 @@ export async function buildPublicChannelState(
     }
   }
 
-  let timerPayload: PublicChannelState['timer'] = null
-  if (bstate?.active_timer_id) {
-    const { data: timer } = await service
-      .from('meeting_timers')
-      .select('*')
-      .eq('id', bstate.active_timer_id)
-      .is('ended_at', null)
-      .maybeSingle()
-    if (timer) {
-      const elapsed = Math.floor((Date.now() - new Date(timer.started_at).getTime()) / 1000)
-      timerPayload = {
-        label: timer.label || 'Timer',
-        duration_seconds: timer.duration_seconds,
-        remaining_seconds: Math.max(0, timer.duration_seconds - elapsed),
-        started_at: timer.started_at,
-        show_on_broadcast: timer.show_on_broadcast,
-        show_on_speaker_monitor: timer.show_on_speaker_monitor,
-        show_on_dais: timer.show_on_dais,
-      }
-    }
-  }
-
-  let active_qr: PublicActiveQr | null = null
-  if (bstate?.active_qr_url) {
-    if (isQrActive(bstate)) {
-      active_qr = {
-        url: bstate.active_qr_url!,
-        label: bstate.active_qr_label || 'Scan',
-        remaining_seconds: getActiveQrRemainingSeconds(bstate),
-      }
-    } else {
-      await clearExpiredQrIfNeeded(service, bm.id, bstate)
-    }
-  }
+  const timerPayload = await loadActiveTimerPayload(service, bstate)
+  const active_qr = await resolveActiveQr(service, bm.id, bstate)
 
   const result_overlay = await buildVoteResultOverlay(service, bm.id, bstate)
 

@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { resolveAgendaNavigation } from '@/lib/board-meetings/control-meeting-cache'
-import { getActiveQrRemainingSeconds, isQrActive, clearExpiredQrIfNeeded } from '@/lib/board-meetings/qr-control'
 import { buildPublicActiveMotionForOutputs, buildPublicVoteResultPayload } from '@/lib/board-meetings/motion-control'
 import { buildPublicLowerThirdPayload, normalizeLowerThirdPosition } from '@/lib/board-meetings/lower-third-control'
 import {
@@ -10,11 +9,15 @@ import {
   tickMeetingPlaylist,
 } from '@/lib/board-meetings/playlist-playback'
 import { resolveOutputPollIntervalMs } from '@/lib/board-meetings/output-polling'
-import { loadAgendaItemSuggestedText } from '@/lib/board-meetings/public-output-state'
+import {
+  buildVoteResultOverlay,
+  loadActiveTimerPayload,
+  loadAgendaItemSuggestedText,
+  resolveActiveQr,
+} from '@/lib/board-meetings/public-output-state'
 import type {
   PublicAgendaItem,
   PublicChannelState,
-  PublicVoteResultOverlay,
 } from '@/lib/board-meetings/public-output-state'
 
 /** Volatile overlay fields — no event log, completed list, or presenter/doc lookups. */
@@ -33,46 +36,6 @@ export type PublicChannelLivePatch = Pick<
   | 'show_channel_ident'
 > & {
   meeting?: Pick<NonNullable<PublicChannelState['meeting']>, 'broadcast_status'> | null
-}
-
-async function buildVoteResultOverlay(
-  service: SupabaseClient,
-  boardMeetingId: string,
-  broadcastState: Record<string, unknown> | null | undefined,
-): Promise<PublicVoteResultOverlay | null> {
-  const activeResultId = broadcastState?.active_vote_result_motion_id as string | undefined
-  const voteResultStartedAt = broadcastState?.vote_result_started_at as string | undefined
-  if (!activeResultId || !voteResultStartedAt) return null
-
-  const startedAt = new Date(voteResultStartedAt).getTime()
-  const elapsed = Math.floor((Date.now() - startedAt) / 1000)
-  const total = (broadcastState?.vote_result_duration_seconds as number | undefined) || 8
-  const held = !!broadcastState?.vote_result_held
-  const remaining = held ? total : Math.max(0, total - elapsed)
-
-  if (!held && remaining <= 0) return null
-
-  const { data: motionRow } = await service
-    .from('meeting_motions')
-    .select('id, result, tally_yea, tally_nay, tally_abstain')
-    .eq('id', activeResultId)
-    .eq('board_meeting_id', boardMeetingId)
-    .maybeSingle()
-
-  if (!motionRow?.result) return null
-
-  return {
-    active: true,
-    motion_id: activeResultId,
-    passed: motionRow.result === 'passed',
-    yea_count: motionRow.tally_yea ?? 0,
-    nay_count: motionRow.tally_nay ?? 0,
-    abstain_count: motionRow.tally_abstain ?? 0,
-    started_at: voteResultStartedAt,
-    total_duration: total,
-    seconds_remaining: remaining,
-    held,
-  }
 }
 
 export function mergePublicChannelState(
@@ -209,40 +172,8 @@ export async function buildPublicChannelLivePatch(
     type: i.type,
   }))
 
-  let timerPayload: PublicChannelState['timer'] = null
-  if (bstate?.active_timer_id) {
-    const { data: timer } = await service
-      .from('meeting_timers')
-      .select('*')
-      .eq('id', bstate.active_timer_id)
-      .is('ended_at', null)
-      .maybeSingle()
-    if (timer) {
-      const elapsed = Math.floor((Date.now() - new Date(timer.started_at).getTime()) / 1000)
-      timerPayload = {
-        label: timer.label || 'Timer',
-        duration_seconds: timer.duration_seconds,
-        remaining_seconds: Math.max(0, timer.duration_seconds - elapsed),
-        started_at: timer.started_at,
-        show_on_broadcast: timer.show_on_broadcast,
-        show_on_speaker_monitor: timer.show_on_speaker_monitor,
-        show_on_dais: timer.show_on_dais,
-      }
-    }
-  }
-
-  let active_qr = null
-  if (bstate?.active_qr_url) {
-    if (isQrActive(bstate)) {
-      active_qr = {
-        url: bstate.active_qr_url!,
-        label: bstate.active_qr_label || 'Scan',
-        remaining_seconds: getActiveQrRemainingSeconds(bstate),
-      }
-    } else {
-      await clearExpiredQrIfNeeded(service, bm.id, bstate)
-    }
-  }
+  const timerPayload = await loadActiveTimerPayload(service, bstate)
+  const active_qr = await resolveActiveQr(service, bm.id, bstate)
 
   const result_overlay = await buildVoteResultOverlay(service, bm.id, bstate)
 

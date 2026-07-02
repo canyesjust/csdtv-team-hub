@@ -4,32 +4,22 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-
-const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
-
-function detectFormat(file: File): 'png' | 'jpg' | 'svg' | 'docx' | null {
-  const t = (file.type || '').toLowerCase()
-  if (t === 'image/png') return 'png'
-  if (t === 'image/jpeg') return 'jpg'
-  if (t === 'image/svg+xml') return 'svg'
-  if (t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx'
-  const n = file.name.toLowerCase()
-  if (n.endsWith('.png')) return 'png'
-  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
-  if (n.endsWith('.svg')) return 'svg'
-  if (n.endsWith('.docx')) return 'docx'
-  return null
-}
-
-const CONTENT_TYPE: Record<LogoFormat, string> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  svg: 'image/svg+xml',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-}
+import {
+  CATEGORY_ORDER,
+  CONTENT_TYPE,
+  DocBadge as SharedDocBadge,
+  MAX_BRAND_UPLOAD_BYTES as MAX_BYTES,
+  detectFormat,
+  deriveLogoName,
+  formatBytes,
+  orderCategories,
+  previewBg,
+  toColorInputValue,
+  type LogoFormat,
+  type PreviewBg,
+} from '@/lib/brand-utils'
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx'
 type Fonts = { heading: string | null; body: string | null; notes: string | null }
 type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
 type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; cover?: boolean; notes?: string | null }
@@ -43,60 +33,15 @@ type School = {
   colors?: Colors
 }
 
-// Coerce a stored value into a valid #rrggbb for a native <input type="color">.
-function toColorInputValue(v: string): string {
-  const t = v.trim()
-  if (/^#[0-9a-f]{6}$/i.test(t)) return t.toLowerCase()
-  if (/^#[0-9a-f]{3}$/i.test(t)) return ('#' + t.slice(1).split('').map((c) => c + c).join('')).toLowerCase()
-  return '#000000'
-}
+const CATEGORY_PRESETS = CATEGORY_ORDER
 
-const CATEGORY_PRESETS = ['Official', 'Wordmark', 'Letterhead', 'Team/Sport', 'Specific', 'Other']
-const CATEGORY_ORDER = CATEGORY_PRESETS
-
-// Small placeholder shown for Word documents, which have no image preview.
+// Manager pages render on the dashboard theme, so the badge label uses the CSS var.
 function DocBadge() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-      <div style={{ width: 40, height: 50, border: '1px solid #185fa5', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#185fa5', background: '#ffffff' }}>DOCX</div>
-      <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)' }}>Word document</span>
-    </div>
-  )
+  return <SharedDocBadge compact muted="var(--text-muted)" />
 }
 
 function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {
   window.dispatchEvent(new CustomEvent('toast', { detail: { message, type } }))
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function deriveLogoName(filename: string): string {
-  const base = filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
-  return base || 'Logo'
-}
-
-type PreviewBg = 'check' | 'light' | 'dark'
-function previewBg(mode: PreviewBg): CSSProperties {
-  if (mode === 'dark') return { background: '#2b2f3a' }
-  if (mode === 'light') return { background: '#ffffff' }
-  return {
-    backgroundColor: '#ffffff',
-    backgroundImage:
-      'linear-gradient(45deg,#dfe3e8 25%,transparent 25%),linear-gradient(-45deg,#dfe3e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#dfe3e8 75%),linear-gradient(-45deg,transparent 75%,#dfe3e8 75%)',
-    backgroundSize: '18px 18px',
-    backgroundPosition: '0 0,0 9px,9px -9px,-9px 0',
-  }
-}
-
-function orderCategories(cats: string[]): string[] {
-  const present = Array.from(new Set(cats))
-  const known = CATEGORY_ORDER.filter((c) => present.includes(c))
-  const extra = present.filter((c) => !CATEGORY_ORDER.includes(c)).sort((a, b) => a.localeCompare(b))
-  return [...known, ...extra]
 }
 
 export default function ManageSchoolBrandPage() {

@@ -6,35 +6,19 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useBrandEmbed, brandQuery } from '../useBrandEmbed'
 import { copyText } from '@/lib/copy-text'
-
-const MAX_BYTES = 20 * 1024 * 1024 // 20 MB
-
-type UploadFormat = 'png' | 'jpg' | 'svg' | 'docx'
-const CONTENT_TYPE: Record<UploadFormat, string> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  svg: 'image/svg+xml',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-}
-
-function detectFormat(file: File): UploadFormat | null {
-  const t = (file.type || '').toLowerCase()
-  if (t === 'image/png') return 'png'
-  if (t === 'image/jpeg') return 'jpg'
-  if (t === 'image/svg+xml') return 'svg'
-  if (t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx'
-  const n = file.name.toLowerCase()
-  if (n.endsWith('.png')) return 'png'
-  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
-  if (n.endsWith('.svg')) return 'svg'
-  if (n.endsWith('.docx')) return 'docx'
-  return null
-}
-
-function deriveLogoName(filename: string): string {
-  const base = filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
-  return base || 'Logo'
-}
+import {
+  CATEGORY_ORDER,
+  CONTENT_TYPE,
+  DocBadge,
+  MAX_BRAND_UPLOAD_BYTES as MAX_BYTES,
+  detectFormat,
+  deriveLogoName,
+  formatBytes,
+  orderCategories,
+  previewBg,
+  toColorInputValue,
+  type PreviewBg,
+} from '@/lib/brand-utils'
 
 // If a CDN-resized thumbnail fails (e.g. the source image is too large for the
 // transform service), fall back to the original file once so the logo still shows.
@@ -47,12 +31,6 @@ function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | nu
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; thumb?: string | null; flagged?: boolean; cover?: boolean; notes?: string | null }
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}
 type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
 type School = {
   code: string
@@ -77,18 +55,6 @@ const colors = {
   chip: '#eef1f6',
 }
 
-const CATEGORY_ORDER = ['Official', 'Wordmark', 'Letterhead', 'Team/Sport', 'Specific', 'Other']
-
-// Small placeholder shown for Word documents, which have no image preview.
-function DocBadge({ compact = false }: { compact?: boolean }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 5 : 8 }}>
-      <div style={{ width: compact ? 40 : 52, height: compact ? 50 : 64, border: `1px solid ${colors.info}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 10 : 12, fontWeight: 800, color: colors.info, background: '#ffffff' }}>DOCX</div>
-      <span style={{ fontSize: compact ? 10.5 : 12, fontWeight: 700, color: colors.muted }}>Word document</span>
-    </div>
-  )
-}
-
 function readableOn(hex: string | null): string {
   if (!hex) return '#ffffff'
   const h = hex.replace('#', '')
@@ -100,33 +66,6 @@ function readableOn(hex: string | null): string {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#1a1f36' : '#ffffff'
 }
 
-// Coerce a stored value into a valid #rrggbb for a native <input type="color">.
-function toColorInputValue(v: string): string {
-  const t = v.trim()
-  if (/^#[0-9a-f]{6}$/i.test(t)) return t.toLowerCase()
-  if (/^#[0-9a-f]{3}$/i.test(t)) return ('#' + t.slice(1).split('').map((c) => c + c).join('')).toLowerCase()
-  return '#000000'
-}
-
-type PreviewBg = 'check' | 'light' | 'dark'
-function previewBg(mode: PreviewBg): CSSProperties {
-  if (mode === 'dark') return { background: '#2b2f3a' }
-  if (mode === 'light') return { background: '#ffffff' }
-  return {
-    backgroundColor: '#ffffff',
-    backgroundImage:
-      'linear-gradient(45deg,#dfe3e8 25%,transparent 25%),linear-gradient(-45deg,#dfe3e8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#dfe3e8 75%),linear-gradient(-45deg,transparent 75%,#dfe3e8 75%)',
-    backgroundSize: '18px 18px',
-    backgroundPosition: '0 0,0 9px,9px -9px,-9px 0',
-  }
-}
-
-function orderCategories(cats: string[]): string[] {
-  const present = Array.from(new Set(cats))
-  const known = CATEGORY_ORDER.filter((c) => present.includes(c))
-  const extra = present.filter((c) => !CATEGORY_ORDER.includes(c)).sort((a, b) => a.localeCompare(b))
-  return [...known, ...extra]
-}
 
 export default function SchoolBrandPage() {
   const params = useParams<{ code: string }>()
