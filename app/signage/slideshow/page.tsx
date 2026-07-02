@@ -54,7 +54,7 @@ function SignageSlideshowInner() {
 
   const loadFeed = useCallback(async () => {
     try {
-      const res = await fetch('/api/signage-submissions/feed', { cache: 'no-store' })
+      const res = await fetch('/api/signage-submissions/feed', { cache: 'no-store', credentials: 'omit' })
       if (!res.ok) return
       const data = (await res.json()) as { images?: FeedImage[] }
       const next = data.images ?? []

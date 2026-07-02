@@ -122,12 +122,12 @@ export default function SignagePage() {
     setGoneDays((goneRes.data as ScheduleGoneDay[]) || [])
     setOfficeClosedDays((closedRes.data as ScheduleOfficeClosedDay[]) || [])
     try {
-      const cfgRes = await fetch('/api/signage/config', { cache: 'no-store' })
+      const cfgRes = await fetch('/api/signage/config', { cache: 'no-store', credentials: 'omit' })
       const cfg = cfgRes.ok ? ((await cfgRes.json()) as { outlookEnabled?: boolean }) : null
       const enabled = Boolean(cfg?.outlookEnabled)
       setOutlookEnabled(enabled)
       if (enabled) {
-        const ir = await fetch('/api/signage/ical-events', { cache: 'no-store' })
+        const ir = await fetch('/api/signage/ical-events', { cache: 'no-store', credentials: 'omit' })
         if (ir.ok) {
           const { events: oe } = await ir.json()
           setOutlookEvents(oe || [])

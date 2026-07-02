@@ -883,7 +883,11 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
 
   const loadFeed = useCallback(async () => {
     try {
-      const res = await fetch(`/api/signage/screen/${encodeURIComponent(code)}/feed`)
+      // credentials:'omit' — public service-role endpoint; drop the same-origin session
+      // cookie so 5s display polls don't carry ~1KB+ of cookies each.
+      const res = await fetch(`/api/signage/screen/${encodeURIComponent(code)}/feed`, {
+        credentials: 'omit',
+      })
       if (!res.ok) return
       const data = (await res.json()) as ScreenFeed
       if (data.offline) {

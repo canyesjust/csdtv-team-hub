@@ -169,7 +169,13 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
 
     const loadFull = async () => {
       try {
-        const res = await fetch(`/api/board/output/${channelNumber}/state`, { cache: 'no-store' })
+        // credentials:'omit' — this endpoint uses the service-role client and never reads
+        // request cookies. Omitting them strips the ~3KB Supabase session cookie that would
+        // otherwise ride along on every poll (the dominant source of inbound data transfer).
+        const res = await fetch(`/api/board/output/${channelNumber}/state`, {
+          cache: 'no-store',
+          credentials: 'omit',
+        })
         if (!res.ok) return
         const data = (await res.json()) as PublicChannelState
         if (!cancelled) {
@@ -191,7 +197,10 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       }
       inflightLiveRef.current = true
       try {
-        const res = await fetch(`/api/board/output/${channelNumber}/live`, { cache: 'no-store' })
+        const res = await fetch(`/api/board/output/${channelNumber}/live`, {
+          cache: 'no-store',
+          credentials: 'omit',
+        })
         if (!res.ok) return
         const patch = (await res.json()) as PublicChannelLivePatch
         if (!cancelled) {

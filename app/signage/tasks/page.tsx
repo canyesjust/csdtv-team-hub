@@ -402,7 +402,7 @@ export default function TasksSignagePage() {
   const loadData = useCallback(async () => {
     setLoadError(null)
     const key = new URLSearchParams(window.location.search).get('k') || ''
-    const res = await fetch(`/api/signage/tasks-data?k=${encodeURIComponent(key)}`, { cache: 'no-store' })
+    const res = await fetch(`/api/signage/tasks-data?k=${encodeURIComponent(key)}`, { cache: 'no-store', credentials: 'omit' })
     const payload = await res.json().catch(() => ({}))
     if (!res.ok) {
       setTasks([])

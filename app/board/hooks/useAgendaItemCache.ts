@@ -48,7 +48,10 @@ export function useAgendaItemCache(
     let cancelled = false
     void (async () => {
       try {
-        const res = await fetch(`/api/board/output/${channelNumber}/agenda-items`, { cache: 'no-store' })
+        const res = await fetch(`/api/board/output/${channelNumber}/agenda-items`, {
+          cache: 'no-store',
+          credentials: 'omit',
+        })
         if (!res.ok || cancelled) return
         const body = (await res.json()) as { items?: PublicAgendaItem[] }
         for (const item of body.items || []) {
