@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSDtv Parade Lower Third</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --red:#c2283a; --blue:#234fb0; --white:#f4f6fa; --gold:#e7c977; --glassbg:rgba(10,18,38,.5); }
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden;
+    font-family:'Inter','Helvetica Neue',Arial,sans-serif;}
+  body.demo{background:radial-gradient(120% 120% at 50% 0%,#2c4474,#0c1322);}
+
+  #stage{position:absolute;top:0;left:0;width:1920px;height:1080px;transform-origin:top left;}
+
+  #l3{position:absolute;left:80px;bottom:80px;}
+  #l3 .glass{position:relative;display:block;padding:24px 44px 28px;border-radius:30px;overflow:hidden;min-width:420px;
+    background:var(--glassbg);backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);
+    border:1px solid rgba(255,255,255,.26);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -1px 1px rgba(255,255,255,.08),0 24px 60px rgba(0,0,0,.5);
+    opacity:0;transform:translateY(22px) scale(.975);transition:opacity .42s ease,transform .42s cubic-bezier(.2,.8,.2,1);}
+  #l3 .glow{position:absolute;inset:0;z-index:1;mix-blend-mode:screen;opacity:.85;pointer-events:none;
+    background:radial-gradient(300px 180px at 3% 60%,rgba(220,54,74,.9),transparent 72%),
+               radial-gradient(330px 200px at 99% 48%,rgba(58,112,232,1),transparent 72%);}
+  #l3 .tri{position:absolute;left:0;right:0;bottom:0;height:6px;z-index:3;
+    background:linear-gradient(90deg,var(--red) 0 33.3%,#eef1f6 33.3% 66.6%,var(--blue) 66.6% 100%);}
+  #l3 .sheen{position:absolute;top:0;left:-55%;width:42%;height:100%;z-index:6;pointer-events:none;
+    background:linear-gradient(105deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-18deg);}
+  #l3 .txt{position:relative;z-index:4;width:900px;}
+  #l3 .nm{font-size:62px;font-weight:600;color:var(--white);line-height:1.04;white-space:nowrap;overflow:hidden;
+    text-shadow:0 2px 6px rgba(0,0,0,.5);opacity:0;transform:translateY(10px);
+    transition:opacity .4s ease .16s,transform .4s ease .16s;}
+  #l3 .og{display:flex;align-items:center;gap:14px;margin-top:12px;opacity:0;transform:translateY(10px);
+    transition:opacity .4s ease .25s,transform .4s ease .25s;}
+  #l3 .og i{width:13px;height:13px;background:var(--red);display:inline-block;flex:none;transform:rotate(45deg);}
+  #l3 .og span{font-size:30px;color:var(--gold);letter-spacing:.13em;text-transform:uppercase;white-space:nowrap;overflow:hidden;
+    text-shadow:0 2px 4px rgba(0,0,0,.5);}
+  #l3.show .glass{opacity:1;transform:none;}
+  #l3.show .nm,#l3.show .og{opacity:1;transform:none;}
+  #l3.show .sheen{animation:sweep 1.0s .2s cubic-bezier(.4,0,.2,1);}
+  @keyframes sweep{from{left:-55%;}to{left:150%;}}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="l3">
+      <div class="glass">
+        <span class="glow"></span><span class="tri"></span><span class="sheen"></span>
+        <div class="txt">
+          <div class="nm" id="nm">Entry name</div>
+          <div class="og"><i></i><span id="og">Organization</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  var params=new URLSearchParams(location.search);
+  if(params.get('demo')==='1') document.body.classList.add('demo');
+
+  var stage=document.getElementById('stage'), l3=document.getElementById('l3');
+  var nm=document.getElementById('nm'), og=document.getElementById('og');
+  var txt=document.querySelector('#l3 .txt');
+
+  function resize(){
+    var w=window.innerWidth,h=window.innerHeight,s=Math.min(w/1920,h/1080);
+    stage.style.transform='translate('+((w-1920*s)/2)+'px,'+((h-1080*s)/2)+'px) scale('+s+')';
+  }
+  window.addEventListener('resize',resize); resize();
+
+  function fit(){ nm.style.fontSize='62px'; var max=txt.clientWidth,s=62;
+    while(nm.scrollWidth>max && s>32){ s-=1; nm.style.fontSize=s+'px'; } }
+  function setEntry(name,org){ nm.textContent=name||''; og.textContent=org||''; fit(); }
+  function show(){ l3.classList.remove('show'); void l3.offsetWidth; l3.classList.add('show'); }
+  function hide(){ l3.classList.remove('show'); }
+
+  // Live control without reloading: parent can postMessage
+  //   { name:"...", org:"...", action:"show" | "hide" }
+  window.addEventListener('message',function(e){
+    var d=e.data||{};
+    if(typeof d!=='object') return;
+    if('name' in d || 'org' in d) setEntry(d.name, d.org);
+    if(d.action==='show') show();
+    else if(d.action==='hide') hide();
+  });
+
+  // Initial state from URL params (used for the static Web Page Widget test).
+  // Falls back to a sample entry so the page never looks blank while setting up.
+  var name=params.get('name'), org=params.get('org');
+  if(name===null && org===null){ name='Corner Canyon Marching Band'; org='Charger Regiment'; }
+  setEntry(name, org);
+  if(params.get('start')==='hidden'){ /* stay hidden until told */ }
+  else setTimeout(show,150);
+})();
+</script>
+</body>
+</html>
