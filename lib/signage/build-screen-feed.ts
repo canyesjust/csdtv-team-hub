@@ -5,6 +5,7 @@ import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
 import { signageLiveMatchesScreen } from './live-targeting'
 import { normalizeSignageStreamUrl } from './stream-url'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
+import { buildBroadcastBoardHtml, type BroadcastBoardItem } from './broadcast-board'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
 import {
@@ -246,6 +247,47 @@ export async function buildScreenFeed(
         display_seconds: clampDisplaySeconds(row.display_seconds),
       }
     })
+
+  // Upcoming broadcasts board: manually flagged livestream/board-meeting
+  // productions in the next 30 days (up to 8, soonest first). Rendered as a
+  // static HTML slide server-side and prepended to the rotation so it leads.
+  try {
+    const nowIso = new Date().toISOString()
+    const in30Iso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: featured } = await service
+      .from('productions')
+      .select('id, title, request_type_label, start_datetime')
+      .eq('feature_on_broadcast_board', true)
+      .in('request_type_label', ['LiveStream Meeting', 'Board Meeting'])
+      .gte('start_datetime', nowIso)
+      .lte('start_datetime', in30Iso)
+      .order('start_datetime', { ascending: true })
+      .limit(8)
+    const items: BroadcastBoardItem[] = (featured ?? [])
+      .filter(p => p.start_datetime)
+      .map(p => {
+        const dt = new Date(p.start_datetime as string)
+        return {
+          title: (p.title as string) || 'CSDtv Broadcast',
+          typeLabel: p.request_type_label === 'Board Meeting' ? 'Board Meeting' : 'Livestream',
+          dateLabel: dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Denver' }),
+          timeLabel: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }),
+        }
+      })
+    if (items.length) {
+      media.unshift({
+        id: 'broadcast-board',
+        type: 'html',
+        title: 'Upcoming broadcasts',
+        url: '',
+        html: buildBroadcastBoardHtml(items),
+        full_screen: false,
+        display_seconds: 20,
+      })
+    }
+  } catch {
+    // Non-fatal: if the productions query fails, just skip the board.
+  }
 
   let areaRowsQuery = service.from('signage_areas').select('id, name')
   let screenRowsQuery = service.from('signage_screens').select('id, name')

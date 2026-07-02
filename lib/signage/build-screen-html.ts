@@ -730,31 +730,52 @@ function runtimeScript(feed: Feed): string {
       advanceTimer = setTimeout(advance, secs * 1000);
     }
     function advance(){
-      var from = index;
       var to = (index + 1) % media.length;
       var outLayer = carousel.querySelector('.cic-media-layer');
       // New incoming layer starts transparent, fades in over crossfadeMs.
       var inLayer = document.createElement('div');
       inLayer.className = 'cic-media-layer cic-media-layer--in';
-      inLayer.appendChild(slideMarkup(media[to]));
-      carousel.insertBefore(inLayer, outLayer.nextSibling);
+      var node = slideMarkup(media[to]);
+      inLayer.appendChild(node);
+      carousel.insertBefore(inLayer, outLayer ? outLayer.nextSibling : null);
       if(outLayer) outLayer.classList.add('cic-media-layer--out');
-      // double rAF so the transition actually runs
-      requestAnimationFrame(function(){
+
+      var started = false;
+      function startFade(){
+        if(started) return; started = true;
+        // double rAF so the transition actually runs
         requestAnimationFrame(function(){
-          inLayer.classList.add('is-fading');
-          if(outLayer) outLayer.classList.add('is-fading');
+          requestAnimationFrame(function(){
+            inLayer.classList.add('is-fading');
+            if(outLayer) outLayer.classList.add('is-fading');
+          });
         });
-      });
-      setTimeout(function(){
-        if(outLayer && outLayer.parentNode) outLayer.parentNode.removeChild(outLayer);
-        inLayer.className = 'cic-media-layer';
-        index = to;
-        setDots();
-        restartProgress(media[index]);
-        preload(media[(index + 1) % media.length]);
-        scheduleNext(media[index]);
-      }, DATA.crossfadeMs);
+        setTimeout(function(){
+          if(outLayer && outLayer.parentNode) outLayer.parentNode.removeChild(outLayer);
+          inLayer.className = 'cic-media-layer';
+          index = to;
+          setDots();
+          restartProgress(media[index]);
+          preload(media[(index + 1) % media.length]);
+          scheduleNext(media[index]);
+        }, DATA.crossfadeMs);
+      }
+
+      // HTML slides render in an iframe that starts blank and only paints once
+      // its document (and any inlined fonts) load. Fading in before that paints
+      // shows the blank frame mid-transition — the "flash". Wait for load (with
+      // a fallback) so the content is on-screen before we reveal it. Images are
+      // already preloaded, so they fade immediately.
+      if(node.tagName === 'IFRAME'){
+        var fallback = setTimeout(startFade, 1500);
+        node.addEventListener('load', function(){
+          clearTimeout(fallback);
+          // one more paint frame so first contentful paint lands before reveal
+          requestAnimationFrame(function(){ requestAnimationFrame(startFade); });
+        });
+      } else {
+        startFade();
+      }
     }
 
     restartProgress(media[0]);

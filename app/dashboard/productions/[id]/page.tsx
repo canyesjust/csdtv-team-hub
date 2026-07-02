@@ -33,6 +33,7 @@ import { normalizeProductionDatetimeFields } from '@/lib/productions/effective-d
 export interface Production {
   id: string; production_number: number; title: string
   type: string | null; request_type_label: string | null; request_type_number: number | null
+  feature_on_broadcast_board: boolean | null
   internal_type_label: string | null; status: string | null; status_code: number | null
   created_on: string | null; is_on_behalf: boolean | null; sent_approved_email: boolean | null
   organizer_name: string | null; organizer_email: string | null

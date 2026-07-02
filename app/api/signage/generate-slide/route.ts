@@ -15,24 +15,10 @@ export const dynamic = 'force-dynamic'
 const VALID_TYPES = new Set(SLIDE_TYPES.map(t => t.value))
 const VALID_MOTION = new Set<SlideMotion>(['none', 'subtle', 'lively'])
 const VALID_DWELL = new Set([10, 15, 20])
-const MAX_LOGO_BYTES = 400 * 1024
 
-/** Fetch a hosted logo and inline it as a data URI so the slide stays offline-safe. */
-async function logoToDataUri(url: string | null): Promise<string | null> {
-  if (!url) return null
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const buf = await res.arrayBuffer()
-    if (buf.byteLength > MAX_LOGO_BYTES) return null
-    const type = res.headers.get('content-type') || 'image/png'
-    if (!type.startsWith('image/')) return null
-    const b64 = Buffer.from(buf).toString('base64')
-    return `data:${type};base64,${b64}`
-  } catch {
-    return null
-  }
-}
+// The district logo is no longer baked in by the model. Editors overlay the real
+// brand-library logo (with a chosen position) after generation, which is exact
+// and consistent — see /api/signage/district-logo and Create with AI.
 
 async function callGenerator(system: string, user: string): Promise<{ html?: string; error?: string }> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -68,6 +54,10 @@ export async function POST(request: NextRequest) {
   const dwellSeconds = VALID_DWELL.has(Number(body.dwell_seconds)) ? Number(body.dwell_seconds) : 15
   const headlineOverride = body.headline_override ? String(body.headline_override).trim().slice(0, 120) : null
   const siteId = String(body.site_id ?? '').trim()
+  // Refine mode: tweak an existing slide instead of generating a fresh one.
+  const refineInstruction = body.refine_instruction ? String(body.refine_instruction).trim().slice(0, 600) : null
+  const previousHtml = body.previous_html ? String(body.previous_html).slice(0, 80_000) : null
+  const isRefine = Boolean(refineInstruction && previousHtml)
 
   if (!prompt) return NextResponse.json({ error: 'A prompt is required.' }, { status: 400 })
   if (prompt.length > 1000) return NextResponse.json({ error: 'Prompt is too long.' }, { status: 400 })
@@ -75,10 +65,10 @@ export async function POST(request: NextRequest) {
   if (!VALID_MOTION.has(motion)) return NextResponse.json({ error: 'Invalid motion setting.' }, { status: 400 })
   if (!siteId) return NextResponse.json({ error: 'Missing site.' }, { status: 400 })
 
-  // Brand: school primary_color (authoritative) → site bg_color → navy. Logo inlined.
+  // Brand: school primary_color (authoritative) → site bg_color → navy.
   const { data: site } = await service
     .from('signage_sites')
-    .select('name, slug, school_code, bg_color, accent_color, logo_url')
+    .select('name, slug, school_code, bg_color, accent_color')
     .eq('id', siteId)
     .maybeSingle()
   if (!site) return NextResponse.json({ error: 'Site not found.' }, { status: 404 })
@@ -94,23 +84,28 @@ export async function POST(request: NextRequest) {
   }
   const accent = schoolPrimary || site.bg_color || site.accent_color || '#065687'
   const shortCode = (site.school_code || site.slug || 'CSD').toUpperCase().slice(0, 4)
-  const logoDataUri = await logoToDataUri(site.logo_url)
 
   const canvas = orientation === 'portrait' ? { w: 1080, h: 1920 } : { w: 1920, h: 1080 }
   const params = {
     prompt, type, motion, orientation, canvas, dwellSeconds, headlineOverride,
-    brand: { locationName: site.name, shortCode, accent, logoDataUri },
+    brand: { locationName: site.name, shortCode, accent, logoDataUri: null },
   }
   const wordCap = wordCapForType(type)
 
-  // Generate, validate, and retry once with the specific failures fed back.
+  // Generate (or refine an existing slide), validate, and retry once with the
+  // specific failures fed back. In refine mode we hand the model the current
+  // HTML and ask for a targeted edit so unrelated parts stay put.
   const { system, user } = buildSlidePrompt(params)
-  let result = await callGenerator(system, user)
+  const genUser = isRefine
+    ? `${user}\n\nHere is the CURRENT slide HTML:\n\n${previousHtml}\n\nApply ONLY this change, keeping everything else identical (same layout, wording, and styling except where the change requires otherwise):\n"${refineInstruction}"\n\nReturn only the full corrected HTML document.`
+    : user
+
+  let result = await callGenerator(system, genUser)
   if (result.error) return NextResponse.json({ error: result.error }, { status: 502 })
 
   let check = validateSlideHtml(result.html || '', { wordCap, headlineOverride })
   if (!check.ok) {
-    const retryUser = `${user}\n\nThe previous attempt failed these readability rules — fix them and return only the corrected HTML:\n- ${check.failures.join('\n- ')}`
+    const retryUser = `${genUser}\n\nThe previous attempt failed these readability rules — fix them and return only the corrected HTML:\n- ${check.failures.join('\n- ')}`
     result = await callGenerator(system, retryUser)
     if (result.error) return NextResponse.json({ error: result.error }, { status: 502 })
     check = validateSlideHtml(result.html || '', { wordCap, headlineOverride })
@@ -128,6 +123,7 @@ export async function POST(request: NextRequest) {
     gen_meta: {
       prompt, type, motion, orientation, dwell_seconds: dwellSeconds,
       headline_override: headlineOverride, model: 'claude-sonnet-4-6',
+      refined: isRefine || undefined,
     },
   })
 }

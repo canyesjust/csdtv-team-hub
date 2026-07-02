@@ -1,7 +1,7 @@
 'use client'
 
 import type { BoardOutputDebugInfo } from '@/app/board/hooks/useBoardChannelState'
-import { POLL_REALTIME_FALLBACK_MS } from '@/lib/board-meetings/output-polling'
+import { POLL_REALTIME_FALLBACK_MS, POLL_WAKE_MS } from '@/lib/board-meetings/output-polling'
 
 function formatAge(ms: number | null): string {
   if (ms == null) return '—'
@@ -15,8 +15,12 @@ export default function BoardOutputDebugStrip({
   info: BoardOutputDebugInfo
   pollMs?: number
 }) {
-  const effectivePoll =
-    info.realtime === 'connected' ? POLL_REALTIME_FALLBACK_MS : (pollMs ?? '—')
+  // The realtime fallback only applies while the meeting is active (fast intervals).
+  // Idle/off channels use the server interval (>= POLL_WAKE_MS) even when Realtime is
+  // connected, so don't advertise the 1.5s fallback there.
+  const isActivePoll = typeof pollMs === 'number' && pollMs < POLL_WAKE_MS
+  const usingFallback = info.realtime === 'connected' && isActivePoll
+  const effectivePoll = usingFallback ? POLL_REALTIME_FALLBACK_MS : (pollMs ?? '—')
 
   return (
     <div
@@ -36,7 +40,7 @@ export default function BoardOutputDebugStrip({
       }}
     >
       <div>Realtime: {info.realtime}</div>
-      <div>Poll: {effectivePoll}ms{info.realtime === 'connected' ? ' (fallback)' : ''}</div>
+      <div>Poll: {effectivePoll}ms{usingFallback ? ' (fallback)' : ''}</div>
       <div>Broadcasts: {info.broadcastCount}</div>
       <div>Last broadcast: {formatAge(info.lastBroadcastMs)}</div>
       <div>Last poll: {formatAge(info.lastPollMs)}</div>

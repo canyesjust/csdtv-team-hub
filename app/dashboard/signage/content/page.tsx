@@ -14,7 +14,7 @@ import SignageTargetingPicker, {
 import { useSignage } from '../components/SignageProvider'
 import CreateWithAI from '../components/CreateWithAI'
 import { SIGNAGE_DEFAULT_DISPLAY_SECONDS, SIGNAGE_MAX_DISPLAY_SECONDS, SIGNAGE_MIN_DISPLAY_SECONDS } from '@/lib/signage/content-display'
-import { signageMediaPublicUrl, CIC_SUBMIT_URL } from '@/lib/signage/constants'
+import { signageMediaPublicUrl, CIC_SUBMIT_URL, SIGNAGE_INDEFINITE_END_DATE, isIndefiniteEndDate } from '@/lib/signage/constants'
 import { prepareSignageImageFile, captureVideoPoster, SIGNAGE_MAX_VIDEO_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
@@ -373,7 +373,9 @@ export default function SignageContentPage() {
   const requestLine = (row: ContentRow) => {
     const parts: string[] = []
     if (row.start_date && row.end_date) {
-      parts.push(`Requested ${formatSignageDate(row.start_date)}–${formatSignageDate(row.end_date)}`)
+      parts.push(isIndefiniteEndDate(row.end_date)
+        ? `Requested from ${formatSignageDate(row.start_date)} · no end date`
+        : `Requested ${formatSignageDate(row.start_date)}–${formatSignageDate(row.end_date)}`)
     }
     if (row.requested_note) parts.push(row.requested_note)
     return parts.join(' · ')
@@ -429,7 +431,15 @@ export default function SignageContentPage() {
               </div>
               <div style={{ flex: 1, minWidth: 130 }}>
                 <p style={s.lbl}>End date</p>
-                <SignageDateInput value={addDates.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, end_date: v }))} style={s.input} min={addDates.start_date || undefined} />
+                {isIndefiniteEndDate(addDates.end_date) ? (
+                  <div style={{ ...s.input, display: 'flex', alignItems: 'center', color: s.muted }}>No end date</div>
+                ) : (
+                  <SignageDateInput value={addDates.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, end_date: v }))} style={s.input} min={addDates.start_date || undefined} />
+                )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted, marginTop: 5, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={isIndefiniteEndDate(addDates.end_date)} onChange={e => setAddDates(d => ({ ...d, end_date: e.target.checked ? SIGNAGE_INDEFINITE_END_DATE : '' }))} />
+                  No end date (runs indefinitely)
+                </label>
               </div>
               <div style={{ width: 90 }}>
                 <p style={s.lbl}>Priority</p>
@@ -500,7 +510,9 @@ export default function SignageContentPage() {
               const fileName = row.media_path ? mediaFileName(row.media_path) : 'HTML slide'
               const typeChip = row.type === 'html' ? 'HTML' : row.type === 'video' ? 'Video' : 'Image'
               const dateLine = row.start_date
-                ? `${formatSignageDate(row.start_date)}–${formatSignageDate(row.end_date)}`
+                ? isIndefiniteEndDate(row.end_date)
+                  ? `From ${formatSignageDate(row.start_date)} · no end date`
+                  : `${formatSignageDate(row.start_date)}–${formatSignageDate(row.end_date)}`
                 : 'No dates'
               return (
                 <div
@@ -604,7 +616,15 @@ export default function SignageContentPage() {
                       </div>
                       <div style={{ flex: 1, minWidth: 130 }}>
                         <p style={s.lbl}>End date</p>
-                        <SignageDateInput value={e.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={s.input} min={e.start_date || undefined} />
+                        {isIndefiniteEndDate(e.end_date) ? (
+                          <div style={{ ...s.input, display: 'flex', alignItems: 'center', color: s.muted }}>No end date</div>
+                        ) : (
+                          <SignageDateInput value={e.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={s.input} min={e.start_date || undefined} />
+                        )}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted, marginTop: 5, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={isIndefiniteEndDate(e.end_date)} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: ev.target.checked ? SIGNAGE_INDEFINITE_END_DATE : '' } }))} />
+                          No end date (runs indefinitely)
+                        </label>
                       </div>
                       <div style={{ width: 90 }}>
                         <p style={s.lbl}>Priority</p>

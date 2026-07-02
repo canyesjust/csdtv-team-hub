@@ -85,6 +85,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
   const realtimeConnectedRef = useRef(false)
   const standbyRef = useRef(false)
   const debugEnabledRef = useRef(false)
+  const listeningRef = useRef(false)
 
   useEffect(() => {
     debugEnabledRef.current = isBoardOutputDebugMode()
@@ -96,6 +97,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
     hasFullRef.current = false
     standbyRef.current = isBoardOutputStandbyMode()
     pollIntervalMsRef.current = POLL_LISTEN_CHECK_MS
+    listeningRef.current = false
 
     const markUpdate = (source: 'poll' | 'broadcast') => {
       if (!debugEnabledRef.current) return
@@ -110,8 +112,14 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       }))
     }
 
+    // The realtime "safety poll" is a tight fallback for the LIVE path only — it catches
+    // a dropped Supabase broadcast so nothing feels slow on air. It must NOT apply while
+    // idle/off, or every open (but inactive) OBS source hammers /state at 1.5s instead of
+    // honoring the server's 120s wake interval. Gate it on active.
     const effectivePollMs = () =>
-      realtimeConnectedRef.current ? POLL_REALTIME_FALLBACK_MS : pollIntervalMsRef.current
+      realtimeConnectedRef.current && activeRef.current
+        ? POLL_REALTIME_FALLBACK_MS
+        : pollIntervalMsRef.current
 
     const clearPoll = () => {
       if (pollTimer !== null) {
@@ -121,10 +129,21 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
     }
 
     let scheduleNext: (immediate?: boolean) => void = () => {}
+    let syncRealtime: (listening: boolean) => void = () => {}
 
     const applyPollingFromState = (data: PublicChannelState | PublicChannelLivePatch) => {
       const becameActive = data.active === true && !activeRef.current
       if (data.active !== undefined) activeRef.current = data.active
+
+      // Connect/disconnect Realtime as Listening flips, so idle/off outputs don't hold a
+      // Supabase subscription 24/7. Detected on every poll (full or live patch).
+      if (
+        data.obs_polling_enabled !== undefined &&
+        data.obs_polling_enabled !== listeningRef.current
+      ) {
+        listeningRef.current = data.obs_polling_enabled
+        syncRealtime(data.obs_polling_enabled)
+      }
 
       const nextInterval = data.poll_interval_ms
       if (nextInterval != null && nextInterval > 0) {
@@ -213,18 +232,27 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       }, ms)
     }
 
-    void loadFull().then(() => {
-      if (cancelled || standbyRef.current) return
-      if (activeRef.current) void loadLive().then(() => scheduleNext())
-      else scheduleNext()
-    })
-
     let supabaseChannel: ReturnType<ReturnType<typeof createClient>['channel']> | null = null
-    if (
+
+    const realtimeAvailable =
       !isBoardOutputRealtimeDisabled() &&
-      process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ) {
+      !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    const disconnectRealtime = () => {
+      realtimeConnectedRef.current = false
+      if (supabaseChannel) {
+        const supabase = createClient()
+        void supabase.removeChannel(supabaseChannel)
+        supabaseChannel = null
+      }
+      if (!cancelled && debugEnabledRef.current) {
+        setDebugInfo(prev => ({ ...prev, realtime: 'off' }))
+      }
+    }
+
+    const connectRealtime = () => {
+      if (!realtimeAvailable || cancelled || supabaseChannel) return
       if (debugEnabledRef.current) {
         setDebugInfo(prev => ({ ...prev, realtime: 'connecting' }))
       }
@@ -262,9 +290,28 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
             }
           }
         })
-    } else if (debugEnabledRef.current) {
-      setDebugInfo(prev => ({ ...prev, realtime: 'off' }))
     }
+
+    // Only hold a Realtime subscription while the operator is driving the channel
+    // (Listening on). Idle/off outputs left open in OBS drop the subscription so they
+    // stop consuming Supabase Realtime connections/messages around the clock. The slow
+    // /state poll (~120s) detects Listening being turned back on and reconnects.
+    syncRealtime = (listening: boolean) => {
+      if (!realtimeAvailable) {
+        if (debugEnabledRef.current) {
+          setDebugInfo(prev => ({ ...prev, realtime: 'off' }))
+        }
+        return
+      }
+      if (listening) connectRealtime()
+      else disconnectRealtime()
+    }
+
+    void loadFull().then(() => {
+      if (cancelled || standbyRef.current) return
+      if (activeRef.current) void loadLive().then(() => scheduleNext())
+      else scheduleNext()
+    })
 
     return () => {
       cancelled = true
@@ -274,6 +321,7 @@ export function useBoardChannelState(channelNumber: number, _options: Options = 
       if (supabaseChannel) {
         const supabase = createClient()
         void supabase.removeChannel(supabaseChannel)
+        supabaseChannel = null
       }
     }
   }, [channelNumber])

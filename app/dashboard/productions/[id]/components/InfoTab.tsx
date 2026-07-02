@@ -1,13 +1,49 @@
 'use client'
 
+import { useState } from 'react'
 import { getDefaultExternalCostForType } from '@/lib/external-production-costs'
 import { getSchoolName } from '@/lib/schools'
+import { toast } from '@/lib/toast'
 import type { PTabCtx } from './production-tab-ctx'
 
 export default function InfoTab({ c }: { c: PTabCtx }) {
   const { activity, border, brandTone, cameraOptionIdFromProduction, cameraPackages, cardBg, dangerTone, delivCount, delivNotes, effectiveProdStatus, externalCostUsd, fetchingYt, formatDateTime, formatOutsourcedUsd, formatRawCreatedOn, getTypeLabel, inputStyle, isOnBehalf, linkYoutubeVideo, muted, notesSaved, organizerEmail, organizerName, persistExternalCostFromInput, production, recomputeOneEstimatedCost, recomputingEstCost, saveTeamNotes, saveVideosProduced, savingDeliv, savingExternalCost, savingNotes, setDelivCount, setDelivNotes, setExternalCostUsd, setTeamNotes, setYoutubeUrl, showSubmitterCard, submitterEmail, submitterName, successTone, teamNotes, text, youtubeUrl } = c
+
+  // "Feature on broadcast board" — manual opt-in for the signage board. Only
+  // livestreams and board meetings are eligible (that's what the board shows).
+  const [savingBoard, setSavingBoard] = useState(false)
+  const boardEligible = production.request_type_label === 'LiveStream Meeting' || production.request_type_label === 'Board Meeting' || production.request_type_number === 4
+  const setBoardFeatured = async (value: boolean) => {
+    setSavingBoard(true)
+    const { error } = await c.supabase.from('productions').update({ feature_on_broadcast_board: value }).eq('id', production.id)
+    setSavingBoard(false)
+    if (error) { toast('Could not update the broadcast board', 'error'); return }
+    toast(value ? 'Added to the broadcast board' : 'Removed from the broadcast board', 'success')
+    await c.loadData()
+  }
+
   return (
         <div>
+          {boardEligible && (
+            <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '14px' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Broadcast board</h3>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: savingBoard ? 'wait' : 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={!!production.feature_on_broadcast_board}
+                  disabled={savingBoard}
+                  onChange={e => void setBoardFeatured(e.target.checked)}
+                  style={{ width: '16px', height: '16px', marginTop: '2px', cursor: 'inherit' }}
+                />
+                <span style={{ fontSize: '13px', color: text, lineHeight: 1.5 }}>
+                  Feature on the digital-signage broadcast board
+                  <span style={{ display: 'block', fontSize: '11px', color: muted, marginTop: '2px' }}>
+                    Shows on screens when it&apos;s within the next 30 days (up to 8 broadcasts, soonest first).
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
           {/* Timeline */}
           <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '14px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 14px' }}>Production timeline</h3>

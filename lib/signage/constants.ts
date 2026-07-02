@@ -29,6 +29,18 @@ export function formatSignageClock(now = new Date()): string {
 export const CIC_REVIEW_URL = 'https://www.csdtvstaff.org/dashboard/signage/content'
 export const CIC_SUBMIT_URL = 'https://www.csdtvstaff.org/signage/submit'
 
+// Sentinel "runs forever" end date. Content with this end date never expires and
+// always counts as active once it has started. Using a far-future date (rather
+// than a nullable column) keeps every existing date query/filter working
+// unchanged — the feed, lifecycle, and validation already treat it correctly.
+export const SIGNAGE_INDEFINITE_END_DATE = '2099-12-31'
+
+/** True when an end date is the indefinite sentinel (or effectively never ends). */
+export function isIndefiniteEndDate(end: string | null | undefined): boolean {
+  const e = end?.slice(0, 10)
+  return !!e && e >= '2099-01-01'
+}
+
 function signageBaseUrl(): string {
   if (typeof window !== 'undefined') return window.location.origin
   return (
