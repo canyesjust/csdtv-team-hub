@@ -10,8 +10,21 @@ import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
 import { verifySignageCron } from '@/lib/signage/ablesign-cron'
 import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { timingSafeEqualStr } from '@/lib/server/security'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+
+// Accept the same durable token the HTML-push crons use, so this can be scheduled
+// from Supabase pg_cron without a separate Vercel CRON_SECRET.
+const PUSH_TOKEN_KEY = 'signage_html_push_cron_token'
+async function verifyPushToken(request: NextRequest, service: SupabaseClient): Promise<boolean> {
+  const token = request.headers.get('x-signage-push-token')?.trim()
+  if (!token) return false
+  const { data } = await service.from('app_settings').select('value').eq('key', PUSH_TOKEN_KEY).maybeSingle()
+  const expected = (data?.value as string | undefined)?.trim()
+  return timingSafeEqualStr(token, expected)
+}
 
 // Each site can point at its own AbleSign workspace, so we fetch the remote
 // screen list once per distinct site and match heartbeats within that site.
@@ -90,8 +103,12 @@ async function refreshAbleSignHealth() {
 }
 
 export async function GET(request: NextRequest) {
-  const isCron = verifySignageCron(request)
-  if (!isCron) {
+  let authorized = verifySignageCron(request)
+  if (!authorized) {
+    const service = getServiceSupabaseClient()
+    if (service) authorized = await verifyPushToken(request, service)
+  }
+  if (!authorized) {
     const auth = await requireSignageEditorApi()
     if ('error' in auth) return auth.error
   }

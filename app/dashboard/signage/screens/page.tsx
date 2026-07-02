@@ -275,11 +275,12 @@ export default function SignageScreensPage() {
           <div className="sig-screen-tiles">
             {screens.map(sc => {
               const selected = editId === sc.id
-              const online = sc.ablesign_screen_id ? sc.ablesign_online : null
-              const statusText = online === true ? 'Online' : online === false ? 'Offline' : 'Not linked'
-              // Offline is the signal a manager scans for — make it loud (red);
-              // online is a calm green; unlinked stays neutral.
-              const pillBg = online === true ? 'rgba(22,128,87,0.95)' : online === false ? 'rgba(200,52,45,0.96)' : 'rgba(2,12,22,0.7)'
+              const linked = !!sc.ablesign_screen_id
+              const online = linked ? sc.ablesign_online : null
+              // Distinguish "not linked" (no AbleSign screen) from "linked but status
+              // not fetched yet" — the latter is Checking, not Not linked.
+              const statusText = !linked ? 'Not linked' : online === true ? 'Online' : online === false ? 'Offline' : 'Checking…'
+              const pillBg = !linked ? 'rgba(2,12,22,0.7)' : online === true ? 'rgba(22,128,87,0.95)' : online === false ? 'rgba(200,52,45,0.96)' : 'rgba(150,110,20,0.92)'
               const meta = [areaName(sc.area_id), layoutLabel(sc.layout)].filter(v => v && v !== '—').join(' · ')
               return (
                 <div key={sc.id} style={{ ...s.card, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', ...(selected ? { border: '2px solid #2a7fb8' } : {}) }}>
