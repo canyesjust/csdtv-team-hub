@@ -13,6 +13,7 @@ import {
   useSignageAdminStyles,
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
+import { slugify } from '@/lib/signage/slug'
 
 type Area = { id: string; name: string; slug: string; building: string | null; floor: number | null; sort_order: number }
 
@@ -28,6 +29,8 @@ export default function SignageAreasPage() {
   const [form, setForm] = useState(empty)
   const [editId, setEditId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  // Once a slug is hand-edited we stop auto-filling it from the name.
+  const [slugTouched, setSlugTouched] = useState(false)
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('signage_areas').select('*').eq('site_id', activeSiteId).order('sort_order')
@@ -41,6 +44,7 @@ export default function SignageAreasPage() {
     setForm(empty)
     setEditId(null)
     setShowForm(false)
+    setSlugTouched(false)
   }
 
   const startEdit = (area: Area) => {
@@ -53,11 +57,12 @@ export default function SignageAreasPage() {
       sort_order: area.sort_order,
     })
     setShowForm(true)
+    setSlugTouched(true)
   }
 
   const save = async () => {
-    if (!form.name.trim() || !form.slug.trim()) {
-      toast('Name and slug are required', 'error')
+    if (!form.name.trim()) {
+      toast('Name is required', 'error')
       return
     }
     const body = {
@@ -97,11 +102,24 @@ export default function SignageAreasPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
             <div>
               <p style={s.lbl}>Name</p>
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={s.input} />
+              <input
+                value={form.name}
+                onChange={e => {
+                  const name = e.target.value
+                  setForm(f => ({ ...f, name, slug: (!editId && !slugTouched) ? slugify(name) : f.slug }))
+                }}
+                style={s.input}
+              />
             </div>
             <div>
               <p style={s.lbl}>Slug</p>
-              <input value={form.slug} onChange={e => setForm(f => ({ ...f, slug: e.target.value }))} style={s.input} />
+              <input
+                value={form.slug}
+                onChange={e => { setSlugTouched(true); setForm(f => ({ ...f, slug: slugify(e.target.value) })) }}
+                placeholder="auto from name"
+                style={s.input}
+              />
+              <p style={{ ...s.lbl, margin: '4px 0 0', lineHeight: 1.4 }}>Fills in from the name. The location prefix and uniqueness are added automatically when you save.</p>
             </div>
             <div>
               <p style={s.lbl}>Building</p>
