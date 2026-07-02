@@ -47,6 +47,21 @@ type Screen = ScreenForm & {
   ablesign_heartbeat_at: string | null
 }
 
+type AssignedItem = {
+  id: string
+  title: string | null
+  type?: string
+  system_kind?: string | null
+  all_screens: boolean
+  target_area_ids: string[] | null
+  target_screen_ids: string[] | null
+  target_buildings?: string[] | null
+  start_date: string | null
+  end_date: string | null
+  active?: boolean
+  pending?: boolean
+}
+
 const empty: ScreenForm = {
   code: '', name: '', area_id: null, building: '', floor: null, orientation: 'landscape', layout: 'inherit',
   theme: '', wayfinding_heading: '', accepts_takeover: true, board_takeover_enabled: false, board_takeover_audio: false, active: true, notes: '',
@@ -62,6 +77,7 @@ export default function SignageScreensPage() {
   const [form, setForm] = useState<ScreenForm>(empty)
   const [editId, setEditId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [assigned, setAssigned] = useState<{ content: AssignedItem[]; anns: AssignedItem[] } | null>(null)
 
   const areaName = (areaId: string | null) => areas.find(a => a.id === areaId)?.name ?? '—'
 
@@ -73,6 +89,34 @@ export default function SignageScreensPage() {
   }, [supabase, activeSiteId])
 
   useEffect(() => { void loadScreens() }, [loadScreens])
+
+  // Load what content + announcements currently target the screen being edited,
+  // so the editor shows "what's on this screen" — not just its config.
+  useEffect(() => {
+    if (!editId || !activeSiteId) { setAssigned(null); return }
+    const sc = screens.find(x => x.id === editId)
+    if (!sc) { setAssigned(null); return }
+    let cancelled = false
+    void (async () => {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' })
+      const [c, a] = await Promise.all([
+        supabase.from('signage_content').select('id, title, type, system_kind, all_screens, target_area_ids, target_screen_ids, target_buildings, start_date, end_date').eq('site_id', activeSiteId).eq('status', 'approved'),
+        supabase.from('signage_announcements').select('id, title, all_screens, target_area_ids, target_screen_ids, start_date, end_date, active, pending').eq('site_id', activeSiteId),
+      ])
+      if (cancelled) return
+      const matches = (r: AssignedItem) =>
+        r.all_screens ||
+        (Array.isArray(r.target_screen_ids) && r.target_screen_ids.includes(sc.id)) ||
+        (Array.isArray(r.target_area_ids) && !!sc.area_id && r.target_area_ids.includes(sc.area_id)) ||
+        (Array.isArray(r.target_buildings) && !!sc.building && r.target_buildings.includes(sc.building))
+      const inRange = (r: AssignedItem) =>
+        (!r.start_date || r.start_date.slice(0, 10) <= today) && (!r.end_date || r.end_date.slice(0, 10) >= today)
+      const content = ((c.data ?? []) as AssignedItem[]).filter(r => matches(r) && inRange(r))
+      const anns = ((a.data ?? []) as AssignedItem[]).filter(r => !r.pending && r.active && matches(r) && inRange(r))
+      setAssigned({ content, anns })
+    })()
+    return () => { cancelled = true }
+  }, [editId, activeSiteId, screens, supabase])
 
   const resetForm = () => {
     setForm(empty)
@@ -142,6 +186,33 @@ export default function SignageScreensPage() {
       {showForm && (
         <div style={{ ...s.card, marginBottom: 20 }}>
           <h3 style={s.h3}>{editId ? 'Edit screen' : 'Add screen'}</h3>
+
+          {editId && assigned && (
+            <div style={{ border: `1px solid ${s.infoBorder || s.border}`, borderRadius: 10, padding: '12px 14px', marginBottom: 16, background: s.infoBg }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: s.text, marginBottom: 8 }}>On this screen now</div>
+              {assigned.content.length === 0 && assigned.anns.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: s.muted, lineHeight: 1.5 }}>Nothing is targeted to this screen yet. On the <strong style={{ color: s.text }}>Content</strong> page, pick this screen in a piece&rsquo;s targeting to assign it here.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {assigned.content.map(c => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: s.text }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: s.info, minWidth: 46 }}>{c.system_kind ? 'Block' : c.type === 'video' ? 'Video' : c.type === 'html' ? 'Slide' : 'Image'}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || 'Untitled'}</span>
+                      {c.all_screens && <span style={{ fontSize: 11, color: s.muted }}>· all screens</span>}
+                    </div>
+                  ))}
+                  {assigned.anns.map(a => (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: s.text }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: s.info, minWidth: 46 }}>Notice</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</span>
+                      {a.all_screens && <span style={{ fontSize: 11, color: s.muted }}>· all screens</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             <div>
               <p style={s.lbl}>Code (URL slug)</p>
@@ -213,22 +284,27 @@ export default function SignageScreensPage() {
           </div>
           <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'wrap' }}>
             <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
-              <input type="checkbox" checked={form.accepts_takeover} onChange={e => setForm(f => ({ ...f, accepts_takeover: e.target.checked }))} />
-              Accepts live takeover
-            </label>
-            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
-              <input type="checkbox" checked={form.board_takeover_enabled} onChange={e => setForm(f => ({ ...f, board_takeover_enabled: e.target.checked }))} />
-              Board meeting takeover
-            </label>
-            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
-              <input type="checkbox" checked={form.board_takeover_audio} onChange={e => setForm(f => ({ ...f, board_takeover_audio: e.target.checked }))} />
-              Play board audio
-            </label>
-            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
               <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />
               Active
             </label>
           </div>
+          <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: s.muted, listStyle: 'revert' }}>Takeover options</summary>
+            <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
+                <input type="checkbox" checked={form.accepts_takeover} onChange={e => setForm(f => ({ ...f, accepts_takeover: e.target.checked }))} />
+                Accepts live takeover
+              </label>
+              <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
+                <input type="checkbox" checked={form.board_takeover_enabled} onChange={e => setForm(f => ({ ...f, board_takeover_enabled: e.target.checked }))} />
+                Board meeting takeover
+              </label>
+              <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>
+                <input type="checkbox" checked={form.board_takeover_audio} onChange={e => setForm(f => ({ ...f, board_takeover_audio: e.target.checked }))} />
+                Play board audio
+              </label>
+            </div>
+          </details>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
             <button type="button" onClick={resetForm} style={s.btn}>Cancel</button>
             {editId && (
@@ -245,6 +321,9 @@ export default function SignageScreensPage() {
             <button type="button" onClick={() => void save()} style={s.btnPrimary}>Save</button>
           </div>
           {editId && (
+            <details style={{ marginTop: 18, borderTop: `1px solid ${s.border}`, paddingTop: 14 }}>
+            <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: s.muted, listStyle: 'revert' }}>AbleSign sync &amp; player</summary>
+            <div style={{ marginTop: 12 }}>
             <AbleSignScreenPanel
               screen={{
                 id: editId,
@@ -261,6 +340,8 @@ export default function SignageScreensPage() {
               onUpdated={() => void loadScreens()}
               siteId={activeSiteId}
             />
+            </div>
+            </details>
           )}
         </div>
       )}

@@ -41,13 +41,21 @@ type ContentRow = {
   target_buildings: string[]
   full_screen: boolean
   reject_reason: string | null
+  system_kind: string | null
   created_at?: string
 }
 
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, created_at'
+  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, created_at'
+
+// Built-in "stock" blocks: always available, added + targeted like content.
+const STOCK_BLOCKS: { kind: string; label: string; desc: string; available: boolean }[] = [
+  { kind: 'broadcast_board', label: "What's coming up on air", desc: 'Upcoming livestreams & board meetings you feature, with date, time & a scan-to-watch QR.', available: true },
+  { kind: 'calendar', label: 'Calendar', desc: 'A month/agenda view of upcoming productions and events.', available: false },
+  { kind: 'website', label: 'Website preview', desc: 'A live snapshot of a district web page.', available: false },
+]
 
 const EMPTY_COUNTS: Record<Tab, number> = { pending: 0, approved: 0, rejected: 0 }
 
@@ -370,6 +378,37 @@ export default function SignageContentPage() {
     return parts.join(' · ')
   }
 
+  const addStockBlock = async (kind: string) => {
+    // If this stock block already exists for the site, just open it to assign screens.
+    const { data: existing } = await supabase
+      .from('signage_content').select('id, status')
+      .eq('site_id', activeSiteId).eq('system_kind', kind).limit(1).maybeSingle()
+    if (existing) {
+      setTab(existing.status === 'rejected' ? 'rejected' : existing.status === 'pending' ? 'pending' : 'approved')
+      setExpandedId(existing.id)
+      toast('Already added — assign it to screens below', 'success')
+      return
+    }
+    const fd = new FormData()
+    fd.set('system_kind', kind)
+    fd.set('title', STOCK_BLOCKS.find(b => b.kind === kind)?.label || 'Stock content')
+    fd.set('start_date', today)
+    fd.set('end_date', SIGNAGE_INDEFINITE_END_DATE)
+    fd.set('all_screens', 'false')
+    fd.set('target_area_ids', '[]')
+    fd.set('target_screen_ids', '[]')
+    fd.set('target_buildings', '[]')
+    fd.set('site_id', activeSiteId)
+    fd.set('status', 'approved')
+    const res = await fetch('/api/signage/content', { method: 'POST', body: fd })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { toast(data.error || 'Could not add block', 'error'); return }
+    toast('Added — now choose which screens show it', 'success')
+    await refreshAll()
+    setTab('approved')
+    if (data.content?.id) setExpandedId(data.content.id)
+  }
+
   const requestLine = (row: ContentRow) => {
     const parts: string[] = []
     if (row.start_date && row.end_date) {
@@ -393,6 +432,24 @@ export default function SignageContentPage() {
         <button type="button" onClick={() => { void navigator.clipboard.writeText(submitUrl); toast('Submission link copied', 'success') }} style={s.btnPrimary}>Copy link</button>
         <a href={submitUrl} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, textDecoration: 'none' }}>Open form</a>
       </div>
+
+      {isManager && (
+        <div style={{ ...s.card, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Stock content</div>
+          <div style={{ fontSize: 12, color: s.muted, margin: '2px 0 12px' }}>Built-in blocks that are always available. Add one, then choose which screens show it.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+            {STOCK_BLOCKS.map(b => (
+              <div key={b.kind} style={{ border: `1px solid ${s.border}`, borderRadius: 10, padding: '11px 13px', display: 'flex', flexDirection: 'column', opacity: b.available ? 1 : 0.6 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>{b.label}</div>
+                <div style={{ fontSize: 11.5, color: s.muted, margin: '3px 0 10px', lineHeight: 1.45, flex: 1 }}>{b.desc}</div>
+                {b.available
+                  ? <button type="button" onClick={() => void addStockBlock(b.kind)} style={{ ...s.btnPrimary, alignSelf: 'flex-start' }}>Add to screens</button>
+                  : <span style={{ fontSize: 11, fontWeight: 600, color: s.muted, alignSelf: 'flex-start' }}>Coming soon</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {(['pending', 'approved', 'rejected'] as Tab[]).map(t => (
@@ -563,7 +620,7 @@ export default function SignageContentPage() {
               const e = getEdit(row)
               const lc = contentLifecycle(row.start_date, row.end_date, today)
               const showStatus = tab === 'approved' && lc !== 'none'
-              const isHtml = row.type === 'html'
+              const isHtml = row.type === 'html' && !row.system_kind
               const isVideoRow = row.type === 'video'
               const previewImg = !isHtml && row.thumb_path
                 ? signageMediaPublicUrl(row.thumb_path)
@@ -778,6 +835,16 @@ function ScaledSlide({ html }: { html: string }) {
  * for the detail panel. The parent must be position:relative with a fixed aspect.
  */
 function SlidePreview({ row, edit, fit = 'cover' }: { row: ContentRow; edit?: { html_body: string }; fit?: 'cover' | 'contain' }) {
+  if (row.system_kind) {
+    const label = STOCK_BLOCKS.find(b => b.kind === row.system_kind)?.label || 'Live block'
+    return (
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, background: '#0b0e13', textAlign: 'center', padding: 10 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', color: '#ff5760' }}>Stock block</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#f0f4ff' }}>{label}</span>
+        <span style={{ fontSize: 10.5, color: '#8a99b5' }}>Rendered live on screens</span>
+      </div>
+    )
+  }
   const isHtml = row.type === 'html'
   const isVideo = row.type === 'video'
   const html = (edit?.html_body ?? row.html_body ?? '').trim()

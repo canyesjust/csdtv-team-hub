@@ -173,6 +173,91 @@ function upcomingClosures(limit = 5): { date: string; label: string }[] {
   return out
 }
 
+// ── Broadcast board (system content) ───────────────────────────────────────
+// The board is the same for every screen, so build it once and cache briefly.
+// It's shown only where an editor targets a broadcast_board content row.
+let broadcastBoardCache: { at: number; html: string | null } | null = null
+const BROADCAST_BOARD_TTL_MS = 5 * 60 * 1000
+const BROADCAST_IMG_MAX_BYTES = 500 * 1024
+
+function broadcastCountdownLabel(target: Date, now: Date): string {
+  const day = 24 * 60 * 60 * 1000
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const diff = Math.round((startOf(target) - startOf(now)) / day)
+  if (diff <= 0) return 'Today'
+  if (diff === 1) return 'Tomorrow'
+  return `In ${diff} days`
+}
+
+function broadcastWatchLabel(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') || 'csdtv.org' } catch { return 'csdtv.org' }
+}
+
+/** Fetch a thumbnail and inline it as a data URI (best-effort, offline-safe). */
+async function inlineBroadcastImage(url: string | null | undefined): Promise<string | null> {
+  const u = (url || '').trim()
+  if (!u || !/^https?:\/\//i.test(u)) return null
+  try {
+    const ctrl = new AbortController()
+    const to = setTimeout(() => ctrl.abort(), 2000)
+    const res = await fetch(u, { signal: ctrl.signal })
+    clearTimeout(to)
+    if (!res.ok) return null
+    const type = res.headers.get('content-type') || 'image/jpeg'
+    if (!type.startsWith('image/')) return null
+    const buf = await res.arrayBuffer()
+    if (buf.byteLength > BROADCAST_IMG_MAX_BYTES) return null
+    return `data:${type};base64,${Buffer.from(buf).toString('base64')}`
+  } catch { return null }
+}
+
+async function getBroadcastBoardHtml(service: SupabaseClient): Promise<string | null> {
+  if (broadcastBoardCache && Date.now() - broadcastBoardCache.at < BROADCAST_BOARD_TTL_MS) {
+    return broadcastBoardCache.html
+  }
+  try {
+    const now = new Date()
+    const in30Iso = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: featured } = await service
+      .from('productions')
+      .select('id, title, request_type_label, start_datetime, thumbnail_url, livestream_url')
+      .eq('feature_on_broadcast_board', true)
+      .in('request_type_label', ['LiveStream Meeting', 'Board Meeting'])
+      .gte('start_datetime', now.toISOString())
+      .lte('start_datetime', in30Iso)
+      .order('start_datetime', { ascending: true })
+      .limit(8)
+
+    const rows = (featured ?? []).filter(p => p.start_datetime)
+    if (!rows.length) { broadcastBoardCache = { at: Date.now(), html: null }; return null }
+
+    const QR = (await import('qrcode')).default
+    const items: BroadcastBoardItem[] = []
+    for (const p of rows) {
+      const dt = new Date(p.start_datetime as string)
+      const stream = ((p.livestream_url as string) || '').trim() || 'https://csdtv.org'
+      let qrDataUri: string | null = null
+      try { qrDataUri = await QR.toDataURL(stream, { margin: 1, width: 260, errorCorrectionLevel: 'M' }) } catch { qrDataUri = null }
+      items.push({
+        title: (p.title as string) || 'CSDtv Broadcast',
+        typeLabel: p.request_type_label === 'Board Meeting' ? 'Board Meeting' : 'Livestream',
+        dateLabel: dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' }),
+        timeLabel: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }),
+        countdownLabel: broadcastCountdownLabel(dt, now),
+        imageDataUri: await inlineBroadcastImage(p.thumbnail_url as string | null),
+        qrDataUri,
+        watchLabel: broadcastWatchLabel(stream),
+      })
+    }
+    const todayLabel = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' })
+    const html = buildBroadcastBoardHtml(items, todayLabel)
+    broadcastBoardCache = { at: Date.now(), html }
+    return html
+  } catch {
+    return broadcastBoardCache?.html ?? null
+  }
+}
+
 export async function buildScreenFeed(
   service: SupabaseClient,
   code: string,
@@ -229,65 +314,35 @@ export async function buildScreenFeed(
     service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle(),
   ])
 
-  const media = (contentRes.data ?? [])
+  const filteredContent = (contentRes.data ?? [])
     .filter(row => isInDateRange(row.start_date, row.end_date, today))
     .filter(row => signageTargetMatches(row, target))
     .sort((a, b) => b.priority - a.priority || String(b.created_at).localeCompare(String(a.created_at)))
+
+  // System "stock" blocks (e.g. the broadcast board) are content rows rendered
+  // dynamically by the feed, but scheduled + targeted exactly like normal
+  // content — so they only appear on the screens an editor assigned them to.
+  const needsBoard = filteredContent.some(row => row.system_kind === 'broadcast_board')
+  const broadcastBoardHtml = needsBoard ? await getBroadcastBoardHtml(service) : null
+
+  const media = filteredContent
+    // Drop a board slide when there are no upcoming broadcasts (nothing to show).
+    .filter(row => row.system_kind !== 'broadcast_board' || broadcastBoardHtml)
     .map(row => {
-      const type = row.type as 'image' | 'video' | 'html'
+      const isBoard = row.system_kind === 'broadcast_board'
+      const type = (isBoard ? 'html' : row.type) as 'image' | 'video' | 'html'
       return {
         id: row.id,
         type,
         title: row.title,
-        url: type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path),
-        html: type === 'html' && row.html_body
-          ? sanitizeSignageHtml(String(row.html_body))
-          : null,
+        url: isBoard || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path),
+        html: isBoard
+          ? broadcastBoardHtml
+          : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null),
         full_screen: row.full_screen,
         display_seconds: clampDisplaySeconds(row.display_seconds),
       }
     })
-
-  // Upcoming broadcasts board: manually flagged livestream/board-meeting
-  // productions in the next 30 days (up to 8, soonest first). Rendered as a
-  // static HTML slide server-side and prepended to the rotation so it leads.
-  try {
-    const nowIso = new Date().toISOString()
-    const in30Iso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: featured } = await service
-      .from('productions')
-      .select('id, title, request_type_label, start_datetime')
-      .eq('feature_on_broadcast_board', true)
-      .in('request_type_label', ['LiveStream Meeting', 'Board Meeting'])
-      .gte('start_datetime', nowIso)
-      .lte('start_datetime', in30Iso)
-      .order('start_datetime', { ascending: true })
-      .limit(8)
-    const items: BroadcastBoardItem[] = (featured ?? [])
-      .filter(p => p.start_datetime)
-      .map(p => {
-        const dt = new Date(p.start_datetime as string)
-        return {
-          title: (p.title as string) || 'CSDtv Broadcast',
-          typeLabel: p.request_type_label === 'Board Meeting' ? 'Board Meeting' : 'Livestream',
-          dateLabel: dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/Denver' }),
-          timeLabel: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }),
-        }
-      })
-    if (items.length) {
-      media.unshift({
-        id: 'broadcast-board',
-        type: 'html',
-        title: 'Upcoming broadcasts',
-        url: '',
-        html: buildBroadcastBoardHtml(items),
-        full_screen: false,
-        display_seconds: 20,
-      })
-    }
-  } catch {
-    // Non-fatal: if the productions query fails, just skip the board.
-  }
 
   let areaRowsQuery = service.from('signage_areas').select('id, name')
   let screenRowsQuery = service.from('signage_screens').select('id, name')

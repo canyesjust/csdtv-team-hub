@@ -37,6 +37,10 @@ export async function POST(request: NextRequest) {
   const displaySeconds = clampDisplaySeconds(form.get('display_seconds'))
   const contentType = String(form.get('content_type') ?? 'image').trim()
   const htmlBody = String(form.get('html_body') ?? '').trim()
+  // Stock/system blocks (broadcast board, etc.) carry no media — the feed renders
+  // them dynamically. They're still scheduled + targeted like normal content.
+  const systemKind = String(form.get('system_kind') ?? '').trim()
+  const isSystem = systemKind === 'broadcast_board'
   const source = String(form.get('source') ?? '').trim() || null
   const statusInput = String(form.get('status') ?? 'approved').trim()
   const status = statusInput === 'pending' ? 'pending' : 'approved'
@@ -51,21 +55,22 @@ export async function POST(request: NextRequest) {
 
   const hasImage = image instanceof File && image.size > 0
   const hasVideo = video instanceof File && video.size > 0
-  const isHtml = contentType === 'html'
+  const isHtml = contentType === 'html' && !isSystem
 
-  if (!hasImage && !hasVideo && !isHtml) {
+  if (!hasImage && !hasVideo && !isHtml && !isSystem) {
     return NextResponse.json({ error: 'Upload an image or video, or add HTML content.' }, { status: 400 })
   }
   if (isHtml && !htmlBody) {
     return NextResponse.json({ error: 'HTML body is required for HTML content.' }, { status: 400 })
   }
 
-  let type: 'image' | 'video' | 'html' = isHtml ? 'html' : 'image'
+  let type: 'image' | 'video' | 'html' = (isHtml || isSystem) ? 'html' : 'image'
   let mediaPath: string | null = null
   let thumbPath: string | null = null
   let storedHtml: string | null = null
 
   if (
+    !isSystem &&
     !allScreens &&
     targetAreaIds.length === 0 &&
     targetScreenIds.length === 0
@@ -130,6 +135,7 @@ export async function POST(request: NextRequest) {
     media_path: mediaPath,
     thumb_path: thumbPath,
     html_body: storedHtml,
+    system_kind: isSystem ? systemKind : null,
     display_seconds: displaySeconds,
     status,
     source,
