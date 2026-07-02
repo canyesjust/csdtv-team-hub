@@ -36,8 +36,9 @@ export async function POST(request: NextRequest) {
   const allScreens = body.all_screens === true
   const targetAreaIds = Array.isArray(body.target_area_ids) ? (body.target_area_ids as unknown[]).map(String) : []
   const targetScreenIds = Array.isArray(body.target_screen_ids) ? (body.target_screen_ids as unknown[]).map(String) : []
-  if (!allScreens && targetAreaIds.length === 0 && targetScreenIds.length === 0) {
-    return NextResponse.json({ error: 'Select "All screens" or at least one area/screen.' }, { status: 400 })
+  const targetBuildings = Array.isArray(body.target_buildings) ? (body.target_buildings as unknown[]).map(String) : []
+  if (!allScreens && targetAreaIds.length === 0 && targetScreenIds.length === 0 && targetBuildings.length === 0) {
+    return NextResponse.json({ error: 'Select "All screens" or at least one area/building/screen.' }, { status: 400 })
   }
 
   // Confirm the uploaded object actually exists before recording it.
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
     all_screens: allScreens,
     target_area_ids: targetAreaIds,
     target_screen_ids: targetScreenIds,
+    target_buildings: targetBuildings,
     priority: typeof body.priority === 'number' ? body.priority : parseInt(String(body.priority ?? '0'), 10) || 0,
     full_screen: body.full_screen === true,
   }).select('*').single()

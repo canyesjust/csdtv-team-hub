@@ -5,7 +5,10 @@
 export type Lifecycle = 'active' | 'upcoming' | 'expired' | 'none'
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  // Mountain time, not UTC. toISOString() rolls over to "tomorrow" every evening
+  // in Utah, which made today's visitors/content get bucketed as past. This
+  // matches the screen feed's signageTodayDateString (America/Denver).
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Denver' })
 }
 
 // Items with a start AND end date (content, announcements).

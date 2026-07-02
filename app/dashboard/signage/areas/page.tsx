@@ -158,20 +158,26 @@ export default function SignageAreasPage() {
         <>
           <SignageListHint color={s.muted}>Click an area to edit.</SignageListHint>
           {areas.map(a => {
-            const count = screens.filter(sc => sc.area_id === a.id).length
+            const inArea = screens.filter(sc => sc.area_id === a.id)
+            const count = inArea.length
             const meta = [
               `${count} screen${count === 1 ? '' : 's'}`,
               a.building || null,
               a.floor != null ? `Floor ${a.floor}` : null,
             ].filter(Boolean).join(' · ')
             return (
-              <div key={a.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <SignageRowEditButton onClick={() => startEdit(a)} textColor={s.text} fontWeight={600}>
-                    {a.name}
-                  </SignageRowEditButton>
-                  <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>{meta}</div>
-                </div>
+              <div key={a.id} style={{ ...s.card, padding: '12px 14px', marginBottom: 8 }}>
+                <SignageRowEditButton onClick={() => startEdit(a)} textColor={s.text} fontWeight={600}>
+                  {a.name}
+                </SignageRowEditButton>
+                <div style={{ fontSize: 12, color: s.muted, marginTop: 4 }}>{meta}</div>
+                {inArea.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {inArea.map(sc => (
+                      <span key={sc.id} style={{ fontSize: 11.5, padding: '2px 9px', borderRadius: 20, border: `1px solid ${s.border}`, color: s.text }}>{sc.name}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

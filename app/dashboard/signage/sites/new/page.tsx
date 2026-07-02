@@ -194,6 +194,11 @@ export default function NewSchoolWizardPage() {
             <div>
               <p style={s.lbl}>Slug (URL id)</p>
               <input value={slug} onChange={e => setSlug(e.target.value)} placeholder={slugify(name) || 'auto'} style={s.input} />
+              {effectiveSlug && (
+                <p style={{ fontSize: 11.5, color: s.muted, margin: '5px 0 0' }}>
+                  Submission form: <code style={{ color: s.info }}>/signage/{effectiveSlug}/submit</code>
+                </p>
+              )}
             </div>
           </div>
           <div>

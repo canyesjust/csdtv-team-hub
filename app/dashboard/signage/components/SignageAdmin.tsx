@@ -3,20 +3,20 @@
 import Link from 'next/link'
 import { SIGNAGE_ANNOUNCEMENT_ICONS, type SignageAnnouncementIconId } from '@/lib/signage/announcement-icons'
 import { usePathname } from 'next/navigation'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTheme } from '@/lib/theme'
 import { confirmDialog } from '@/lib/confirm'
 import { useSignage } from './SignageProvider'
 import { toast } from '@/lib/toast'
-import SignageFloorMap from './SignageFloorMap'
 
 export type SignageArea = { id: string; name: string; slug: string }
-export type SignageScreen = { id: string; code: string; name: string; area_id: string | null }
+export type SignageScreen = { id: string; code: string; name: string; area_id: string | null; building: string | null }
 
 export type TargetingValue = {
   all_screens: boolean
   target_area_ids: string[]
   target_screen_ids: string[]
+  target_buildings?: string[]
 }
 
 /** Hub dashboard admin styles — ports reference sections 7–10. */
@@ -76,11 +76,11 @@ export function useSignageAdminStyles(theme: string) {
       padding: '7px 13px',
       borderRadius: 8,
       border: `1px solid ${info}`,
-      background: dark ? 'transparent' : '#fff',
-      color: info,
+      background: info,
+      color: dark ? '#04213f' : '#fff',
       cursor: 'pointer',
       fontFamily: 'inherit',
-      fontWeight: 500,
+      fontWeight: 600,
     } satisfies React.CSSProperties,
     btnSmall: {
       padding: '2px 8px',
@@ -197,74 +197,106 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const [showScreens, setShowScreens] = useState(value.target_screen_ids.length > 0)
-  const [view, setView] = useState<'list' | 'map'>('list')
+  const buildings = value.target_buildings ?? []
+
+  // Screens grouped by area — powers the "(4)" counts and the grouped picker.
+  const byArea = useMemo(() => {
+    const m = new Map<string | null, SignageScreen[]>()
+    screens.forEach(sc => { const k = sc.area_id ?? null; const l = m.get(k) ?? []; l.push(sc); m.set(k, l) })
+    return m
+  }, [screens])
+  const areaCount = (id: string) => (byArea.get(id) ?? []).length
+
+  const buildingNames = useMemo(() => {
+    const set = new Set<string>()
+    screens.forEach(sc => { const b = (sc.building || '').trim(); if (b) set.add(b) })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [screens])
+  const buildingCount = (b: string) => screens.filter(sc => (sc.building || '').trim() === b).length
+
+  const emit = (patch: Partial<TargetingValue>) => onChange({
+    all_screens: false,
+    target_area_ids: value.target_area_ids,
+    target_screen_ids: value.target_screen_ids,
+    target_buildings: buildings,
+    ...patch,
+  })
 
   const toggleAll = () => {
-    onChange({ all_screens: !value.all_screens, target_area_ids: [], target_screen_ids: [] })
+    onChange({ all_screens: !value.all_screens, target_area_ids: [], target_screen_ids: [], target_buildings: [] })
     setShowScreens(false)
   }
-
   const toggleArea = (id: string) => {
     const set = new Set(value.target_area_ids)
-    if (set.has(id)) set.delete(id)
-    else set.add(id)
-    onChange({ all_screens: false, target_area_ids: [...set], target_screen_ids: value.target_screen_ids })
+    if (set.has(id)) set.delete(id); else set.add(id)
+    emit({ target_area_ids: [...set] })
   }
-
+  const toggleBuilding = (b: string) => {
+    const set = new Set(buildings)
+    if (set.has(b)) set.delete(b); else set.add(b)
+    emit({ target_buildings: [...set] })
+  }
   const toggleScreen = (id: string) => {
     const set = new Set(value.target_screen_ids)
-    if (set.has(id)) set.delete(id)
-    else set.add(id)
-    onChange({ all_screens: false, target_area_ids: value.target_area_ids, target_screen_ids: [...set] })
+    if (set.has(id)) set.delete(id); else set.add(id)
+    emit({ target_screen_ids: [...set] })
   }
 
   return (
     <div>
       {lbl && <p style={lbl}>Show on</p>}
-      <div style={{ display: 'inline-flex', gap: 4, padding: 3, borderRadius: 9, background: s.segBg, marginBottom: 10 }}>
-        <button type="button" onClick={() => setView('list')} style={s.seg(view === 'list')}>List</button>
-        <button type="button" onClick={() => setView('map')} style={s.seg(view === 'map')}>Map</button>
+      <div>
+        <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
+          {value.all_screens ? '✓ ' : ''}All screens
+        </button>
       </div>
-      {view === 'map' ? (
-        <SignageFloorMap mode="select" value={value} onChange={onChange} />
-      ) : (
+
+      {!value.all_screens && (
         <>
-          <div>
-            <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
-              {value.all_screens ? '✓ ' : ''}All screens
-            </button>
-            {!value.all_screens && areas.map(a => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => toggleArea(a.id)}
-                style={s.chip(value.target_area_ids.includes(a.id))}
-              >
-                {value.target_area_ids.includes(a.id) ? '✓ ' : ''}{a.name}
-              </button>
-            ))}
-            {!value.all_screens && (
-              <button
-                type="button"
-                onClick={() => setShowScreens(v => !v)}
-                style={s.chip(showScreens || value.target_screen_ids.length > 0)}
-              >
-                {showScreens ? '− ' : '+ '}Specific screen
-              </button>
-            )}
-          </div>
-          {!value.all_screens && showScreens && (
-            <div style={{ marginTop: 4, maxHeight: 140, overflowY: 'auto' }}>
-              {screens.map(sc => (
-                <button
-                  key={sc.id}
-                  type="button"
-                  onClick={() => toggleScreen(sc.id)}
-                  style={s.chip(value.target_screen_ids.includes(sc.id))}
-                >
-                  {value.target_screen_ids.includes(sc.id) ? '✓ ' : ''}{sc.name} ({sc.code})
+          {areas.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Areas</p>
+              {areas.map(a => (
+                <button key={a.id} type="button" onClick={() => toggleArea(a.id)} style={s.chip(value.target_area_ids.includes(a.id))}>
+                  {value.target_area_ids.includes(a.id) ? '✓ ' : ''}{a.name} <span style={{ opacity: 0.6 }}>({areaCount(a.id)})</span>
                 </button>
               ))}
+            </div>
+          )}
+
+          {buildingNames.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Buildings</p>
+              {buildingNames.map(b => (
+                <button key={b} type="button" onClick={() => toggleBuilding(b)} style={s.chip(buildings.includes(b))}>
+                  {buildings.includes(b) ? '✓ ' : ''}{b} <span style={{ opacity: 0.6 }}>({buildingCount(b)})</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ marginTop: 8 }}>
+            <button type="button" onClick={() => setShowScreens(v => !v)} style={s.chip(showScreens || value.target_screen_ids.length > 0)}>
+              {showScreens ? '− ' : '+ '}Specific screens
+            </button>
+          </div>
+
+          {showScreens && (
+            <div style={{ marginTop: 6, maxHeight: 220, overflowY: 'auto' }}>
+              {[...areas, null].map(area => {
+                const list = byArea.get(area ? area.id : null) ?? []
+                if (!list.length) return null
+                return (
+                  <div key={area ? area.id : 'none'} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: s.muted, margin: '2px 0 4px' }}>{area ? area.name : 'No area'}</div>
+                    {list.map(sc => (
+                      <button key={sc.id} type="button" onClick={() => toggleScreen(sc.id)} style={s.chip(value.target_screen_ids.includes(sc.id))}>
+                        {value.target_screen_ids.includes(sc.id) ? '✓ ' : ''}{sc.name} <span style={{ opacity: 0.55, fontFamily: 'ui-monospace, monospace' }}>/{sc.code}</span>
+                      </button>
+                    ))}
+                  </div>
+                )
+              })}
             </div>
           )}
         </>
@@ -324,7 +356,6 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     label: 'Screens',
     items: [
       { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
-      { href: '/dashboard/signage/floor-plan', label: 'Floor plan', managerOnly: true },
       { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
       { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
     ],

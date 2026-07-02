@@ -192,7 +192,7 @@ export async function buildScreenFeed(
     | { id: string; name: string; slug: string; building: string | null; floor: number | null }[]
     | null
   const area = Array.isArray(rawArea) ? rawArea[0] ?? null : rawArea
-  const target = { id: screen.id, area_id: screen.area_id }
+  const target = { id: screen.id, area_id: screen.area_id, building: screen.building }
   const siteId = (screen.site_id as string | null) ?? null
 
   let contentQuery = service.from('signage_content').select('*').eq('status', 'approved')

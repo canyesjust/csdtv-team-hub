@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
   const allScreens = String(form.get('all_screens') ?? 'false') === 'true'
   const targetAreaIds = JSON.parse(String(form.get('target_area_ids') ?? '[]')) as string[]
   const targetScreenIds = JSON.parse(String(form.get('target_screen_ids') ?? '[]')) as string[]
+  const targetBuildings = JSON.parse(String(form.get('target_buildings') ?? '[]')) as string[]
   const priority = parseInt(String(form.get('priority') ?? '0'), 10) || 0
   const fullScreen = String(form.get('full_screen') ?? 'false') === 'true'
   const displaySeconds = clampDisplaySeconds(form.get('display_seconds'))
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
     all_screens: allScreens,
     target_area_ids: targetAreaIds,
     target_screen_ids: targetScreenIds,
+    target_buildings: targetBuildings,
     priority,
     full_screen: fullScreen,
   }).select('*').single()

@@ -37,6 +37,7 @@ type AnnouncementRow = {
   all_screens: boolean
   target_area_ids: string[]
   target_screen_ids: string[]
+  target_buildings: string[]
   pending: boolean
   submitter_name: string | null
 }
@@ -80,7 +81,7 @@ export default function SignageAnnouncementsPage() {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('signage_announcements')
-      .select('id, title, subtitle, icon, start_date, end_date, priority, in_ticker, active, all_screens, target_area_ids, target_screen_ids, pending, submitter_name')
+      .select('id, title, subtitle, icon, start_date, end_date, priority, in_ticker, active, all_screens, target_area_ids, target_screen_ids, target_buildings, pending, submitter_name')
       .eq('site_id', activeSiteId)
       .order('start_date', { ascending: false })
     if (error) {
@@ -112,6 +113,7 @@ export default function SignageAnnouncementsPage() {
       all_screens: row.all_screens,
       target_area_ids: row.target_area_ids ?? [],
       target_screen_ids: row.target_screen_ids ?? [],
+      target_buildings: row.target_buildings ?? [],
     })
   }
 

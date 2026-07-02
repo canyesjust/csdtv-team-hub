@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
   const submitterName = String(form.get('submitter_name') ?? '').trim()
   const submitterEmail = String(form.get('submitter_email') ?? '').trim().toLowerCase()
   const areaId = String(form.get('area_id') ?? '').trim()
+  const siteSlug = String(form.get('site_slug') ?? '').trim().toLowerCase()
   const startDate = String(form.get('start_date') ?? '').trim()
   const endDate = String(form.get('end_date') ?? '').trim()
   const requestedNote = String(form.get('requested_note') ?? '').trim()
@@ -104,6 +105,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'That area no longer exists.' }, { status: 400 })
   }
   const siteId = areaRow.site_id as string | null
+
+  // When the request comes from a per-site form (/signage/<slug>/submit), make
+  // sure the chosen area actually belongs to that site — a form for location A
+  // must never be able to post into location B's area.
+  if (siteSlug) {
+    const { data: siteRow } = await service.from('signage_sites').select('id, active').eq('slug', siteSlug).maybeSingle()
+    if (!siteRow || siteRow.active === false) {
+      return NextResponse.json({ error: 'That signage location was not found.' }, { status: 400 })
+    }
+    if (siteId !== siteRow.id) {
+      return NextResponse.json({ error: 'That area is not part of this location.' }, { status: 400 })
+    }
+  }
 
   // 1. Media (image/video) ------------------------------------------------------
   let mediaPath = ''

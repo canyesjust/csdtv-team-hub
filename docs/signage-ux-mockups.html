@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signage UX Mockups — Submission Form & Review Panel</title>
+<style>
+  :root{
+    --bg:#eef1f7; --card:#fff; --ink:#1a1f36; --muted:#6b7280; --line:#e3e6ee;
+    --info:#185fa5; --infoBg:#eaf2fb; --amber:#b45309; --amberBg:#fff7ed; --amberLine:#fed7aa;
+    --green:#16a34a; --greenBg:#e9f8ef; --red:#ef4444; --navy:#0b1324;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.5px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 28px}
+  h2{font-size:18px;margin:40px 0 6px;letter-spacing:-.3px}
+  .lead{color:var(--muted);font-size:13.5px;margin:0 0 18px;max-width:760px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+  @media(max-width:880px){.cols{grid-template-columns:1fr}}
+  .pane{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(20,30,60,.05)}
+  .pane-hd{padding:9px 14px;font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .before .pane-hd{background:#fbeaea;color:#a12b2b}
+  .after .pane-hd{background:var(--greenBg);color:#0f7a3d}
+  .pane-bd{padding:18px}
+  .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.3px}
+  .tag.b{background:#f3d3d3;color:#a12b2b}
+  .tag.a{background:#c9edd6;color:#0f7a3d}
+
+  /* form primitives */
+  .lbl{font-size:11.5px;color:var(--muted);margin:0 0 4px;font-weight:600}
+  .inp{height:34px;border:1px solid #d3d6dd;border-radius:8px;background:#fff;padding:0 10px;font-size:13px;width:100%;display:flex;align-items:center;color:#4b5566}
+  .inp.focusring{outline:2px solid var(--info);outline-offset:1px}
+  .row2{display:flex;gap:12px}.row2>*{flex:1}
+  .sec{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:11px}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600}
+  .chk{width:15px;height:15px;border:1.5px solid #b9c0cc;border-radius:4px;display:inline-block;flex:none}
+  .chk.on{background:var(--info);border-color:var(--info);position:relative}
+  .chk.on::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .btn{font-size:12.5px;padding:8px 14px;border-radius:8px;border:1px solid var(--info);background:#fff;color:var(--info);font-weight:600;display:inline-block}
+  .btn.fill{background:var(--info);color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.danger{border-color:var(--red);color:var(--red)}
+  .muted{color:var(--muted);font-size:12px}
+  .drop{border:1px dashed #c4c8d0;border-radius:8px;padding:16px;text-align:center;color:var(--muted);font-size:12.5px}
+  .callout{border-radius:9px;padding:9px 11px;font-size:12px;line-height:1.45;display:flex;gap:8px}
+  .callout.info{background:var(--infoBg);color:#123f6b}
+  .callout.amber{background:var(--amberBg);border:1px solid var(--amberLine);color:var(--amber)}
+  .callout.green{background:var(--greenBg);color:#0f7a3d}
+  .callout .i{font-weight:800;flex:none}
+  .pill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .pill.live{background:var(--greenBg);color:var(--green)}
+  .pill.up{background:var(--infoBg);color:var(--info)}
+
+  /* annotations */
+  .notes{margin:12px 0 0;padding:0;list-style:none;font-size:12.5px}
+  .notes li{position:relative;padding:5px 0 5px 22px;color:#334}
+  .notes li::before{content:"";position:absolute;left:2px;top:9px;width:8px;height:8px;border-radius:50%}
+  .before .notes li::before{background:var(--red)}
+  .after .notes li::before{background:var(--green)}
+  .badge{display:inline-block;font-size:10px;font-weight:700;background:var(--navy);color:#fff;border-radius:5px;padding:1px 6px;margin-right:5px;vertical-align:1px}
+
+  /* review card */
+  .rev{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
+  .thumb{width:40px;height:40px;border-radius:9px;background:var(--infoBg);color:var(--info);display:flex;align-items:center;justify-content:center;flex:none;font-size:18px}
+  .metric{border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+  .metric .k{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  .metric .v{font-size:26px;font-weight:800;letter-spacing:-1px;margin-top:4px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:560px){.grid4{grid-template-columns:repeat(2,1fr)}}
+  footer{margin-top:48px;color:var(--muted);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Digital Signage — UX Mockups</h1>
+  <p class="sub">Before / after visual reference for the two highest-traffic screens. Static mockup — not wired to the app. Companion to <b>signage-ux-review-2026-07-01.md</b>.</p>
+
+  <!-- ============ SCREEN 1: PUBLIC SUBMISSION ============ -->
+  <h2>1 · Public submission form</h2>
+  <p class="lead">The "after" merges the two forms into one, moves validation to the moment a file is chosen, and makes the hidden field-logic visible. Everything is reviewed before it appears — that promise stays.</p>
+
+  <div class="cols">
+    <!-- BEFORE -->
+    <div class="pane before">
+      <div class="pane-hd"><span class="tag b">BEFORE</span> /signage/submit &amp; /signage/csdtv/submit</div>
+      <div class="pane-bd">
+        <div class="row2" style="margin-bottom:11px">
+          <div><p class="lbl">Your name</p><div class="inp"></div></div>
+          <div><p class="lbl">Email</p><div class="inp"></div></div>
+        </div>
+        <p class="lbl">Area</p><div class="inp" style="margin-bottom:11px">Choose an area…</div>
+        <div class="sec"><div class="toggle"><span class="chk"></span> Welcome a visitor</div></div>
+        <div class="sec"><div class="toggle"><span class="chk on"></span> Post an announcement</div></div>
+        <div class="sec">
+          <div class="toggle" style="margin-bottom:10px"><span class="chk on"></span> Add an image or video</div>
+          <div class="drop">↑<br>Drop an image or browse — best 1920 × 1080</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:6px"><span class="btn">Review and submit</span></div>
+        <ul class="notes">
+          <li>Two different forms, different fields/colors/backends — no page tells you which to use</li>
+          <li>"Drop an image" but drag-and-drop isn't actually wired up</li>
+          <li>HEIC / oversized / wrong-type files fail only <i>after</i> submit</li>
+          <li>Date fields silently become required when a toggle is on — never stated</li>
+          <li>No turnaround estimate, no confirmation email, no "submit another"</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="pane after">
+      <div class="pane-hd"><span class="tag a">AFTER</span> one unified form</div>
+      <div class="pane-bd">
+        <div class="callout info" style="margin-bottom:12px"><span class="i">ℹ</span><span>Add at least one item below. Everything is reviewed before it appears on screen — usually within 1–2 school days.</span></div>
+        <div class="row2" style="margin-bottom:11px">
+          <div><p class="lbl">Your name</p><div class="inp focusring"></div></div>
+          <div><p class="lbl">Email</p><div class="inp"></div></div>
+        </div>
+        <p class="lbl">Where should this show?</p><div class="inp" style="margin-bottom:6px">CIC Lobby — 4 screens ▾</div>
+        <p class="muted" style="margin:0 0 12px;color:var(--info)">→ Goes to 4 screens in CIC Lobby</p>
+        <div class="sec"><div class="toggle"><span class="chk"></span> Welcome a visitor</div></div>
+        <div class="sec">
+          <div class="toggle" style="margin-bottom:9px"><span class="chk on"></span> Add an image or video</div>
+          <div class="drop" style="border-color:var(--info);color:var(--info)">poster-spring.jpg · 1920×1080 · 1.2 MB ✓</div>
+          <div class="callout amber" style="margin-top:9px"><span class="i">⚠</span><span>Portrait image detected — it will show with black bars on the sides. A 1920×1080 (landscape) file looks best.</span></div>
+        </div>
+        <div class="row2" style="margin-bottom:6px">
+          <div><p class="lbl">Show from <span class="muted">(required for images)</span></p><div class="inp">Jul 1, 2026</div></div>
+          <div><p class="lbl">Show until</p><div class="inp">Jul 14, 2026</div></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px"><span class="btn fill">Review &amp; submit</span></div>
+        <ul class="notes">
+          <li><span class="badge">1</span>One form, one look, one review queue &amp; notification rule</li>
+          <li><span class="badge">2</span>File checked on select: name, dimensions, size, type shown instantly</li>
+          <li><span class="badge">3</span>Orientation warning as a visible amber badge (both media types)</li>
+          <li><span class="badge">4</span>"Required for images" caption appears with the toggle</li>
+          <li><span class="badge">5</span>Turnaround promise + (after submit) confirmation email &amp; "Submit another"</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 2: REVIEW / APPROVE ============ -->
+  <h2>2 · Admin review &amp; approve</h2>
+  <p class="lead">The "after" closes the two biggest footguns: content with no target silently going to <i>all screens</i>, and one-click approve vs. fiddly reject. Approve now shows a compact summary of what/where/when; reject is a clear two-button confirm.</p>
+
+  <div class="cols">
+    <!-- BEFORE -->
+    <div class="pane before">
+      <div class="pane-hd"><span class="tag b">BEFORE</span> Overview · Needs your review</div>
+      <div class="pane-bd">
+        <div class="grid4">
+          <div class="metric"><div class="k">Screens</div><div class="v" style="color:var(--green)">6/6</div></div>
+          <div class="metric"><div class="k">Showing</div><div class="v">4</div></div>
+          <div class="metric"><div class="k">Pending</div><div class="v" style="color:var(--amber)">3</div></div>
+          <div class="metric"><div class="k">Live ann.</div><div class="v">1</div></div>
+        </div>
+        <div style="border-left:3px solid var(--amber);border-radius:10px;background:#fff;border:1px solid var(--line);padding:10px 12px">
+          <b style="font-size:13px">Needs your review (3)</b>
+          <div class="rev">
+            <div class="thumb">▦</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">Spring Concert poster</div>
+              <div class="muted">Image · All screens · from R. Kim</div>
+            </div>
+            <div><span class="btn">Approve</span> <span class="btn ghost" style="color:var(--red)">Reject</span></div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Approve is one instant click — no summary of where it lands</li>
+          <li>"All screens" is a silent default when submitter set no area → district-wide by accident</li>
+          <li>Reject requires typing a reason in an easy-to-miss inline box; lost if you navigate away</li>
+          <li>Overview and Content pages approve via two different code paths</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- AFTER -->
+    <div class="pane after">
+      <div class="pane-hd"><span class="tag a">AFTER</span> guarded approve / reject</div>
+      <div class="pane-bd">
+        <div class="grid4">
+          <div class="metric"><div class="k">Screens</div><div class="v" style="color:var(--green)">6/6</div></div>
+          <div class="metric"><div class="k">Showing</div><div class="v">4</div></div>
+          <div class="metric"><div class="k">Pending</div><div class="v" style="color:var(--amber)">3</div></div>
+          <div class="metric"><div class="k">Live ann.</div><div class="v">1</div></div>
+        </div>
+        <div style="border-left:3px solid var(--info);border-radius:10px;background:#fff;border:1px solid var(--line);padding:10px 12px">
+          <b style="font-size:13px">Needs your review (3)</b>
+          <div class="rev">
+            <div class="thumb">▦</div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:600">Spring Concert poster <span class="pill up">Upcoming</span></div>
+              <div class="muted">Image · from R. Kim (rkim@canyons…)</div>
+              <div class="callout amber" style="margin-top:7px"><span class="i">⚠</span><span>No area chosen — will show on <b>all 6 screens</b>. <u style="cursor:pointer">Limit to CIC Lobby</u>?</span></div>
+              <div class="callout green" style="margin-top:7px"><span class="i">✓</span><span><b>Approve:</b> Image → all screens · Jul 1–14 · 12s each</span></div>
+              <div style="margin-top:9px;display:flex;gap:6px">
+                <span class="btn fill">Confirm approve</span>
+                <span class="btn danger">Reject…</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li><span class="badge">1</span>No-target items flag an amber warning + one-click "limit to area"</li>
+          <li><span class="badge">2</span>Approve shows a plain-language summary (what · where · when) before it goes live</li>
+          <li><span class="badge">3</span>Submitter email shown so reviewers can judge trust</li>
+          <li><span class="badge">4</span>Reject opens a clear confirm state; live/upcoming pill visible while pending</li>
+          <li><span class="badge">5</span>One shared approveContent() path for Overview + Content</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>Static mockup for discussion · Canyons School District signage · 2026-07-01</footer>
+</div>
+</body>
+</html>

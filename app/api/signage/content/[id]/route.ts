@@ -44,7 +44,8 @@ export async function PATCH(
       const allScreens = typeof body.all_screens === 'boolean' ? body.all_screens : existing.all_screens
       const areaIds = Array.isArray(body.target_area_ids) ? body.target_area_ids : existing.target_area_ids
       const screenIds = Array.isArray(body.target_screen_ids) ? body.target_screen_ids : existing.target_screen_ids
-      if (!allScreens && areaIds.length === 0 && screenIds.length === 0) {
+      const buildings = Array.isArray(body.target_buildings) ? body.target_buildings : (existing.target_buildings ?? [])
+      if (!allScreens && areaIds.length === 0 && screenIds.length === 0 && buildings.length === 0) {
         patch.all_screens = true
       }
     }
@@ -52,6 +53,7 @@ export async function PATCH(
   if (typeof body.all_screens === 'boolean') patch.all_screens = body.all_screens
   if (Array.isArray(body.target_area_ids)) patch.target_area_ids = body.target_area_ids
   if (Array.isArray(body.target_screen_ids)) patch.target_screen_ids = body.target_screen_ids
+  if (Array.isArray(body.target_buildings)) patch.target_buildings = body.target_buildings
   if (typeof body.start_date === 'string') patch.start_date = body.start_date
   if (typeof body.end_date === 'string') patch.end_date = body.end_date
   if (typeof body.priority === 'number') patch.priority = body.priority

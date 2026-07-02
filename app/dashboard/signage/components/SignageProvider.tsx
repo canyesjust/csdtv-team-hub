@@ -77,7 +77,7 @@ export function SignageProvider({ children }: { children: ReactNode }) {
     if (!activeSiteId) { setAreas([]); setScreens([]); return }
     const [areasRes, screensRes] = await Promise.all([
       supabase.from('signage_areas').select('id, name, slug').eq('site_id', activeSiteId).order('sort_order'),
-      supabase.from('signage_screens').select('id, code, name, area_id').eq('site_id', activeSiteId).order('code'),
+      supabase.from('signage_screens').select('id, code, name, area_id, building').eq('site_id', activeSiteId).order('code'),
     ])
     setAreas(areasRes.data || [])
     setScreens(screensRes.data || [])

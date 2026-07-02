@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import { isSignageStreamUrl, normalizeSignageStreamUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import SignageTargetingPicker, { SignagePageShell, useSignageTheme, type TargetingValue } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
@@ -54,6 +55,10 @@ export default function SignageLivePage() {
   }, [bt?.active])
 
   const btPost = async (action: 'preroll' | 'live' | 'off') => {
+    if (action === 'live') {
+      const ok = await confirmDialog({ title: 'Go live on the signage screens?', message: 'Every screen with board takeover enabled will switch to the live board stream within about 5 seconds.', confirmLabel: 'Go live', tone: 'danger' })
+      if (!ok) return
+    }
     setBtSaving(true)
     const res = await fetch('/api/signage/board-takeover', {
       method: 'POST',
@@ -111,6 +116,13 @@ export default function SignageLivePage() {
       payload.target_screen_ids.length === 0
     ) {
       payload.all_screens = true
+    }
+    if (form.is_live) {
+      const scope = payload.all_screens
+        ? 'all screens at this location'
+        : `${payload.target_area_ids.length + payload.target_screen_ids.length} selected target${payload.target_area_ids.length + payload.target_screen_ids.length === 1 ? '' : 's'}`
+      const ok = await confirmDialog({ title: 'Take over the screens?', message: `${scope.charAt(0).toUpperCase() + scope.slice(1)} will switch to this live stream within about 5 seconds.`, confirmLabel: 'Take over', tone: 'danger' })
+      if (!ok) return
     }
     setSaving(true)
     const res = await fetch('/api/signage/live', {

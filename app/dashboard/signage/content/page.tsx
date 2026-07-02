@@ -38,6 +38,7 @@ type ContentRow = {
   all_screens: boolean
   target_area_ids: string[]
   target_screen_ids: string[]
+  target_buildings: string[]
   full_screen: boolean
   reject_reason: string | null
   created_at?: string
@@ -46,7 +47,7 @@ type ContentRow = {
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, full_screen, reject_reason, created_at'
+  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, created_at'
 
 const EMPTY_COUNTS: Record<Tab, number> = { pending: 0, approved: 0, rejected: 0 }
 
@@ -61,7 +62,11 @@ export default function SignageContentPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { isManager, areas, screens, activeSiteId } = useSignage()
+  const { isManager, areas, screens, activeSiteId, sites } = useSignage()
+
+  // Each location has its own submission form at /signage/<slug>/submit.
+  const activeSite = sites.find(x => x.id === activeSiteId) || null
+  const submitUrl = activeSite ? `https://www.csdtvstaff.org/signage/${activeSite.slug}/submit` : CIC_SUBMIT_URL
 
   const [tab, setTab] = useState<Tab>('pending')
   const [rows, setRows] = useState<ContentRow[]>([])
@@ -142,6 +147,7 @@ export default function SignageContentPage() {
     all_screens: row.all_screens,
     target_area_ids: row.target_area_ids ?? [],
     target_screen_ids: row.target_screen_ids ?? [],
+    target_buildings: row.target_buildings ?? [],
     start_date: row.start_date?.slice(0, 10) ?? '',
     end_date: row.end_date?.slice(0, 10) ?? '',
     priority: row.priority,
@@ -180,6 +186,7 @@ export default function SignageContentPage() {
       all_screens: e.all_screens,
       target_area_ids: e.target_area_ids,
       target_screen_ids: e.target_screen_ids,
+      target_buildings: e.target_buildings ?? [],
       start_date: e.start_date,
       end_date: e.end_date,
       priority: e.priority,
@@ -203,7 +210,7 @@ export default function SignageContentPage() {
   const approve = async (row: ContentRow) => {
     const e = getEdit(row)
     const targeting =
-      !e.all_screens && e.target_area_ids.length === 0 && e.target_screen_ids.length === 0
+      !e.all_screens && e.target_area_ids.length === 0 && e.target_screen_ids.length === 0 && (e.target_buildings ?? []).length === 0
         ? { ...e, all_screens: true }
         : e
     await patchContent(row.id, {
@@ -213,6 +220,7 @@ export default function SignageContentPage() {
       all_screens: targeting.all_screens,
       target_area_ids: targeting.target_area_ids,
       target_screen_ids: targeting.target_screen_ids,
+      target_buildings: targeting.target_buildings ?? [],
       start_date: targeting.start_date,
       end_date: targeting.end_date,
       priority: targeting.priority,
@@ -240,9 +248,10 @@ export default function SignageContentPage() {
     if (
       !addTargeting.all_screens &&
       addTargeting.target_area_ids.length === 0 &&
-      addTargeting.target_screen_ids.length === 0
+      addTargeting.target_screen_ids.length === 0 &&
+      (addTargeting.target_buildings ?? []).length === 0
     ) {
-      toast('Select "All screens" or at least one area/screen', 'error')
+      toast('Select "All screens" or at least one area, building, or screen', 'error')
       return
     }
 
@@ -257,6 +266,7 @@ export default function SignageContentPage() {
     fd.set('all_screens', String(addTargeting.all_screens))
     fd.set('target_area_ids', JSON.stringify(addTargeting.target_area_ids))
     fd.set('target_screen_ids', JSON.stringify(addTargeting.target_screen_ids))
+    fd.set('target_buildings', JSON.stringify(addTargeting.target_buildings ?? []))
 
     if (addContentType === 'html') {
       fd.set('html_body', addHtmlBody)
@@ -319,6 +329,7 @@ export default function SignageContentPage() {
             all_screens: addTargeting.all_screens,
             target_area_ids: addTargeting.target_area_ids,
             target_screen_ids: addTargeting.target_screen_ids,
+            target_buildings: addTargeting.target_buildings ?? [],
             media_path: sign.video.path,
             thumb_path: thumbPath,
           }),
@@ -374,11 +385,11 @@ export default function SignageContentPage() {
       <div style={{ ...s.card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Share the submission link</div>
-          <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>Send this to anyone who needs to submit content for the CIC screens. It goes to the approval queue.</div>
-          <div style={{ fontSize: 12.5, color: s.text, marginTop: 6, wordBreak: 'break-all', fontFamily: 'ui-monospace, monospace' }}>{CIC_SUBMIT_URL}</div>
+          <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>Send this to anyone who needs to submit content for {activeSite?.name || 'these'} screens. Everything goes to the approval queue.</div>
+          <div style={{ fontSize: 12.5, color: s.text, marginTop: 6, wordBreak: 'break-all', fontFamily: 'ui-monospace, monospace' }}>{submitUrl}</div>
         </div>
-        <button type="button" onClick={() => { void navigator.clipboard.writeText(CIC_SUBMIT_URL); toast('Submission link copied', 'success') }} style={s.btnPrimary}>Copy link</button>
-        <a href={CIC_SUBMIT_URL} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, textDecoration: 'none' }}>Open form</a>
+        <button type="button" onClick={() => { void navigator.clipboard.writeText(submitUrl); toast('Submission link copied', 'success') }} style={s.btnPrimary}>Copy link</button>
+        <a href={submitUrl} target="_blank" rel="noopener noreferrer" style={{ ...s.btn, textDecoration: 'none' }}>Open form</a>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>

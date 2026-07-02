@@ -19,10 +19,11 @@ export async function POST(request: NextRequest) {
     subtitle: body.subtitle || null,
     icon,
     all_screens: body.all_screens ?? (
-      !(body.target_area_ids?.length) && !(body.target_screen_ids?.length)
+      !(body.target_area_ids?.length) && !(body.target_screen_ids?.length) && !(body.target_buildings?.length)
     ),
     target_area_ids: body.target_area_ids ?? [],
     target_screen_ids: body.target_screen_ids ?? [],
+    target_buildings: body.target_buildings ?? [],
     start_date: body.start_date,
     end_date: body.end_date,
     priority: body.priority ?? 0,
@@ -47,6 +48,7 @@ export async function PATCH(request: NextRequest) {
   if (typeof body.all_screens === 'boolean') patch.all_screens = body.all_screens
   if (Array.isArray(body.target_area_ids)) patch.target_area_ids = body.target_area_ids
   if (Array.isArray(body.target_screen_ids)) patch.target_screen_ids = body.target_screen_ids
+  if (Array.isArray(body.target_buildings)) patch.target_buildings = body.target_buildings
   if (typeof body.start_date === 'string') patch.start_date = body.start_date
   if (typeof body.end_date === 'string') patch.end_date = body.end_date
   if (typeof body.priority === 'number') patch.priority = body.priority

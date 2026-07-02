@@ -308,6 +308,7 @@ export default function SignageSitesPage() {
               <th style={s.th}>Name</th>
               <th style={s.th}>Colors</th>
               <th style={s.th}>Theme</th>
+              <th style={s.th}>Form link</th>
               <th style={s.th}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   AbleSign
@@ -335,6 +336,22 @@ export default function SignageSitesPage() {
                   ) : <span style={{ fontSize: 12, color: s.muted }}>theme</span>}
                 </td>
                 <td style={s.tdMuted}>{site.use_brand_colors ? 'custom' : site.default_theme}</td>
+                <td style={s.td}>
+                  <button
+                    type="button"
+                    title={`Copy the public submission link for ${site.name}`}
+                    onClick={() => {
+                      const url = `${window.location.origin}/signage/${site.slug}/submit`
+                      void navigator.clipboard.writeText(url).then(
+                        () => toast('Form link copied', 'success'),
+                        () => toast('Copy failed', 'error'),
+                      )
+                    }}
+                    style={{ ...s.btnSmall, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                  >
+                    <span aria-hidden>🔗</span> Copy
+                  </button>
+                </td>
                 <td style={s.td}>
                   {(() => {
                     const st = asStatus[site.id]

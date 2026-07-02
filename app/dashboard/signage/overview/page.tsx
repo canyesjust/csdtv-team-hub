@@ -220,7 +220,7 @@ export default function SignageOverviewPage() {
 
             <div style={{ ...s.card }}>
               <div style={{ fontSize: 15, fontWeight: 600, color: s.text, marginBottom: 12 }}>Quick actions</div>
-              <Link href={`${BASE}/content`} prefetch style={{ ...s.btn, textDecoration: 'none', display: 'block', textAlign: 'center', marginBottom: 8 }}>+ Add content</Link>
+              <Link href={`${BASE}/content`} prefetch style={{ ...s.btnPrimary, textDecoration: 'none', display: 'block', textAlign: 'center', marginBottom: 8 }}>+ Add content</Link>
               <Link href={`${BASE}/announcements`} prefetch style={{ ...s.btn, textDecoration: 'none', display: 'block', textAlign: 'center', marginBottom: 8 }}>New announcement</Link>
               <Link href={`${BASE}/visitors`} prefetch style={{ ...s.btn, textDecoration: 'none', display: 'block', textAlign: 'center' }}>Add visitor</Link>
               {review.length === 0 && (
