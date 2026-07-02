@@ -490,7 +490,7 @@ export default function SignageContentPage() {
       ) : !displayRows.length ? (
         <div style={{ color: s.muted, padding: 24, textAlign: 'center' }}>No {tab} items.</div>
       ) : (
-        <div className="sig-content-split">
+        <div className={`sig-content-split${expandedId ? ' is-open' : ''}`}>
           <div className="sig-content-tiles">
             {displayRows.map(row => {
               const e = getEdit(row)
@@ -538,7 +538,7 @@ export default function SignageContentPage() {
             })}
           </div>
 
-          <div className="sig-content-detail">
+          {expandedId && <div className="sig-content-detail">
             {(() => {
               const row = displayRows.find(r => r.id === expandedId)
               if (!row) {
@@ -685,7 +685,7 @@ export default function SignageContentPage() {
                 </div>
               )
             })()}
-          </div>
+          </div>}
         </div>
       )}
 
@@ -710,9 +710,9 @@ export default function SignageContentPage() {
 
       <style>{`
         .sig-content-split { display: grid; grid-template-columns: 1fr; gap: 16px; }
-        .sig-content-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; align-content: start; }
+        .sig-content-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 280px)); gap: 14px; align-content: start; justify-content: start; }
         @media (min-width: 860px) {
-          .sig-content-split { grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+          .sig-content-split.is-open { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
           .sig-content-detail { position: sticky; top: 80px; }
         }
       `}</style>

@@ -156,13 +156,84 @@ export default function SignageLivePage() {
 
   return (
     <SignagePageShell title="Live takeover" subtitle="Take over the screens with a live stream">
-      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, maxWidth: 560 }}>
-        {loading ? (
-          <div style={{ color: muted, padding: 8 }}>Loading live state…</div>
-        ) : (
-          <>
-            {previewEmbed && (
-              <div style={{ marginBottom: 16 }}>
+      <div className="sig-live-grid">
+        {/* Left: controls */}
+        <div>
+          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20 }}>
+            {loading ? (
+              <div style={{ color: muted, padding: 8 }}>Loading live state…</div>
+            ) : (
+              <>
+                <h3 style={{ fontSize: 16, fontWeight: 600, color: text, margin: '0 0 4px' }}>Stream takeover</h3>
+                <p style={{ fontSize: 13, color: muted, margin: '0 0 14px', lineHeight: 1.55 }}>
+                  Paste an encoder HLS URL (<code>.m3u8</code>) or a YouTube live/watch link. Targeted screens with
+                  &ldquo;Accepts live takeover&rdquo; enabled will switch within about 5 seconds.
+                </p>
+                <label style={{ display: 'flex', gap: 8, marginBottom: 12, fontSize: 15, color: text }}>
+                  <input type="checkbox" checked={form.is_live} onChange={e => setForm(f => ({ ...f, is_live: e.target.checked }))} />
+                  Live on air
+                </label>
+                <input
+                  placeholder="HLS (.m3u8) or YouTube live URL"
+                  value={form.hls_url}
+                  onChange={e => setForm(f => ({ ...f, hls_url: e.target.value }))}
+                  style={{ ...inputStyle, marginBottom: 10 }}
+                />
+                <input placeholder="On-screen title (e.g. Demo Day livestream)" value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} style={{ ...inputStyle, marginBottom: 12 }} />
+                <SignageTargetingPicker areas={areas} screens={screens} value={targeting} onChange={v => { setTargeting(v); setForm(f => ({ ...f, all_screens: v.all_screens })) }} />
+                <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void save()}
+                    style={{ padding: '10px 18px', background: form.is_live ? '#ef4444' : '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {form.is_live ? 'Apply live takeover' : 'Save stream URL'}
+                  </button>
+                  {form.is_live && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void endLive()}
+                      style={{ padding: '10px 18px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      End live
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, marginTop: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: text, margin: '0 0 4px' }}>Board meeting takeover</h3>
+            <p style={{ fontSize: 13, color: muted, margin: '0 0 14px', lineHeight: 1.55 }}>
+              Takes over signage screens that have board takeover enabled. Start the preroll graphic, flip to the live
+              YouTube stream (pulled from the meeting&apos;s production), then end to return screens to normal signage.
+            </p>
+            {bt?.active && (
+              <p style={{ fontSize: 13, color: '#16a34a', margin: '0 0 12px' }}>
+                On air now: {bt.mode === 'live' ? 'live stream' : 'preroll'}{bt.board_channel_number ? ` · channel ${bt.board_channel_number}` : ''}
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <input placeholder="Board channel #" value={btChannel} onChange={e => setBtChannel(e.target.value)} style={{ ...inputStyle, width: 140 }} />
+              <input placeholder="On-screen label (optional)" value={btLabel} onChange={e => setBtLabel(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button type="button" disabled={btSaving} onClick={() => void btPost('preroll')} style={{ padding: '10px 18px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Start preroll</button>
+              <button type="button" disabled={btSaving} onClick={() => void btPost('live')} style={{ padding: '10px 18px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Go live</button>
+              <button type="button" disabled={btSaving} onClick={() => void btPost('off')} style={{ padding: '10px 18px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>End takeover</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: preview + on-air status */}
+        <aside className="sig-live-preview">
+          <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 10 }}>Preview</div>
+            {previewEmbed ? (
+              <>
                 <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 12, overflow: 'hidden', background: '#000', border: `1px solid ${border}` }}>
                   <iframe
                     src={previewEmbed}
@@ -172,70 +243,38 @@ export default function SignageLivePage() {
                     style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
                   />
                 </div>
-                <p style={{ fontSize: 12, color: muted, margin: '6px 0 0' }}>Preview · autoplays muted with captions on, matching the screens.</p>
+                <p style={{ fontSize: 12, color: muted, margin: '8px 0 0' }}>Autoplays muted with captions on, matching the screens.</p>
+              </>
+            ) : (
+              <div style={{ width: '100%', paddingTop: '56.25%', position: 'relative', borderRadius: 12, border: `1px dashed ${border}`, background: inputBg }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 20 }}>
+                  <span style={{ fontSize: 13, color: muted, lineHeight: 1.5 }}>Paste a stream URL on the left to preview it here — exactly as it will look on the screens.</span>
+                </div>
               </div>
             )}
-            <p style={{ fontSize: 13, color: muted, margin: '0 0 14px', lineHeight: 1.55 }}>
-              Paste an encoder HLS URL (<code>.m3u8</code>) or a YouTube live/watch link. Targeted screens with
-              &ldquo;Accepts live takeover&rdquo; enabled will switch within about 5 seconds.
-            </p>
-            <label style={{ display: 'flex', gap: 8, marginBottom: 12, fontSize: 15, color: text }}>
-              <input type="checkbox" checked={form.is_live} onChange={e => setForm(f => ({ ...f, is_live: e.target.checked }))} />
-              Live on air
-            </label>
-            <input
-              placeholder="HLS (.m3u8) or YouTube live URL"
-              value={form.hls_url}
-              onChange={e => setForm(f => ({ ...f, hls_url: e.target.value }))}
-              style={{ ...inputStyle, marginBottom: 10 }}
-            />
-            <input placeholder="On-screen title (e.g. Demo Day livestream)" value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} style={{ ...inputStyle, marginBottom: 12 }} />
-            <SignageTargetingPicker areas={areas} screens={screens} value={targeting} onChange={v => { setTargeting(v); setForm(f => ({ ...f, all_screens: v.all_screens })) }} />
-            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void save()}
-                style={{ padding: '10px 18px', background: form.is_live ? '#ef4444' : '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                {form.is_live ? 'Apply live takeover' : 'Save stream URL'}
-              </button>
-              {form.is_live && (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void endLive()}
-                  style={{ padding: '10px 18px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  End live
-                </button>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${border}` }}>
+              {(() => {
+                const onAir = Boolean(bt?.active) || form.is_live
+                const label = bt?.active ? `On air · board ${bt.mode === 'live' ? 'live stream' : 'preroll'}` : form.is_live ? 'On air · stream takeover' : 'Screens showing normal signage'
+                return (
+                  <>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', background: onAir ? '#16a34a' : '#9aa0ab', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, color: onAir ? text : muted, fontWeight: onAir ? 600 : 400 }}>{label}</span>
+                  </>
+                )
+              })()}
             </div>
-          </>
-        )}
+          </div>
+        </aside>
       </div>
 
-      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 14, padding: 20, marginTop: 20, maxWidth: 560 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, color: text, margin: '0 0 4px' }}>Board meeting takeover</h3>
-        <p style={{ fontSize: 13, color: muted, margin: '0 0 14px', lineHeight: 1.55 }}>
-          Takes over signage screens that have board takeover enabled. Start the preroll graphic, flip to the live
-          YouTube stream (pulled from the meeting&apos;s production), then end to return screens to normal signage.
-        </p>
-        {bt?.active && (
-          <p style={{ fontSize: 13, color: '#16a34a', margin: '0 0 12px' }}>
-            On air now: {bt.mode === 'live' ? 'live stream' : 'preroll'}{bt.board_channel_number ? ` · channel ${bt.board_channel_number}` : ''}
-          </p>
-        )}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <input placeholder="Board channel #" value={btChannel} onChange={e => setBtChannel(e.target.value)} style={{ ...inputStyle, width: 140 }} />
-          <input placeholder="On-screen label (optional)" value={btLabel} onChange={e => setBtLabel(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-        </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button type="button" disabled={btSaving} onClick={() => void btPost('preroll')} style={{ padding: '10px 18px', background: '#1e6cb5', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Start preroll</button>
-          <button type="button" disabled={btSaving} onClick={() => void btPost('live')} style={{ padding: '10px 18px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Go live</button>
-          <button type="button" disabled={btSaving} onClick={() => void btPost('off')} style={{ padding: '10px 18px', background: 'transparent', color: text, border: `1px solid ${border}`, borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit' }}>End takeover</button>
-        </div>
-      </div>
+      <style>{`
+        .sig-live-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
+        @media (min-width: 1000px) {
+          .sig-live-grid { grid-template-columns: minmax(0, 600px) minmax(0, 1fr); gap: 24px; }
+          .sig-live-preview { position: sticky; top: 72px; }
+        }
+      `}</style>
     </SignagePageShell>
   )
 }
