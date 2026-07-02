@@ -11,7 +11,7 @@ import {
 } from '../components/AbleSignControls'
 import { SignagePageShell, useSignageAdminStyles } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
-import SignageFloorMap from '../components/SignageFloorMap'
+import SignageFloorPlanBuilder from '../components/SignageFloorPlanBuilder'
 import Link from 'next/link'
 
 type Screen = AbleSignScreenFields & {
@@ -39,7 +39,6 @@ export default function SignageFloorPlanPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [screens, setScreens] = useState<Screen[]>([])
-  const [reloadKey, setReloadKey] = useState(0)
 
   const loadScreens = useCallback(async () => {
     // Scope to the active location so the plan + list change with the site switcher.
@@ -67,7 +66,6 @@ export default function SignageFloorPlanPage() {
       if (!res.ok) throw new Error(data.error || 'Health refresh failed')
       toast(`Updated ${data.updated ?? 0} screen(s)`, 'success')
       await loadScreens()
-      setReloadKey(k => k + 1)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Health refresh failed', 'error')
     } finally {
@@ -87,7 +85,7 @@ export default function SignageFloorPlanPage() {
         </span>
       </div>
 
-      <SignageFloorMap mode="manage" reloadSignal={reloadKey} />
+      <SignageFloorPlanBuilder />
 
       <div style={{ ...s.card, marginTop: 20 }}>
         <h3 style={s.h3}>All screens</h3>
