@@ -5,6 +5,7 @@ import { isProductionInDateWindow, normalizeProductionDatetimeFields } from '@/l
 import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 import { fetchTaskAssignments } from '@/lib/task-assignments'
 import { timingSafeEqualStr } from '@/lib/server/security'
+import { SIGNAGE_TASKS_CACHE_HEADERS } from '@/lib/signage/public-api-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -252,5 +253,5 @@ export async function GET(request: Request) {
     checklistOpenByUser,
     checklistUnassignedOpen,
     taskIntakeUrl,
-  })
+  }, { headers: SIGNAGE_TASKS_CACHE_HEADERS })
 }
