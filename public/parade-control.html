@@ -90,6 +90,15 @@ Thank you to our sponsors</textarea>
       <button class="warn" id="clearFull">Clear full screen</button></div>
   </div>
 
+  <h2>Sponsor panel (left popout)</h2>
+  <div class="sec">
+    <label>Title</label><input id="pnTitle" value="Mountain America Credit Union">
+    <label>Text (line breaks ok)</label><textarea id="pnText">Proud parade partner</textarea>
+    <label>Image URL (optional)</label><input id="pnLogo" placeholder="https://.../logo.png">
+    <div class="row" style="margin-top:8px;"><button class="pri" id="airPanel">Air panel</button>
+      <button class="warn" id="clearPanel">Clear panel</button></div>
+  </div>
+
   <h2>Preview (what's on air)</h2>
   <div class="sec"><iframe id="prev" src="parade-output.html?demo=1"></iframe>
     <div class="hintbar">This mirror is just for you; the real graphic is the Browser Source in OBS.</div>
@@ -110,6 +119,7 @@ Thank you to our sponsors</textarea>
   ];
   var idx=-1;
   var state={lower:{on:false,name:'',org:''},coming:{on:false,name:''},full:{on:false},
+    panel:{on:false,title:'',text:'',logo:''},
     ticker:{on:false,items:[]},bug:{on:false,text:'CSDtv LIVE'},clock:{on:false}};
 
   var bc; try{ bc=new BroadcastChannel('parade'); }catch(e){}
@@ -138,6 +148,7 @@ Thank you to our sponsors</textarea>
     renderLineup();
     var s=[]; if(state.lower.on) s.push('Lower: '+state.lower.name);
     if(state.full.on) s.push('Full: '+(state.full.title||state.full.kind));
+    if(state.panel.on) s.push('Panel: '+(state.panel.title||''));
     if(state.bug.on) s.push('Bug'); if(state.clock.on) s.push('Clock'); if(state.ticker.on) s.push('Ticker');
     E('status').innerHTML = s.length? '<span class="onair">ON AIR:</span> '+esc(s.join('  ·  ')) : 'On air: nothing';
     E('bugBtn').textContent='Bug: '+(state.bug.on?'on':'off'); E('bugBtn').className=state.bug.on?'live':'';
@@ -159,6 +170,8 @@ Thank you to our sponsors</textarea>
   E('airBumper').onclick=function(){ state.full={on:true,kind:'text',title:E('bmp').value,body:''}; push(); };
   E('airSlate').onclick=function(){ state.full={on:true,kind:'slate',title:E('spn').value}; push(); };
   E('clearFull').onclick=function(){ state.full={on:false}; push(); };
+  E('airPanel').onclick=function(){ state.panel={on:true,title:E('pnTitle').value,text:E('pnText').value,logo:E('pnLogo').value.trim()}; push(); };
+  E('clearPanel').onclick=function(){ state.panel={on:false}; push(); };
 
   // load lineup from a published Google Sheet CSV
   E('loadSheet').onclick=function(){ var url=E('sheetUrl').value.trim(); if(!url) return;

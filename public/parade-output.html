@@ -33,11 +33,16 @@
   .lyr.on{opacity:1;}
 
   /* Lower third */
-  #lower{left:80px;bottom:80px;width:1250px;border-radius:16px;padding:22px 40px 26px;}
+  #lower{left:80px;bottom:80px;width:max-content;max-width:1740px;border-radius:16px;padding:22px 44px 26px;}
   #lowerNm{font-size:56px;} #lowerOg{font-size:26px;}
   /* Coming up */
   #coming{right:80px;bottom:80px;max-width:620px;border-radius:14px;padding:14px 26px 16px;}
   #comingNm{font-size:30px;}
+  #panel{left:0;top:180px;width:560px;border-radius:0 18px 18px 0;padding:26px 40px 30px;}
+  #panelTitle{font-size:46px;white-space:normal;}
+  #panelText{color:#e8ecf5;font-size:24px;line-height:1.4;white-space:pre-line;text-shadow:var(--tsh);}
+  #panelImg{width:100%;height:280px;border-radius:10px;background:#0d1626 center/contain no-repeat;margin:16px 0;display:none;}
+  .triV{position:absolute;top:0;bottom:0;right:0;z-index:4;width:5px;background:linear-gradient(180deg,var(--red) 0 33.3%,#eef1f6 33.3% 66.6%,var(--blue) 66.6% 100%);}
   /* Full screen */
   #full{left:8%;right:8%;top:22%;bottom:22%;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
   #full .content{padding:0 60px;width:100%;}
@@ -68,6 +73,9 @@
       <div class="og"><i></i><span id="lowerOg">Organization</span></div></div></div>
   <div id="coming" class="glass lyr slideR"><span class="glow"></span><span class="tri"></span>
     <div class="content"><div class="kick" style="font-size:17px;">Coming up</div><div class="nm" id="comingNm" style="margin-top:3px;"></div></div></div>
+  <div id="panel" class="glass lyr slideL"><span class="glow"></span><span class="triV"></span>
+    <div class="content"><div class="kick" style="font-size:20px;">Proud sponsor</div>
+      <div class="nm" id="panelTitle"></div><div id="panelImg"></div><div id="panelText"></div></div></div>
   <div id="full" class="glass lyr fade"><span class="glow"></span><span class="tri"></span>
     <div class="content"><div class="kick" id="fullKick" style="font-size:34px;display:none;"></div>
       <div class="nm" id="fullTitle"></div><div class="kick" id="fullSub"></div>
@@ -84,33 +92,37 @@
 
   var E=function(id){return document.getElementById(id);};
   function fit(node,max,start,min){node.style.fontSize=start+'px';var s=start;while(node.scrollWidth>max&&s>min){s--;node.style.fontSize=s+'px';}}
-  function toggle(node,on){ if(on){ node.classList.remove('on'); void node.offsetWidth; node.classList.add('on'); } else node.classList.remove('on'); }
+  function play(node){ node.classList.remove('on'); void node.offsetWidth; node.classList.add('on'); }
+  // only animates on off->on, or on content change when animate=true; leaves unchanged layers alone
+  function manage(node,on,sig,animate,update){
+    var wasOn=node.classList.contains('on'), was=node.dataset.sig||'';
+    if(on){
+      if(!wasOn){ if(update)update(); node.dataset.sig=sig; play(node); }
+      else if(sig!==was){ if(update)update(); node.dataset.sig=sig; if(animate) play(node); }
+    } else { if(wasOn) node.classList.remove('on'); node.dataset.sig=''; }
+  }
 
   var last='';
   function apply(st){
     if(!st) return;
-    // Lower third
-    if(st.lower){ if(st.lower.on){ E('lowerNm').textContent=st.lower.name||''; E('lowerOg').textContent=st.lower.org||''; fit(E('lowerNm'),1160,56,30);} toggle(E('lower'), !!st.lower.on); }
-    // Coming
-    if(st.coming){ if(st.coming.on){ E('comingNm').textContent=st.coming.name||''; } toggle(E('coming'), !!st.coming.on); }
-    // Bug
-    if(st.bug){ if(st.bug.on){ E('bugTxt').textContent=st.bug.text||'CSDtv LIVE'; } toggle(E('bug'), !!st.bug.on); }
-    // Clock
-    if(st.clock){ toggle(E('clock'), !!st.clock.on); }
-    // Ticker
-    if(st.ticker){ if(st.ticker.on){ renderTicker(st.ticker.items||[]); } toggle(E('ticker'), !!st.ticker.on); }
-    // Full screen
-    if(st.full){
-      if(st.full.on){
-        var f=st.full, kind=f.kind||'title';
-        E('fullKick').style.display='none'; E('fullSub').textContent=''; E('fullBody').textContent=''; E('fullBody').style.display='none';
-        if(kind==='slate'){ E('fullKick').style.display='block'; E('fullKick').textContent='Brought to you by'; E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='88px'; }
-        else if(kind==='social'){ E('fullKick').style.display='block'; E('fullKick').textContent='Follow along'; E('fullTitle').textContent=f.handle||f.title||''; E('fullTitle').style.fontSize='96px'; if(f.platform){E('fullSub').textContent=f.platform;} }
-        else if(kind==='text'){ E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='64px'; if(f.body){E('fullBody').style.display='block'; E('fullBody').textContent=f.body;} }
-        else { E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='110px'; if(f.sub){E('fullSub').textContent=f.sub;} }
-      }
-      toggle(E('full'), !!st.full.on);
-    }
+    var lo=st.lower||{}, co=st.coming||{}, bu=st.bug||{}, ck=st.clock||{}, ti=st.ticker||{}, fu=st.full||{}, pa=st.panel||{};
+    manage(E('lower'), !!lo.on, 'L|'+(lo.name||'')+'|'+(lo.org||''), true, function(){
+      E('lowerNm').textContent=lo.name||''; E('lowerOg').textContent=lo.org||''; fit(E('lowerNm'),1650,56,30); });
+    manage(E('coming'), !!co.on, 'C|'+(co.name||''), true, function(){ E('comingNm').textContent=co.name||''; });
+    manage(E('bug'), !!bu.on, 'B|'+(bu.text||''), false, function(){ E('bugTxt').textContent=bu.text||'CSDtv LIVE'; });
+    manage(E('clock'), !!ck.on, 'K', false, null);
+    manage(E('ticker'), !!ti.on, 'T|'+((ti.items||[]).join('~')), false, function(){ renderTicker(ti.items||[]); });
+    manage(E('panel'), !!pa.on, 'P|'+(pa.title||'')+'|'+(pa.text||'')+'|'+(pa.logo||''), true, function(){
+      E('panelTitle').textContent=pa.title||''; E('panelText').textContent=pa.text||'';
+      var pi=E('panelImg'); if(pa.logo){ pi.style.display='block'; pi.style.backgroundImage='url("'+String(pa.logo).replace(/"/g,'')+'")'; } else { pi.style.display='none'; pi.style.backgroundImage=''; } });
+    manage(E('full'), !!fu.on, 'F|'+JSON.stringify(fu), true, function(){
+      var f=fu, kind=f.kind||'title';
+      E('fullKick').style.display='none'; E('fullSub').textContent=''; E('fullBody').textContent=''; E('fullBody').style.display='none';
+      if(kind==='slate'){ E('fullKick').style.display='block'; E('fullKick').textContent='Brought to you by'; E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='88px'; }
+      else if(kind==='social'){ E('fullKick').style.display='block'; E('fullKick').textContent='Follow along'; E('fullTitle').textContent=f.handle||f.title||''; E('fullTitle').style.fontSize='96px'; if(f.platform){E('fullSub').textContent=f.platform;} }
+      else if(kind==='text'){ E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='64px'; if(f.body){E('fullBody').style.display='block'; E('fullBody').textContent=f.body;} }
+      else { E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='110px'; if(f.sub){E('fullSub').textContent=f.sub;} }
+    });
   }
   function renderTicker(items){
     if(!items.length) items=['CSDtv Parade'];
