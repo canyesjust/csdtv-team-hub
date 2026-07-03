@@ -8,6 +8,16 @@ import { OBS_ASSETS_BUCKET, OBS_CATEGORIES, canUploadObs, kindForUpload, validat
 // exists at the claimed path before inserting.
 export const dynamic = 'force-dynamic'
 
+// Turn a raw upload filename into a readable default display name:
+// "CIC_RecruitmentVideo_v8_YYYYMMDD[v8].mp4" -> "CIC RecruitmentVideo YYYYMMDD".
+function cleanAssetName(filename: string): string {
+  let n = filename.replace(/\.[^.]+$/, '')   // drop extension
+  n = n.replace(/[[(]v\d+[\])]/gi, '')       // drop [v8] / (v8)
+  n = n.replace(/[_.]+/g, ' ')               // underscores/dots -> spaces
+  n = n.replace(/\s+/g, ' ').trim()
+  return n || filename
+}
+
 export async function POST(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -44,7 +54,10 @@ export async function POST(request: Request) {
   }
 
   const filename = String(body.filename || base || 'Untitled')
-  const name = String(body.name || filename).trim() || filename
+  const provided = String(body.name || '').trim()
+  // Use a typed-in name only if it differs from the raw filename; otherwise
+  // auto-clean the filename so operators see something readable.
+  const name = provided && provided !== filename ? provided : cleanAssetName(filename)
   const description = String(body.description || '').trim() || null
 
   const { data: row, error } = await service

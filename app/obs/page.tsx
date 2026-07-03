@@ -10,6 +10,9 @@ const colors = {
   muted: '#6b7280',
   info: '#185fa5',
   ok: '#1a7f37',
+  navy: '#0a2c52',
+  blue: '#1c6aa8',
+  gold: '#fbae42',
 }
 
 type ObsAsset = {
@@ -33,7 +36,7 @@ function formatBytes(bytes: number | null): string {
   return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
 }
 
-function AssetList({ category, title, emptyLabel }: { category: 'commercial' | 'scene'; title: string; emptyLabel: string }) {
+function AssetList({ category, title, emptyLabel, note }: { category: 'commercial' | 'scene'; title: string; emptyLabel: string; note?: string }) {
   const [assets, setAssets] = useState<ObsAsset[]>([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
@@ -80,6 +83,7 @@ function AssetList({ category, title, emptyLabel }: { category: 'commercial' | '
   return (
     <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18 }}>
       <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{title}</h2>
+      {note ? <p style={{ margin: '6px 0 0', fontSize: 12.5, color: colors.muted, lineHeight: 1.5 }}>{note}</p> : null}
       {loading ? (
         <p style={{ margin: '14px 0 0', fontSize: 14, color: colors.muted }}>Loading…</p>
       ) : error ? (
@@ -120,10 +124,18 @@ export default function ObsAssetsPage() {
   return (
     <div style={{ background: colors.bg, minHeight: '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif', padding: '32px 20px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, lineHeight: 1.15 }}>CSDtv OBS Assets</h1>
-        <p style={{ margin: '10px 0 0', fontSize: 15, lineHeight: 1.55, color: colors.muted }}>
-          Download the OBS controller, commercials, and scene files for the CSDtv broadcast setup.
-        </p>
+        <header style={{ background: `linear-gradient(100deg, ${colors.navy}, ${colors.blue})`, borderRadius: 16, padding: '26px 26px 22px', color: '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ display: 'inline-grid', placeItems: 'center', width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,0.16)', color: colors.gold, fontWeight: 800, fontSize: 17, letterSpacing: 0.5 }}>▶</span>
+            <div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', opacity: 0.85 }}>CSDtv Broadcast</p>
+              <h1 style={{ margin: '2px 0 0', fontSize: 26, fontWeight: 800, lineHeight: 1.1 }}>OBS Ad Controller Setup</h1>
+            </div>
+          </div>
+          <p style={{ margin: '14px 0 0', fontSize: 14.5, lineHeight: 1.55, opacity: 0.95 }}>
+            Everything to run commercials in OBS: download the controller and the commercials, follow the steps, and you&apos;re on air. Takes about 15 minutes.
+          </p>
+        </header>
 
         {/* Controller download */}
         <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 22 }}>
@@ -142,7 +154,7 @@ export default function ObsAssetsPage() {
 
         {/* Asset lists */}
         <AssetList category="commercial" title="2. Commercials" emptyLabel="No commercials have been uploaded yet." />
-        <AssetList category="scene" title="3. Scenes" emptyLabel="No scenes have been uploaded yet." />
+        <AssetList category="scene" title="3. Scenes" emptyLabel="No scenes have been uploaded yet." note="Scene collections are starting templates. Their media and source paths point at the machine they came from, so after importing one in OBS you'll usually need to re-point sources to this computer's files." />
 
         {/* Setup steps */}
         <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18 }}>
@@ -150,11 +162,11 @@ export default function ObsAssetsPage() {
           <p style={stepStyle}><strong>1. Install Node.js.</strong> Download the macOS Installer (.pkg) from <span style={codeStyle}>nodejs.org</span> and click through to Finish. The controller needs it. Do <strong>not</strong> use nvm; a double-clicked launcher can&apos;t find nvm-installed Node. Use the plain .pkg installer.</p>
           <p style={stepStyle}><strong>2. Unzip the controller</strong> somewhere permanent, like Documents. Don&apos;t leave it in Downloads.</p>
           <p style={stepStyle}><strong>3. Add the OBS sources.</strong> In your OBS scene, create three sources named exactly <span style={codeStyle}>Commercials</span> (media source, videos), <span style={codeStyle}>CommercialsImage</span> (image source, image ads), and <span style={codeStyle}>StartingSoon</span> (media source, the pre-show slate). Leave their files empty. Put <span style={codeStyle}>StartingSoon</span> below the two Commercials sources so ads cover it.</p>
-          <p style={stepStyle}><strong>4. Turn on the OBS WebSocket.</strong> In OBS go to <span style={codeStyle}>Tools → WebSocket Server Settings</span>, check <span style={codeStyle}>Enable WebSocket Server</span>, keep the port at <span style={codeStyle}>4455</span>, and set the password. <strong>Ask Justin for the password.</strong></p>
-          <p style={stepStyle}><strong>5. Set the password in the config.</strong> Open <span style={codeStyle}>config.json</span> in the controller folder and put that same password between the quotes on the <span style={codeStyle}>&quot;password&quot;</span> line. It must match OBS exactly. While there, make sure <span style={codeStyle}>&quot;scene&quot;</span> matches your actual OBS scene name (it ships as <span style={codeStyle}>Live</span>), or ads load but stay hidden.</p>
-          <p style={stepStyle}><strong>6. Run the launcher.</strong> Double-click <span style={codeStyle}>Start Ad Controller.command</span>. The first time, macOS may block it, so right-click the file → Open → Open. It installs what it needs, then starts. Leave the window open during the show.</p>
+          <p style={stepStyle}><strong>4. Turn on the OBS WebSocket.</strong> In OBS go to <span style={codeStyle}>Tools → WebSocket Server Settings</span>, check <span style={codeStyle}>Enable WebSocket Server</span>, keep the port at <span style={codeStyle}>4455</span>, and set the password to <strong>the same password you used to open this page</strong>. (Ask Justin if you&apos;re not sure.)</p>
+          <p style={stepStyle}><strong>5. Put that password in the config.</strong> Open <span style={codeStyle}>config.json</span> in the controller folder and type the same password between the quotes on the <span style={codeStyle}>&quot;password&quot;</span> line. It&apos;s the one password used everywhere here. While you&apos;re in there, make sure <span style={codeStyle}>&quot;scene&quot;</span> matches your actual OBS scene name (it ships as <span style={codeStyle}>Live</span>), or ads load but stay hidden.</p>
+          <p style={stepStyle}><strong>6. Run the controller.</strong> Double-click <strong>CSDtv Ad Controller</strong> (the app with the CSDtv icon). The first time, macOS may block it, so right-click it → Open → Open. It starts in the background and opens the Ad Control panel in your browser. No Terminal. To stop it later, quit the app.</p>
           <p style={stepStyle}><strong>7. Add the Ad Control dock.</strong> In OBS choose <span style={codeStyle}>Docks → Custom Browser Docks</span> and add one pointing to <span style={codeStyle}>http://127.0.0.1:4466</span>.</p>
-          <p style={{ ...stepStyle, marginBottom: 0 }}><strong>8. Load your files.</strong> Download the commercials and scenes above. Put video and image ads in the controller&apos;s <span style={codeStyle}>ads</span> folder and your starting-soon video in the <span style={codeStyle}>preshow</span> folder, then click <strong>Reload folder</strong> in the panel.</p>
+          <p style={{ ...stepStyle, marginBottom: 0 }}><strong>8. Load the commercials.</strong> In the Ad Control dock, click <strong>Download missing</strong> and every commercial drops straight into the <span style={codeStyle}>ads</span> folder. No downloading and moving files by hand. Run it again anytime to pick up new ones. For the pre-show, put your starting-soon video in the <span style={codeStyle}>preshow</span> folder and click <strong>Reload folder</strong>.</p>
         </section>
 
         {/* Troubleshooting */}
