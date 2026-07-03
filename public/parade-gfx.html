@@ -104,7 +104,7 @@
 
   // ---------- graphic builders ----------
   function lower(name,org,size){
-    var big=size==='small'?40:56, sub=size==='small'?20:26, w=size==='small'?720:1000, h=size==='small'?120:170;
+    var big=size==='small'?40:56, sub=size==='small'?20:26, w=size==='small'?820:1250, h=size==='small'?120:170;
     mount('<div class="glass inL" style="position:absolute;left:80px;bottom:80px;width:'+w+'px;border-radius:16px;padding:22px 40px 26px;">'
       +'<span class="glow"></span>'+sparkles(3)+'<span class="tri"></span><span class="sheen"></span>'
       +'<div class="content"><div class="nm inL show-nm" id="nm" style="font-size:'+big+'px;"></div>'
@@ -169,8 +169,7 @@
     var seq=items.concat(items); var inner=seq.map(function(t){return '<span style="padding:0 60px;">'+esc(t)+'</span><span style="color:var(--gold);">&#9670;</span>';}).join('');
     mount('<div class="glass show" style="position:absolute;left:0;right:0;bottom:0;height:64px;border-radius:0;display:flex;align-items:center;overflow:hidden;">'
       +'<span class="tri"></span>'
-      +'<div style="position:absolute;left:0;top:0;bottom:0;width:230px;z-index:6;background:var(--glass);display:flex;align-items:center;justify-content:center;border-right:2px solid rgba(255,255,255,.25);"><span class="kick" style="font-size:24px;">CSDtv Parade</span></div>'
-      +'<div class="content" style="white-space:nowrap;padding-left:250px;color:#fff;font-size:26px;text-shadow:var(--tsh);animation:mar 40s linear infinite;">'+inner+'</div></div>');
+      +'<div class="content" style="white-space:nowrap;padding-left:40px;color:#fff;font-size:26px;text-shadow:var(--tsh);animation:mar 40s linear infinite;">'+inner+'</div></div>');
     var st=document.createElement('style'); st.textContent='@keyframes mar{from{transform:translateX(0)}to{transform:translateX(-50%)}}'; document.head.appendChild(st);
   }
   function bug(text){
@@ -219,6 +218,7 @@
     var _bw={topic:560,coming:460,bug:230,clock:170};
     if(_bh[type]!=null){ el.style.boxSizing='border-box'; el.style.height=_bh[type]+'px'; }
     if(_bw[type]!=null){ el.style.width=_bw[type]+'px'; }
+    show();
   }
 
   // keyboard for lineup stepper
