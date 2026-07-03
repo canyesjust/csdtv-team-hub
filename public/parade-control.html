@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSDtv Parade Control</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0f1e;--card:#0d1525;--card2:#111827;--text:#f0f4ff;--muted:#94a3b8;--border:rgba(255,255,255,.10);
+    --accent:#1e6cb5;--accenthi:#5ba3e0;--red:#c2283a;--gold:#e7c977;--on:#1d9e75;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:14px;}
+  .wrap{padding:12px;max-width:900px;margin:0 auto;}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--accenthi);margin:16px 0 8px;}
+  .sec{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  button{font-family:inherit;font-size:14px;color:var(--text);background:var(--card2);border:1px solid var(--border);
+    border-radius:8px;padding:9px 14px;min-height:40px;cursor:pointer;}
+  button:hover{border-color:var(--accenthi);}
+  button:active{transform:scale(.98);}
+  button.pri{background:var(--accent);border-color:var(--accent);}
+  button.live{background:var(--on);border-color:var(--on);}
+  button.warn{background:var(--red);border-color:var(--red);}
+  input,textarea{font-family:inherit;font-size:14px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px;min-height:40px;width:100%;}
+  textarea{min-height:80px;resize:vertical;}
+  .lineup{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto;}
+  .ent{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;}
+  .ent:hover{border-color:var(--accenthi);}
+  .ent.cur{border-color:var(--on);background:#0f2a20;}
+  .ent .num{min-width:26px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .ent .nm{font-weight:500;} .ent .og{color:var(--gold);font-size:12px;text-transform:uppercase;letter-spacing:.06em;}
+  .status{font-size:12px;color:var(--muted);margin-left:auto;}
+  .onair{color:#ff6b6a;font-weight:600;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  label{font-size:12px;color:var(--muted);display:block;margin:6px 0 3px;}
+  iframe{width:100%;aspect-ratio:16/9;border:1px solid var(--border);border-radius:8px;background:#0c1322;}
+  .hintbar{font-size:12px;color:var(--muted);margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="sec">
+    <div class="row">
+      <strong>Parade Control</strong>
+      <span class="status" id="status">On air: nothing</span>
+    </div>
+  </div>
+
+  <h2>Lineup — click an entry to air its lower third</h2>
+  <div class="sec">
+    <div class="row" style="margin-bottom:8px;">
+      <input id="sheetUrl" placeholder="(optional) published Google Sheet CSV URL" style="flex:1;min-width:220px;">
+      <button id="loadSheet">Load from sheet</button>
+    </div>
+    <div class="lineup" id="lineup"></div>
+    <div class="row" style="margin-top:8px;">
+      <button id="prev">‹ Prev</button>
+      <button class="pri" id="next">Next ›</button>
+      <button class="warn" id="clearLower">Clear lower third</button>
+      <button id="comingToggle">Coming-up: off</button>
+    </div>
+  </div>
+
+  <h2>Always-on</h2>
+  <div class="sec"><div class="row">
+    <button id="bugBtn">Bug: off</button>
+    <button id="clockBtn">Clock: off</button>
+    <button id="tickerBtn">Ticker: off</button>
+  </div>
+  <label>Ticker items (one per line)</label>
+  <textarea id="tickerItems">Welcome to the 2026 Sandy City Parade
+Follow us @CSDtv
+Thank you to our sponsors</textarea>
+  </div>
+
+  <h2>Full screen</h2>
+  <div class="sec">
+    <div class="grid2">
+      <div><label>Title</label><input id="ftTitle" value="WELCOME"></div>
+      <div><label>Subtitle</label><input id="ftSub" value="2026 Sandy City Parade"></div>
+    </div>
+    <div class="row" style="margin-top:8px;"><button class="pri" id="airTitle">Air title card</button></div>
+    <label style="margin-top:10px;">Bumper / message</label>
+    <input id="bmp" value="We'll be right back">
+    <div class="row" style="margin-top:8px;"><button class="pri" id="airBumper">Air bumper</button></div>
+    <label style="margin-top:10px;">Sponsor slate (name)</label>
+    <input id="spn" value="Mountain America Credit Union">
+    <div class="row" style="margin-top:8px;"><button class="pri" id="airSlate">Air sponsor slate</button>
+      <button class="warn" id="clearFull">Clear full screen</button></div>
+  </div>
+
+  <h2>Preview (what's on air)</h2>
+  <div class="sec"><iframe id="prev" src="parade-output.html?demo=1"></iframe>
+    <div class="hintbar">This mirror is just for you; the real graphic is the Browser Source in OBS.</div>
+  </div>
+
+</div>
+<script>
+(function(){
+  var LINEUP=[
+    {num:1,name:"Corner Canyon Marching Band",org:"Charger Regiment"},
+    {num:2,name:"American Legion Post 100",org:"Veterans Color Guard"},
+    {num:3,name:"Daughters of the American Revolution",org:"Salt Lake Chapter"},
+    {num:4,name:"Sandy City Fire Department",org:"Engine 31"},
+    {num:5,name:"Alta High Drumline",org:"Hawks Percussion"},
+    {num:6,name:"Utah National Guard",org:"19th Special Forces Group"},
+    {num:7,name:"Draper Days Royalty",org:"2026 Royal Court"},
+    {num:8,name:"Grand Marshal",org:"Mayor Monica Zoltanski"}
+  ];
+  var idx=-1;
+  var state={lower:{on:false,name:'',org:''},coming:{on:false,name:''},full:{on:false},
+    ticker:{on:false,items:[]},bug:{on:false,text:'CSDtv LIVE'},clock:{on:false}};
+
+  var bc; try{ bc=new BroadcastChannel('parade'); }catch(e){}
+  function push(){ state._t=Date.now(); try{localStorage.setItem('parade_state',JSON.stringify(state));}catch(e){}
+    try{ if(bc) bc.postMessage(state); }catch(e){}
+    // nudge the preview iframe too (separate context)
+    var pf=document.getElementById('prev'); try{ pf.contentWindow.postMessage(state,'*'); }catch(e){}
+    render(); }
+
+  var E=function(id){return document.getElementById(id);};
+  function esc(s){return String(s||'').replace(/</g,'&lt;');}
+
+  function renderLineup(){
+    E('lineup').innerHTML=LINEUP.map(function(e,i){
+      return '<div class="ent'+(i===idx?' cur':'')+'" data-i="'+i+'"><span class="num">'+e.num+'</span>'
+        +'<span class="nm">'+esc(e.name)+'</span> <span class="og">'+esc(e.org)+'</span></div>';
+    }).join('');
+    [].forEach.call(E('lineup').children,function(el){ el.onclick=function(){ air(parseInt(el.getAttribute('data-i'),10)); }; });
+  }
+  function air(i){ if(i<0||i>=LINEUP.length) return; idx=i; var e=LINEUP[i];
+    state.lower={on:true,name:e.name,org:e.org};
+    if(state.coming.on){ var n=LINEUP[i+1]; state.coming.name=n?n.name:''; }
+    push(); }
+
+  function render(){
+    renderLineup();
+    var s=[]; if(state.lower.on) s.push('Lower: '+state.lower.name);
+    if(state.full.on) s.push('Full: '+(state.full.title||state.full.kind));
+    if(state.bug.on) s.push('Bug'); if(state.clock.on) s.push('Clock'); if(state.ticker.on) s.push('Ticker');
+    E('status').innerHTML = s.length? '<span class="onair">ON AIR:</span> '+esc(s.join('  ·  ')) : 'On air: nothing';
+    E('bugBtn').textContent='Bug: '+(state.bug.on?'on':'off'); E('bugBtn').className=state.bug.on?'live':'';
+    E('clockBtn').textContent='Clock: '+(state.clock.on?'on':'off'); E('clockBtn').className=state.clock.on?'live':'';
+    E('tickerBtn').textContent='Ticker: '+(state.ticker.on?'on':'off'); E('tickerBtn').className=state.ticker.on?'live':'';
+    E('comingToggle').textContent='Coming-up: '+(state.coming.on?'on':'off'); E('comingToggle').className=state.coming.on?'live':'';
+  }
+
+  E('next').onclick=function(){ air(idx<0?0:idx+1); };
+  E('prev').onclick=function(){ if(idx>0) air(idx-1); };
+  E('clearLower').onclick=function(){ state.lower.on=false; push(); };
+  E('comingToggle').onclick=function(){ state.coming.on=!state.coming.on; var n=LINEUP[idx+1]; state.coming.name=n?n.name:''; push(); };
+  E('bugBtn').onclick=function(){ state.bug.on=!state.bug.on; push(); };
+  E('clockBtn').onclick=function(){ state.clock.on=!state.clock.on; push(); };
+  E('tickerBtn').onclick=function(){ state.ticker.on=!state.ticker.on; state.ticker.items=E('tickerItems').value.split('\n').map(function(x){return x.trim();}).filter(Boolean); push(); };
+  E('tickerItems').onchange=function(){ if(state.ticker.on){ state.ticker.items=E('tickerItems').value.split('\n').map(function(x){return x.trim();}).filter(Boolean); push(); } };
+
+  E('airTitle').onclick=function(){ state.full={on:true,kind:'title',title:E('ftTitle').value,sub:E('ftSub').value}; push(); };
+  E('airBumper').onclick=function(){ state.full={on:true,kind:'text',title:E('bmp').value,body:''}; push(); };
+  E('airSlate').onclick=function(){ state.full={on:true,kind:'slate',title:E('spn').value}; push(); };
+  E('clearFull').onclick=function(){ state.full={on:false}; push(); };
+
+  // load lineup from a published Google Sheet CSV
+  E('loadSheet').onclick=function(){ var url=E('sheetUrl').value.trim(); if(!url) return;
+    fetch(url).then(function(r){return r.text();}).then(function(t){
+      var rows=t.split(/\r?\n/).filter(Boolean).map(function(l){ return l.split(','); });
+      var start=/num|name/i.test(rows[0].join(','))?1:0;
+      LINEUP=rows.slice(start).map(function(c,i){ return {num:(c[0]||i+1),name:(c[1]||'').trim(),org:(c[2]||'').trim()}; });
+      idx=-1; render();
+    }).catch(function(){ alert('Could not load that CSV URL. Make sure the sheet is Published to web as CSV.'); });
+  };
+
+  render(); push();
+})();
+</script>
+</body>
+</html>

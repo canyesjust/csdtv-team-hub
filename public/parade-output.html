@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSDtv Parade Output</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --red:#c2283a; --reddot:#e0434f; --blue:#234fb0; --white:#fff; --gold:#f0cd7a;
+    --glass:rgba(10,16,32,0.94); --tsh:0 2px 6px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.55); }
+  html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden;font-family:'Inter','Helvetica Neue',Arial,sans-serif;}
+  body.demo{background:radial-gradient(120% 120% at 50% 0%,#2c4474,#0c1322);}
+  #stage{position:absolute;top:0;left:0;width:1920px;height:1080px;transform-origin:top left;}
+  .glass{position:absolute;overflow:hidden;background:var(--glass);border:1px solid rgba(255,255,255,.26);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.45),0 16px 38px rgba(0,0,0,.55);}
+  .glow{position:absolute;inset:0;z-index:1;mix-blend-mode:screen;opacity:.45;pointer-events:none;
+    background:radial-gradient(46% 92% at 3% 60%,rgba(220,54,74,.8),transparent 72%),radial-gradient(48% 96% at 99% 48%,rgba(58,112,232,.9),transparent 72%);}
+  .tri{position:absolute;left:0;right:0;bottom:0;z-index:4;height:5px;background:linear-gradient(90deg,var(--red) 0 33.3%,#eef1f6 33.3% 66.6%,var(--blue) 66.6% 100%);}
+  .content{position:relative;z-index:5;}
+  .nm{color:var(--white);font-weight:600;line-height:1.05;text-shadow:var(--tsh);white-space:nowrap;overflow:hidden;}
+  .og{display:flex;align-items:center;gap:12px;margin-top:8px;}
+  .og i{width:12px;height:12px;background:var(--reddot);display:inline-block;flex:none;transform:rotate(45deg);}
+  .og span{color:var(--gold);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;text-shadow:var(--tsh);}
+  .kick{color:var(--gold);letter-spacing:.16em;text-transform:uppercase;text-shadow:var(--tsh);}
+
+  /* layers hidden by default; .on shows with snappy motion */
+  .lyr{opacity:0;pointer-events:none;}
+  .slideL{transform:translateX(-52px);} .lyr.on.slideL{opacity:1;transform:none;transition:opacity .3s ease,transform .34s cubic-bezier(.2,.85,.25,1);}
+  .slideR{transform:translateX(52px);} .lyr.on.slideR{opacity:1;transform:none;transition:opacity .3s ease,transform .34s cubic-bezier(.2,.85,.25,1);}
+  .fade{transform:scale(.98);} .lyr.on.fade{opacity:1;transform:none;transition:opacity .4s ease,transform .42s cubic-bezier(.2,.8,.2,1);}
+  .lyr.on{opacity:1;}
+
+  /* Lower third */
+  #lower{left:80px;bottom:80px;width:1250px;border-radius:16px;padding:22px 40px 26px;}
+  #lowerNm{font-size:56px;} #lowerOg{font-size:26px;}
+  /* Coming up */
+  #coming{right:80px;bottom:80px;max-width:620px;border-radius:14px;padding:14px 26px 16px;}
+  #comingNm{font-size:30px;}
+  /* Full screen */
+  #full{left:8%;right:8%;top:22%;bottom:22%;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+  #full .content{padding:0 60px;width:100%;}
+  #fullTitle{font-size:110px;white-space:normal;} #fullSub{font-size:40px;margin-top:20px;}
+  #fullBody{color:#e8ecf5;font-size:38px;line-height:1.5;margin-top:20px;white-space:pre-line;text-shadow:var(--tsh);}
+  /* Ticker */
+  #ticker{left:0;right:0;bottom:0;height:64px;border-radius:0;display:flex;align-items:center;}
+  #tickerScroll{white-space:nowrap;color:#fff;font-size:26px;padding-left:40px;text-shadow:var(--tsh);}
+  /* Bug + Clock */
+  #bug{right:70px;top:60px;border-radius:40px;padding:12px 26px;}
+  #bug .content{display:flex;align-items:center;gap:12px;}
+  #bugDot{width:14px;height:14px;border-radius:50%;background:var(--reddot);}
+  #bugTxt{color:#fff;font-weight:500;font-size:26px;letter-spacing:.04em;text-shadow:var(--tsh);}
+  #clock{left:70px;top:60px;border-radius:40px;padding:12px 30px;}
+  #clockTxt{color:#fff;font-weight:500;font-size:30px;letter-spacing:.06em;text-shadow:var(--tsh);}
+  @keyframes mar{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bug" class="glass lyr fade"><span class="glow"></span><span class="tri"></span>
+    <div class="content"><span id="bugDot"></span><span id="bugTxt">CSDtv LIVE</span></div></div>
+  <div id="clock" class="glass lyr fade"><span class="glow"></span><span class="tri"></span>
+    <div class="content"><span id="clockTxt"></span></div></div>
+  <div id="ticker" class="glass lyr fade"><span class="tri"></span><div id="tickerScroll" class="content"></div></div>
+  <div id="lower" class="glass lyr slideL"><span class="glow"></span><span class="tri"></span>
+    <div class="content"><div class="nm" id="lowerNm">Entry name</div>
+      <div class="og"><i></i><span id="lowerOg">Organization</span></div></div></div>
+  <div id="coming" class="glass lyr slideR"><span class="glow"></span><span class="tri"></span>
+    <div class="content"><div class="kick" style="font-size:17px;">Coming up</div><div class="nm" id="comingNm" style="margin-top:3px;"></div></div></div>
+  <div id="full" class="glass lyr fade"><span class="glow"></span><span class="tri"></span>
+    <div class="content"><div class="kick" id="fullKick" style="font-size:34px;display:none;"></div>
+      <div class="nm" id="fullTitle"></div><div class="kick" id="fullSub"></div>
+      <div id="fullBody"></div></div></div>
+</div>
+<script>
+(function(){
+  var P=new URLSearchParams(location.search);
+  if(P.get('demo')==='1') document.body.classList.add('demo');
+  var stage=document.getElementById('stage');
+  function resize(){var w=innerWidth,h=innerHeight,s=Math.min(w/1920,h/1080);
+    stage.style.transform='translate('+((w-1920*s)/2)+'px,'+((h-1080*s)/2)+'px) scale('+s+')';}
+  addEventListener('resize',resize); resize();
+
+  var E=function(id){return document.getElementById(id);};
+  function fit(node,max,start,min){node.style.fontSize=start+'px';var s=start;while(node.scrollWidth>max&&s>min){s--;node.style.fontSize=s+'px';}}
+  function toggle(node,on){ if(on){ node.classList.remove('on'); void node.offsetWidth; node.classList.add('on'); } else node.classList.remove('on'); }
+
+  var last='';
+  function apply(st){
+    if(!st) return;
+    // Lower third
+    if(st.lower){ if(st.lower.on){ E('lowerNm').textContent=st.lower.name||''; E('lowerOg').textContent=st.lower.org||''; fit(E('lowerNm'),1160,56,30);} toggle(E('lower'), !!st.lower.on); }
+    // Coming
+    if(st.coming){ if(st.coming.on){ E('comingNm').textContent=st.coming.name||''; } toggle(E('coming'), !!st.coming.on); }
+    // Bug
+    if(st.bug){ if(st.bug.on){ E('bugTxt').textContent=st.bug.text||'CSDtv LIVE'; } toggle(E('bug'), !!st.bug.on); }
+    // Clock
+    if(st.clock){ toggle(E('clock'), !!st.clock.on); }
+    // Ticker
+    if(st.ticker){ if(st.ticker.on){ renderTicker(st.ticker.items||[]); } toggle(E('ticker'), !!st.ticker.on); }
+    // Full screen
+    if(st.full){
+      if(st.full.on){
+        var f=st.full, kind=f.kind||'title';
+        E('fullKick').style.display='none'; E('fullSub').textContent=''; E('fullBody').textContent=''; E('fullBody').style.display='none';
+        if(kind==='slate'){ E('fullKick').style.display='block'; E('fullKick').textContent='Brought to you by'; E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='88px'; }
+        else if(kind==='social'){ E('fullKick').style.display='block'; E('fullKick').textContent='Follow along'; E('fullTitle').textContent=f.handle||f.title||''; E('fullTitle').style.fontSize='96px'; if(f.platform){E('fullSub').textContent=f.platform;} }
+        else if(kind==='text'){ E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='64px'; if(f.body){E('fullBody').style.display='block'; E('fullBody').textContent=f.body;} }
+        else { E('fullTitle').textContent=f.title||''; E('fullTitle').style.fontSize='110px'; if(f.sub){E('fullSub').textContent=f.sub;} }
+      }
+      toggle(E('full'), !!st.full.on);
+    }
+  }
+  function renderTicker(items){
+    if(!items.length) items=['CSDtv Parade'];
+    var seq=items.concat(items);
+    E('tickerScroll').innerHTML=seq.map(function(t){return '<span style="padding:0 60px;">'+String(t).replace(/</g,'&lt;')+'</span><span style="color:var(--gold);">&#9670;</span>';}).join('');
+    E('tickerScroll').style.animation='mar 40s linear infinite';
+  }
+
+  // clock ticking
+  function uclk(){var d=new Date(),h=d.getHours(),m=d.getMinutes(),ap=h>=12?'PM':'AM';h=h%12||12;E('clockTxt').textContent=h+':'+(m<10?'0':'')+m+' '+ap;}
+  uclk(); setInterval(uclk,1000);
+
+  // ---- receive state ----
+  function read(){ try{ return JSON.parse(localStorage.getItem('parade_state')||'null'); }catch(e){ return null; } }
+  function handle(st){ if(!st) return; var key=JSON.stringify(st); if(key===last) return; last=key; apply(st); }
+  try{ var bc=new BroadcastChannel('parade'); bc.onmessage=function(e){ handle(e.data); }; }catch(e){}
+  addEventListener('storage',function(e){ if(e.key==='parade_state') handle(read()); });
+  setInterval(function(){ handle(read()); }, 300); // poll fallback
+  handle(read()); // initial
+})();
+</script>
+</body>
+</html>
