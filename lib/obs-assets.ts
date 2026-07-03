@@ -17,9 +17,9 @@ const VIDEO_MIMES = new Set(['video/mp4', 'video/quicktime'])
 const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const SCENE_MIMES = new Set(['application/json', 'application/zip', 'application/x-zip-compressed'])
 
-const MAX_VIDEO_BYTES = 1024 * 1024 * 1024 // 1 GB
-const MAX_IMAGE_BYTES = 50 * 1024 * 1024   // 50 MB
-const MAX_SCENE_BYTES = 50 * 1024 * 1024   // 50 MB
+const MAX_VIDEO_BYTES = 5 * 1024 * 1024 * 1024 // 5 GB
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024       // 50 MB
+const MAX_SCENE_BYTES = 100 * 1024 * 1024      // 100 MB
 
 /** Resolve the stored `kind` for an upload, or null if the mime is not allowed. */
 export function kindForUpload(category: ObsCategory, mime: string): ObsKind | null {
@@ -39,7 +39,7 @@ export function kindForUpload(category: ObsCategory, mime: string): ObsKind | nu
 export function validateObsUpload(category: ObsCategory, mime: string, sizeBytes: number): string | null {
   if (category === 'commercial') {
     if (VIDEO_MIMES.has(mime)) {
-      if (sizeBytes > MAX_VIDEO_BYTES) return 'Video must be 1 GB or smaller'
+      if (sizeBytes > MAX_VIDEO_BYTES) return 'Video must be 5 GB or smaller'
       return null
     }
     if (IMAGE_MIMES.has(mime)) {

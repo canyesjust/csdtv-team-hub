@@ -11,7 +11,7 @@ VALUES (
   'obs-assets',
   'obs-assets',
   false,
-  1073741824, -- 1 GB
+  5368709120, -- 5 GB
   ARRAY[
     'video/mp4',
     'video/quicktime',
