@@ -70,9 +70,8 @@
 
   // opacity: full-screen takeovers default near-solid; overlays default 0.70; ?op=NN overrides
   (function(){
-    var fs={title:1,fulltext:1,slate:1,social:1};
     var o=P.get('op');
-    var a=(o!==null && o!=='') ? Math.max(0,Math.min(100,parseFloat(o)||0))/100 : (fs[type]?0.94:0.70);
+    var a=(o!==null && o!=='') ? Math.max(0,Math.min(100,parseFloat(o)||0))/100 : 0.94;
     document.documentElement.style.setProperty('--glass','rgba(10,16,32,'+a+')');
   })();
 
@@ -175,13 +174,14 @@
     var st=document.createElement('style'); st.textContent='@keyframes mar{from{transform:translateX(0)}to{transform:translateX(-50%)}}'; document.head.appendChild(st);
   }
   function bug(text){
-    mount('<div class="glass show" style="position:absolute;right:70px;top:60px;border-radius:40px;padding:12px 26px;display:flex;align-items:center;gap:12px;">'
+    mount('<div class="glass show" style="position:absolute;right:70px;top:60px;border-radius:40px;padding:12px 26px;">'
+      +'<span class="content" style="display:flex;align-items:center;gap:12px;">'
       +'<span style="width:14px;height:14px;border-radius:50%;background:var(--reddot);"></span>'
-      +'<span style="color:#fff;font-weight:500;font-size:26px;letter-spacing:.04em;text-shadow:var(--tsh);">'+esc(text||'CSDtv LIVE')+'</span></div>');
+      +'<span style="color:#fff;font-weight:500;font-size:26px;letter-spacing:.04em;text-shadow:var(--tsh);">'+esc(text||'CSDtv LIVE')+'</span></span></div>');
   }
   function clock(){
     mount('<div class="glass show" style="position:absolute;left:70px;top:60px;border-radius:40px;padding:12px 30px;">'
-      +'<span id="clk" style="color:#fff;font-weight:500;font-size:30px;letter-spacing:.06em;text-shadow:var(--tsh);"></span></div>');
+      +'<span class="content" id="clk" style="color:#fff;font-weight:500;font-size:30px;letter-spacing:.06em;text-shadow:var(--tsh);"></span></div>');
     function u(){var d=new Date(),h=d.getHours(),m=d.getMinutes(),ap=h>=12?'PM':'AM';h=h%12||12;document.getElementById('clk').textContent=h+':'+(m<10?'0':'')+m+' '+ap;}
     u(); setInterval(u,1000);
   }
