@@ -68,6 +68,14 @@
   var type=(P.get('type')||'lower').toLowerCase();
   var stage=document.getElementById('stage'), root=document.getElementById('root'), hint=document.getElementById('hint');
 
+  // opacity: full-screen takeovers default near-solid; overlays default 0.70; ?op=NN overrides
+  (function(){
+    var fs={title:1,fulltext:1,slate:1,social:1};
+    var o=P.get('op');
+    var a=(o!==null && o!=='') ? Math.max(0,Math.min(100,parseFloat(o)||0))/100 : (fs[type]?0.94:0.70);
+    document.documentElement.style.setProperty('--glass','rgba(10,16,32,'+a+')');
+  })();
+
   function resize(){var w=innerWidth,h=innerHeight,s=Math.min(w/1920,h/1080);
     stage.style.transform='translate('+((w-1920*s)/2)+'px,'+((h-1080*s)/2)+'px) scale('+s+')';}
   addEventListener('resize',resize); resize();
@@ -203,6 +211,9 @@
   else if(type==='bug'){ bug(P.get('text')); }
   else if(type==='clock'){ clock(); }
   else { lower1('Unknown type: '+esc(type)); autoShow(); }
+
+  // box mode: render just the glass shape (no text) so you can overlay native Singular text
+  if(P.get('box')==='1' && el){ var _c=el.querySelector('.content'); if(_c) _c.style.display='none'; }
 
   // keyboard for lineup stepper
   addEventListener('keydown',function(e){
