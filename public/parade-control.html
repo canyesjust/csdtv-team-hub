@@ -170,10 +170,11 @@ Thank you to our sponsors</textarea>
     }).join('');
     [].forEach.call(E('lineup').children,function(el){ el.onclick=function(){ air(parseInt(el.getAttribute('data-i'),10)); }; });
   }
+  function scrollCur(){ var lp=E('lineup'),c=lp.querySelector('.cur'); if(c) lp.scrollTo({top:Math.max(0,c.offsetTop-lp.offsetTop),behavior:'smooth'}); }
   function air(i){ if(i<0||i>=LINEUP.length) return; idx=i; var e=LINEUP[i];
     state.lower={on:true,name:e.name,org:e.org};
     if(state.coming.on){ var n=LINEUP[i+1]; state.coming.name=n?n.name:''; }
-    push(); }
+    push(); scrollCur(); }
 
   function render(){
     renderLineup();

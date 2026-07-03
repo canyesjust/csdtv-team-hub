@@ -99,8 +99,13 @@
     var wasOn=node.classList.contains('on'), was=node.dataset.sig||'';
     if(on){
       if(!wasOn){ if(update)update(); node.dataset.sig=sig; play(node); }
-      else if(sig!==was){ if(update)update(); node.dataset.sig=sig; if(animate) play(node); }
-    } else { if(wasOn) node.classList.remove('on'); node.dataset.sig=''; }
+      else if(sig!==was){
+        node.dataset.sig=sig;
+        if(animate){ node.classList.remove('on'); clearTimeout(node._swap);   // animate OUT, then swap content and animate back IN
+          node._swap=setTimeout(function(){ if(update)update(); play(node); }, 400); }
+        else { if(update)update(); }
+      }
+    } else { if(wasOn) node.classList.remove('on'); node.dataset.sig=''; clearTimeout(node._swap); }
   }
 
   var last='';
