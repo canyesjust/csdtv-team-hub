@@ -26,11 +26,11 @@
   .kick{color:var(--gold);letter-spacing:.16em;text-transform:uppercase;text-shadow:var(--tsh);}
 
   /* layers hidden by default; .on shows with snappy motion */
-  .lyr{opacity:0;pointer-events:none;}
-  .slideL{transform:translateX(-52px);} .lyr.on.slideL{opacity:1;transform:none;transition:opacity .3s ease,transform .34s cubic-bezier(.2,.85,.25,1);}
-  .slideR{transform:translateX(52px);} .lyr.on.slideR{opacity:1;transform:none;transition:opacity .3s ease,transform .34s cubic-bezier(.2,.85,.25,1);}
-  .fade{transform:scale(.98);} .lyr.on.fade{opacity:1;transform:none;transition:opacity .4s ease,transform .42s cubic-bezier(.2,.8,.2,1);}
-  .lyr.on{opacity:1;}
+  .lyr{opacity:0;pointer-events:none;transition:opacity .45s ease,transform .55s cubic-bezier(.2,.8,.2,1);}
+  .slideL{transform:translateX(-70px);}
+  .slideR{transform:translateX(70px);}
+  .fade{transform:scale(.985);}
+  .lyr.on{opacity:1;transform:none;}
 
   /* Lower third */
   #lower{left:80px;bottom:80px;width:max-content;max-width:1740px;border-radius:16px;padding:22px 44px 26px;}
@@ -56,6 +56,7 @@
   #bug .content{display:flex;align-items:center;gap:12px;}
   #bugDot{width:14px;height:14px;border-radius:50%;background:var(--reddot);}
   #bugTxt{color:#fff;font-weight:500;font-size:26px;letter-spacing:.04em;text-shadow:var(--tsh);}
+  #bugLogo{height:36px;display:none;}
   #clock{left:70px;top:60px;border-radius:40px;padding:12px 30px;}
   #clockTxt{color:#fff;font-weight:500;font-size:30px;letter-spacing:.06em;text-shadow:var(--tsh);}
   @keyframes mar{from{transform:translateX(0)}to{transform:translateX(-50%)}}
@@ -64,7 +65,7 @@
 <body>
 <div id="stage">
   <div id="bug" class="glass lyr fade"><span class="glow"></span><span class="tri"></span>
-    <div class="content"><span id="bugDot"></span><span id="bugTxt">CSDtv LIVE</span></div></div>
+    <div class="content"><span id="bugDot"></span><span id="bugTxt">CSDtv LIVE</span><img id="bugLogo" alt=""></div></div>
   <div id="clock" class="glass lyr fade"><span class="glow"></span><span class="tri"></span>
     <div class="content"><span id="clockTxt"></span></div></div>
   <div id="ticker" class="glass lyr fade"><span class="tri"></span><div id="tickerScroll" class="content"></div></div>
@@ -109,7 +110,9 @@
     manage(E('lower'), !!lo.on, 'L|'+(lo.name||'')+'|'+(lo.org||''), true, function(){
       E('lowerNm').textContent=lo.name||''; E('lowerOg').textContent=lo.org||''; fit(E('lowerNm'),1650,56,30); });
     manage(E('coming'), !!co.on, 'C|'+(co.name||''), true, function(){ E('comingNm').textContent=co.name||''; });
-    manage(E('bug'), !!bu.on, 'B|'+(bu.text||''), false, function(){ E('bugTxt').textContent=bu.text||'CSDtv LIVE'; });
+    manage(E('bug'), !!bu.on, 'B|'+(bu.text||'')+'|'+(bu.logo||''), false, function(){
+      if(bu.logo){ E('bugLogo').src=bu.logo; E('bugLogo').style.display='block'; E('bugDot').style.display='none'; E('bugTxt').style.display='none'; }
+      else { E('bugLogo').style.display='none'; E('bugDot').style.display='inline-block'; E('bugTxt').style.display='inline'; E('bugTxt').textContent=bu.text||'CSDtv LIVE'; } });
     manage(E('clock'), !!ck.on, 'K', false, null);
     manage(E('ticker'), !!ti.on, 'T|'+((ti.items||[]).join('~')), false, function(){ renderTicker(ti.items||[]); });
     manage(E('panel'), !!pa.on, 'P|'+(pa.title||'')+'|'+(pa.text||'')+'|'+(pa.logo||''), true, function(){
