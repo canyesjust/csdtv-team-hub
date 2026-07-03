@@ -45,6 +45,9 @@ export default function ObsAssetsManagePage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [isManager, setIsManager] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [savingName, setSavingName] = useState(false)
   const commercialInput = useRef<HTMLInputElement>(null)
   const sceneInput = useRef<HTMLInputElement>(null)
 
@@ -130,6 +133,37 @@ export default function ObsAssetsManagePage() {
     e.target.value = ''
   }
 
+  const startRename = (asset: ObsAsset) => {
+    setEditingId(asset.id)
+    setEditName(asset.name)
+  }
+
+  const cancelRename = () => {
+    setEditingId(null)
+    setEditName('')
+  }
+
+  const saveRename = async (asset: ObsAsset) => {
+    const name = editName.trim()
+    if (!name) { toast('Name is required', 'error'); return }
+    if (name === asset.name) { cancelRename(); return }
+    setSavingName(true)
+    try {
+      const res = await fetch(`/api/obs/assets/${asset.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast(d?.error || 'Could not rename', 'error'); return }
+      setAssets(prev => prev.map(a => (a.id === asset.id ? { ...a, name } : a)))
+      cancelRename()
+      toast('Renamed', 'success')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
   const remove = async (asset: ObsAsset) => {
     if (!(await confirmDialog({ message: `Delete "${asset.name}"? This cannot be undone.`, tone: 'danger', confirmLabel: 'Delete' }))) return
     const res = await fetch(`/api/obs/assets/${asset.id}`, { method: 'DELETE' })
@@ -207,8 +241,8 @@ export default function ObsAssetsManagePage() {
           </button>
           <span style={{ fontSize: 12.5, color: muted }}>
             {tab === 'commercial'
-              ? 'MP4/MOV video (≤ 1 GB) or PNG/JPEG/WebP image (≤ 50 MB).'
-              : '.json or .zip scene collection (≤ 50 MB).'}
+              ? 'MP4/MOV video (≤ 5 GB) or PNG/JPEG/WebP image (≤ 50 MB).'
+              : '.json or .zip scene collection (≤ 100 MB).'}
           </span>
         </div>
       </div>
@@ -223,17 +257,54 @@ export default function ObsAssetsManagePage() {
           {filtered.map((asset, i) => (
             <div key={asset.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: i === 0 ? 'none' : `0.5px solid ${border}` }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.name}</p>
+                {editingId === asset.id ? (
+                  <input
+                    autoFocus
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveRename(asset); if (e.key === 'Escape') cancelRename() }}
+                    maxLength={200}
+                    style={{ width: '100%', background: inputBg, border: `0.5px solid var(--brand-primary)`, borderRadius: 8, padding: '7px 10px', fontSize: 14, color: text, fontFamily: 'inherit', outline: 'none' }}
+                  />
+                ) : (
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.name}</p>
+                )}
                 <p style={{ margin: '2px 0 0', fontSize: 12, color: muted }}>
                   {asset.kind}{asset.file_size_bytes ? ` · ${formatBytes(asset.file_size_bytes)}` : ''} · {asset.filename}
                 </p>
               </div>
-              <button
-                onClick={() => remove(asset)}
-                style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: `0.5px solid ${border}`, background: 'transparent', color: 'var(--status-danger)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                Delete
-              </button>
+              {editingId === asset.id ? (
+                <>
+                  <button
+                    onClick={() => saveRename(asset)}
+                    disabled={savingName}
+                    style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: 'none', background: 'var(--brand-primary)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: savingName ? 'default' : 'pointer', fontFamily: 'inherit', opacity: savingName ? 0.6 : 1 }}
+                  >
+                    {savingName ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={cancelRename}
+                    style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: `0.5px solid ${border}`, background: 'transparent', color: muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => startRename(asset)}
+                    style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: `0.5px solid ${border}`, background: 'transparent', color: text, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    onClick={() => remove(asset)}
+                    style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: `0.5px solid ${border}`, background: 'transparent', color: 'var(--status-danger)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>

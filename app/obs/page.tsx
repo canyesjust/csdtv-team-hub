@@ -113,6 +113,8 @@ function AssetList({ category, title, emptyLabel }: { category: 'commercial' | '
 
 const stepStyle: CSSProperties = { margin: '0 0 10px', fontSize: 14, lineHeight: 1.6, color: colors.text }
 const codeStyle: CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, background: '#eef1f6', padding: '1px 6px', borderRadius: 5 }
+const qStyle: CSSProperties = { margin: '16px 0 4px', fontSize: 14.5, fontWeight: 700, color: colors.text }
+const aStyle: CSSProperties = { margin: '0 0 6px', fontSize: 14, lineHeight: 1.6, color: colors.muted }
 
 export default function ObsAssetsPage() {
   return (
@@ -143,13 +145,45 @@ export default function ObsAssetsPage() {
         <AssetList category="scene" title="3. Scenes" emptyLabel="No scenes have been uploaded yet." />
 
         {/* Setup steps */}
-        <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18, marginBottom: 40 }}>
+        <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18 }}>
           <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>4. Setup</h2>
-          <p style={stepStyle}><strong>1. Install Node.js.</strong> Download and install the LTS build from <span style={codeStyle}>nodejs.org</span>. The controller needs it to run.</p>
-          <p style={stepStyle}><strong>2. Add the OBS sources.</strong> In your OBS scene, create three sources named exactly <span style={codeStyle}>Commercials</span> (media source for videos), <span style={codeStyle}>CommercialsImage</span> (image source for image ads), and <span style={codeStyle}>StartingSoon</span> (the pre-show slate).</p>
-          <p style={stepStyle}><strong>3. Turn on the OBS WebSocket.</strong> In OBS go to <span style={codeStyle}>Tools → WebSocket Server Settings</span>, enable the server, and set a password. Ask Justin for the password to match the controller config.</p>
-          <p style={stepStyle}><strong>4. Run the launcher.</strong> Unzip the controller and double-click the launcher. It starts the local Ad Control server.</p>
-          <p style={{ ...stepStyle, marginBottom: 0 }}><strong>5. Add the Ad Control dock.</strong> In OBS choose <span style={codeStyle}>Docks → Custom Browser Docks</span> and add a dock pointing to <span style={codeStyle}>http://127.0.0.1:4466</span>. Use it to play commercials, jump to a specific ad, and toggle the Starting Soon slate.</p>
+          <p style={stepStyle}><strong>1. Install Node.js.</strong> Download the macOS Installer (.pkg) from <span style={codeStyle}>nodejs.org</span> and click through to Finish. The controller needs it. Do <strong>not</strong> use nvm; a double-clicked launcher can&apos;t find nvm-installed Node. Use the plain .pkg installer.</p>
+          <p style={stepStyle}><strong>2. Unzip the controller</strong> somewhere permanent, like Documents. Don&apos;t leave it in Downloads.</p>
+          <p style={stepStyle}><strong>3. Add the OBS sources.</strong> In your OBS scene, create three sources named exactly <span style={codeStyle}>Commercials</span> (media source, videos), <span style={codeStyle}>CommercialsImage</span> (image source, image ads), and <span style={codeStyle}>StartingSoon</span> (media source, the pre-show slate). Leave their files empty. Put <span style={codeStyle}>StartingSoon</span> below the two Commercials sources so ads cover it.</p>
+          <p style={stepStyle}><strong>4. Turn on the OBS WebSocket.</strong> In OBS go to <span style={codeStyle}>Tools → WebSocket Server Settings</span>, check <span style={codeStyle}>Enable WebSocket Server</span>, keep the port at <span style={codeStyle}>4455</span>, and set the password. <strong>Ask Justin for the password.</strong></p>
+          <p style={stepStyle}><strong>5. Set the password in the config.</strong> Open <span style={codeStyle}>config.json</span> in the controller folder and put that same password between the quotes on the <span style={codeStyle}>&quot;password&quot;</span> line. It must match OBS exactly. While there, make sure <span style={codeStyle}>&quot;scene&quot;</span> matches your actual OBS scene name (it ships as <span style={codeStyle}>Live</span>), or ads load but stay hidden.</p>
+          <p style={stepStyle}><strong>6. Run the launcher.</strong> Double-click <span style={codeStyle}>Start Ad Controller.command</span>. The first time, macOS may block it, so right-click the file → Open → Open. It installs what it needs, then starts. Leave the window open during the show.</p>
+          <p style={stepStyle}><strong>7. Add the Ad Control dock.</strong> In OBS choose <span style={codeStyle}>Docks → Custom Browser Docks</span> and add one pointing to <span style={codeStyle}>http://127.0.0.1:4466</span>.</p>
+          <p style={{ ...stepStyle, marginBottom: 0 }}><strong>8. Load your files.</strong> Download the commercials and scenes above. Put video and image ads in the controller&apos;s <span style={codeStyle}>ads</span> folder and your starting-soon video in the <span style={codeStyle}>preshow</span> folder, then click <strong>Reload folder</strong> in the panel.</p>
+        </section>
+
+        {/* Troubleshooting */}
+        <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18, marginBottom: 40 }}>
+          <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>5. If something goes wrong</h2>
+
+          <p style={qStyle}>The launcher says Node isn&apos;t installed, but I installed it</p>
+          <p style={aStyle}>Open Terminal and run <span style={codeStyle}>which node</span>. If it prints nothing, Node didn&apos;t install, or you used nvm. Reinstall with the <strong>.pkg</strong> from nodejs.org and open a fresh Terminal. If it prints a path, close the launcher window and double-click <span style={codeStyle}>Start Ad Controller.command</span> again.</p>
+
+          <p style={qStyle}>macOS won&apos;t open the launcher</p>
+          <p style={aStyle}>Right-click <span style={codeStyle}>Start Ad Controller.command</span> → Open → Open. You only do this the first time.</p>
+
+          <p style={qStyle}>The panel says &quot;OBS offline&quot;</p>
+          <p style={aStyle}>Make sure OBS is running and the WebSocket server is enabled. Confirm the port is <span style={codeStyle}>4455</span> and that the password in <span style={codeStyle}>config.json</span> exactly matches the OBS Server Password. A mismatched password is the most common cause. Ask Justin to confirm the password.</p>
+
+          <p style={qStyle}>It says &quot;Connected to OBS&quot; but no ad appears</p>
+          <p style={aStyle}>Check the source names are exactly <span style={codeStyle}>Commercials</span>, <span style={codeStyle}>CommercialsImage</span>, and <span style={codeStyle}>StartingSoon</span>. Check that <span style={codeStyle}>&quot;scene&quot;</span> in <span style={codeStyle}>config.json</span> matches your real scene name, and that the sources are in that scene and not hidden.</p>
+
+          <p style={qStyle}>An image ad shows blank</p>
+          <p style={aStyle}>Confirm you added the <span style={codeStyle}>CommercialsImage</span> image source.</p>
+
+          <p style={qStyle}>A commercial won&apos;t show up in the list</p>
+          <p style={aStyle}>Make sure the file is in the <span style={codeStyle}>ads</span> folder and click <strong>Reload folder</strong>. Videos should be <span style={codeStyle}>.mp4</span> or <span style={codeStyle}>.mov</span>; images <span style={codeStyle}>.png</span> or <span style={codeStyle}>.jpg</span>.</p>
+
+          <p style={qStyle}>Starting Soon won&apos;t start</p>
+          <p style={aStyle}>Put a video in the <span style={codeStyle}>preshow</span> folder and click <strong>Reload folder</strong>. The panel says when a starting-soon video is ready.</p>
+
+          <p style={{ ...qStyle }}>The panel and OBS look out of sync</p>
+          <p style={{ ...aStyle, marginBottom: 0 }}>They resync within a second. If not, right-click the browser source in OBS → Refresh.</p>
         </section>
       </div>
     </div>
