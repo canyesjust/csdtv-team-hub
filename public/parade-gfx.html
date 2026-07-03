@@ -213,7 +213,13 @@
   else { lower1('Unknown type: '+esc(type)); autoShow(); }
 
   // box mode: render just the glass shape (no text) so you can overlay native Singular text
-  if(P.get('box')==='1' && el){ var _c=el.querySelector('.content'); if(_c) _c.style.display='none'; }
+  if(P.get('box')==='1' && el){
+    var _c=el.querySelector('.content'); if(_c) _c.style.visibility='hidden';
+    var _bh={lower:150,host:150,lineup:150,lower1:110,topic:140,coming:96,panel:560,bug:52,clock:54};
+    var _bw={topic:560,coming:460,bug:230,clock:170};
+    if(_bh[type]!=null){ el.style.boxSizing='border-box'; el.style.height=_bh[type]+'px'; }
+    if(_bw[type]!=null){ el.style.width=_bw[type]+'px'; }
+  }
 
   // keyboard for lineup stepper
   addEventListener('keydown',function(e){
