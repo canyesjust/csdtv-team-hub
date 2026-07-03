@@ -174,7 +174,7 @@ export default function ObsAssetsPage() {
           <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>5. If something goes wrong</h2>
 
           <p style={qStyle}>The launcher says Node isn&apos;t installed, but I installed it</p>
-          <p style={aStyle}>Open Terminal and run <span style={codeStyle}>which node</span>. If it prints nothing, Node didn&apos;t install, or you used nvm. Reinstall with the <strong>.pkg</strong> from nodejs.org and open a fresh Terminal. If it prints a path, close the launcher window and double-click <span style={codeStyle}>Start Ad Controller.command</span> again.</p>
+          <p style={aStyle}>Open Terminal and run <span style={codeStyle}>which node</span>. If it prints nothing, Node didn&apos;t install, or you used nvm. Reinstall with the <strong>.pkg</strong> from nodejs.org and open a fresh Terminal. If it prints a path, quit the app and open it again.</p>
 
           <p style={qStyle}>macOS says it can&apos;t verify the app</p>
           <p style={aStyle}>If you see &ldquo;Apple could not verify CSDtv Ad Controller is free of malware,&rdquo; that&apos;s just because the app isn&apos;t signed by Apple, not an actual problem. Click <strong>Done</strong> (not Move to Trash). Open the Apple menu → <strong>System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and click <strong>Open Anyway</strong> next to the CSDtv Ad Controller message. Authenticate, then click <strong>Open</strong>. It launches normally after that. You only do this once per Mac.</p>
