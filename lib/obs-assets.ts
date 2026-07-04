@@ -9,7 +9,7 @@ export function canUploadObs(role: string | null | undefined): boolean {
   return OBS_UPLOADER_ROLES.has(role || '')
 }
 
-export const OBS_CATEGORIES = ['commercial', 'scene'] as const
+export const OBS_CATEGORIES = ['commercial', 'scene', 'starting_soon'] as const
 export type ObsCategory = (typeof OBS_CATEGORIES)[number]
 export type ObsKind = 'video' | 'image' | 'scene'
 
@@ -32,6 +32,10 @@ export function kindForUpload(category: ObsCategory, mime: string): ObsKind | nu
     if (SCENE_MIMES.has(mime)) return 'scene'
     return null
   }
+  if (category === 'starting_soon') {
+    if (VIDEO_MIMES.has(mime)) return 'video'
+    return null
+  }
   return null
 }
 
@@ -51,6 +55,11 @@ export function validateObsUpload(category: ObsCategory, mime: string, sizeBytes
   if (category === 'scene') {
     if (!SCENE_MIMES.has(mime)) return 'Scene must be a .json or .zip file'
     if (sizeBytes > MAX_SCENE_BYTES) return 'Scene must be 50 MB or smaller'
+    return null
+  }
+  if (category === 'starting_soon') {
+    if (!VIDEO_MIMES.has(mime)) return 'Starting Soon must be an MP4 or MOV video'
+    if (sizeBytes > MAX_VIDEO_BYTES) return 'Video must be 5 GB or smaller'
     return null
   }
   return 'Invalid category'

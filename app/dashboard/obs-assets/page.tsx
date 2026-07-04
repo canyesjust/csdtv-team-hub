@@ -7,7 +7,7 @@ import { confirmDialog } from '@/lib/confirm'
 import { toast } from '@/lib/toast'
 import Loader from '../components/Loader'
 
-type ObsCategory = 'commercial' | 'scene'
+type ObsCategory = 'commercial' | 'scene' | 'starting_soon'
 
 type ObsAsset = {
   id: string
@@ -23,6 +23,7 @@ type ObsAsset = {
 
 const COMMERCIAL_ACCEPT = 'video/mp4,video/quicktime,image/png,image/jpeg,image/webp'
 const SCENE_ACCEPT = 'application/json,application/zip,application/x-zip-compressed,.json,.zip'
+const VIDEO_ACCEPT = 'video/mp4,video/quicktime'
 
 function formatBytes(bytes: number | null): string {
   if (!bytes || bytes <= 0) return ''
@@ -50,6 +51,7 @@ export default function ObsAssetsManagePage() {
   const [savingName, setSavingName] = useState(false)
   const commercialInput = useRef<HTMLInputElement>(null)
   const sceneInput = useRef<HTMLInputElement>(null)
+  const startingSoonInput = useRef<HTMLInputElement>(null)
 
   // Manager password panel state
   const [pwStatus, setPwStatus] = useState<{ configured: boolean; source: string } | null>(null)
@@ -201,7 +203,8 @@ export default function ObsAssetsManagePage() {
   }
 
   const filtered = assets.filter(a => a.category === tab)
-  const inputRef = tab === 'commercial' ? commercialInput : sceneInput
+  const inputRef = tab === 'commercial' ? commercialInput : tab === 'scene' ? sceneInput : startingSoonInput
+  const uploadLabel = tab === 'commercial' ? 'commercial' : tab === 'scene' ? 'scene' : 'Starting Soon video'
 
   const tabBtn = (value: ObsCategory): React.CSSProperties => ({
     padding: '8px 16px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
@@ -217,13 +220,14 @@ export default function ObsAssetsManagePage() {
       <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: text, margin: 0 }}>OBS assets</h1>
         <p style={{ fontSize: 14, color: muted, margin: '4px 0 0' }}>
-          Manage the commercials and scenes that operators download from the public <span style={{ fontFamily: 'ui-monospace, monospace' }}>/obs</span> page.
+          Manage the commercials, Starting Soon video, and scenes that operators download from the public <span style={{ fontFamily: 'ui-monospace, monospace' }}>/obs</span> page.
         </p>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <button style={tabBtn('commercial')} onClick={() => setTab('commercial')}>Commercials</button>
+        <button style={tabBtn('starting_soon')} onClick={() => setTab('starting_soon')}>Starting Soon</button>
         <button style={tabBtn('scene')} onClick={() => setTab('scene')}>Scenes</button>
       </div>
 
@@ -231,18 +235,21 @@ export default function ObsAssetsManagePage() {
       <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
         <input ref={commercialInput} type="file" accept={COMMERCIAL_ACCEPT} style={{ display: 'none' }} onChange={onPick('commercial')} />
         <input ref={sceneInput} type="file" accept={SCENE_ACCEPT} style={{ display: 'none' }} onChange={onPick('scene')} />
+        <input ref={startingSoonInput} type="file" accept={VIDEO_ACCEPT} style={{ display: 'none' }} onChange={onPick('starting_soon')} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
             style={{ padding: '10px 18px', borderRadius: 10, background: 'var(--brand-primary)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: uploading ? 'wait' : 'pointer', fontFamily: 'inherit', opacity: uploading ? 0.7 : 1 }}
           >
-            {uploading ? 'Uploading…' : `+ Upload ${tab === 'commercial' ? 'commercial' : 'scene'}`}
+            {uploading ? 'Uploading…' : `+ Upload ${uploadLabel}`}
           </button>
           <span style={{ fontSize: 12.5, color: muted }}>
             {tab === 'commercial'
               ? 'MP4/MOV video (≤ 5 GB) or PNG/JPEG/WebP image (≤ 50 MB).'
-              : '.json or .zip scene collection (≤ 100 MB).'}
+              : tab === 'scene'
+              ? '.json or .zip scene collection (≤ 100 MB).'
+              : 'MP4/MOV video that loops as the pre-show. The newest one is what every machine uses.'}
           </span>
         </div>
       </div>
