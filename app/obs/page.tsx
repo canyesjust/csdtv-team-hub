@@ -169,6 +169,14 @@ export default function ObsAssetsPage() {
           <p style={{ ...stepStyle, marginBottom: 0 }}><strong>8. Load the commercials.</strong> In the panel, click <strong>Download missing</strong> and every commercial drops into the app&apos;s ads folder for you. No downloading and moving files by hand. Run it again anytime to pick up new ones. For the pre-show, click <strong>Open preshow folder</strong> in the panel, drop your Starting Soon video in, then click <strong>Reload folder</strong>.</p>
         </section>
 
+        {/* Parade graphics */}
+        <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18 }}>
+          <h2 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700 }}>Parade graphics (if this Mac runs the parade)</h2>
+          <p style={{ margin: '0 0 12px', fontSize: 13.5, color: colors.muted, lineHeight: 1.55 }}>The parade lower thirds, ticker, and sponsor cards are separate from the ad controller. They&apos;re already hosted, so you just point OBS at them. Two pieces:</p>
+          <p style={stepStyle}><strong>1. Graphics — add as a Browser <em>source</em></strong> (not a dock). In your scene: <span style={codeStyle}>Sources → + → Browser</span>. Name it <span style={codeStyle}>Parade Graphics</span>. URL: <span style={codeStyle}>https://www.csdtvstaff.org/parade-output.html</span>. Set Width <span style={codeStyle}>1920</span> and Height <span style={codeStyle}>1080</span>. Drag it <strong>above your camera</strong> in the scene.</p>
+          <p style={{ ...stepStyle, marginBottom: 0 }}><strong>2. Control — add as a Custom Browser <em>dock</em>.</strong> <span style={codeStyle}>Docks → Custom Browser Docks</span>, add one: Dock Name <span style={codeStyle}>Parade Control</span>, URL <span style={codeStyle}>https://www.csdtvstaff.org/parade-control.html</span>. That&apos;s the panel you drive the lower thirds and ticker from.</p>
+        </section>
+
         {/* Troubleshooting */}
         <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18, marginBottom: 40 }}>
           <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>5. If something goes wrong</h2>
