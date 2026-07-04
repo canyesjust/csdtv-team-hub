@@ -166,6 +166,19 @@ export default function ObsAssetsManagePage() {
     }
   }
 
+  const toggleEnabled = async (asset: ObsAsset) => {
+    const next = !asset.enabled
+    const res = await fetch(`/api/obs/assets/${asset.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) { toast(d?.error || 'Could not update', 'error'); return }
+    setAssets(prev => prev.map(a => (a.id === asset.id ? { ...a, enabled: next } : a)))
+    toast(next ? 'Set active' : 'Set inactive — machines remove it on next sync', 'success')
+  }
+
   const remove = async (asset: ObsAsset) => {
     if (!(await confirmDialog({ message: `Delete "${asset.name}"? This cannot be undone.`, tone: 'danger', confirmLabel: 'Delete' }))) return
     const res = await fetch(`/api/obs/assets/${asset.id}`, { method: 'DELETE' })
@@ -298,6 +311,13 @@ export default function ObsAssetsManagePage() {
                 </>
               ) : (
                 <>
+                  <button
+                    onClick={() => toggleEnabled(asset)}
+                    title={asset.enabled === false ? 'Inactive — click to set active' : 'Active — click to set inactive (removed from machines on next sync)'}
+                    style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${asset.enabled === false ? 'var(--status-warning)' : 'var(--status-success)'}`, background: 'transparent', color: asset.enabled === false ? 'var(--status-warning)' : 'var(--status-success)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {asset.enabled === false ? 'Inactive' : 'Active'}
+                  </button>
                   <button
                     onClick={() => startRename(asset)}
                     style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 8, border: `0.5px solid ${border}`, background: 'transparent', color: text, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}

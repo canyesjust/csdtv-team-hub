@@ -47,7 +47,7 @@ function AssetList({ category, title, emptyLabel, note }: { category: 'commercia
     try {
       const res = await fetch(`/api/obs/assets?category=${category}`, { cache: 'no-store' })
       const d = await res.json().catch(() => ({}))
-      if (res.ok) setAssets(Array.isArray(d.assets) ? d.assets : [])
+      if (res.ok) setAssets((Array.isArray(d.assets) ? d.assets : []).filter((a: ObsAsset) => a.enabled !== false))
       else setError(typeof d?.error === 'string' ? d.error : 'Could not load files.')
     } catch {
       setError('Could not reach the server.')

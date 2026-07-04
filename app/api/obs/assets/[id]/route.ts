@@ -19,13 +19,25 @@ export async function PATCH(
   if (!service) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
 
   const body = await request.json().catch(() => ({}))
-  const name = String(body.name || '').trim()
-  if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
-  if (name.length > 200) return NextResponse.json({ error: 'Name is too long (200 characters max)' }, { status: 400 })
+  const update: { updated_at: string; name?: string; enabled?: boolean } = {
+    updated_at: new Date().toISOString(),
+  }
+  if (typeof body.name === 'string') {
+    const name = body.name.trim()
+    if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    if (name.length > 200) return NextResponse.json({ error: 'Name is too long (200 characters max)' }, { status: 400 })
+    update.name = name
+  }
+  if (typeof body.enabled === 'boolean') {
+    update.enabled = body.enabled
+  }
+  if (update.name === undefined && update.enabled === undefined) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+  }
 
   const { data: row, error } = await service
     .from('obs_assets')
-    .update({ name, updated_at: new Date().toISOString() })
+    .update(update)
     .eq('id', id)
     .select('id, category, name, filename, kind, mime_type, file_size_bytes, enabled, created_at')
     .single()
