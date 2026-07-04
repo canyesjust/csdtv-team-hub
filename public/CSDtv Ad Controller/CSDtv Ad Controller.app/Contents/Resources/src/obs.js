@@ -1,0 +1,134 @@
+// OBS connection wrapper. Everything that talks to OBS lives here, so the
+// rest of the app never touches the websocket API directly.
+
+import { OBSWebSocket } from 'obs-websocket-js';
+import { EventEmitter } from 'node:events';
+
+export class ObsClient extends EventEmitter {
+  constructor(cfg) {
+    super();
+    this.cfg = cfg;
+    this.obs = new OBSWebSocket();
+    this.connected = false;
+  }
+
+  async connect() {
+    try {
+      const pw = this.cfg.obs.password || undefined;
+      await this.obs.connect(this.cfg.obs.url, pw);
+      this.connected = true;
+      this.emit('log', 'Connected to OBS');
+
+      // Hide the ad sources (and any leftover starting-soon loop) on connect so
+      // nothing is stuck on air from a previous run.
+      await this.hideAll();
+      await this.hideStartingSoon();
+
+      this.obs.on('MediaInputPlaybackEnded', ({ inputName }) => {
+        if (inputName === this.cfg.mediaSource) this.emit('mediaEnded');
+      });
+
+      this.obs.once('ConnectionClosed', () => {
+        this.connected = false;
+        this.emit('log', 'OBS connection lost. Retrying in 3s.');
+        setTimeout(() => this.connect(), 3000);
+      });
+    } catch (err) {
+      this.connected = false;
+      this.emit('log', 'OBS not reachable. Retrying in 3s.');
+      setTimeout(() => this.connect(), 3000);
+    }
+  }
+
+  // Point the Media Source at a video file and restart playback. The source is
+  // shown here and hidden again when playback ends (see index.js -> mediaEnded).
+  async playVideo(fullPath) {
+    if (!this.connected) throw new Error('OBS not connected');
+    // Make sure the image ad isn't also showing.
+    if (this.cfg.imageSource) await this.setVisible(this.cfg.imageSource, false);
+    await this.obs.call('SetInputSettings', {
+      inputName: this.cfg.mediaSource,
+      inputSettings: { is_local_file: true, local_file: fullPath, looping: false },
+    });
+    await this.setVisible(this.cfg.mediaSource, true);
+    await this.obs.call('TriggerMediaInputAction', {
+      inputName: this.cfg.mediaSource,
+      mediaAction: 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART',
+    });
+  }
+
+  // Point the Image Source at a file and show it. Images have no "playback
+  // ended" event, so the rotator hides them on a timer instead.
+  async showImage(fullPath) {
+    if (!this.connected) throw new Error('OBS not connected');
+    if (!this.cfg.imageSource) throw new Error('No imageSource configured');
+    // Make sure the video ad isn't also showing.
+    await this.setVisible(this.cfg.mediaSource, false);
+    await this.obs.call('SetInputSettings', {
+      inputName: this.cfg.imageSource,
+      inputSettings: { file: fullPath },
+    });
+    await this.setVisible(this.cfg.imageSource, true);
+  }
+
+  // Loop a "starting soon" video underneath the ads. Ads cover it and it shows
+  // through again when they clear.
+  async playStartingSoon(fullPath) {
+    if (!this.connected) throw new Error('OBS not connected');
+    if (!this.cfg.startingSoonSource) throw new Error('No startingSoonSource configured');
+    await this.obs.call('SetInputSettings', {
+      inputName: this.cfg.startingSoonSource,
+      inputSettings: { is_local_file: true, local_file: fullPath, looping: true },
+    });
+    await this.setVisible(this.cfg.startingSoonSource, true);
+    await this.obs.call('TriggerMediaInputAction', {
+      inputName: this.cfg.startingSoonSource,
+      mediaAction: 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART',
+    });
+  }
+
+  async hideStartingSoon() {
+    if (!this.connected || !this.cfg.startingSoonSource) return;
+    try {
+      await this.obs.call('TriggerMediaInputAction', {
+        inputName: this.cfg.startingSoonSource,
+        mediaAction: 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP',
+      });
+    } catch { /* ignore */ }
+    await this.setVisible(this.cfg.startingSoonSource, false);
+  }
+
+  // Stop video playback and hide both ad sources. Leaves Starting Soon alone.
+  async stopAll() {
+    if (!this.connected) return;
+    try {
+      await this.obs.call('TriggerMediaInputAction', {
+        inputName: this.cfg.mediaSource,
+        mediaAction: 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP',
+      });
+    } catch { /* media source may not support stop; ignore */ }
+    await this.hideAll();
+  }
+
+  async hideAll() {
+    await this.setVisible(this.cfg.mediaSource, false);
+    if (this.cfg.imageSource) await this.setVisible(this.cfg.imageSource, false);
+  }
+
+  // Show or hide a source in the configured scene.
+  async setVisible(sourceName, visible) {
+    try {
+      const { sceneItemId } = await this.obs.call('GetSceneItemId', {
+        sceneName: this.cfg.scene,
+        sourceName,
+      });
+      await this.obs.call('SetSceneItemEnabled', {
+        sceneName: this.cfg.scene,
+        sceneItemId,
+        sceneItemEnabled: visible,
+      });
+    } catch (err) {
+      this.emit('log', `Could not set "${sourceName}" visibility: ` + err.message);
+    }
+  }
+}

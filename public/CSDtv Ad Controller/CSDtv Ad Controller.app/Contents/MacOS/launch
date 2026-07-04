@@ -1,0 +1,65 @@
+#!/bin/bash
+# CSDtv Ad Controller — app launcher. All code lives inside this app bundle, and
+# config/media live in ~/Documents/CSDtv Ad Controller. Nothing is read from next
+# to the app, so it runs from anywhere (its folder, Applications, or the temporary
+# copy macOS uses for unsigned apps). No Terminal: it opens the panel in the
+# browser. Quit the app to stop it.
+
+RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
+DATA="$HOME/Documents/CSDtv Ad Controller"
+mkdir -p "$DATA"
+
+# Finder launches apps with a bare PATH, so Node may be installed but not visible.
+export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/local/opt/node/bin:$PATH"
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null 2>&1
+if ! command -v node >/dev/null 2>&1; then
+  latest="$(ls -d "$NVM_DIR"/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+  [ -n "$latest" ] && export PATH="$latest:$PATH"
+fi
+if ! command -v node >/dev/null 2>&1; then
+  osascript -e 'display dialog "Node.js is not installed. I will open the download page — install the macOS (.pkg) version, then open this app again." with title "CSDtv Ad Controller" buttons {"OK"} default button "OK" with icon caution' >/dev/null 2>&1
+  open "https://nodejs.org/en/download/"
+  exit 1
+fi
+
+# Start the controller (code bundled in Resources); log into the data folder.
+node "$RES/src/index.js" >"$DATA/controller.log" 2>&1 &
+NODE_PID=$!
+trap 'kill "$NODE_PID" 2>/dev/null' EXIT INT TERM
+
+# Wait up to 60s for the panel to answer. First launch can be slow while Node
+# loads its libraries. Stop early only if Node actually exited.
+UP=""
+for i in $(seq 1 120); do
+  if curl -s "http://127.0.0.1:4466/api/status" >/dev/null 2>&1; then UP=1; break; fi
+  kill -0 "$NODE_PID" 2>/dev/null || break
+  sleep 0.5
+done
+open_panel() {
+  local URL="http://127.0.0.1:4466"
+  # Prefer a Chromium "app" window: a clean standalone window with no tabs or
+  # address bar, instead of a new tab in the operator's browser.
+  local chrome="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  local edge="/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+  local brave="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+  if [ -x "$chrome" ]; then
+    "$chrome" --app="$URL" --window-size=460,980 >/dev/null 2>&1 &
+  elif [ -x "$edge" ]; then
+    "$edge" --app="$URL" --window-size=460,980 >/dev/null 2>&1 &
+  elif [ -x "$brave" ]; then
+    "$brave" --app="$URL" --window-size=460,980 >/dev/null 2>&1 &
+  else
+    open "$URL"
+  fi
+}
+
+if [ -n "$UP" ] || kill -0 "$NODE_PID" 2>/dev/null; then
+  # Up, or still starting but alive — open the panel; it connects when ready.
+  open_panel
+else
+  osascript -e 'display dialog "The controller stopped unexpectedly. Check controller.log in the CSDtv Ad Controller folder in your Documents." with title "CSDtv Ad Controller" buttons {"OK"} default button "OK" with icon stop' >/dev/null 2>&1
+  exit 1
+fi
+
+wait "$NODE_PID"
