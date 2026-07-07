@@ -17,6 +17,12 @@ const WORK_BASE: DashboardNavItem[] = [
   { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
 ]
 
+const OBS_ASSETS: DashboardNavItem = {
+  label: 'OBS assets',
+  href: '/dashboard/obs-assets',
+  icon: 'tv',
+}
+
 const MORE_BASE: DashboardNavItem[] = [
   { label: 'Contacts', href: '/dashboard/contacts', icon: 'contact' },
   { label: 'Onboarding', href: '/dashboard/onboarding', icon: 'star' },
@@ -69,6 +75,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
   const resourcesItems: DashboardNavItem[] = [
     { label: 'Library', href: '/dashboard/library', icon: 'book' },
     brandLibrary,
+    OBS_ASSETS,
     ...(manager ? [{ label: 'Reports', href: '/dashboard/reports', icon: 'chart' }] : []),
   ]
 
@@ -77,6 +84,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
     brandLibrary,
+    OBS_ASSETS,
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
     { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
     { label: 'Settings', href: '/dashboard/settings', icon: 'settings' },
@@ -134,6 +142,7 @@ export function buildStudentInternDashboardNav(): {
         items: [
           { label: 'Library', href: '/dashboard/library', icon: 'book' },
           BRAND_LIBRARY_PUBLIC,
+          OBS_ASSETS,
         ],
       },
       {

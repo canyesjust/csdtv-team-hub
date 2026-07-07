@@ -54,6 +54,7 @@
       <input id="sheetUrl" placeholder="(optional) published Google Sheet CSV URL" style="flex:1;min-width:220px;">
       <button id="loadSheet">Load from sheet</button>
     </div>
+    <div class="hintbar" style="margin-bottom:8px;">CSV columns: <b>num, name, org</b>. <a href="#" id="dlLineup" style="color:var(--accenthi)">Download template CSV</a></div>
     <div class="lineup" id="lineup"></div>
     <div class="row" style="margin-top:8px;">
       <button id="prev">‹ Prev</button>
@@ -79,9 +80,7 @@
     <button id="tickerBtn">Ticker: off</button>
   </div>
   <label>Ticker items (one per line)</label>
-  <textarea id="tickerItems">Welcome to the 2026 Sandy City Parade
-Follow us @CSDtv
-Thank you to our sponsors</textarea>
+  <textarea id="tickerItems" placeholder="One ticker line per line, e.g.&#10;Welcome to the parade&#10;Follow @CSDtv"></textarea>
   <label>Bug logo URL (optional — blank = "CSDtv LIVE" text)</label>
   <input id="bugLogo" placeholder="https://.../logo.png">
   </div>
@@ -92,32 +91,33 @@ Thank you to our sponsors</textarea>
       <input id="spSheetUrl" placeholder="(optional) published Sponsors CSV URL" style="flex:1;min-width:220px;">
       <button id="loadSp">Load</button>
     </div>
+    <div class="hintbar" style="margin-bottom:8px;">CSV columns: <b>sponsor, tagline, logo_url</b>. <a href="#" id="dlSponsors" style="color:var(--accenthi)">Download template CSV</a></div>
     <div class="lineup" id="sponsors"></div>
   </div>
 
   <h2>Full screen</h2>
   <div class="sec">
     <div class="grid2">
-      <div><label>Title</label><input id="ftTitle" value="WELCOME"></div>
-      <div><label>Subtitle</label><input id="ftSub" value="2026 Sandy City Parade"></div>
+      <div><label>Title</label><input id="ftTitle" placeholder="e.g. WELCOME"></div>
+      <div><label>Subtitle</label><input id="ftSub" placeholder="e.g. 2026 Parade"></div>
     </div>
     <div class="row" style="margin-top:8px;"><button class="pri" id="airTitle">Air title card</button></div>
     <label style="margin-top:10px;">Bumper / message</label>
-    <input id="bmp" value="We'll be right back">
+    <input id="bmp" placeholder="e.g. We'll be right back">
     <div class="row" style="margin-top:8px;"><button class="pri" id="airBumper">Air bumper</button></div>
     <label style="margin-top:10px;">Sponsor slate (name)</label>
-    <input id="spn" value="Mountain America Credit Union">
+    <input id="spn" placeholder="Sponsor name">
     <div class="row" style="margin-top:8px;"><button class="pri" id="airSlate">Air sponsor slate</button></div>
     <label style="margin-top:10px;">Social — handle & platform</label>
-    <div class="grid2"><input id="socHandle" value="@CSDtv"><input id="socPlat" value="Instagram"></div>
+    <div class="grid2"><input id="socHandle" placeholder="@handle"><input id="socPlat" placeholder="Platform"></div>
     <div class="row" style="margin-top:8px;"><button class="pri" id="airSocial">Air social</button>
       <button class="warn" id="clearFull">Clear full screen</button></div>
   </div>
 
   <h2>Sponsor panel (left popout)</h2>
   <div class="sec">
-    <label>Title</label><input id="pnTitle" value="Mountain America Credit Union">
-    <label>Text (line breaks ok)</label><textarea id="pnText">Proud parade partner</textarea>
+    <label>Title</label><input id="pnTitle" placeholder="Sponsor name">
+    <label>Text (line breaks ok)</label><textarea id="pnText" placeholder="Sponsor text (line breaks ok)"></textarea>
     <label>Image URL (optional)</label><input id="pnLogo" placeholder="https://.../logo.png">
     <div class="row" style="margin-top:8px;"><button class="pri" id="airPanel">Air panel</button>
       <button class="warn" id="clearPanel">Clear panel</button></div>
@@ -131,23 +131,8 @@ Thank you to our sponsors</textarea>
 </div>
 <script>
 (function(){
-  var LINEUP=[
-    {num:1,name:"Corner Canyon Marching Band",org:"Charger Regiment"},
-    {num:2,name:"American Legion Post 100",org:"Veterans Color Guard"},
-    {num:3,name:"Daughters of the American Revolution",org:"Salt Lake Chapter"},
-    {num:4,name:"Sandy City Fire Department",org:"Engine 31"},
-    {num:5,name:"Alta High Drumline",org:"Hawks Percussion"},
-    {num:6,name:"Utah National Guard",org:"19th Special Forces Group"},
-    {num:7,name:"Draper Days Royalty",org:"2026 Royal Court"},
-    {num:8,name:"Grand Marshal",org:"Mayor Monica Zoltanski"}
-  ];
-  var SPONSORS=[
-    {name:"Mountain America Credit Union",tagline:"Proud parade partner",logo:""},
-    {name:"Sandy City",tagline:"Celebrating our community",logo:""},
-    {name:"Rio Tinto Kennecott",tagline:"Supporting local schools",logo:""},
-    {name:"Harmons Grocery",tagline:"Neighborhood proud",logo:""},
-    {name:"Larry H. Miller Company",tagline:"Driven by community",logo:""}
-  ];
+  var LINEUP=[];
+  var SPONSORS=[];
   var idx=-1;
   var state={lower:{on:false,name:'',org:''},coming:{on:false,name:''},full:{on:false},
     panel:{on:false,title:'',text:'',logo:''},
@@ -164,6 +149,7 @@ Thank you to our sponsors</textarea>
   function esc(s){return String(s||'').replace(/</g,'&lt;');}
 
   function renderLineup(){
+    if(!LINEUP.length){ E('lineup').innerHTML='<div class="hintbar" style="padding:10px 6px">No lineup loaded. Paste a published CSV URL above and Load (columns: <b>num, name, org</b>), download the template below, or use Manual lower third for one-offs.</div>'; return; }
     E('lineup').innerHTML=LINEUP.map(function(e,i){
       return '<div class="ent'+(i===idx?' cur':'')+'" data-i="'+i+'"><span class="num">'+e.num+'</span>'
         +'<span class="nm">'+esc(e.name)+'</span> <span class="og">'+esc(e.org)+'</span></div>';
@@ -225,8 +211,21 @@ Thank you to our sponsors</textarea>
     }).catch(function(){ alert('Could not load that CSV URL. Make sure the sheet is Published to web as CSV.'); });
   };
 
-  function renderSponsors(){ E('sponsors').innerHTML=SPONSORS.map(function(s,i){return '<div class="ent" data-i="'+i+'"><span class="nm">'+esc(s.name)+'</span> <span class="og">'+esc(s.tagline||'')+'</span></div>';}).join('');
+  function renderSponsors(){
+    if(!SPONSORS.length){ E('sponsors').innerHTML='<div class="hintbar" style="padding:10px 6px">No sponsors loaded. Paste a published CSV URL above and Load (columns: <b>sponsor, tagline, logo_url</b>), or download the template below.</div>'; return; }
+    E('sponsors').innerHTML=SPONSORS.map(function(s,i){return '<div class="ent" data-i="'+i+'"><span class="nm">'+esc(s.name)+'</span> <span class="og">'+esc(s.tagline||'')+'</span></div>';}).join('');
     [].forEach.call(E('sponsors').children,function(el){ el.onclick=function(){ var s=SPONSORS[parseInt(el.getAttribute('data-i'),10)]; E('spn').value=s.name; E('pnTitle').value=s.name; E('pnText').value=s.tagline||''; E('pnLogo').value=s.logo||''; }; }); }
+  function downloadCSV(filename, content){
+    var blob=new Blob([content],{type:'text/csv'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },1000);
+  }
+  E('dlLineup').onclick=function(ev){ ev.preventDefault();
+    downloadCSV('parade-lineup-template.csv','num,name,org\n1,Marching Band,Example High School\n2,Fire Department,Engine 1\n'); };
+  E('dlSponsors').onclick=function(ev){ ev.preventDefault();
+    downloadCSV('parade-sponsors-template.csv','sponsor,tagline,logo_url\nSponsor Name,Optional tagline,https://example.com/logo.png\n'); };
+
   renderSponsors();
   render(); push();
 })();

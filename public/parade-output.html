@@ -25,12 +25,13 @@
   .og span{color:var(--gold);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;text-shadow:var(--tsh);}
   .kick{color:var(--gold);letter-spacing:.16em;text-transform:uppercase;text-shadow:var(--tsh);}
 
-  /* layers hidden by default; .on shows with snappy motion */
-  .lyr{opacity:0;pointer-events:none;transition:opacity .45s ease,transform .55s cubic-bezier(.2,.8,.2,1);}
+  /* layers hidden by default. Base timing governs the EXIT (a touch slower so
+     graphics linger as they leave); .lyr.on governs the ENTRANCE. */
+  .lyr{opacity:0;pointer-events:none;transition:opacity .75s ease,transform .9s cubic-bezier(.2,.8,.2,1);}
   .slideL{transform:translateX(-70px);}
   .slideR{transform:translateX(70px);}
   .fade{transform:scale(.985);}
-  .lyr.on{opacity:1;transform:none;}
+  .lyr.on{opacity:1;transform:none;transition:opacity .6s ease,transform .8s cubic-bezier(.2,.8,.2,1);}
 
   /* Lower third */
   #lower{left:80px;bottom:80px;width:max-content;max-width:1740px;border-radius:16px;padding:22px 44px 26px;}
@@ -102,7 +103,7 @@
       else if(sig!==was){
         node.dataset.sig=sig;
         if(animate){ node.classList.remove('on'); clearTimeout(node._swap);   // animate OUT, then swap content and animate back IN
-          node._swap=setTimeout(function(){ if(update)update(); play(node); }, 400); }
+          node._swap=setTimeout(function(){ if(update)update(); play(node); }, 650); }
         else { if(update)update(); }
       }
     } else { if(wasOn) node.classList.remove('on'); node.dataset.sig=''; clearTimeout(node._swap); }
