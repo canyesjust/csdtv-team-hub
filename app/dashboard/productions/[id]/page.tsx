@@ -1865,7 +1865,7 @@ export default function ProductionDetailPage() {
           productionId={uuid}
           productionNumber={production.production_number}
           productionTitle={production.title}
-          isManager={currentUser?.role === 'Manager'}
+          canManage={currentUser?.role === 'Manager' || currentUser?.role === 'Staff'}
         />
       )}
 

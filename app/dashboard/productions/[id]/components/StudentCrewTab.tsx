@@ -53,7 +53,7 @@ interface Props {
   productionId: string
   productionNumber: number
   productionTitle: string
-  isManager: boolean
+  canManage: boolean
 }
 
 const FOOD_OPTIONS = [
@@ -75,7 +75,7 @@ const TRANSPORT_OPTIONS = [
 
 const WEAR_DEFAULT = 'CSDtv black polo and dark pants. Closed-toe shoes. No logos or graphics.'
 
-export default function StudentCrewTab({ productionId, productionNumber, productionTitle, isManager }: Props) {
+export default function StudentCrewTab({ productionId, productionNumber, productionTitle, canManage }: Props) {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   const supabase = createClient()
@@ -179,7 +179,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   useEffect(() => { loadAll() }, [loadAll])
 
   const enableCrew = async () => {
-    if (!isManager) return
+    if (!canManage) return
     setLoading(true)
     // Update production
     await supabase.from('productions').update({ has_student_crew: true }).eq('id', productionId)
@@ -198,7 +198,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   }
 
   const disableCrew = async () => {
-    if (!isManager) return
+    if (!canManage) return
     if (!(await confirmDialog({ message: 'Disable student crew for this production? Existing sign-ups will remain in the database for reports but the public sign-up page will be hidden.', confirmLabel: 'Disable' }))) return
     await supabase.from('productions').update({ has_student_crew: false }).eq('id', productionId)
     setHasStudentCrew(false)
@@ -331,7 +331,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
       <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '32px 20px', textAlign: 'center' as const }}>
         <p style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 6px' }}>🎬 Student crew not yet enabled</p>
         <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px' }}>Turn this on to manage student sign-ups for this production. You&apos;ll get a public URL students can use to claim crew positions.</p>
-        {isManager ? (
+        {canManage ? (
           <button onClick={enableCrew} style={{ fontSize: '14px', padding: '10px 20px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Enable student crew</button>
         ) : (
           <p style={{ fontSize: '13px', color: muted, margin: 0 }}>(Manager-only)</p>
@@ -359,7 +359,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
         </div>
         <button onClick={copyUrl} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(30,108,181,0.1)', color: 'var(--brand-primary)', border: '0.5px solid rgba(30,108,181,0.25)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>📋 Copy</button>
         <a href={publicUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, textDecoration: 'none' }}>↗ Preview</a>
-        {isManager && (
+        {canManage && (
           <button onClick={disableCrew} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Disable</button>
         )}
       </div>
@@ -389,45 +389,45 @@ export default function StudentCrewTab({ productionId, productionNumber, product
 
         <div style={{ marginBottom: '10px' }}>
           <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Display title</label>
-          <input value={form.display_title} onChange={e => setForm(f => ({ ...f, display_title: e.target.value }))} placeholder={productionTitle} style={inputStyle} disabled={!isManager} />
+          <input value={form.display_title} onChange={e => setForm(f => ({ ...f, display_title: e.target.value }))} placeholder={productionTitle} style={inputStyle} disabled={!canManage} />
           <p style={{ fontSize: '11px', color: muted, margin: '3px 0 0' }}>What students see at the top of the public page. Defaults to the production title.</p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '10px' }}>
           <div>
             <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Crew call time</label>
-            <input type="time" value={form.call_time} onChange={e => setForm(f => ({ ...f, call_time: e.target.value }))} style={inputStyle} disabled={!isManager} />
+            <input type="time" value={form.call_time} onChange={e => setForm(f => ({ ...f, call_time: e.target.value }))} style={inputStyle} disabled={!canManage} />
           </div>
           <div>
             <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Event start</label>
-            <input type="time" value={form.event_start_time} onChange={e => setForm(f => ({ ...f, event_start_time: e.target.value }))} style={inputStyle} disabled={!isManager} />
+            <input type="time" value={form.event_start_time} onChange={e => setForm(f => ({ ...f, event_start_time: e.target.value }))} style={inputStyle} disabled={!canManage} />
           </div>
           <div>
             <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Wrap / end</label>
-            <input type="time" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} style={inputStyle} disabled={!isManager} />
+            <input type="time" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} style={inputStyle} disabled={!canManage} />
           </div>
         </div>
 
         <div style={{ marginBottom: '10px' }}>
           <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Meeting location</label>
-          <input value={form.meeting_location} onChange={e => setForm(f => ({ ...f, meeting_location: e.target.value }))} placeholder="e.g. Meet at the front entrance / loading dock by the pool" style={inputStyle} disabled={!isManager} />
+          <input value={form.meeting_location} onChange={e => setForm(f => ({ ...f, meeting_location: e.target.value }))} placeholder="e.g. Meet at the front entrance / loading dock by the pool" style={inputStyle} disabled={!canManage} />
         </div>
 
         <div style={{ marginBottom: '10px' }}>
           <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>What you&apos;ll be doing</label>
-          <textarea value={form.what_youll_do} onChange={e => setForm(f => ({ ...f, what_youll_do: e.target.value }))} placeholder="Brief description of the gig — &quot;You'll be running cameras for the basketball game...&quot;" style={{ ...inputStyle, minHeight: '70px', resize: 'vertical' as const, lineHeight: 1.5 }} disabled={!isManager} />
+          <textarea value={form.what_youll_do} onChange={e => setForm(f => ({ ...f, what_youll_do: e.target.value }))} placeholder="Brief description of the gig — &quot;You'll be running cameras for the basketball game...&quot;" style={{ ...inputStyle, minHeight: '70px', resize: 'vertical' as const, lineHeight: 1.5 }} disabled={!canManage} />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
           <div>
             <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Food</label>
-            <select value={form.food} onChange={e => setForm(f => ({ ...f, food: e.target.value }))} style={inputStyle} disabled={!isManager}>
+            <select value={form.food} onChange={e => setForm(f => ({ ...f, food: e.target.value }))} style={inputStyle} disabled={!canManage}>
               {FOOD_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
           </div>
           <div>
             <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Transportation</label>
-            <select value={form.transportation_note} onChange={e => setForm(f => ({ ...f, transportation_note: e.target.value }))} style={inputStyle} disabled={!isManager}>
+            <select value={form.transportation_note} onChange={e => setForm(f => ({ ...f, transportation_note: e.target.value }))} style={inputStyle} disabled={!canManage}>
               <option value="">Select...</option>
               {TRANSPORT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
@@ -436,7 +436,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
 
         <div style={{ marginBottom: '10px' }}>
           <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>What to wear</label>
-          <textarea value={form.what_to_wear} onChange={e => setForm(f => ({ ...f, what_to_wear: e.target.value }))} style={{ ...inputStyle, minHeight: '50px', resize: 'vertical' as const, lineHeight: 1.5 }} disabled={!isManager} />
+          <textarea value={form.what_to_wear} onChange={e => setForm(f => ({ ...f, what_to_wear: e.target.value }))} style={{ ...inputStyle, minHeight: '50px', resize: 'vertical' as const, lineHeight: 1.5 }} disabled={!canManage} />
         </div>
 
         <div style={{ marginBottom: '10px' }}>
@@ -448,12 +448,12 @@ export default function StudentCrewTab({ productionId, productionNumber, product
               {form.requirements.map((req, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: inputBg, borderRadius: '6px', border: `0.5px solid ${border}` }}>
                   <span style={{ flex: 1, fontSize: '13px', color: text }}>• {req}</span>
-                  {isManager && <button onClick={() => removeRequirement(i)} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>}
+                  {canManage && <button onClick={() => removeRequirement(i)} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>}
                 </div>
               ))}
             </div>
           )}
-          {isManager && (
+          {canManage && (
             <div style={{ display: 'flex', gap: '6px' }}>
               <input value={newReq} onChange={e => setNewReq(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRequirement() } }} placeholder="Add a requirement (e.g. Bring a water bottle)" style={{ ...inputStyle, flex: 1, fontSize: '13px' }} />
               <button onClick={addRequirement} disabled={!newReq.trim()} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: newReq.trim() ? 'var(--brand-primary)' : 'var(--surface-2)', color: newReq.trim() ? '#fff' : muted, border: 'none', cursor: newReq.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 500 }}>Add</button>
@@ -462,20 +462,20 @@ export default function StudentCrewTab({ productionId, productionNumber, product
         </div>
 
         <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: isManager ? 'pointer' : 'default' }}>
-            <input type="checkbox" checked={form.hide_names_on_public} onChange={e => setForm(f => ({ ...f, hide_names_on_public: e.target.checked }))} disabled={!isManager} style={{ width: '14px', height: '14px' }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: canManage ? 'pointer' : 'default' }}>
+            <input type="checkbox" checked={form.hide_names_on_public} onChange={e => setForm(f => ({ ...f, hide_names_on_public: e.target.checked }))} disabled={!canManage} style={{ width: '14px', height: '14px' }} />
             <span style={{ fontSize: '12px', color: text }}>Hide other students&apos; names on the public sign-up page (privacy mode)</span>
           </label>
         </div>
 
-        {isManager && (
+        {canManage && (
           <div style={{ marginBottom: '10px' }}>
             <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Internal note (manager-only — never shown publicly)</label>
             <textarea value={form.internal_note} onChange={e => setForm(f => ({ ...f, internal_note: e.target.value }))} placeholder="Notes for your reference..." style={{ ...inputStyle, minHeight: '50px', resize: 'vertical' as const, lineHeight: 1.5, background: dark ? 'rgba(245,158,11,0.04)' : 'rgba(245,158,11,0.04)', borderColor: 'rgba(245,158,11,0.2)' }} />
           </div>
         )}
 
-        {isManager && (
+        {canManage && (
           <button onClick={saveForm} disabled={savingForm} style={{ fontSize: '13px', padding: '8px 18px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: savingForm ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
             {savingForm ? 'Saving...' : 'Save event details'}
           </button>
@@ -486,7 +486,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
       <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '12px', padding: '16px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 600, color: text, margin: 0 }}>Roles needed</h3>
-          {isManager && !showAddSlot && !editingSlotId && (
+          {canManage && !showAddSlot && !editingSlotId && (
             <button onClick={() => { setShowAddSlot(true); setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' }) }} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Add role</button>
           )}
         </div>
@@ -546,7 +546,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
                       {slot.notes && ` · ${slot.notes}`}
                     </p>
                   </div>
-                  {isManager && (
+                  {canManage && (
                     <span>
                       <button onClick={() => startEditSlot(slot)} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'transparent', color: 'var(--brand-primary)', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', marginRight: '4px' }}>Edit</button>
                       <button onClick={() => deleteSlot(slot.id, role?.name || 'this role')} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'transparent', color: '#ef4444', border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Remove</button>
@@ -563,7 +563,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
                         </span>
                         <span style={{ flex: 1, color: text }}>{su.students?.name || 'Unknown student'}{su.students?.grade && <span style={{ color: muted, fontSize: '12px' }}> · Grade {su.students.grade}</span>}</span>
                         <span style={{ fontSize: '11px', color: muted }}>{new Date(su.signed_up_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                        {isManager && (
+                        {canManage && (
                           <button onClick={() => cancelSignup(su.id, su.students?.name || 'this student')} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
                         )}
                       </div>

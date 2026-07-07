@@ -71,6 +71,8 @@ export default function VideosPage() {
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterReview, setFilterReview] = useState(false)
+  const VIDEO_PAGE_SIZE = 100
+  const [visibleCount, setVisibleCount] = useState(VIDEO_PAGE_SIZE)
   const [showNew, setShowNew] = useState(false)
   const [showBulkImport, setShowBulkImport] = useState(false)
   const [bulkCSV, setBulkCSV] = useState('')
@@ -94,11 +96,30 @@ export default function VideosPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [videosRes, userRes] = await Promise.all([
-      supabase.from('videos').select('id, title, description, video_type, status, production_id, school_department, school_year, visibility, date_filmed, date_published, thumbnail_url, created_by, created_at, updated_at, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, needs_review, youtube_tags, video_tags(tag), productions(title, production_number)').order('date_published', { ascending: false, nullsFirst: false }).limit(1000),
+    // PostgREST caps every request at 1000 rows, so page through with .range()
+    // to load the whole library. A secondary sort by id keeps paging stable
+    // when many videos share a date_published.
+    const VIDEO_COLS = 'id, title, description, video_type, status, production_id, school_department, school_year, visibility, date_filmed, date_published, thumbnail_url, created_by, created_at, updated_at, youtube_url, youtube_id, youtube_views, youtube_likes, youtube_duration, youtube_thumbnail, needs_review, youtube_tags, video_tags(tag), productions(title, production_number)'
+    const PAGE = 1000
+    const [allVideos, userRes] = await Promise.all([
+      (async () => {
+        const acc: Video[] = []
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await supabase
+            .from('videos')
+            .select(VIDEO_COLS)
+            .order('date_published', { ascending: false, nullsFirst: false })
+            .order('id', { ascending: true })
+            .range(from, from + PAGE - 1)
+          if (error || !data || data.length === 0) break
+          acc.push(...(data as unknown as Video[]))
+          if (data.length < PAGE) break
+        }
+        return acc
+      })(),
       resolveEffectiveTeamRow<TeamMember>(supabase, 'id, name, role'),
     ])
-    setVideos((videosRes.data as unknown as Video[]) || [])
+    setVideos(allVideos)
     setCurrentUser(userRes)
     // Show the video grid now; the productions + schools lists are only used in
     // the add/edit dropdowns, so they load in the background.
@@ -491,6 +512,11 @@ export default function VideosPage() {
     return matchSearch && matchType && matchStatus && matchReview
   })
 
+  // Only render a window of rows so the page stays fast with thousands of
+  // videos. Reset the window whenever the filters/search change.
+  const visible = filtered.slice(0, visibleCount)
+  useEffect(() => { setVisibleCount(VIDEO_PAGE_SIZE) }, [search, filterType, filterStatus, filterReview])
+
   const inputStyle: React.CSSProperties = { width: '100%', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '8px', padding: '10px 12px', fontSize: '14px', color: text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
   const labelStyle: React.CSSProperties = { fontSize: '12px', fontWeight: 500, color: muted, display: 'block', marginBottom: '4px', textTransform: 'uppercase' as const, letterSpacing: '0.5px' }
 
@@ -788,7 +814,7 @@ export default function VideosPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(video => {
+                {visible.map(video => {
                   const statusDot = video.needs_review ? '#f59e0b' : video.production_id ? '#22c55e' : '#ef4444'
                   return (
                     <tr key={video.id} style={{ borderBottom: `0.5px solid ${border}` }}
@@ -884,6 +910,15 @@ export default function VideosPage() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', padding: '12px 16px', borderTop: `0.5px solid ${border}`, flexWrap: 'wrap' as const }}>
+            <span style={{ fontSize: '13px', color: muted }}>Showing {visible.length.toLocaleString()} of {filtered.length.toLocaleString()}</span>
+            {visibleCount < filtered.length && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setVisibleCount(c => c + VIDEO_PAGE_SIZE)} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Load {Math.min(VIDEO_PAGE_SIZE, filtered.length - visibleCount)} more</button>
+                <button onClick={() => setVisibleCount(filtered.length)} style={{ fontSize: '13px', padding: '8px 16px', borderRadius: '8px', background: cardBg, color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Show all</button>
+              </div>
+            )}
           </div>
         </div>
       )}

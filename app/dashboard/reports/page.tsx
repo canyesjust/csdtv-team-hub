@@ -75,7 +75,17 @@ export default function ReportsPage() {
       supabase.from('productions').select('id, title, production_number, status, request_type_label, school_department, start_datetime, school_year, synced_at, estimated_external_cost, deliverables_count').order('production_number'),
       supabase.from('tasks').select('id, status, assigned_to, completed_at, created_at, priority'),
       supabase.from('production_activity').select('id, production_id, action, created_at').order('created_at'),
-      supabase.from('videos').select('id, title, status, video_type, date_published, created_at, youtube_views, youtube_likes, youtube_url, youtube_thumbnail'),
+      // Paginate past PostgREST's 1000-row cap so reports count every video.
+      (async () => {
+        const acc: any[] = []
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from('videos').select('id, title, status, video_type, date_published, created_at, youtube_views, youtube_likes, youtube_url, youtube_thumbnail').order('id', { ascending: true }).range(from, from + 999)
+          if (error || !data || data.length === 0) break
+          acc.push(...data)
+          if (data.length < 1000) break
+        }
+        return { data: acc }
+      })(),
       supabase.from('video_destinations').select('id, video_id, platform, view_count'),
       supabase.from('video_talent').select('id, video_id, release_status'),
       supabase.from('equipment_loans').select('id, equipment_id, checked_out_at, checked_in_at, equipment(name, asset_tag)').order('checked_out_at', { ascending: false }),
