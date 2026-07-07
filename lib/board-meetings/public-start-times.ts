@@ -18,15 +18,33 @@ export const EMPTY_PUBLIC_START_TIMES: PublicStartTimes = { meeting: null, secti
 // stored payload so a malformed/oversized body can't bloat the row.
 const MAX_SECTIONS = 40
 
-const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/
-
-/** Accept "H:MM" or "HH:MM" (00:00–23:59); normalize to zero-padded "HH:MM". */
-function cleanHHMM(value: unknown): string | null {
+/**
+ * Parse a time into zero-padded 24-hour "HH:MM". Accepts both formats the two
+ * agenda importers produce:
+ *   - 24-hour "H:MM"/"HH:MM"  (AI/PDF extraction, e.g. "17:30")
+ *   - 12-hour "5:00 pm", "5 pm", "5:00p.m." (portal heading, e.g. "5:00 pm")
+ * Returns null for anything malformed.
+ */
+export function parseTimeToHHMM(value: unknown): string | null {
   if (typeof value !== 'string') return null
-  const m = value.trim().match(HHMM)
-  if (!m) return null
-  const h = String(Number(m[1])).padStart(2, '0')
-  return `${h}:${m[2]}`
+  const s = value.trim().toLowerCase()
+
+  // 12-hour with am/pm.
+  const m12 = s.match(/^(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?$/)
+  if (m12) {
+    let h = Number(m12[1])
+    const min = m12[2] ? Number(m12[2]) : 0
+    if (h < 1 || h > 12 || min > 59) return null
+    if (h === 12) h = 0
+    if (m12[3] === 'p') h += 12
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+  }
+
+  // 24-hour.
+  const m24 = s.match(/^([01]?\d|2[0-3]):([0-5]\d)$/)
+  if (m24) return `${String(Number(m24[1])).padStart(2, '0')}:${m24[2]}`
+
+  return null
 }
 
 /**
@@ -37,7 +55,7 @@ export function normalizePublicStartTimes(raw: unknown): PublicStartTimes {
   if (!raw || typeof raw !== 'object') return { meeting: null, sections: {} }
   const obj = raw as Record<string, unknown>
 
-  const meeting = cleanHHMM(obj.meeting)
+  const meeting = parseTimeToHHMM(obj.meeting)
 
   const sections: Record<string, string> = {}
   const rawSections = obj.sections
@@ -47,7 +65,7 @@ export function normalizePublicStartTimes(raw: unknown): PublicStartTimes {
       if (count >= MAX_SECTIONS) break
       // Section keys are agenda section numbers — integer strings only.
       if (!/^\d{1,4}$/.test(key)) continue
-      const hhmm = cleanHHMM(val)
+      const hhmm = parseTimeToHHMM(val)
       if (!hhmm) continue
       sections[String(Number(key))] = hhmm
       count++
@@ -59,7 +77,7 @@ export function normalizePublicStartTimes(raw: unknown): PublicStartTimes {
 
 /** "17:00" → "5:00 p.m." (matches the public page's a.m./p.m. label style). */
 export function formatStartLabel(hhmm: string | null | undefined): string | null {
-  const clean = cleanHHMM(hhmm)
+  const clean = parseTimeToHHMM(hhmm)
   if (!clean) return null
   const [h, mm] = clean.split(':')
   const hour = Number(h)

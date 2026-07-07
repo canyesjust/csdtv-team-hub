@@ -23,6 +23,17 @@ function parseDuration(iso: string): string {
   return `${min}:${String(sec).padStart(2, '0')}`
 }
 
+// Convert a UTC ISO instant to a Mountain-time calendar date (YYYY-MM-DD).
+// Uses the IANA zone so DST is handled correctly (MDT in summer, MST in winter).
+function mountainDate(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Denver',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso))
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const url = searchParams.get('url')
@@ -51,18 +62,14 @@ export async function GET(request: Request) {
     let localDate: string
     const liveStart = item.liveStreamingDetails?.actualStartTime
     if (liveStart) {
-      const d = new Date(liveStart)
-      const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
-      localDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+      localDate = mountainDate(liveStart)
     } else {
       const titleDateMatch = item.snippet.title.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
       if (titleDateMatch) {
         const [, mo, day, yr] = titleDateMatch
         localDate = `${yr}-${mo.padStart(2, '0')}-${day.padStart(2, '0')}`
       } else {
-        const pubDate = new Date(item.snippet.publishedAt)
-        const mt = new Date(pubDate.getTime() - 7 * 60 * 60 * 1000)
-        localDate = `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+        localDate = mountainDate(item.snippet.publishedAt)
       }
     }
 

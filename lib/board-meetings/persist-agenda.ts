@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { syncAgendaMotions } from '@/lib/board-meetings/agenda-motions-sync'
 import type { ExtractedAgendaItem, ExtractedAgendaResponse } from '@/lib/board-meetings/extraction'
 import { enrichExtractedItems } from '@/lib/board-meetings/extraction'
+import { parseTimeToHHMM, type PublicStartTimes } from '@/lib/board-meetings/public-start-times'
 
 export async function ensureBoardMeetingRow(
   service: SupabaseClient,
@@ -84,6 +85,7 @@ export async function replaceAgendaItemsFromExtraction(
         agenda_extracted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         ...schedulePatchFromMeeting(extracted.meeting),
+        public_start_times: publicStartTimesFromExtraction(extracted),
       })
       .eq('id', boardMeetingId)
     await syncAgendaMotions(service, boardMeetingId, openedBy ?? null)
@@ -151,6 +153,7 @@ export async function replaceAgendaItemsFromExtraction(
       agenda_extracted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       ...schedulePatchFromMeeting(extracted.meeting),
+      public_start_times: publicStartTimesFromExtraction(extracted),
     })
     .eq('id', boardMeetingId)
   if (upErr) throw new Error(upErr.message)
@@ -196,6 +199,23 @@ function combineDateAndTime(dateStr: string | undefined, timeStr: string | undef
     ms -= errMin * 60 * 1000
   }
   return new Date(ms).toISOString()
+}
+
+/**
+ * Section start times for the public Watch page, read straight from the agenda
+ * (AI/PDF sections carry "17:30"; the portal parser carries "5:00 pm"). Skips
+ * closed / non-broadcast sections so a private closed-session time can never
+ * become the public "meeting begins" label.
+ */
+function publicStartTimesFromExtraction(extracted: ExtractedAgendaResponse): PublicStartTimes {
+  const sections: Record<string, string> = {}
+  for (const s of extracted.sections || []) {
+    if (s.broadcastable === false) continue
+    if (/closed session/i.test(s.title || '')) continue
+    const hhmm = parseTimeToHHMM(s.start_time)
+    if (hhmm) sections[String(s.number)] = hhmm
+  }
+  return { meeting: null, sections }
 }
 
 function schedulePatchFromMeeting(meeting: ExtractedAgendaResponse['meeting'] | undefined): Record<string, string | null> {

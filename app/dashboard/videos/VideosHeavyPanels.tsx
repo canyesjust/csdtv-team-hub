@@ -26,7 +26,6 @@ type SyncRow = {
   title: string
   views: number
   existing: boolean
-  matchedProd: { production_number: number; title: string } | null
   thumbnail: string
 }
 
@@ -47,10 +46,12 @@ export interface VideosHeavyPanelsProps {
   onApplySuggestions: () => void
   syncResults: SyncRow[] | null
   syncImporting: boolean
+  syncComplete: boolean
+  refreshedCount: number
   missingFromYoutube: MissingVideo[]
   onCancelSync: () => void
   onImportSync: () => void
-  onRemoveAllMissing: () => void
+  onArchiveAllMissing: () => void
   onRemoveMissing: (id: string) => void
 }
 
@@ -63,10 +64,12 @@ export default function VideosHeavyPanels({
   onApplySuggestions,
   syncResults,
   syncImporting,
+  syncComplete,
+  refreshedCount,
   missingFromYoutube,
   onCancelSync,
   onImportSync,
-  onRemoveAllMissing,
+  onArchiveAllMissing,
   onRemoveMissing,
 }: VideosHeavyPanelsProps) {
   const { text, muted, border, cardBg, dark } = theme
@@ -114,7 +117,7 @@ export default function VideosHeavyPanels({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div>
               <h3 style={{ fontSize: '15px', fontWeight: 600, color: text, margin: '0 0 4px' }}>YouTube Channel Sync</h3>
-              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{syncResults.length} total · {syncResults.filter(r => !r.existing).length} new · {syncResults.filter(r => !r.existing && r.matchedProd).length} matched to productions · {syncResults.filter(r => r.existing).length} already imported</p>
+              <p style={{ fontSize: '13px', color: muted, margin: 0 }}>{syncResults.length} {syncComplete ? 'total' : 'fetched (partial)'} · {syncResults.filter(r => !r.existing).length} new · {syncResults.filter(r => r.existing).length} already imported{refreshedCount > 0 ? ` · ${refreshedCount} refreshed` : ''}</p>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="button" onClick={onCancelSync} style={{ padding: '8px 14px', borderRadius: '8px', background: cardBg, border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px' }}>Cancel</button>
@@ -123,43 +126,45 @@ export default function VideosHeavyPanels({
               </button>
             </div>
           </div>
-          {missingFromYoutube.length > 0 && (
-            <div style={{ marginBottom: '14px', padding: '12px 14px', borderRadius: '10px', background: 'rgba(239,68,68,0.06)', border: '0.5px solid rgba(239,68,68,0.2)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <div>
-                  <p style={{ fontSize: '14px', fontWeight: 600, color: '#ef4444', margin: 0 }}>⚠ {missingFromYoutube.length} no longer on YouTube</p>
-                  <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Could be deleted, made private, or unlisted. Review before removing.</p>
-                </div>
-                <button type="button" onClick={onRemoveAllMissing} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Remove all</button>
-              </div>
-              <div style={{ maxHeight: '180px', overflowY: 'auto' as const }}>
-                {missingFromYoutube.map(v => (
-                  <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '6px' }}>
-                    {v.youtube_thumbnail ? (
-                      <img src={v.youtube_thumbnail} alt="" style={{ width: '48px', height: '27px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0, opacity: 0.5 }} />
-                    ) : <div style={{ width: '48px', height: '27px', borderRadius: '4px', background: 'var(--surface-2)', flexShrink: 0 }} />}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '12px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
-                      <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.date_published || 'No date'}{v.youtube_views != null ? ` · ${v.youtube_views.toLocaleString()} views` : ''}</p>
-                    </div>
-                    <button type="button" onClick={() => onRemoveMissing(v.id)} style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: 'none', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Remove</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           <div style={{ maxHeight: '400px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
             {syncResults.slice(0, 50).map(v => (
               <div key={v.youtube_id} style={{ display: 'flex', gap: '10px', padding: '8px', borderRadius: '8px', border: `0.5px solid ${border}`, opacity: v.existing ? 0.4 : 1 }}>
                 {v.thumbnail && <img src={v.thumbnail} alt="" style={{ width: '80px', height: '45px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0 }} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: '12px', fontWeight: 500, color: text, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
-                  <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.views.toLocaleString()} views{v.existing ? ' · ✓ imported' : v.matchedProd ? ` · → #${v.matchedProd.production_number}` : ''}</p>
-                  {v.matchedProd && !v.existing && <p style={{ fontSize: '10px', color: '#22c55e', margin: '2px 0 0', fontWeight: 500 }}>✓ {v.matchedProd.title}</p>}
+                  <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.views.toLocaleString()} views{v.existing ? ' · ✓ imported' : ''}</p>
                 </div>
               </div>
             ))}
           </div>
+
+          {missingFromYoutube.length > 0 && (
+            <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: `0.5px solid ${border}` }}>
+              <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'rgba(239,68,68,0.06)', border: '0.5px solid rgba(239,68,68,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: '#ef4444', margin: 0 }}>⚠ {missingFromYoutube.length} gone from YouTube</p>
+                    <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Checked against YouTube: these appear deleted or set to private. Unlisted videos still work and are not listed here. Archive keeps them in the Hub but hidden.</p>
+                  </div>
+                  <button type="button" onClick={onArchiveAllMissing} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(239,68,68,0.12)', color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>Archive all</button>
+                </div>
+                <div style={{ maxHeight: '180px', overflowY: 'auto' as const }}>
+                  {missingFromYoutube.map(v => (
+                    <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '6px' }}>
+                      {v.youtube_thumbnail ? (
+                        <img src={v.youtube_thumbnail} alt="" style={{ width: '48px', height: '27px', objectFit: 'cover' as const, borderRadius: '4px', flexShrink: 0, opacity: 0.5 }} />
+                      ) : <div style={{ width: '48px', height: '27px', borderRadius: '4px', background: 'var(--surface-2)', flexShrink: 0 }} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: '12px', fontWeight: 500, color: text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{v.title}</p>
+                        <p style={{ fontSize: '11px', color: muted, margin: 0 }}>{v.date_published || 'No date'}{v.youtube_views != null ? ` · ${v.youtube_views.toLocaleString()} views` : ''}</p>
+                      </div>
+                      <button type="button" onClick={() => onRemoveMissing(v.id)} title="Delete permanently from the Hub" style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '5px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>

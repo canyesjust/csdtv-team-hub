@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 
 const CHANNEL_HANDLE = '@canyonsdistricttv'
+// 50 videos per page. 40 pages = 2000 videos, well above the channel size.
+const MAX_PAGES = 40
 
 function parseIsoDuration(iso: string | undefined | null): string {
   if (!iso) return '0:00'
@@ -15,25 +17,41 @@ function parseIsoDuration(iso: string | undefined | null): string {
     : `${m}:${String(s).padStart(2, '0')}`
 }
 
+// Convert a UTC ISO instant to a Mountain-time calendar date (YYYY-MM-DD).
+// Uses the IANA zone so DST is handled correctly (MDT in summer, MST in winter).
 function localDateFromIso(iso: string | undefined | null): string | null {
   if (!iso) return null
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return null
-  const mt = new Date(d.getTime() - 7 * 60 * 60 * 1000)
-  return `${mt.getUTCFullYear()}-${String(mt.getUTCMonth() + 1).padStart(2, '0')}-${String(mt.getUTCDate()).padStart(2, '0')}`
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Denver',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
-async function youtubeErrorMessage(res: Response, fallback: string): Promise<string> {
+async function readYoutubeError(
+  res: Response,
+): Promise<{ message?: string; reason?: string }> {
   try {
-    const body = (await res.json()) as { error?: { message?: string } }
-    if (body.error?.message) return body.error.message
+    const body = (await res.json()) as {
+      error?: { message?: string; errors?: Array<{ reason?: string }> }
+    }
+    return {
+      message: body.error?.message,
+      reason: body.error?.errors?.[0]?.reason,
+    }
   } catch {
-    /* ignore */
+    return {}
   }
-  return fallback
 }
 
-export async function GET(request: Request) {
+const QUOTA_MESSAGE =
+  'YouTube API daily quota exceeded. Sync will work again after the quota resets (midnight Pacific).'
+
+export async function GET() {
   const teamUser = await getAuthenticatedTeamUser()
   if (!teamUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -49,8 +67,9 @@ export async function GET(request: Request) {
       `https://www.googleapis.com/youtube/v3/channels?forHandle=${handleParam}&part=contentDetails,snippet,statistics&key=${apiKey}`,
     )
     if (!chRes.ok) {
-      const message = await youtubeErrorMessage(chRes, 'Failed to fetch channel from YouTube')
-      return NextResponse.json({ error: message }, { status: 502 })
+      const { message, reason } = await readYoutubeError(chRes)
+      if (reason === 'quotaExceeded') return NextResponse.json({ error: QUOTA_MESSAGE }, { status: 429 })
+      return NextResponse.json({ error: message || 'Failed to fetch channel from YouTube' }, { status: 502 })
     }
     const chData = await chRes.json()
     if (!chData.items?.length) return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
@@ -62,27 +81,49 @@ export async function GET(request: Request) {
     }
     const channelTitle = channel.snippet.title
 
-    // Step 2: Fetch all videos from uploads playlist (paginated, max 500)
+    // Step 2: Page through the uploads playlist.
+    // `complete` is true only if we reached the end of the playlist. If we stop
+    // early (page cap or a failed page), the caller must NOT treat any stored
+    // video as "missing" — the fetched set is incomplete.
     const allVideoIds: string[] = []
     let nextPageToken = ''
     let pages = 0
+    let complete = false
+    let warning: string | null = null
 
     do {
       const plRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?playlistId=${uploadsPlaylistId}&part=contentDetails&maxResults=50&pageToken=${nextPageToken}&key=${apiKey}`)
-      if (!plRes.ok) break
+      if (!plRes.ok) {
+        const { message, reason } = await readYoutubeError(plRes)
+        if (reason === 'quotaExceeded') return NextResponse.json({ error: QUOTA_MESSAGE }, { status: 429 })
+        warning = message || 'Stopped early: a channel page failed to load.'
+        break
+      }
       const plData = await plRes.json()
       const ids = (plData.items || []).map((item: any) => item.contentDetails.videoId)
       allVideoIds.push(...ids)
       nextPageToken = plData.nextPageToken || ''
       pages++
-    } while (nextPageToken && pages < 10) // Max 500 videos
+      if (!nextPageToken) {
+        complete = true
+        break
+      }
+    } while (pages < MAX_PAGES)
+
+    if (!complete && !warning) {
+      warning = `Stopped at the ${MAX_PAGES * 50}-video limit. Missing-video check skipped.`
+    }
 
     // Step 3: Fetch full details for all videos (in batches of 50)
     const videos: any[] = []
     for (let i = 0; i < allVideoIds.length; i += 50) {
       const batch = allVideoIds.slice(i, i + 50)
       const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?id=${batch.join(',')}&part=snippet,statistics,contentDetails,liveStreamingDetails&key=${apiKey}`)
-      if (!vRes.ok) continue
+      if (!vRes.ok) {
+        const { reason } = await readYoutubeError(vRes)
+        if (reason === 'quotaExceeded') return NextResponse.json({ error: QUOTA_MESSAGE }, { status: 429 })
+        continue
+      }
       const vData = await vRes.json()
       for (const item of vData.items || []) {
         const duration = parseIsoDuration(item.contentDetails?.duration)
@@ -111,6 +152,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       channel: channelTitle,
       total: videos.length,
+      complete,
+      warning,
       videos,
     })
   } catch (err) {

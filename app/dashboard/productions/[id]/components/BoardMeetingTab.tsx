@@ -12,7 +12,6 @@ import type { AgendaItemUI, BoardMeetingRecord } from '@/lib/board-meetings/type
 import type { AgendaDiffEntry } from '@/lib/board-meetings/agenda-diff'
 import MeetingPlaylistSection from './MeetingPlaylistSection'
 import PublicAgendaUrlCard from './PublicAgendaUrlCard'
-import MeetingTimesCard from './MeetingTimesCard'
 import AgendaWatchPreview from './AgendaWatchPreview'
 
 type Phase = 'loading' | 'empty' | 'extracting' | 'review' | 'locked' | 'diff' | 'readonly'
@@ -65,6 +64,30 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       else next.add(id)
       return next
     })
+
+  // Public start times per agenda section — auto-filled from the imported agenda,
+  // editable inline in the review list. Drives the "Watch Board Meetings Live"
+  // page's start label and per-section times.
+  const [sectionTimes, setSectionTimes] = useState<Record<string, string>>({})
+  useEffect(() => {
+    setSectionTimes(meeting?.public_start_times?.sections || {})
+  }, [meeting?.public_start_times])
+  const saveSectionTimes = async (next: Record<string, string>) => {
+    const clean: Record<string, string> = {}
+    for (const [k, v] of Object.entries(next)) if (v) clean[k] = v
+    const res = await fetch(`/api/board-meetings/${productionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ public_start_times: { meeting: null, sections: clean } }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      toast((body as { error?: string }).error || 'Failed to save start time', 'error')
+      return
+    }
+    const body = await res.json()
+    setMeeting(m => (m ? { ...m, public_start_times: body.board_meeting?.public_start_times ?? null } : m))
+  }
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -571,12 +594,6 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             initialUrl={meeting?.public_agenda_url}
             onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
           />
-          <MeetingTimesCard
-            productionId={productionId}
-            items={orderedReviewItems}
-            initial={meeting?.public_start_times}
-            onSaved={val => setMeeting(m => (m ? { ...m, public_start_times: val } : m))}
-          />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <div>
               <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Click an item to edit it. Flagged items are highlighted. The preview shows the public view.</p>
@@ -614,8 +631,18 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             )}
             {reviewSections.map(sec => (
               <div key={sec.number}>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: muted, textTransform: 'uppercase', letterSpacing: '.05em', margin: '0 0 6px' }}>
-                  {sec.number} · {sec.title}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: muted, textTransform: 'uppercase', letterSpacing: '.05em', flex: 1, minWidth: 0 }}>
+                    {sec.number} · {sec.title}
+                  </span>
+                  <input
+                    type="time"
+                    value={sectionTimes[String(sec.number)] || ''}
+                    onChange={e => setSectionTimes(s => ({ ...s, [String(sec.number)]: e.target.value }))}
+                    onBlur={() => saveSectionTimes(sectionTimes)}
+                    title="Start time shown on the public Watch page (from the agenda; edit if needed)"
+                    style={{ fontSize: '12px', padding: '4px 7px', borderRadius: '6px', border: `0.5px solid ${border}`, background: inputBg, color: text, fontFamily: 'inherit' }}
+                  />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {sec.items.map(it => {
@@ -714,12 +741,6 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             productionId={productionId}
             initialUrl={meeting?.public_agenda_url}
             onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
-          />
-          <MeetingTimesCard
-            productionId={productionId}
-            items={items}
-            initial={meeting?.public_start_times}
-            onSaved={val => setMeeting(m => (m ? { ...m, public_start_times: val } : m))}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <div>

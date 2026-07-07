@@ -78,8 +78,10 @@ export default function VideosPage() {
   const [saving, setSaving] = useState(false)
   const [newVideo, setNewVideo] = useState({ title: '', description: '', video_type: 'Other', status: 'Filming', visibility: 'Internal', production_id: '', school_year: '', date_filmed: '', tags: '' })
   const [syncing, setSyncing] = useState(false)
-  const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; local_date: string; existing: boolean; matchedProd: Production | null }[] | null>(null)
+  const [syncResults, setSyncResults] = useState<{ youtube_id: string; title: string; views: number; likes: number; duration: string; thumbnail: string; published_at: string; local_date: string; existing: boolean }[] | null>(null)
   const [syncImporting, setSyncImporting] = useState(false)
+  const [syncComplete, setSyncComplete] = useState(true)
+  const [refreshedCount, setRefreshedCount] = useState(0)
   const [categorizing, setCategorizing] = useState(false)
   const [aiSuggestions, setAiSuggestions] = useState<{ videoId: string; videoTitle: string; video_type: string; school: string | null; production_number: number | null; prodTitle: string | null; confidence: string; approved: boolean }[] | null>(null)
   const [linkingVideoId, setLinkingVideoId] = useState<string | null>(null)
@@ -134,6 +136,7 @@ export default function VideosPage() {
 
   const syncChannel = async () => {
     setSyncing(true)
+    toast('Fetching channel videos… this can take a moment for large channels.', 'info')
     try {
       const res = await fetch('/api/youtube/channel', { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
@@ -147,6 +150,9 @@ export default function VideosPage() {
         setSyncing(false)
         return
       }
+      const complete = (data as { complete?: boolean }).complete !== false
+      setSyncComplete(complete)
+
       // Check which videos already exist in our DB
       const existingIds = new Set(videos.map((v: any) => v.youtube_id).filter(Boolean))
 
@@ -156,16 +162,10 @@ export default function VideosPage() {
       const results = data.videos.map((v: any) => ({
         ...v,
         existing: existingIds.has(v.youtube_id),
-        matchedProd: null,
       }))
 
-      // Detect videos in our DB with a youtube_id that are no longer on the channel.
-      // Could be deleted, made private, or unlisted — user reviews before removing.
-      const ytIdSet = new Set<string>(data.videos.map((v: any) => v.youtube_id).filter(Boolean))
-      const missing = videos.filter(v => v.youtube_id && !ytIdSet.has(v.youtube_id))
-      setMissingFromYoutube(missing)
-
-      // Auto-fix dates on existing videos (UTC→Mountain)
+      // Refresh dates/stats on existing videos. The server returns DST-correct
+      // Mountain dates, so this quietly fixes any drifted values.
       let dateFixed = 0
       for (const v of results.filter((r: any) => r.existing)) {
         const correctDate = v.local_date
@@ -176,11 +176,45 @@ export default function VideosPage() {
           dateFixed++
         }
       }
+      setRefreshedCount(dateFixed)
+
+      // Missing detection. Only run when the channel fetch was COMPLETE — a
+      // truncated fetch would wrongly flag real videos. Candidates (in our DB
+      // but not in the public uploads playlist) are then verified against
+      // videos.list, which still returns UNLISTED videos. Only IDs that come
+      // back gone (deleted or private) are flagged as missing.
+      let missing: Video[] = []
+      if (complete) {
+        const ytIdSet = new Set<string>(data.videos.map((v: any) => v.youtube_id).filter(Boolean))
+        const candidates = videos.filter(v => v.youtube_id && !ytIdSet.has(v.youtube_id))
+        if (candidates.length > 0) {
+          try {
+            const vres = await fetch('/api/youtube/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids: candidates.map(v => v.youtube_id) }),
+            })
+            const vdata = await vres.json().catch(() => ({}))
+            if (vres.ok && Array.isArray((vdata as { existing?: unknown }).existing)) {
+              const stillExists = new Set<string>((vdata as { existing: string[] }).existing)
+              missing = candidates.filter(v => !stillExists.has(v.youtube_id as string))
+            } else {
+              // Verification failed — don't guess. Show nothing rather than false alarms.
+              toast('Could not verify removed videos; skipping that check.', 'error')
+            }
+          } catch {
+            toast('Could not verify removed videos; skipping that check.', 'error')
+          }
+        }
+      }
+      setMissingFromYoutube(missing)
 
       setSyncResults(results)
       const newCount = results.filter((r: any) => !r.existing).length
-      const missingNote = missing.length > 0 ? ` ${missing.length} no longer on YouTube.` : ''
-      toast(`Found ${data.total} videos. ${newCount} new.${missingNote}${dateFixed > 0 ? ` Fixed ${dateFixed} dates.` : ''}`, 'info')
+      const missingNote = missing.length > 0 ? ` ${missing.length} gone from YouTube.` : ''
+      const refreshNote = dateFixed > 0 ? ` Refreshed ${dateFixed}.` : ''
+      const partialNote = complete ? '' : ' Partial fetch — removed-video check skipped.'
+      toast(`Found ${data.total} videos. ${newCount} new.${missingNote}${refreshNote}${partialNote}`, complete ? 'info' : 'error')
       if (dateFixed > 0) await loadData()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Channel sync failed', 'error')
@@ -198,7 +232,7 @@ export default function VideosPage() {
         title: v.title, video_type: 'Other', status: 'Published', visibility: 'Public',
         date_published: v.local_date || (v.published_at ? new Date(v.published_at).toLocaleDateString('en-CA', { timeZone: 'America/Denver' }) : null),
         description: (v as any).description?.slice(0, 500) || null,
-        production_id: v.matchedProd?.id || null,
+        production_id: null,
         youtube_url: `https://www.youtube.com/watch?v=${v.youtube_id}`, youtube_id: v.youtube_id,
         youtube_views: v.views, youtube_likes: v.likes, youtube_duration: v.duration,
         youtube_thumbnail: v.thumbnail, youtube_synced_at: new Date().toISOString(),
@@ -391,24 +425,26 @@ export default function VideosPage() {
     }
   }
 
+  // Per-item hard delete, for a video the user has confirmed is truly gone.
   const removeMissingVideo = async (videoId: string) => {
-    if (!(await confirmDialog({ message: 'Remove this video permanently? It will be deleted from the Hub.', tone: 'danger', confirmLabel: 'Remove' }))) return
+    if (!(await confirmDialog({ message: 'Delete this video permanently from the Hub? This cannot be undone.', tone: 'danger', confirmLabel: 'Delete' }))) return
     const { error } = await supabase.from('videos').delete().eq('id', videoId)
-    if (error) { toast('Could not remove video', 'error'); return }
+    if (error) { toast('Could not delete video', 'error'); return }
     setVideos(prev => prev.filter(v => v.id !== videoId))
     setMissingFromYoutube(prev => prev.filter(v => v.id !== videoId))
-    toast('Removed', 'success')
+    toast('Deleted', 'success')
   }
 
-  const removeAllMissing = async () => {
+  // Bulk action defaults to the safe, reversible option: hide, don't delete.
+  const archiveAllMissing = async () => {
     if (missingFromYoutube.length === 0) return
-    if (!(await confirmDialog({ message: `Remove all ${missingFromYoutube.length} videos that are no longer on YouTube?`, tone: 'danger', confirmLabel: 'Remove' }))) return
+    if (!(await confirmDialog({ message: `Archive all ${missingFromYoutube.length} videos that are gone from YouTube? They'll be hidden from the library but kept in the Hub, so you can restore them.`, tone: 'default', confirmLabel: 'Archive' }))) return
     const ids = missingFromYoutube.map(v => v.id)
-    const { error } = await supabase.from('videos').delete().in('id', ids)
-    if (error) { toast('Could not remove all missing videos', 'error'); return }
-    setVideos(prev => prev.filter(v => !ids.includes(v.id)))
+    const { error } = await supabase.from('videos').update({ status: 'Hidden' }).in('id', ids)
+    if (error) { toast('Could not archive videos', 'error'); return }
+    setVideos(prev => prev.map(v => ids.includes(v.id) ? { ...v, status: 'Hidden' } : v))
     setMissingFromYoutube([])
-    toast(`Removed ${ids.length} videos`, 'success')
+    toast(`Archived ${ids.length} videos`, 'success')
   }
 
   const createVideo = async () => {
@@ -512,10 +548,12 @@ export default function VideosPage() {
           onApplySuggestions={applyApprovedSuggestions}
           syncResults={syncResults}
           syncImporting={syncImporting}
+          syncComplete={syncComplete}
+          refreshedCount={refreshedCount}
           missingFromYoutube={missingFromYoutube}
           onCancelSync={() => { setSyncResults(null); setMissingFromYoutube([]) }}
           onImportSync={importSyncResults}
-          onRemoveAllMissing={removeAllMissing}
+          onArchiveAllMissing={archiveAllMissing}
           onRemoveMissing={removeMissingVideo}
         />
       )}
