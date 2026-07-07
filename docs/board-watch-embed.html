@@ -168,6 +168,26 @@
   @media (prefers-reduced-motion:reduce){
     #csdtv-watch .cw-livebadge .dot,#csdtv-watch .cw-chip .dot,#csdtv-watch .cw-it.current .nowtag .dot,#csdtv-watch .cw-ag-head .follow .dot,#csdtv-watch .cw-skel{animation:none}
   }
+  /* recent meetings — expandable agenda */
+  #csdtv-watch .cw-rl-item + .cw-rl-item{border-top:1px solid var(--line)}
+  #csdtv-watch .cw-rl-head{display:flex;gap:11px;align-items:center;padding:11px 16px;width:100%;background:none;border:0;cursor:pointer;text-align:left;font:inherit;color:inherit}
+  #csdtv-watch .cw-rl-head:hover{background:#f7fafc}
+  #csdtv-watch .cw-rl-head .th{position:relative;flex:0 0 92px;aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:#0c1f2e}
+  #csdtv-watch .cw-rl-head .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #csdtv-watch .cw-rl-info{flex:1;min-width:0}
+  #csdtv-watch .cw-rl-info .vt{font-size:13.5px;font-weight:700;line-height:1.3;color:var(--ink)}
+  #csdtv-watch .cw-rl-info .vd{font-size:12px;color:var(--slate);margin-top:2px}
+  #csdtv-watch .cw-rl-chev{flex:0 0 auto;color:var(--slate);transition:transform .15s}
+  #csdtv-watch .cw-rl-item.open .cw-rl-chev{transform:rotate(180deg)}
+  #csdtv-watch .cw-rl-body{padding:2px 16px 14px}
+  #csdtv-watch .cw-rl-loading{font-size:12.5px;color:var(--slate);padding:8px 0}
+  #csdtv-watch .cw-rl-full{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--blue1);cursor:pointer;margin:4px 0 10px}
+  #csdtv-watch .cw-rl-full:hover{text-decoration:underline}
+  #csdtv-watch .cw-rl-sec{font-size:11px;font-weight:800;color:var(--blue2);margin:10px 0 3px}
+  #csdtv-watch .cw-rl-it{display:flex;gap:8px;align-items:center;padding:4px 0}
+  #csdtv-watch .cw-rl-it .t{flex:1;font-size:13px;color:var(--ink);line-height:1.3}
+  #csdtv-watch .cw-jump{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:var(--blue1);background:#eef6fb;border:1px solid #d9e9f5;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums}
+  #csdtv-watch .cw-jump:hover{background:#e2eff8}
   /* ===== EMBED END (styles) ===== */
   body{margin:0;background:#f3f6f9}
 </style>
@@ -242,6 +262,12 @@
   var FALLBACK_TIME = '7:00 p.m.';
   var MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   var currentYoutubeId = null;
+  // Same-origin base for the per-meeting archive endpoint (agenda + timestamps).
+  var ARCHIVE_ORIGIN = ENDPOINT.replace(/\/api\/public\/board-watch.*$/, '');
+  // Once the viewer picks a past recording, stop the live poll from swapping the
+  // player back to the featured meeting.
+  var playerLocked = false;
+  var lastRecentSig = null;
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function el(id){return document.getElementById(id);}
   function isoParts(iso){var p=String(iso||'').split('-');return {mo:MONTHS[(+p[1]||1)-1]||'',dy:String(+p[2]||'')};}
@@ -255,9 +281,14 @@
   }
   // ---------- player ----------
   function renderPlayer(featured, state) {
+    if (playerLocked) return; // viewer is watching a past recording — leave it alone
     var p = el('cw-player');
     var id = featured && featured.youtube_id;
     if (id) {
+      // Don't rebuild the iframe if we're already showing this video. Re-rendering
+      // it on every poll reloads the stream and the viewer has to press play again.
+      // Only (re)create the player when the video id actually changes.
+      if (id === currentYoutubeId && p.querySelector('iframe')) return;
       currentYoutubeId = id;
       p.innerHTML = '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(id) +
         '?rel=0&modestbranding=1" title="' + esc(featured.title) +
@@ -277,6 +308,18 @@
     p.innerHTML = '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(currentYoutubeId) +
       '?rel=0&modestbranding=1&autoplay=1&start=' + Math.max(0, parseInt(seconds, 10) || 0) +
       '" title="Board meeting" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
+    var top = el('csdtv-watch').getBoundingClientRect().top + window.pageYOffset - 16;
+    window.scrollTo({ top: top, behavior: 'smooth' });
+  }
+  // Play a PAST meeting's recording in the top player at a given second, and keep
+  // the live poll from overwriting it.
+  function playRecording(id, seconds) {
+    if (!id) return;
+    playerLocked = true;
+    currentYoutubeId = id;
+    el('cw-player').innerHTML = '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(id) +
+      '?rel=0&modestbranding=1&autoplay=1&start=' + Math.max(0, parseInt(seconds, 10) || 0) +
+      '" title="Board meeting recording" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
     var top = el('csdtv-watch').getBoundingClientRect().top + window.pageYOffset - 16;
     window.scrollTo({ top: top, behavior: 'smooth' });
   }
@@ -448,17 +491,86 @@
     }).join('');
     elx.innerHTML = rows + '<div class="cw-upnote">Stream link and agenda post closer to each meeting.</div>';
   }
+  var CHEV = '<svg class="cw-rl-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+  // Re-render the recent list only when its set actually changes, so the live poll
+  // doesn't collapse a meeting the viewer has expanded.
+  function renderRecentIfChanged(list) {
+    var sig = (list || []).map(function (m) { return m.production_number + ':' + (m.youtube_id || ''); }).join(',');
+    if (sig === lastRecentSig) return;
+    lastRecentSig = sig;
+    renderRecent(list);
+  }
   function renderRecent(list) {
     var elx = el('cw-recent');
     if (!list || !list.length) { elx.innerHTML = '<div class="cw-rl-empty">Past meetings will appear here.</div>'; return; }
-    elx.innerHTML = list.slice(0, 5).map(function (m) {
+    elx.innerHTML = list.slice(0, 6).map(function (m) {
       var thumb = m.thumbnail
         ? '<img src="' + esc(m.thumbnail) + '" alt="" loading="lazy">'
         : fallbackGraphic(m.date_short || m.date_long || '', '');
-      var href = m.youtube_url || (m.youtube_id ? 'https://www.youtube.com/watch?v=' + m.youtube_id : '#');
-      return '<a class="cw-rl" href="' + esc(href) + '" target="_blank" rel="noopener"><div class="th">' + thumb + '</div>' +
-        '<div><div class="vt">' + esc(m.title || 'Board Meeting') + '</div><div class="vd">' + esc(m.date_short || m.date_long || '') + '</div></div></a>';
+      return '<div class="cw-rl-item" data-num="' + esc(m.production_number) + '" data-yt="' + esc(m.youtube_id || '') + '">' +
+        '<button class="cw-rl-head" type="button" aria-expanded="false"><div class="th">' + thumb + '</div>' +
+        '<div class="cw-rl-info"><div class="vt">' + esc(m.title || 'Board Meeting') + '</div><div class="vd">' + esc(m.date_short || m.date_long || '') + '</div></div>' +
+        CHEV + '</button><div class="cw-rl-body" hidden></div></div>';
     }).join('');
+    elx.querySelectorAll('.cw-rl-head').forEach(function (btn) {
+      btn.addEventListener('click', function () { toggleRecent(btn.parentNode); });
+    });
+  }
+  function toggleRecent(item) {
+    var elx = el('cw-recent');
+    var wasOpen = item.classList.contains('open');
+    // One open at a time: collapse any other open meeting first.
+    elx.querySelectorAll('.cw-rl-item.open').forEach(function (o) {
+      o.classList.remove('open');
+      var h = o.querySelector('.cw-rl-head'); if (h) h.setAttribute('aria-expanded', 'false');
+      var b = o.querySelector('.cw-rl-body'); if (b) b.hidden = true;
+    });
+    if (wasOpen) return; // clicking the open one closes it
+    item.classList.add('open');
+    item.querySelector('.cw-rl-head').setAttribute('aria-expanded', 'true');
+    var body = item.querySelector('.cw-rl-body');
+    body.hidden = false;
+    if (!item.getAttribute('data-loaded')) {
+      body.innerHTML = '<div class="cw-rl-loading">Loading agenda…</div>';
+      loadRecentAgenda(item, body);
+    }
+  }
+  function loadRecentAgenda(item, body) {
+    var num = item.getAttribute('data-num');
+    var yt = item.getAttribute('data-yt');
+    fetch(ARCHIVE_ORIGIN + '/api/board/meeting/' + encodeURIComponent(num) + '/archive', { credentials: 'omit' })
+      .then(function (r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); })
+      .then(function (data) {
+        item.setAttribute('data-loaded', '1');
+        body.innerHTML = recentAgendaHtml(data, yt);
+        body.querySelectorAll('.cw-jump').forEach(function (b) {
+          b.addEventListener('click', function () { playRecording(yt, b.getAttribute('data-sec')); });
+        });
+        var full = body.querySelector('.cw-rl-full');
+        if (full) full.addEventListener('click', function () { playRecording(yt, 0); });
+      })
+      .catch(function () {
+        var link = yt ? '<a href="https://www.youtube.com/watch?v=' + esc(yt) + '" target="_blank" rel="noopener">Watch on YouTube</a>' : '';
+        body.innerHTML = '<div class="cw-rl-loading">Couldn’t load this agenda. ' + link + '</div>';
+      });
+  }
+  function recentAgendaHtml(data, yt) {
+    var ag = (data && data.agenda) || [];
+    var full = yt ? '<span class="cw-rl-full" role="button" tabindex="0"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l16 9-16 9z"/></svg> Watch full recording</span>' : '';
+    if (!ag.length) return full + '<div class="cw-rl-loading">No agenda was posted for this meeting.</div>';
+    var curSec = null, rows = '';
+    ag.forEach(function (it) {
+      if (it.section_number !== curSec) {
+        curSec = it.section_number;
+        rows += '<div class="cw-rl-sec">' + esc(it.section_number) + ' · ' + esc(it.section_title || '') + '</div>';
+      }
+      var chip = (it.started_at_offset_seconds != null)
+        ? '<span class="cw-jump" data-sec="' + esc(it.started_at_offset_seconds) + '">▶ ' + esc(it.started_at_human || '') + '</span>'
+        : '';
+      var title = it.consent_block ? 'Consent Agenda' : it.title;
+      rows += '<div class="cw-rl-it"><span class="t">' + esc(((it.item_number || '') + ' ' + title).trim()) + '</span>' + chip + '</div>';
+    });
+    return full + rows;
   }
   // ---------- load ----------
   function failSoft() {
@@ -479,8 +591,10 @@
     renderMeta(data);
     renderAgenda(data);
     renderUpcoming(data.upcoming);
-    renderRecent(data.recent);
-    return data.state === 'live' ? 30000 : 300000;
+    renderRecentIfChanged(data.recent);
+    // Poll fast while live AND on meeting day, so an already-open page flips to
+    // the live view within ~30s of the gavel. Otherwise relax to 5 minutes.
+    return (data.state === 'live' || data.state === 'today') ? 30000 : 300000;
   }
   function load() {
     fetch(ENDPOINT, { credentials: 'omit' })
