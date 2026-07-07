@@ -4,6 +4,12 @@ import {
   resolveIcompassMeeting,
   resolveIcompassAgendaDocId,
 } from '@/lib/board-meetings/icompass-agenda'
+import {
+  normalizePublicStartTimes,
+  formatStartLabel,
+  earliestSectionTime,
+  type PublicStartTimes,
+} from '@/lib/board-meetings/public-start-times'
 
 // Public, read-only payload that powers the district website's
 // "Watch Board Meetings Live" page. Assembled entirely from data that is already
@@ -171,6 +177,7 @@ type MeetingRow = {
   livestreamUrl: string | null
   broadcastStatus: string
   scheduledStart: string | null
+  publicStartTimes: PublicStartTimes
   icompassMeetingId: string | null
   agendaLocked: boolean
   cancelled: boolean
@@ -190,7 +197,7 @@ async function loadBoardMeetings(service: SupabaseClient): Promise<MeetingRow[]>
       .eq('request_type_number', 4),
     service
       .from('board_meetings')
-      .select('id, production_id, broadcast_status, scheduled_public_start, icompass_meeting_id, agenda_locked'),
+      .select('id, production_id, broadcast_status, scheduled_public_start, public_start_times, icompass_meeting_id, agenda_locked'),
   ])
   if (!prods?.length) return []
 
@@ -216,6 +223,7 @@ async function loadBoardMeetings(service: SupabaseClient): Promise<MeetingRow[]>
       livestreamUrl: p.livestream_url ?? null,
       broadcastStatus: (b?.broadcast_status as string) || 'none',
       scheduledStart: (b?.scheduled_public_start as string | null) ?? null,
+      publicStartTimes: normalizePublicStartTimes(b?.public_start_times),
       icompassMeetingId: (b?.icompass_meeting_id as string | null) ?? null,
       agendaLocked: !!b?.agenda_locked,
       cancelled: b?.broadcast_status === 'cancelled' || p.status === 'Cancelled',
@@ -306,7 +314,12 @@ async function assembleAgenda(
 
     const sectionMeta = new Map<number, { title: string; start_time: string | null }>()
     const entries = storedAgenda.map((a, i) => {
-      if (!sectionMeta.has(a.section_number)) sectionMeta.set(a.section_number, { title: a.section_title, start_time: null })
+      if (!sectionMeta.has(a.section_number)) {
+        sectionMeta.set(a.section_number, {
+          title: a.section_title,
+          start_time: formatStartLabel(featured.publicStartTimes.sections[String(a.section_number)]),
+        })
+      }
       let status: AgendaItem['status'] = null
       if (isLive && currentIndex >= 0) status = i < currentIndex ? 'completed' : i === currentIndex ? 'current' : 'upcoming'
       else if (isArchived) status = 'completed'
@@ -459,12 +472,19 @@ export async function buildBoardWatchPayload(service: SupabaseClient): Promise<B
     const id = youtubeId(featured.livestreamUrl)
     const ytUrl = youtubeUrlFrom(featured.livestreamUrl, id)
     const daysUntil = state === 'today' || state === 'upcoming' ? Math.max(0, wholeDaysBetween(today, featured.localDate)) : null
+    // Public start label: operator-entered meeting time, else the earliest
+    // section time, else the legacy scheduled_public_start timestamp. When all are
+    // empty the embed falls back to its own default.
+    const startLabel =
+      formatStartLabel(featured.publicStartTimes.meeting) ??
+      formatStartLabel(earliestSectionTime(featured.publicStartTimes)) ??
+      denverTimeLabel(featured.scheduledStart)
     featuredOut = {
       title: featured.title,
       date: featured.localDate,
       date_long: denverLong(new Date(featured.startDatetime)),
       scheduled_start: featured.scheduledStart,
-      scheduled_start_label: denverTimeLabel(featured.scheduledStart),
+      scheduled_start_label: startLabel,
       location: featured.location,
       broadcast_status: featured.broadcastStatus,
       is_live: state === 'live',

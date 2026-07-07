@@ -21,6 +21,8 @@ export type BoardMeetingRecord = {
   agenda_locked_by: string | null
   /** Public link pushed via “View meeting agenda” QR preset. */
   public_agenda_url?: string | null
+  /** Operator-entered start times for the public Watch page (wall-clock, America/Denver). */
+  public_start_times?: { meeting: string | null; sections: Record<string, string> } | null
   /** Wall-clock go-live from control surface (used for chapters when event log is incomplete). */
   live_started_at?: string | null
   /** When the YouTube stream began (video 0:00) — the anchor for chapter timestamps. */

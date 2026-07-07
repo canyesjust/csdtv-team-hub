@@ -259,7 +259,6 @@
     public_participation: 'https://www.canyonsdistrict.org/leadership/board/board-meetings/public-participation/',
     diligent: 'https://canyonsdistrict.community.highbond.com/portal/'
   };
-  var FALLBACK_TIME = '7:00 p.m.';
   var MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   var currentYoutubeId = null;
   // Same-origin base for the per-meeting archive endpoint (agenda + timestamps).
@@ -295,8 +294,8 @@
         '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
     } else {
       currentYoutubeId = null;
-      var startLabel = (featured && featured.scheduled_start_label) || FALLBACK_TIME;
-      var note = state === 'today' ? 'Stream begins at ' + startLabel
+      var startLabel = (featured && featured.scheduled_start_label) || null;
+      var note = state === 'today' ? (startLabel ? 'Stream begins at ' + startLabel : 'Stream begins shortly.')
         : state === 'upcoming' ? 'The stream link will appear before the meeting.'
         : 'Watch on the CSDtv channel.';
       p.innerHTML = fallbackGraphic(featured ? featured.date_long : '', note);
@@ -342,7 +341,7 @@
     var links = data.links || DEFAULT_LINKS;
     var state = data.state;
     var loc = f.location || 'Canyons District Office, 9361 S. 300 E., Sandy';
-    var startLabel = f.scheduled_start_label || FALLBACK_TIME;
+    var startLabel = f.scheduled_start_label || null;
     var badge = '', band = '', actions = '';
     if (state === 'live') {
       badge = '<span class="cw-chip live"><span class="dot"></span>Meeting in progress</span>';
@@ -351,7 +350,7 @@
         (cur ? 'Now discussing <b>Item ' + esc(cur.num) + ', ' + esc(cur.title) + '</b>' : '<b>Streaming now</b>') + '</span></div>';
     } else if (state === 'today') {
       badge = '<span class="cw-chip today"><span class="dot"></span>Meeting today</span>';
-      band = '<div class="cw-count is-today"><div class="num">Today</div><div><div class="lab">Streaming today</div><div class="sub">Press play above when the meeting begins, around ' + esc(startLabel) + '.</div></div></div>';
+      band = '<div class="cw-count is-today"><div class="num">Today</div><div><div class="lab">Streaming today</div><div class="sub">Press play above when the meeting begins' + (startLabel ? ', around ' + esc(startLabel) : '') + '.</div></div></div>';
     } else if (state === 'upcoming') {
       badge = '<span class="cw-chip up">Up next</span>';
       var d = (f.days_until == null) ? '' : f.days_until;
@@ -448,7 +447,7 @@
     var ag = data.agenda || {};
     var f = data.featured || {};
     var links = data.links || DEFAULT_LINKS;
-    var startLabel = (f.scheduled_start_label) || FALLBACK_TIME;
+    var startLabel = (f.scheduled_start_label) || null;
     var body = el('cw-ag-body');
     var meta = el('cw-ag-meta');
     var foot = el('cw-ag-foot');
@@ -470,7 +469,7 @@
     }).join('');
     body.innerHTML = html;
     foot.style.display = 'flex';
-    el('cw-ag-footnote').textContent = 'Meetings begin at ' + startLabel;
+    el('cw-ag-footnote').textContent = startLabel ? 'Meetings begin at ' + startLabel : '';
     el('cw-ag-diligent').href = ag.diligent_url || links.diligent;
     // wire jump points
     body.querySelectorAll('.tc').forEach(function (b) {

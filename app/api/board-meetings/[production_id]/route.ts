@@ -3,6 +3,7 @@ import { withBoardMeetingProduction } from '@/lib/board-meetings/production-rout
 import { loadBoardMeetingBundle } from '@/lib/board-meetings/meeting-api'
 import { ensureBoardMeetingRow } from '@/lib/board-meetings/persist-agenda'
 import { isValidHttpUrl } from '@/lib/board-meetings/qr-control'
+import { normalizePublicStartTimes } from '@/lib/board-meetings/public-start-times'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,6 +41,11 @@ export async function PATCH(
         return NextResponse.json({ error: 'Public agenda URL must be http or https' }, { status: 400 })
       }
       patch.public_agenda_url = url
+    }
+
+    if (body.public_start_times !== undefined) {
+      // Validate/normalize server-side; drops anything malformed and bounds size.
+      patch.public_start_times = normalizePublicStartTimes(body.public_start_times)
     }
 
     if (Object.keys(patch).length === 1) {

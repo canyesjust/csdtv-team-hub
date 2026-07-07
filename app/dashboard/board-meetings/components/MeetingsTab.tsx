@@ -256,14 +256,24 @@ export default function MeetingsTab() {
       return
     }
     setFocusedId(prev => {
-      if (prev && allSorted.some(r => r.id === prev)) return prev
+      // The meeting currently pinned — either this session's selection or the
+      // value saved in the browser from a previous visit.
       const stored = readStoredFocusId()
-      return (
-        (stored && allSorted.some(r => r.id === stored) ? stored : null) ??
-        upcoming[0]?.id ??
-        past[0]?.id ??
+      const pinnedId =
+        (prev && allSorted.some(r => r.id === prev) && prev) ||
+        (stored && allSorted.some(r => r.id === stored) && stored) ||
         null
-      )
+
+      // Respect the pin for current and upcoming meetings. Auto-advance to the
+      // next upcoming meeting once the pinned one has gone stale (more than a
+      // day past), as long as there's an upcoming meeting to move to.
+      if (pinnedId) {
+        const pinnedRow = allSorted.find(r => r.id === pinnedId)
+        const pinnedStale = pinnedRow ? isPastMeeting(pinnedRow) : false
+        if (!pinnedStale || upcoming.length === 0) return pinnedId
+      }
+
+      return upcoming[0]?.id ?? past[0]?.id ?? pinnedId ?? null
     })
   }, [loading, allSorted, upcoming, past])
 

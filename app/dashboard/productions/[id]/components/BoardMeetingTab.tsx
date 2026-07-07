@@ -12,6 +12,7 @@ import type { AgendaItemUI, BoardMeetingRecord } from '@/lib/board-meetings/type
 import type { AgendaDiffEntry } from '@/lib/board-meetings/agenda-diff'
 import MeetingPlaylistSection from './MeetingPlaylistSection'
 import PublicAgendaUrlCard from './PublicAgendaUrlCard'
+import MeetingTimesCard from './MeetingTimesCard'
 import AgendaWatchPreview from './AgendaWatchPreview'
 
 type Phase = 'loading' | 'empty' | 'extracting' | 'review' | 'locked' | 'diff' | 'readonly'
@@ -570,6 +571,12 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             initialUrl={meeting?.public_agenda_url}
             onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
           />
+          <MeetingTimesCard
+            productionId={productionId}
+            items={orderedReviewItems}
+            initial={meeting?.public_start_times}
+            onSaved={val => setMeeting(m => (m ? { ...m, public_start_times: val } : m))}
+          />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <div>
               <p style={{ margin: 0, color: muted, fontSize: '14px' }}>Click an item to edit it. Flagged items are highlighted. The preview shows the public view.</p>
@@ -707,6 +714,12 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
             productionId={productionId}
             initialUrl={meeting?.public_agenda_url}
             onSaved={url => setMeeting(m => (m ? { ...m, public_agenda_url: url } : m))}
+          />
+          <MeetingTimesCard
+            productionId={productionId}
+            items={items}
+            initial={meeting?.public_start_times}
+            onSaved={val => setMeeting(m => (m ? { ...m, public_start_times: val } : m))}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
             <div>
