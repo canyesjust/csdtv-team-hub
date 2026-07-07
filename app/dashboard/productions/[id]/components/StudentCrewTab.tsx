@@ -38,6 +38,12 @@ interface CrewRoleSlot {
   end_time: string | null
   notes: string | null
   sort_order: number
+  allowed_tiers: string[] | null
+}
+
+interface SignupTier {
+  name: string
+  description: string | null
 }
 
 interface CrewSignup {
@@ -83,6 +89,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   const [hasStudentCrew, setHasStudentCrew] = useState(false)
   const [crew, setCrew] = useState<ProductionCrew | null>(null)
   const [allRoles, setAllRoles] = useState<CrewRole[]>([])
+  const [tiers, setTiers] = useState<SignupTier[]>([])
   const [slots, setSlots] = useState<CrewRoleSlot[]>([])
   const [signups, setSignups] = useState<CrewSignup[]>([])
   const [loading, setLoading] = useState(true)
@@ -109,7 +116,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   // Slot editing
   const [showAddSlot, setShowAddSlot] = useState(false)
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null)
-  const [slotForm, setSlotForm] = useState({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' })
+  const [slotForm, setSlotForm] = useState({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '', allowed_tiers: [] as string[] })
 
   const text = 'var(--text-primary)'
   const muted = 'var(--text-muted)'
@@ -132,11 +139,13 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   }
 
   const loadAll = useCallback(async () => {
-    const [prodRes, rolesRes] = await Promise.all([
+    const [prodRes, rolesRes, tiersRes] = await Promise.all([
       supabase.from('productions').select('has_student_crew').eq('id', productionId).single(),
       supabase.from('crew_roles').select('*').order('name'),
+      supabase.from('signup_tiers').select('name, description').order('name'),
     ])
     setAllRoles(rolesRes.data || [])
+    setTiers(tiersRes.data || [])
     const enabled = !!prodRes.data?.has_student_crew
     setHasStudentCrew(enabled)
 
@@ -181,16 +190,19 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   const enableCrew = async () => {
     if (!canManage) return
     setLoading(true)
-    // Update production
-    await supabase.from('productions').update({ has_student_crew: true }).eq('id', productionId)
+    // Flip has_student_crew via the RPC (productions RLS is Manager-only; the
+    // RPC allows Manager or Staff).
+    const { error: toggleErr } = await supabase.rpc('set_production_has_student_crew', { p_production_id: productionId, p_enabled: true })
+    if (toggleErr) { toast('Failed to enable: ' + toggleErr.message, 'error'); setLoading(false); return }
     // Create production_crew row if missing
     const { data: existing } = await supabase.from('production_crew').select('id').eq('production_id', productionId).maybeSingle()
     if (!existing) {
-      await supabase.from('production_crew').insert({
+      const { error: insErr } = await supabase.from('production_crew').insert({
         production_id: productionId,
         display_title: productionTitle,
         what_to_wear: WEAR_DEFAULT,
       })
+      if (insErr) { toast('Failed to set up crew: ' + insErr.message, 'error'); setLoading(false); return }
     }
     setHasStudentCrew(true)
     toast('Student crew enabled', 'success')
@@ -200,7 +212,8 @@ export default function StudentCrewTab({ productionId, productionNumber, product
   const disableCrew = async () => {
     if (!canManage) return
     if (!(await confirmDialog({ message: 'Disable student crew for this production? Existing sign-ups will remain in the database for reports but the public sign-up page will be hidden.', confirmLabel: 'Disable' }))) return
-    await supabase.from('productions').update({ has_student_crew: false }).eq('id', productionId)
+    const { error: toggleErr } = await supabase.rpc('set_production_has_student_crew', { p_production_id: productionId, p_enabled: false })
+    if (toggleErr) { toast('Failed to disable: ' + toggleErr.message, 'error'); return }
     setHasStudentCrew(false)
     toast('Student crew disabled', 'success')
   }
@@ -253,12 +266,13 @@ export default function StudentCrewTab({ productionId, productionNumber, product
       call_time: slotForm.call_time || null,
       end_time: slotForm.end_time || null,
       notes: slotForm.notes.trim() || null,
+      allowed_tiers: slotForm.allowed_tiers.length ? slotForm.allowed_tiers : null,
       sort_order: sortOrder,
     }).select().single()
     if (error) { toast('Failed to add: ' + error.message, 'error'); return }
     if (data) setSlots(prev => [...prev, data])
     setShowAddSlot(false)
-    setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' })
+    setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '', allowed_tiers: [] as string[] })
     toast('Role added', 'success')
   }
 
@@ -271,6 +285,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
       call_time: s.call_time || '',
       end_time: s.end_time || '',
       notes: s.notes || '',
+      allowed_tiers: s.allowed_tiers || [],
     })
   }
 
@@ -284,12 +299,13 @@ export default function StudentCrewTab({ productionId, productionNumber, product
       call_time: slotForm.call_time || null,
       end_time: slotForm.end_time || null,
       notes: slotForm.notes.trim() || null,
+      allowed_tiers: slotForm.allowed_tiers.length ? slotForm.allowed_tiers : null,
     }
     const { error } = await supabase.from('crew_role_slots').update(payload).eq('id', editingSlotId)
     if (error) { toast('Failed: ' + error.message, 'error'); return }
     setSlots(prev => prev.map(s => s.id === editingSlotId ? { ...s, ...payload } : s))
     setEditingSlotId(null)
-    setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' })
+    setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '', allowed_tiers: [] as string[] })
     toast('Role updated', 'success')
   }
 
@@ -487,7 +503,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: 600, color: text, margin: 0 }}>Roles needed</h3>
           {canManage && !showAddSlot && !editingSlotId && (
-            <button onClick={() => { setShowAddSlot(true); setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '' }) }} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Add role</button>
+            <button onClick={() => { setShowAddSlot(true); setSlotForm({ role_id: '', capacity: '1', call_time: '', end_time: '', notes: '', allowed_tiers: [] as string[] }) }} style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>+ Add role</button>
           )}
         </div>
 
@@ -521,6 +537,27 @@ export default function StudentCrewTab({ productionId, productionNumber, product
               <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Notes for this role (optional)</label>
               <input value={slotForm.notes} onChange={e => setSlotForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Switcher ends earlier than the rest of the crew" style={inputStyle} />
             </div>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ fontSize: '11px', color: muted, display: 'block', marginBottom: '3px' }}>Who can sign up?</label>
+              {tiers.length === 0 ? (
+                <p style={{ fontSize: '12px', color: muted, margin: 0, fontStyle: 'italic' as const }}>No tiers defined. Add tiers on the Students page to limit a role to certain students.</p>
+              ) : (
+                <>
+                  <p style={{ fontSize: '11px', color: muted, margin: '0 0 6px' }}>Leave all unchecked to open this role to everyone. Check one or more tiers to limit it — students not on those tiers will be told they&apos;re not eligible.</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px' }}>
+                    {tiers.map(t => {
+                      const checked = slotForm.allowed_tiers.includes(t.name)
+                      return (
+                        <label key={t.name} title={t.description || undefined} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: text, background: checked ? 'rgba(30,108,181,0.1)' : inputBg, border: `0.5px solid ${checked ? 'var(--brand-primary)' : border}`, borderRadius: '6px', padding: '5px 10px', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={checked} onChange={e => setSlotForm(f => ({ ...f, allowed_tiers: e.target.checked ? [...f.allowed_tiers, t.name] : f.allowed_tiers.filter(x => x !== t.name) }))} style={{ width: '13px', height: '13px' }} />
+                          {t.name}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: '6px' }}>
               <button onClick={editingSlotId ? saveSlot : addSlot} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>{editingSlotId ? 'Save' : 'Add role'}</button>
               <button onClick={() => { setShowAddSlot(false); setEditingSlotId(null) }} style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '6px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
@@ -544,6 +581,7 @@ export default function StudentCrewTab({ productionId, productionNumber, product
                       {slot.call_time && ` · Call ${slot.call_time}`}
                       {slot.end_time && ` · Wrap ${slot.end_time}`}
                       {slot.notes && ` · ${slot.notes}`}
+                      {slot.allowed_tiers && slot.allowed_tiers.length > 0 && ` · 🔒 ${slot.allowed_tiers.join(', ')} only`}
                     </p>
                   </div>
                   {canManage && (

@@ -15,6 +15,7 @@ interface SlotView {
   call_time: string | null
   end_time: string | null
   notes: string | null
+  allowed_tiers: string[] | null
   signups: SignupView[]
 }
 
@@ -257,6 +258,11 @@ export default function PublicCrewPage() {
                       <p style={{ fontSize: '15px', fontWeight: 600, color: colors.text, margin: 0 }}>
                         {slot.role_name} <span style={{ fontSize: '13px', color: colors.muted, fontWeight: 400 }}>× {slot.capacity}</span>
                       </p>
+                      {slot.allowed_tiers && slot.allowed_tiers.length > 0 && (
+                        <span style={{ display: 'inline-block', marginTop: '4px', fontSize: '11px', fontWeight: 600, color: '#92400e', background: 'rgba(245,158,11,0.15)', padding: '2px 8px', borderRadius: '6px' }}>
+                          🔒 {slot.allowed_tiers.join(', ')} only
+                        </span>
+                      )}
                       {(slot.call_time || slot.end_time || slot.notes) && (
                         <p style={{ fontSize: '12px', color: colors.muted, margin: '2px 0 0' }}>
                           {slot.call_time && `Call ${slot.call_time}`}

@@ -47,7 +47,7 @@ export async function GET(
 
   const { data: slotsRaw } = await supabase
     .from('crew_role_slots')
-    .select('id, capacity, call_time, end_time, notes, sort_order, role_id, crew_roles(name)')
+    .select('id, capacity, call_time, end_time, notes, sort_order, allowed_tiers, role_id, crew_roles(name)')
     .eq('production_crew_id', crew.id)
     .order('sort_order')
 
@@ -58,6 +58,7 @@ export async function GET(
     call_time: string | null
     end_time: string | null
     notes: string | null
+    allowed_tiers: string[] | null
     signups: Array<{ student_name: string | null; signed_up_by_self: boolean }>
   }> = []
 
@@ -69,7 +70,7 @@ export async function GET(
       .in('crew_role_slot_id', slotIds)
 
     type SignupRow = { crew_role_slot_id: string; signed_up_by: string | null; students: { name: string } | { name: string }[] | null }
-    type SlotRow = { id: string; capacity: number; call_time: string | null; end_time: string | null; notes: string | null; crew_roles: { name: string } | { name: string }[] | null }
+    type SlotRow = { id: string; capacity: number; call_time: string | null; end_time: string | null; notes: string | null; allowed_tiers: string[] | null; crew_roles: { name: string } | { name: string }[] | null }
 
     for (const slot of slotsRaw as unknown as SlotRow[]) {
       const slotSignups = ((signupsRaw || []) as unknown as SignupRow[])
@@ -91,6 +92,7 @@ export async function GET(
         call_time: slot.call_time,
         end_time: slot.end_time,
         notes: slot.notes,
+        allowed_tiers: slot.allowed_tiers,
         signups: slotSignups,
       })
     }
