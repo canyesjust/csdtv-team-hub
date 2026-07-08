@@ -67,11 +67,11 @@ export function buildBroadcastBoardHtml(items: BroadcastBoardItem[], todayLabel:
   .live{display:flex;align-items:center;gap:0.9vw;background:rgba(232,33,42,0.12);border:0.2vh solid rgba(232,33,42,0.35);border-radius:6vh;padding:1.2vh 1.8vw;font-size:1.8vh;font-weight:700;letter-spacing:0.22vw;text-transform:uppercase;color:var(--red2)}
   .live .dot{width:1.4vh;height:1.4vh;border-radius:50%;background:var(--red)}
   .today{text-align:right;font-size:1.9vh;font-weight:700;letter-spacing:0.14vw;text-transform:uppercase;color:var(--muted)}
-  #list{flex:1;display:flex;flex-direction:column;gap:1.8vh;padding-top:2.6vh;overflow:hidden}
-  .bc-card{display:flex;align-items:stretch;background:var(--card);border:0.2vh solid var(--border);border-left:0.6vh solid var(--red);border-radius:1.4vh;overflow:hidden;flex:1;min-height:0}
-  .bc-thumb{flex:0 0 22vw;background:#0a0d12;position:relative;overflow:hidden}
-  .bc-img{width:100%;height:100%;object-fit:cover;display:block}
-  .bc-img--ph{display:flex;align-items:center;justify-content:center;font-size:6vh;font-weight:800;color:rgba(255,255,255,0.06);letter-spacing:0.1vw}
+  #list{flex:1;display:flex;flex-direction:column;gap:1.8vh;padding-top:2.6vh;overflow:hidden;justify-content:flex-start}
+  .bc-card{display:flex;align-items:stretch;background:var(--card);border:0.2vh solid var(--border);border-left:0.6vh solid var(--red);border-radius:1.4vh;overflow:hidden;flex:1 1 0;min-height:0;max-height:20vh}
+  .bc-thumb{flex:0 0 auto;height:100%;aspect-ratio:16/9;background:#0a0d12;position:relative;overflow:hidden}
+  .bc-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .bc-img--ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:5vh;font-weight:800;color:rgba(255,255,255,0.07);letter-spacing:0.1vw}
   .bc-body{flex:1;min-width:0;padding:2.2vh 2.4vw;display:flex;flex-direction:column;justify-content:center;gap:1.2vh}
   .bc-type{font-size:1.6vh;font-weight:700;letter-spacing:0.3vw;text-transform:uppercase;color:var(--red2)}
   .bc-name{font-size:4vh;font-weight:800;line-height:1.08;letter-spacing:0.02vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

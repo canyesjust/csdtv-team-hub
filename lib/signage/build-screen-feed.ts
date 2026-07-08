@@ -6,6 +6,7 @@ import { signageLiveMatchesScreen } from './live-targeting'
 import { normalizeSignageStreamUrl } from './stream-url'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { buildBroadcastBoardHtml, type BroadcastBoardItem } from './broadcast-board'
+import { buildCalendarBoardHtml, buildWebsiteEmbedHtml, type CalendarItem } from './system-blocks'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
 import {
@@ -258,6 +259,66 @@ async function getBroadcastBoardHtml(service: SupabaseClient): Promise<string | 
   }
 }
 
+// ── Calendar block ──────────────────────────────────────────────────────────
+let calendarBoardCache: { at: number; html: string | null } | null = null
+const CALENDAR_TYPE_COLOR: Record<string, string> = {
+  'LiveStream Meeting': '#22c55e',
+  'Board Meeting': '#ef4444',
+  'Create a Video(Film, Edit, Publish)': '#60b8f0',
+  'Record Meeting': '#9b85e0',
+  'Podcast': '#f97316',
+  'Photo Headshots': '#e8a020',
+}
+const CALENDAR_TYPE_SHORT: Record<string, string> = {
+  'LiveStream Meeting': 'Livestream',
+  'Board Meeting': 'Board Meeting',
+  'Create a Video(Film, Edit, Publish)': 'Video',
+  'Record Meeting': 'Recording',
+  'Podcast': 'Podcast',
+  'Photo Headshots': 'Photo',
+}
+const CALENDAR_STATUSES = ['Approved/Scheduled', 'Complete Requested']
+
+async function getCalendarBoardHtml(service: SupabaseClient): Promise<string | null> {
+  if (calendarBoardCache && Date.now() - calendarBoardCache.at < BROADCAST_BOARD_TTL_MS) {
+    return calendarBoardCache.html
+  }
+  try {
+    const now = new Date()
+    const in31Iso = new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000).toISOString()
+    const { data } = await service
+      .from('productions')
+      .select('id, title, request_type_label, status, start_datetime')
+      .in('status', CALENDAR_STATUSES)
+      .gte('start_datetime', now.toISOString())
+      .lte('start_datetime', in31Iso)
+      .order('start_datetime', { ascending: true })
+      .limit(8)
+    const items: CalendarItem[] = (data ?? [])
+      .filter(p => p.start_datetime)
+      .map(p => {
+        const dt = new Date(p.start_datetime as string)
+        const label = (p.request_type_label as string) || ''
+        return {
+          weekday: dt.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Denver' }).toUpperCase(),
+          day: dt.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Denver' }),
+          month: dt.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Denver' }).toUpperCase(),
+          timeLabel: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }),
+          title: (p.title as string) || 'CSDtv Production',
+          typeLabel: CALENDAR_TYPE_SHORT[label] || label || 'Event',
+          accent: CALENDAR_TYPE_COLOR[label] || '#8a99b5',
+        }
+      })
+    if (!items.length) { calendarBoardCache = { at: Date.now(), html: null }; return null }
+    const todayLabel = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' })
+    const html = buildCalendarBoardHtml(items, todayLabel)
+    calendarBoardCache = { at: Date.now(), html }
+    return html
+  } catch {
+    return calendarBoardCache?.html ?? null
+  }
+}
+
 export async function buildScreenFeed(
   service: SupabaseClient,
   code: string,
@@ -319,25 +380,33 @@ export async function buildScreenFeed(
     .filter(row => signageTargetMatches(row, target))
     .sort((a, b) => b.priority - a.priority || String(b.created_at).localeCompare(String(a.created_at)))
 
-  // System "stock" blocks (e.g. the broadcast board) are content rows rendered
-  // dynamically by the feed, but scheduled + targeted exactly like normal
-  // content — so they only appear on the screens an editor assigned them to.
-  const needsBoard = filteredContent.some(row => row.system_kind === 'broadcast_board')
-  const broadcastBoardHtml = needsBoard ? await getBroadcastBoardHtml(service) : null
+  // System "stock" blocks (broadcast board, calendar, website) are content rows
+  // rendered dynamically by the feed, but scheduled + targeted exactly like
+  // normal content — so they only appear on the screens an editor assigned them to.
+  const [broadcastBoardHtml, calendarHtml] = await Promise.all([
+    filteredContent.some(row => row.system_kind === 'broadcast_board') ? getBroadcastBoardHtml(service) : Promise.resolve(null),
+    filteredContent.some(row => row.system_kind === 'calendar') ? getCalendarBoardHtml(service) : Promise.resolve(null),
+  ])
+  const systemHtml = (row: { system_kind?: string | null; html_body?: string | null }): string | null => {
+    if (row.system_kind === 'broadcast_board') return broadcastBoardHtml
+    if (row.system_kind === 'calendar') return calendarHtml
+    if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
+    return null
+  }
 
   const media = filteredContent
-    // Drop a board slide when there are no upcoming broadcasts (nothing to show).
-    .filter(row => row.system_kind !== 'broadcast_board' || broadcastBoardHtml)
+    // Drop a system block when it has nothing to show (e.g. no upcoming items, no URL).
+    .filter(row => !row.system_kind || systemHtml(row))
     .map(row => {
-      const isBoard = row.system_kind === 'broadcast_board'
-      const type = (isBoard ? 'html' : row.type) as 'image' | 'video' | 'html'
+      const isSystem = !!row.system_kind
+      const type = (isSystem ? 'html' : row.type) as 'image' | 'video' | 'html'
       return {
         id: row.id,
         type,
         title: row.title,
-        url: isBoard || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path),
-        html: isBoard
-          ? broadcastBoardHtml
+        url: isSystem || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path),
+        html: isSystem
+          ? systemHtml(row)
           : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null),
         full_screen: row.full_screen,
         display_seconds: clampDisplaySeconds(row.display_seconds),

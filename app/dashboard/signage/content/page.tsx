@@ -53,8 +53,8 @@ const CONTENT_COLUMNS =
 // Built-in "stock" blocks: always available, added + targeted like content.
 const STOCK_BLOCKS: { kind: string; label: string; desc: string; available: boolean }[] = [
   { kind: 'broadcast_board', label: "What's coming up on air", desc: 'Upcoming livestreams & board meetings you feature, with date, time & a scan-to-watch QR.', available: true },
-  { kind: 'calendar', label: 'Calendar', desc: 'A month/agenda view of upcoming productions and events.', available: false },
-  { kind: 'website', label: 'Website preview', desc: 'A live snapshot of a district web page.', available: false },
+  { kind: 'calendar', label: 'Calendar', desc: 'An agenda of upcoming scheduled productions and events this month.', available: true },
+  { kind: 'website', label: 'Website preview', desc: 'A live view of a district web page (the page must allow embedding).', available: true },
 ]
 
 const EMPTY_COUNTS: Record<Tab, number> = { pending: 0, approved: 0, rejected: 0 }
@@ -112,15 +112,25 @@ export default function SignageContentPage() {
   })
 
   const loadCounts = useCallback(async () => {
-    const { data } = await supabase.from('signage_content').select('status').eq('site_id', activeSiteId)
+    const d = new Date()
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const { data } = await supabase.from('signage_content').select('status, end_date').eq('site_id', activeSiteId)
     const next = { ...EMPTY_COUNTS }
     for (const row of data ?? []) {
       const st = row.status as Tab
-      if (st in next) next[st] += 1
+      if (!(st in next)) continue
+      // The Approved list hides past items unless "Show past" is on — keep the
+      // tab count in sync so the number matches what's actually shown.
+      if (st === 'approved' && !showPast) {
+        const end = (row.end_date as string | null)?.slice(0, 10)
+        const expired = !!end && !isIndefiniteEndDate(row.end_date as string) && end < todayStr
+        if (expired) continue
+      }
+      next[st] += 1
     }
     setCounts(next)
     setCountsLoaded(true)
-  }, [supabase, activeSiteId])
+  }, [supabase, activeSiteId, showPast])
 
   const loadTab = useCallback(async (activeTab: Tab) => {
     setTabLoading(true)
@@ -389,8 +399,14 @@ export default function SignageContentPage() {
       toast('Already added — assign it to screens below', 'success')
       return
     }
+    let websiteUrl = ''
+    if (kind === 'website') {
+      websiteUrl = (window.prompt('Web page URL to show on screen (the page must allow embedding):', 'https://www.canyonsdistrict.org') || '').trim()
+      if (!websiteUrl) return
+    }
     const fd = new FormData()
     fd.set('system_kind', kind)
+    if (kind === 'website') fd.set('website_url', websiteUrl)
     fd.set('title', STOCK_BLOCKS.find(b => b.kind === kind)?.label || 'Stock content')
     fd.set('start_date', today)
     fd.set('end_date', SIGNAGE_INDEFINITE_END_DATE)
@@ -708,6 +724,18 @@ export default function SignageContentPage() {
                           rows={8}
                           style={s.textarea}
                         />
+                      </div>
+                    )}
+                    {row.system_kind === 'website' && (
+                      <div style={{ marginTop: 12 }}>
+                        <p style={s.lbl}>Web page URL</p>
+                        <input
+                          value={e.html_body}
+                          onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, html_body: ev.target.value } }))}
+                          placeholder="https://www.canyonsdistrict.org"
+                          style={s.input}
+                        />
+                        <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>The page must allow being embedded (some sites block this). Test on a screen after saving.</p>
                       </div>
                     )}
                     <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
