@@ -11,6 +11,7 @@ import {
   screenWeatherClass,
   screenColorVarPairs,
 } from './screen-view'
+import { resolveZoneConfig, type RailWidget, type BandWidget } from './zones'
 
 /**
  * Self-contained HTML render pipeline for the AbleSign HTML web app changeover.
@@ -446,6 +447,55 @@ function liveCardHtml(live: NonNullable<Feed['csdtv_live']>): string {
   )
 }
 
+// --- Layout-builder zone widgets (zoned2 rail cells + news band) --------------
+// A widget rendered into a swappable slot. Default keys (brand/weather/board/news)
+// call the exact original functions so the default layout stays byte-identical.
+
+function railDirectionsHtml(feed: Feed): string {
+  return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Directory</div>${wayfindingDirectory(feed.wayfinding, { compact: true })}</div>`
+}
+
+function railSpotlightHtml(feed: Feed): string {
+  const items = feed.spotlight ?? []
+  if (!items.length) return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight</div><div class="cic-empty-muted">—</div></div>`
+  const rows = items.slice(0, 3).map(v => {
+    const thumb = v.thumb ? `<span class="cic-z2-news-thumb"><img src="${esc(v.thumb)}" alt=""></span>` : ''
+    const sub = v.duration ? `<div class="cic-z2-ann-s">${esc(v.duration)}</div>` : ''
+    return `<div class="cic-z2-ann-row">${thumb}<div><div class="cic-z2-ann-t">${esc(v.title)}</div>${sub}</div></div>`
+  }).join('')
+  return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight</div>${rows}</div>`
+}
+
+function railWidgetHtml(key: RailWidget, feed: Feed, ctx: { dateStr: string }): string {
+  switch (key) {
+    case 'brand': return zoned2BrandBox({ logoUrl: feed.screen.logo_url, dateStr: ctx.dateStr })
+    case 'weather': return zoned2Weather(feed.weather)
+    case 'board': return zoned2Rail(feed)
+    case 'directions': return railDirectionsHtml(feed)
+    case 'announcements': return annCardHtml(feed.announcements)
+    case 'spotlight': return railSpotlightHtml(feed)
+  }
+}
+
+function bandWidgetHtml(key: BandWidget, feed: Feed): string {
+  switch (key) {
+    case 'news':
+      return zoned2News(feed.news ?? [])
+    case 'directions':
+      return (
+        `<footer class="cic-z2-news"><div class="cic-z2-news-badge"><span class="cic-z2-news-w"><span class="dot"></span>DIRECTORY</span></div>` +
+        `<div class="cic-z2-news-rot">${wayfindingDirectory(feed.wayfinding, { compact: true })}</div></footer>`
+      )
+    case 'announcements': {
+      const rows = feed.announcements.slice(0, 4).map(announcementRow).join('') || '<div class="cic-empty-muted">No announcements</div>'
+      return (
+        `<footer class="cic-z2-news"><div class="cic-z2-news-badge"><span class="cic-z2-news-w"><span class="dot"></span>NOTICES</span></div>` +
+        `<div class="cic-z2-news-rot">${rows}</div></footer>`
+      )
+    }
+  }
+}
+
 function zoned2Rail(feed: Feed): string {
   const cards: string[] = []
   if (feed.csdtv_live) cards.push(liveCardHtml(feed.csdtv_live))
@@ -541,11 +591,12 @@ function composeBody(feed: Feed): string {
       ? `<div class="cic-z2-scan"><div class="cic-z2-scan-cap"><div class="cic-z2-scan-k">Now playing</div>${cur.title ? `<div class="cic-z2-scan-t">${esc(cur.title)}</div>` : ''}</div><div class="cic-z2-scan-hint">Scan to watch with sound</div></div>`
       : ''
     const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Denver' })
+    const zc = resolveZoneConfig(s.zone_config)
     return (
       `<div class="cic-zoned-stage cic-zoned2-stage">` +
       `<div class="cic-body"><div class="cic-z2-mediacell">${mediaCarousel(feed.media, { overlayHtml: scan })}</div>` +
-      `<div class="cic-railcol">${zoned2BrandBox({ logoUrl: s.logo_url, dateStr })}${zoned2Weather(feed.weather)}${zoned2Rail(feed)}</div></div>` +
-      zoned2News(feed.news ?? []) +
+      `<div class="cic-railcol">${railWidgetHtml(zc.railTop, feed, { dateStr })}${railWidgetHtml(zc.railMid, feed, { dateStr })}${railWidgetHtml(zc.railBottom, feed, { dateStr })}</div></div>` +
+      bandWidgetHtml(zc.band, feed) +
       `</div>`
     )
   }

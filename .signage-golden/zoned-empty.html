@@ -2008,6 +2008,28 @@
   renderClock();
   setInterval(renderClock, 1000);
 
+  // ---- Scaled website slides ----
+  // Render the page at its logical width, then scale it to fit the zone so a
+  // tall site shows more of the page (matches the live React player).
+  function sizeWebScaled(box){
+    if(!box) return;
+    var w = parseFloat(box.getAttribute('data-web-width')) || 0;
+    var frame = box.querySelector('iframe');
+    if(!w || !frame) return;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if(bw <= 0 || bh <= 0) return;
+    var k = bw / w;
+    frame.style.width = w + 'px';
+    frame.style.height = Math.ceil(bh / k) + 'px';
+    frame.style.transform = 'scale(' + k + ')';
+  }
+  function sizeAllWebScaled(){
+    var boxes = document.querySelectorAll('.cic-web-scaled');
+    for(var i=0;i<boxes.length;i++){ sizeWebScaled(boxes[i]); }
+  }
+  sizeAllWebScaled();
+  window.addEventListener('resize', sizeAllWebScaled);
+
   // ---- Zoned 2 rail card rotation ----
   var z2rot = document.querySelector('[data-z2rot]');
   if(z2rot){
@@ -2058,11 +2080,32 @@
         img.src = item.url; img.alt = '';
         return img;
       }
+      if(item.type === 'website' && item.url && item.website_width){
+        // Scaled website: render wide, then the sizer scales it to fit the zone.
+        var box = document.createElement('div');
+        box.className = 'cic-html-slide cic-web-scaled';
+        box.setAttribute('data-web-width', String(item.website_width));
+        box.style.overflow = 'hidden'; box.style.background = '#fff';
+        var wf = document.createElement('iframe');
+        wf.setAttribute('scrolling', 'no');
+        wf.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        wf.style.position = 'absolute'; wf.style.top = '0'; wf.style.left = '0';
+        wf.style.border = '0'; wf.style.transformOrigin = 'top left'; wf.style.background = '#fff';
+        wf.src = item.url;
+        box.appendChild(wf);
+        setTimeout(function(){ sizeWebScaled(box); }, 0);
+        return box;
+      }
       var frame = document.createElement('iframe');
       frame.className = 'cic-html-slide';
-      frame.setAttribute('sandbox', 'allow-scripts');
       frame.setAttribute('scrolling', 'no');
-      frame.srcdoc = item.html || '';
+      if(item.type === 'website' && item.url){
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        frame.src = item.url;
+      } else {
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.srcdoc = item.html || '';
+      }
       return frame;
     }
     function setDots(){
@@ -2160,6 +2203,8 @@
       var f = document.createElement('iframe');
       f.setAttribute('src', src);
       if(allow) f.setAttribute('allow', allow);
+      // YouTube embeds reject requests with a stripped referrer (error 153).
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
       f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none';
       return f;
     }

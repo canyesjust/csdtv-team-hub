@@ -1984,7 +1984,7 @@
 .cic-screen.layout-zoned2 .z2wx-rain { opacity: 0.55; }
 </style></head><body><div class="cic-screen layout-full_bleed cic-theme-primary" style="--navy:#162844;--panel:#1e3649;--accent:#96b7c8"><div class="sig-glow" aria-hidden="true"><div class="sig-glow__blob sig-glow__b1"></div><div class="sig-glow__blob sig-glow__b2"></div><div class="sig-glow__blob sig-glow__b3"></div></div><div class="cic-screen-content"><div class="cic-fill"><div class="cic-media16 fill" data-carousel style="--crossfade-ms:700ms"><div class="cic-media-layer"><img src="https://example.org/a.jpg" alt="Welcome"></div><div class="cic-dots" data-dots><span class="cic-dot on"></span><span class="cic-dot"></span></div><div class="cic-mediaprog" aria-hidden><span class="cic-mediaprog-fill" data-prog style="animation-duration:10s"></span></div></div><div class="cic-locchip">West Front</div><div class="cic-welchip"><span class="cic-confetti-icon" aria-hidden>✦</span> Welcome Dr. Smith</div></div><div class="cic-ticker"><span class="cic-ticker-pill" aria-hidden>C</span><div class="cic-ticker-scroll"><div class="cic-tickin">Go Cougars   •   Spirit week is here</div></div></div></div></div><script>
 (function(){
-  var DATA = JSON.parse("{\"media\":[{\"type\":\"image\",\"url\":\"https://example.org/a.jpg\",\"html\":null,\"display_seconds\":10},{\"type\":\"html\",\"url\":\"\",\"html\":\"\\u003ch1>Hi\\u003c/h1>\",\"display_seconds\":8}],\"layout\":\"full_bleed\",\"headings\":[\"Find your way around Canyons Innovation Center\"],\"crossfadeMs\":700,\"headingRotateMs\":3500,\"defaultSeconds\":10,\"takeoverUrl\":\"https://www.csdtvstaff.org/api/signage/screen/westfront/takeover\"}");
+  var DATA = JSON.parse("{\"media\":[{\"type\":\"image\",\"url\":\"https://example.org/a.jpg\",\"html\":null,\"display_seconds\":10,\"website_width\":null},{\"type\":\"html\",\"url\":\"\",\"html\":\"\\u003ch1>Hi\\u003c/h1>\",\"display_seconds\":8,\"website_width\":null}],\"layout\":\"full_bleed\",\"headings\":[\"Find your way around Canyons Innovation Center\"],\"crossfadeMs\":700,\"headingRotateMs\":3500,\"defaultSeconds\":10,\"takeoverUrl\":\"https://www.csdtvstaff.org/api/signage/screen/westfront/takeover\"}");
 
   // ---- Clock (always Mountain Time, never the device timezone) ----
   var clockEls = document.querySelectorAll('[data-clock]');
@@ -2007,6 +2007,28 @@
   }
   renderClock();
   setInterval(renderClock, 1000);
+
+  // ---- Scaled website slides ----
+  // Render the page at its logical width, then scale it to fit the zone so a
+  // tall site shows more of the page (matches the live React player).
+  function sizeWebScaled(box){
+    if(!box) return;
+    var w = parseFloat(box.getAttribute('data-web-width')) || 0;
+    var frame = box.querySelector('iframe');
+    if(!w || !frame) return;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if(bw <= 0 || bh <= 0) return;
+    var k = bw / w;
+    frame.style.width = w + 'px';
+    frame.style.height = Math.ceil(bh / k) + 'px';
+    frame.style.transform = 'scale(' + k + ')';
+  }
+  function sizeAllWebScaled(){
+    var boxes = document.querySelectorAll('.cic-web-scaled');
+    for(var i=0;i<boxes.length;i++){ sizeWebScaled(boxes[i]); }
+  }
+  sizeAllWebScaled();
+  window.addEventListener('resize', sizeAllWebScaled);
 
   // ---- Zoned 2 rail card rotation ----
   var z2rot = document.querySelector('[data-z2rot]');
@@ -2058,11 +2080,32 @@
         img.src = item.url; img.alt = '';
         return img;
       }
+      if(item.type === 'website' && item.url && item.website_width){
+        // Scaled website: render wide, then the sizer scales it to fit the zone.
+        var box = document.createElement('div');
+        box.className = 'cic-html-slide cic-web-scaled';
+        box.setAttribute('data-web-width', String(item.website_width));
+        box.style.overflow = 'hidden'; box.style.background = '#fff';
+        var wf = document.createElement('iframe');
+        wf.setAttribute('scrolling', 'no');
+        wf.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        wf.style.position = 'absolute'; wf.style.top = '0'; wf.style.left = '0';
+        wf.style.border = '0'; wf.style.transformOrigin = 'top left'; wf.style.background = '#fff';
+        wf.src = item.url;
+        box.appendChild(wf);
+        setTimeout(function(){ sizeWebScaled(box); }, 0);
+        return box;
+      }
       var frame = document.createElement('iframe');
       frame.className = 'cic-html-slide';
-      frame.setAttribute('sandbox', 'allow-scripts');
       frame.setAttribute('scrolling', 'no');
-      frame.srcdoc = item.html || '';
+      if(item.type === 'website' && item.url){
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        frame.src = item.url;
+      } else {
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.srcdoc = item.html || '';
+      }
       return frame;
     }
     function setDots(){
@@ -2160,6 +2203,8 @@
       var f = document.createElement('iframe');
       f.setAttribute('src', src);
       if(allow) f.setAttribute('allow', allow);
+      // YouTube embeds reject requests with a stripped referrer (error 153).
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
       f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none';
       return f;
     }

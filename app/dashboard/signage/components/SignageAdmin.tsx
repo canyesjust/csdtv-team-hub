@@ -356,6 +356,7 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     label: 'Screens',
     items: [
       { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
+      { href: '/dashboard/signage/layout-builder', label: 'Layout builder', managerOnly: true },
       { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
       { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
     ],

@@ -28113,7 +28113,7 @@ function youtubeEmbedUrlFromStreamUrl(url, opts = {}) {
     params.set("cc_load_policy", "1");
     params.set("cc_lang_pref", "en");
   }
-  return `https://www.youtube.com/embed/${id}?${params.toString()}`;
+  return `https://www.youtube-nocookie.com/embed/${id}?${params.toString()}`;
 }
 
 // app/signage/_components/SignageBackground.tsx
@@ -28405,8 +28405,67 @@ function MediaSlide({
     item.type === "html" && item.html && // Render in an iframe so the slide's vh/vw/vmin units measure THIS media
     // zone (16:9), not the whole screen — otherwise it renders full-screen
     // and gets cropped inside a zoned layout's media cell.
-    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("iframe", { className: "cic-html-slide", title: item.title || "", srcDoc: item.html, sandbox: "allow-scripts", scrolling: "no", onLoad: onReady })
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("iframe", { className: "cic-html-slide", title: item.title || "", srcDoc: item.html, sandbox: "allow-scripts", scrolling: "no", onLoad: onReady }),
+    item.type === "website" && item.url && // Live external page. Native size for TV-designed pages; scaled-to-fit
+    // (rendered wider, zoomed out) when a page-zoom width is set so a tall
+    // site shows more of the page instead of being clipped below the fold.
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(WebsiteSlide, { url: item.url, title: item.title || "", width: item.website_width ?? null, onReady })
   ] });
+}
+var WEBSITE_SANDBOX = "allow-scripts allow-same-origin allow-popups allow-forms allow-presentation";
+function WebsiteSlide({ url, title, width, onReady }) {
+  const boxRef = (0, import_react.useRef)(null);
+  const [box, setBox] = (0, import_react.useState)(null);
+  (0, import_react.useEffect)(() => {
+    if (!width) return;
+    const el = boxRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w > 0 && h > 0) setBox({ w, h });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [width]);
+  if (!width) {
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+      "iframe",
+      {
+        className: "cic-html-slide",
+        title,
+        src: url,
+        sandbox: WEBSITE_SANDBOX,
+        scrolling: "no",
+        onLoad: onReady
+      }
+    );
+  }
+  const scale = box ? box.w / width : 1;
+  const logicalH = box ? Math.ceil(box.h / scale) : 0;
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { ref: boxRef, className: "cic-html-slide", style: { overflow: "hidden", background: "#fff" }, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+    "iframe",
+    {
+      title,
+      src: url,
+      sandbox: WEBSITE_SANDBOX,
+      scrolling: "no",
+      onLoad: onReady,
+      style: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        border: 0,
+        width,
+        height: logicalH || "100%",
+        transformOrigin: "top left",
+        transform: `scale(${scale})`,
+        background: "#fff"
+      }
+    }
+  ) });
 }
 function MediaCarousel({
   media,
@@ -28772,6 +28831,7 @@ function LiveTakeover({
         src: youtubeEmbed,
         title,
         allow: "autoplay; encrypted-media; picture-in-picture",
+        referrerPolicy: "strict-origin-when-cross-origin",
         style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }
       }
     ) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("video", { ref: videoRef, muted: true, playsInline: true, autoPlay: true, className: "cic-live-video", crossOrigin: "anonymous" }),
@@ -28982,6 +29042,7 @@ function ScreenClient({ code, initialFeed, imageSeconds }) {
           src: feed.board_takeover.url,
           title: feed.board_takeover.label || "Board meeting",
           allow: "autoplay; encrypted-media; picture-in-picture",
+          referrerPolicy: "strict-origin-when-cross-origin",
           style: { position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }
         }
       ) }),

@@ -1,5 +1,6 @@
 import type { SignageLayout, SignageOrientation, SignageTheme } from './constants'
 import type { SignageWeather } from './weather'
+import type { ZoneConfig } from './zones'
 
 export type ScreenFeedMedia = {
   id: string
@@ -62,6 +63,9 @@ export type ScreenFeed = {
     brand_title: string | null
     brand_subtitle: string | null
     logo_url: string | null
+    /** Layout-builder slot assignments (zoned2). Resolved to a full config in
+     *  buildScreenFeed; renderers read it to fill the swappable zones. */
+    zone_config?: ZoneConfig | null
   }
   template: ScreenTemplate
   media: ScreenFeedMedia[]
