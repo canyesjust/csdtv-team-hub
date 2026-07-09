@@ -885,6 +885,7 @@ function LiveTakeover({
           src={youtubeEmbed}
           title={title}
           allow="autoplay; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
         />
       ) : (
@@ -1144,6 +1145,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             src={feed.board_takeover.url}
             title={feed.board_takeover.label || 'Board meeting'}
             allow="autoplay; encrypted-media; picture-in-picture"
+            referrerPolicy="strict-origin-when-cross-origin"
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
           />
         </div>

@@ -861,6 +861,8 @@ function runtimeScript(feed: Feed): string {
       var f = document.createElement('iframe');
       f.setAttribute('src', src);
       if(allow) f.setAttribute('allow', allow);
+      // YouTube embeds reject requests with a stripped referrer (error 153).
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
       f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none';
       return f;
     }
