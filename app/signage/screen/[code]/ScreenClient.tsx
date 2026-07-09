@@ -400,10 +400,82 @@ function MediaSlide({
         <iframe className="cic-html-slide" title={item.title || ''} srcDoc={item.html} sandbox="allow-scripts" scrolling="no" onLoad={onReady} />
       )}
       {item.type === 'website' && item.url && (
-        // Live external page (e.g. a TV-mode dashboard). Direct iframe at the
-        // zone's native size, with same-origin so the embedded app can run.
-        <iframe className="cic-html-slide" title={item.title || ''} src={item.url} sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" scrolling="no" onLoad={onReady} />
+        // Live external page. Native size for TV-designed pages; scaled-to-fit
+        // (rendered wider, zoomed out) when a page-zoom width is set so a tall
+        // site shows more of the page instead of being clipped below the fold.
+        <WebsiteSlide url={item.url} title={item.title || ''} width={item.website_width ?? null} onReady={onReady} />
       )}
+    </div>
+  )
+}
+
+const WEBSITE_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation'
+
+// Renders a live external page inside a media zone. With no `width` the page
+// fills the zone at native size (best for pages built for a TV). With a `width`
+// (logical CSS px) the page is rendered that wide and scaled down to fit the
+// zone — zooming out so a tall site shows far more of the page than a native
+// fill would (which only shows the top slice above the fold).
+function WebsiteSlide({ url, title, width, onReady }: {
+  url: string
+  title: string
+  width: number | null
+  onReady?: () => void
+}) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null)
+
+  useEffect(() => {
+    if (!width) return
+    const el = boxRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w > 0 && h > 0) setBox({ w, h })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [width])
+
+  if (!width) {
+    return (
+      <iframe
+        className="cic-html-slide"
+        title={title}
+        src={url}
+        sandbox={WEBSITE_SANDBOX}
+        scrolling="no"
+        onLoad={onReady}
+      />
+    )
+  }
+
+  const scale = box ? box.w / width : 1
+  // Logical height so the scaled iframe exactly fills the zone's height.
+  const logicalH = box ? Math.ceil(box.h / scale) : 0
+  return (
+    <div ref={boxRef} className="cic-html-slide" style={{ overflow: 'hidden', background: '#fff' }}>
+      <iframe
+        title={title}
+        src={url}
+        sandbox={WEBSITE_SANDBOX}
+        scrolling="no"
+        onLoad={onReady}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          border: 0,
+          width: width,
+          height: logicalH || '100%',
+          transformOrigin: 'top left',
+          transform: `scale(${scale})`,
+          background: '#fff',
+        }}
+      />
     </div>
   )
 }

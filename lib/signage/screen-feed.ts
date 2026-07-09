@@ -11,6 +11,12 @@ export type ScreenFeedMedia = {
   html: string | null
   full_screen: boolean
   display_seconds: number
+  // Website slides only. When set, the live page is rendered at this logical CSS
+  // width and scaled to fit the zone — so a tall site (whose full-width layout
+  // would otherwise be clipped below the fold) shows much more of the page. When
+  // null/undefined the page renders at the zone's native size (best for pages
+  // already designed for a TV, e.g. kiosk/TV-mode dashboards).
+  website_width?: number | null
 }
 
 export type ScreenFeedAnnouncement = {

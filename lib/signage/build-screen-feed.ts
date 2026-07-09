@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
-import { clampDisplaySeconds, sanitizeSignageHtml } from './content-display'
+import { clampDisplaySeconds, sanitizeSignageHtml, websiteWidthFromMeta } from './content-display'
 import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
 import { resolveScreenLive, resolveBoardTakeover } from './takeover'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
@@ -413,11 +413,11 @@ const SITE_BRAND_COLUMNS = 'use_brand_colors, bg_color, panel_color, accent_colo
 // "Full preview" so editors can see exactly what a block will look like.
 export async function renderSystemBlockHtml(
   service: SupabaseClient,
-  row: { system_kind: string | null; html_body: string | null; site_id: string | null },
+  row: { system_kind: string | null; html_body: string | null; site_id: string | null; gen_meta?: unknown },
 ): Promise<string | null> {
   if (row.system_kind === 'broadcast_board') return getBroadcastBoardHtml(service)
   if (row.system_kind === 'calendar') return getCalendarFromIcs(String(row.html_body ?? ''))
-  if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
+  if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body), websiteWidthFromMeta(row.gen_meta)) : null
   if (row.system_kind === 'national_day' || row.system_kind === 'designed_slide') {
     const { data: site } = row.site_id
       ? await service.from('signage_sites').select(SITE_BRAND_COLUMNS).eq('id', row.site_id).maybeSingle()
@@ -548,6 +548,7 @@ export async function buildScreenFeed(
         html: isWebsite ? null : (isSystem ? systemHtml(row) : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null)),
         full_screen: row.full_screen,
         display_seconds: clampDisplaySeconds(row.display_seconds),
+        website_width: isWebsite ? websiteWidthFromMeta(row.gen_meta) : null,
       }
     })
 

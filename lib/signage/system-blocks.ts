@@ -146,19 +146,33 @@ export function buildNationalDayHtml(p: NationalDayParams): string {
 // ── Website preview ─────────────────────────────────────────────────────────
 // Renders a live district web page full-bleed. NOTE: only works for pages that
 // permit being embedded in a frame (no X-Frame-Options / frame-ancestors block).
-export function buildWebsiteEmbedHtml(url: string): string {
+export function buildWebsiteEmbedHtml(url: string, width?: number | null): string {
   const safe = esc(url)
+  const sandbox = 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation'
   // Preview-only embed (dashboard). On real screens the website is rendered as a
-  // distinct `type:'website'` media item in a direct iframe at the zone's native
-  // size. Here we mirror that: fill the zone 1:1 and give the inner frame a
-  // permissive sandbox so SPAs (which need same-origin to boot) actually render
-  // instead of showing blank.
-  return `<!DOCTYPE html>
+  // distinct `type:'website'` media item in a direct iframe. Mirror that here so
+  // the preview matches: fill 1:1 (native) or, when a page-zoom width is set,
+  // render the page that wide and scale it to fit — showing more of a tall page.
+  if (!width || width <= 0) {
+    return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
 <style>
   *{margin:0;padding:0}
   html,body{width:100%;height:100%;background:#0b0e13;overflow:hidden}
   iframe{border:0;display:block;width:100vw;height:100vh}
 </style></head>
-<body><iframe src="${safe}" scrolling="no" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"></iframe></body></html>`
+<body><iframe src="${safe}" scrolling="no" referrerpolicy="no-referrer" sandbox="${sandbox}"></iframe></body></html>`
+  }
+  const w = Math.round(width)
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<style>
+  *{margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#fff;overflow:hidden}
+  #box{position:absolute;inset:0;overflow:hidden;background:#fff}
+  #box iframe{position:absolute;top:0;left:0;border:0;transform-origin:top left;background:#fff}
+</style></head>
+<body><div id="box"><iframe id="wf" src="${safe}" scrolling="no" referrerpolicy="no-referrer" sandbox="${sandbox}"></iframe></div>
+<script>(function(){var W=${w};var box=document.getElementById('box');var f=document.getElementById('wf');function size(){var k=box.clientWidth/W;f.style.width=W+'px';f.style.height=Math.ceil(box.clientHeight/k)+'px';f.style.transform='scale('+k+')';}size();window.addEventListener('resize',size);})();</script>
+</body></html>`
 }

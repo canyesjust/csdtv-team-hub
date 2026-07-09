@@ -68,6 +68,17 @@ export async function PATCH(
   if (typeof body.title === 'string') patch.title = body.title
   if (body.display_seconds !== undefined) patch.display_seconds = clampDisplaySeconds(body.display_seconds)
   if (typeof body.html_body === 'string') patch.html_body = sanitizeSignageHtml(body.html_body)
+  // Website "page zoom": logical render width merged into gen_meta. 0/null clears
+  // it (back to native fill). Other gen_meta keys (AI provenance, etc.) are kept.
+  if (body.website_width !== undefined) {
+    const w = typeof body.website_width === 'number'
+      ? body.website_width
+      : parseInt(String(body.website_width ?? ''), 10)
+    const meta = (existing.gen_meta && typeof existing.gen_meta === 'object') ? { ...existing.gen_meta } : {}
+    if (Number.isFinite(w) && w > 0) meta.website_width = Math.min(6000, Math.max(640, Math.round(w)))
+    else delete meta.website_width
+    patch.gen_meta = meta
+  }
   if (body.reject_reason === null || typeof body.reject_reason === 'string') {
     patch.reject_reason = body.reject_reason
   }

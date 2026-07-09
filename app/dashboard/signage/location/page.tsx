@@ -36,6 +36,41 @@ export default function SignageLocationPage() {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchMsg, setSearchMsg] = useState<string | null>(null)
+  const [schools, setSchools] = useState<Array<{ id: string; name: string; code: string | null; lat: number; lng: number }>>([])
+
+  // Load the district's schools (with saved coordinates) so a location can be set
+  // by picking a school instead of hand-entering latitude/longitude.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const { data } = await supabase
+        .from('schools')
+        .select('id, name, code, lat, lng')
+        .not('lat', 'is', null)
+        .not('lng', 'is', null)
+        .order('name')
+      if (cancelled || !data) return
+      setSchools(
+        data
+          .filter(r => typeof r.lat === 'number' && typeof r.lng === 'number')
+          .map(r => ({ id: r.id, name: r.name, code: r.code, lat: r.lat as number, lng: r.lng as number })),
+      )
+    })()
+    return () => { cancelled = true }
+  }, [supabase])
+
+  const pickSchool = (id: string) => {
+    const school = schools.find(sc => sc.id === id)
+    if (!school) return
+    setForm(f => ({
+      ...f,
+      weather_lat: school.lat,
+      weather_lon: school.lng,
+      // Keep an existing custom label; otherwise use the school name.
+      center_name: f.center_name.trim() && f.center_name !== DEFAULTS.center_name ? f.center_name : school.name,
+    }))
+    setSearchMsg(`Set to ${school.name} — ${school.lat}, ${school.lng}`)
+  }
 
   const load = useCallback(async () => {
     if (!activeSiteId) { setLoading(false); return }
@@ -128,6 +163,25 @@ export default function SignageLocationPage() {
       <div style={{ maxWidth: 560, display: 'grid', gap: 16 }}>
         <div style={{ ...s.card, display: 'grid', gap: 12 }}>
           <h3 style={s.h3}>Find this location</h3>
+          {schools.length > 0 && (
+            <div>
+              <p style={s.lbl}>Pick a school</p>
+              <select
+                defaultValue=""
+                onChange={e => { if (e.target.value) pickSchool(e.target.value) }}
+                style={s.input}
+              >
+                <option value="">Select a school…</option>
+                {schools.map(sc => (
+                  <option key={sc.id} value={sc.id}>{sc.name}{sc.code ? ` (${sc.code})` : ''}</option>
+                ))}
+              </select>
+              <p style={{ fontSize: 11.5, color: s.muted, margin: '6px 0 0' }}>
+                Fills the saved coordinates for that school — no typing needed. You can still fine-tune below.
+              </p>
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: s.muted, textAlign: 'center' }}>— or search an address —</div>
           <p style={{ fontSize: 12, color: s.muted, margin: 0 }}>
             Search a city, address, or place and we&rsquo;ll fill in the coordinates — no need to look up latitude and longitude yourself.
           </p>

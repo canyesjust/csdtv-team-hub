@@ -43,6 +43,7 @@ type ContentRow = {
   full_screen: boolean
   reject_reason: string | null
   system_kind: string | null
+  gen_meta: { website_width?: number | null } & Record<string, unknown> | null
   created_at?: string
   reviewed_at?: string | null
   reviewed_by?: string | null
@@ -51,7 +52,7 @@ type ContentRow = {
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, created_at, reviewed_at, reviewed_by'
+  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, gen_meta, created_at, reviewed_at, reviewed_by'
 
 // A template assigned to this location (from the admin library).
 type StockTemplate = { id: string; name: string; description: string | null; kind: string; singleton: boolean; requires_url: boolean; config?: { html?: string } | null }
@@ -100,6 +101,7 @@ export default function SignageContentPage() {
     full_screen: boolean
     display_seconds: number
     html_body: string
+    website_width: number
   }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -191,6 +193,7 @@ export default function SignageContentPage() {
     full_screen: row.full_screen,
     display_seconds: row.display_seconds ?? SIGNAGE_DEFAULT_DISPLAY_SECONDS,
     html_body: row.html_body ?? '',
+    website_width: row.gen_meta?.website_width ?? 0,
   }
 
   const today = useMemo(() => {
@@ -228,6 +231,7 @@ export default function SignageContentPage() {
       priority: e.priority,
       display_seconds: e.display_seconds,
       ...(row.type === 'html' ? { html_body: e.html_body } : {}),
+      ...(row.system_kind === 'website' ? { website_width: e.website_width || null } : {}),
       ...extra,
     })
   }
@@ -787,6 +791,22 @@ export default function SignageContentPage() {
                           style={s.input}
                         />
                         <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>{row.system_kind === 'calendar' ? 'Paste a public ICS/iCal feed URL. Upcoming events auto-update on screen.' : 'The page must allow being embedded (some sites block this). Test on a screen after saving.'}</p>
+                      </div>
+                    )}
+                    {row.system_kind === 'website' && (
+                      <div style={{ marginTop: 12 }}>
+                        <p style={s.lbl}>Page zoom</p>
+                        <select
+                          value={String(e.website_width || 0)}
+                          onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, website_width: parseInt(ev.target.value, 10) || 0 } }))}
+                          style={s.input}
+                        >
+                          <option value="0">Fit to screen — native size (best for TV/kiosk pages)</option>
+                          <option value="1920">Show more — zoom out (good for full websites)</option>
+                          <option value="2560">Show a lot more — zoom out further</option>
+                          <option value="3200">Show the most — smallest text</option>
+                        </select>
+                        <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>Native fits a page built for a screen. For a normal website that runs off the bottom, zoom out to fit more of the page (text gets smaller).</p>
                       </div>
                     )}
                     <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>

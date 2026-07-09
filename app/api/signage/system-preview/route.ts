@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   const { data: row } = await service
     .from('signage_content')
-    .select('system_kind, html_body, site_id')
+    .select('system_kind, html_body, site_id, gen_meta')
     .eq('id', id)
     .maybeSingle()
   if (!row || !row.system_kind) {
@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     system_kind: row.system_kind as string | null,
     html_body: row.html_body as string | null,
     site_id: row.site_id as string | null,
+    gen_meta: row.gen_meta,
   })
   if (!html) {
     return new NextResponse(

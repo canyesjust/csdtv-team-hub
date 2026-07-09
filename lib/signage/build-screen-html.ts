@@ -324,9 +324,23 @@ function slideInner(item: Feed['media'][number]): string {
     return `<iframe class="cic-html-slide" srcdoc="${esc(item.html)}" sandbox="allow-scripts" scrolling="no"></iframe>`
   }
   if (item.type === 'website' && item.url) {
-    return `<iframe class="cic-html-slide" src="${esc(item.url)}" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" scrolling="no"></iframe>`
+    return websiteSlideHtml(item.url, item.type === 'website' ? (item.website_width ?? null) : null)
   }
   return ''
+}
+
+const WEBSITE_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation'
+
+// Live external page in a media zone. No width → native fill (best for pages
+// built for a TV). A width (logical CSS px) → the page is rendered that wide and
+// scaled to fit the zone by the runtime sizer (`data-web-width`), so a tall site
+// shows more of the page than a native fill (which only shows the top slice).
+function websiteSlideHtml(url: string, width: number | null): string {
+  const src = esc(url)
+  if (!width) {
+    return `<iframe class="cic-html-slide" src="${src}" sandbox="${WEBSITE_SANDBOX}" scrolling="no"></iframe>`
+  }
+  return `<div class="cic-html-slide cic-web-scaled" data-web-width="${width}" style="overflow:hidden;background:#fff"><iframe src="${src}" sandbox="${WEBSITE_SANDBOX}" scrolling="no" style="position:absolute;top:0;left:0;border:0;transform-origin:top left;background:#fff"></iframe></div>`
 }
 
 function mediaCarousel(
@@ -605,7 +619,7 @@ function runtimeScript(feed: Feed): string {
   const data = {
     media: feed.media
       .filter(m => (m.type === 'image' && m.url) || (m.type === 'html' && m.html) || (m.type === 'website' && m.url))
-      .map(m => ({ type: m.type, url: m.url, html: m.html, display_seconds: m.display_seconds })),
+      .map(m => ({ type: m.type, url: m.url, html: m.html, display_seconds: m.display_seconds, website_width: m.type === 'website' ? (m.website_width ?? null) : null })),
     layout: feed.screen.layout,
     headings: (() => {
       const list: string[] = []
@@ -651,6 +665,28 @@ function runtimeScript(feed: Feed): string {
   }
   renderClock();
   setInterval(renderClock, 1000);
+
+  // ---- Scaled website slides ----
+  // Render the page at its logical width, then scale it to fit the zone so a
+  // tall site shows more of the page (matches the live React player).
+  function sizeWebScaled(box){
+    if(!box) return;
+    var w = parseFloat(box.getAttribute('data-web-width')) || 0;
+    var frame = box.querySelector('iframe');
+    if(!w || !frame) return;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if(bw <= 0 || bh <= 0) return;
+    var k = bw / w;
+    frame.style.width = w + 'px';
+    frame.style.height = Math.ceil(bh / k) + 'px';
+    frame.style.transform = 'scale(' + k + ')';
+  }
+  function sizeAllWebScaled(){
+    var boxes = document.querySelectorAll('.cic-web-scaled');
+    for(var i=0;i<boxes.length;i++){ sizeWebScaled(boxes[i]); }
+  }
+  sizeAllWebScaled();
+  window.addEventListener('resize', sizeAllWebScaled);
 
   // ---- Zoned 2 rail card rotation ----
   var z2rot = document.querySelector('[data-z2rot]');
@@ -701,6 +737,22 @@ function runtimeScript(feed: Feed): string {
         var img = document.createElement('img');
         img.src = item.url; img.alt = '';
         return img;
+      }
+      if(item.type === 'website' && item.url && item.website_width){
+        // Scaled website: render wide, then the sizer scales it to fit the zone.
+        var box = document.createElement('div');
+        box.className = 'cic-html-slide cic-web-scaled';
+        box.setAttribute('data-web-width', String(item.website_width));
+        box.style.overflow = 'hidden'; box.style.background = '#fff';
+        var wf = document.createElement('iframe');
+        wf.setAttribute('scrolling', 'no');
+        wf.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        wf.style.position = 'absolute'; wf.style.top = '0'; wf.style.left = '0';
+        wf.style.border = '0'; wf.style.transformOrigin = 'top left'; wf.style.background = '#fff';
+        wf.src = item.url;
+        box.appendChild(wf);
+        setTimeout(function(){ sizeWebScaled(box); }, 0);
+        return box;
       }
       var frame = document.createElement('iframe');
       frame.className = 'cic-html-slide';
