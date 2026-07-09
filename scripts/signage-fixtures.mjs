@@ -1,0 +1,44 @@
+// Shared fixtures for the signage golden-master harnesses (baked HTML + React).
+export function baseFeed(layout, orientation = 'landscape') {
+  return {
+    screen: {
+      name: 'West Front Entrance', code: 'westfront', orientation, layout,
+      heading: null,
+      area: { name: 'West Front', slug: 'west-front', building: 'Main', floor: 1 },
+      center_name: 'Canyons Innovation Center', theme: 'primary',
+      colors: { bg: '#162844', panel: '#1e3649', accent: '#96b7c8' },
+      brand_title: 'CIC', brand_subtitle: 'Canyons Innovation Center',
+      logo_url: 'https://example.org/logo.png',
+    },
+    template: { show_weather: true, show_clock: true, show_ticker: true, show_visitor_welcome: true },
+    media: [
+      { id: 'm1', type: 'image', title: 'Welcome', url: 'https://example.org/a.jpg', html: null, full_screen: false, display_seconds: 10 },
+      { id: 'm2', type: 'html', title: null, url: '', html: '<h1>Hi</h1>', full_screen: false, display_seconds: 8 },
+    ],
+    announcements: [
+      { id: 'a1', title: 'Picture Day', subtitle: 'Wear your best', in_ticker: true, icon: 'star', scope_label: 'All', all_screens: true },
+      { id: 'a2', title: 'Late Start', subtitle: null, in_ticker: false, icon: 'clock', scope_label: null, all_screens: false },
+    ],
+    ticker: ['Go Cougars', 'Spirit week is here'],
+    wayfinding: [
+      { id: 'w1', destination: 'Front Office', direction: 'left' },
+      { id: 'w2', destination: 'Gym', direction: 'right' },
+    ],
+    visitors: [{ id: 'v1', name: 'Dr. Smith', note: 'Room 204' }],
+    live: { live: false },
+    weather: { tempF: 72, condition: 'Sunny', icon: '☀', high: 80, low: 55, windMph: 6 },
+    spotlight: [{ id: 's1', title: 'Board Recap', thumb: 'https://example.org/t.jpg', kind: 'news', views: 120, duration: '3:20' }],
+    csdtv_live: null,
+    news: [{ title: 'District wins award', image: 'https://example.org/n.jpg' }],
+    closures: [{ date: '2026-07-24', label: 'Pioneer Day' }],
+    board_next: { date: 'Jul 15', time: '6:00 PM', title: 'Board Meeting' },
+  }
+}
+
+export const CASES = [
+  ['zoned-landscape', baseFeed('zoned')],
+  ['zoned-portrait', baseFeed('zoned', 'portrait')],
+  ['zoned2-landscape', baseFeed('zoned2')],
+  ['full_bleed-landscape', baseFeed('full_bleed')],
+  ['wayfinding-landscape', baseFeed('wayfinding')],
+]

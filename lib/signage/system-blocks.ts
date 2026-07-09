@@ -31,7 +31,7 @@ export function buildCalendarBoardHtml(items: CalendarItem[], todayLabel: string
         </div>
         <div class="cal-body">
           <div class="cal-title">${esc(it.title)}</div>
-          <div class="cal-sub"><span class="cal-dot" style="background:${esc(it.accent)}"></span>${esc(it.typeLabel)}</div>
+          ${it.typeLabel ? `<div class="cal-sub"><span class="cal-dot" style="background:${esc(it.accent)}"></span>${esc(it.typeLabel)}</div>` : ''}
         </div>
         <div class="cal-time">${esc(it.timeLabel)}</div>
       </div>`).join('')
@@ -147,8 +147,18 @@ export function buildNationalDayHtml(p: NationalDayParams): string {
 // permit being embedded in a frame (no X-Frame-Options / frame-ancestors block).
 export function buildWebsiteEmbedHtml(url: string): string {
   const safe = esc(url)
+  // Render the page at a desktop width inside the zone, then scale it down to
+  // exactly fit the zone's width (via calc against 100vw of the slide's own
+  // viewport). This shows the full-width layout instead of an oversized crop
+  // that bleeds past the zone. overflow:hidden clips any height remainder.
+  const DESKTOP_W = 1440
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
-<style>*{margin:0;padding:0}html,body{width:100%;height:100%;background:#0b0e13;overflow:hidden}iframe{border:0;width:100vw;height:100vh;display:block}</style></head>
-<body><iframe src="${safe}" scrolling="no" referrerpolicy="no-referrer"></iframe></body></html>`
+<style>
+  *{margin:0;padding:0}
+  html,body{width:100%;height:100%;background:#0b0e13;overflow:hidden}
+  .wrap{position:absolute;inset:0;overflow:hidden}
+  iframe{border:0;display:block;width:${DESKTOP_W}px;height:${Math.round(DESKTOP_W * 9 / 16)}px;transform-origin:top left;transform:scale(calc(100vw / ${DESKTOP_W}))}
+</style></head>
+<body><div class="wrap"><iframe src="${safe}" scrolling="no" referrerpolicy="no-referrer"></iframe></div></body></html>`
 }

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
   let mediaPath: string | null = null
   let thumbPath: string | null = null
   let storedHtml: string | null = null
-  if (systemKind === 'website' && websiteUrl) storedHtml = websiteUrl
+  if ((systemKind === 'website' || systemKind === 'calendar') && websiteUrl) storedHtml = websiteUrl
 
   if (
     !isSystem &&

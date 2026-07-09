@@ -57,7 +57,7 @@ const CONTENT_COLUMNS =
 const STOCK_BLOCKS: { kind: string; label: string; desc: string; available: boolean }[] = [
   { kind: 'broadcast_board', label: "What's coming up on air", desc: 'Upcoming livestreams & board meetings you feature, with date, time & a scan-to-watch QR.', available: true },
   { kind: 'national_day', label: 'National Day of the day', desc: 'Auto-updates every day to show today’s fun national day.', available: true },
-  { kind: 'calendar', label: 'Calendar', desc: 'An agenda of upcoming scheduled productions and events this month.', available: true },
+  { kind: 'calendar', label: 'Calendar', desc: 'Upcoming events from a calendar (ICS/iCal) link you provide.', available: true },
   { kind: 'website', label: 'Website preview', desc: 'A live view of a district web page (the page must allow embedding).', available: true },
 ]
 
@@ -402,25 +402,35 @@ export default function SignageContentPage() {
   }
 
   const addStockBlock = async (kind: string) => {
-    // If this stock block already exists for the site, just open it to assign screens.
-    const { data: existing } = await supabase
-      .from('signage_content').select('id, status')
-      .eq('site_id', activeSiteId).eq('system_kind', kind).limit(1).maybeSingle()
-    if (existing) {
-      setTab(existing.status === 'rejected' ? 'rejected' : existing.status === 'pending' ? 'pending' : 'approved')
-      setExpandedId(existing.id)
-      toast('Already added — assign it to screens below', 'success')
-      return
+    // Broadcast board + national day are singletons (one per location). Website
+    // and calendar are URL-based, so you can add as many as you like.
+    const SINGLETON_KINDS = ['broadcast_board', 'national_day']
+    if (SINGLETON_KINDS.includes(kind)) {
+      const { data: existing } = await supabase
+        .from('signage_content').select('id, status')
+        .eq('site_id', activeSiteId).eq('system_kind', kind).limit(1).maybeSingle()
+      if (existing) {
+        setTab(existing.status === 'rejected' ? 'rejected' : existing.status === 'pending' ? 'pending' : 'approved')
+        setExpandedId(existing.id)
+        toast('Already added — assign it to screens below', 'success')
+        return
+      }
     }
-    let websiteUrl = ''
+    let blockUrl = ''
+    let blockTitle = STOCK_BLOCKS.find(b => b.kind === kind)?.label || 'Stock content'
     if (kind === 'website') {
-      websiteUrl = (window.prompt('Web page URL to show on screen (the page must allow embedding):', 'https://www.canyonsdistrict.org') || '').trim()
-      if (!websiteUrl) return
+      blockUrl = (window.prompt('Web page URL to show on screen (the page must allow embedding):', 'https://www.canyonsdistrict.org') || '').trim()
+      if (!blockUrl) return
+      blockTitle = `Website — ${blockUrl.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}`
+    } else if (kind === 'calendar') {
+      blockUrl = (window.prompt('Calendar link (ICS/iCal URL) to show upcoming events from:', 'https://') || '').trim()
+      if (!blockUrl) return
     }
     const fd = new FormData()
     fd.set('system_kind', kind)
-    if (kind === 'website') fd.set('website_url', websiteUrl)
-    fd.set('title', STOCK_BLOCKS.find(b => b.kind === kind)?.label || 'Stock content')
+    if (blockUrl) fd.set('website_url', blockUrl)
+    fd.set('title', blockTitle)
+    fd.set('start_date', today)
     fd.set('start_date', today)
     fd.set('end_date', SIGNAGE_INDEFINITE_END_DATE)
     fd.set('all_screens', 'false')
@@ -751,16 +761,16 @@ export default function SignageContentPage() {
                         />
                       </div>
                     )}
-                    {row.system_kind === 'website' && (
+                    {(row.system_kind === 'website' || row.system_kind === 'calendar') && (
                       <div style={{ marginTop: 12 }}>
-                        <p style={s.lbl}>Web page URL</p>
+                        <p style={s.lbl}>{row.system_kind === 'calendar' ? 'Calendar link (ICS/iCal URL)' : 'Web page URL'}</p>
                         <input
                           value={e.html_body}
                           onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, html_body: ev.target.value } }))}
-                          placeholder="https://www.canyonsdistrict.org"
+                          placeholder={row.system_kind === 'calendar' ? 'https://…/calendar.ics' : 'https://www.canyonsdistrict.org'}
                           style={s.input}
                         />
-                        <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>The page must allow being embedded (some sites block this). Test on a screen after saving.</p>
+                        <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>{row.system_kind === 'calendar' ? 'Paste a public ICS/iCal feed URL. Upcoming events auto-update on screen.' : 'The page must allow being embedded (some sites block this). Test on a screen after saving.'}</p>
                       </div>
                     )}
                     <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>

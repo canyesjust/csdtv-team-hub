@@ -784,7 +784,9 @@ function runtimeScript(feed: Feed): string {
 // Document assembly
 // ---------------------------------------------------------------------------
 
-function renderScreenDocument(feed: Feed): string {
+// Exported for the golden-master render test (scripts/signage-golden.mjs), which
+// diffs the baked HTML before/after refactors. Pure: no Supabase, no network.
+export function renderScreenDocument(feed: Feed): string {
   const s = feed.screen
   const portrait = s.orientation === 'portrait'
   const layout = s.layout ?? 'zoned'

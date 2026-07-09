@@ -8,6 +8,7 @@ import { isInDateRange, signageTargetMatches, todayDateString } from './targetin
 import { buildBroadcastBoardHtml, type BroadcastBoardItem } from './broadcast-board'
 import { buildCalendarBoardHtml, buildWebsiteEmbedHtml, buildNationalDayHtml, type CalendarItem } from './system-blocks'
 import { nationalDayFor } from './national-days.data'
+import { parseOutlookIcal } from '@/lib/outlook-ical-parse'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
 import {
@@ -261,62 +262,55 @@ async function getBroadcastBoardHtml(service: SupabaseClient): Promise<string | 
 }
 
 // ── Calendar block ──────────────────────────────────────────────────────────
-let calendarBoardCache: { at: number; html: string | null } | null = null
-const CALENDAR_TYPE_COLOR: Record<string, string> = {
-  'LiveStream Meeting': '#22c55e',
-  'Board Meeting': '#ef4444',
-  'Create a Video(Film, Edit, Publish)': '#60b8f0',
-  'Record Meeting': '#9b85e0',
-  'Podcast': '#f97316',
-  'Photo Headshots': '#e8a020',
-}
-const CALENDAR_TYPE_SHORT: Record<string, string> = {
-  'LiveStream Meeting': 'Livestream',
-  'Board Meeting': 'Board Meeting',
-  'Create a Video(Film, Edit, Publish)': 'Video',
-  'Record Meeting': 'Recording',
-  'Podcast': 'Podcast',
-  'Photo Headshots': 'Photo',
-}
-const CALENDAR_STATUSES = ['Approved/Scheduled', 'Complete Requested']
+// Renders upcoming events from an ICS/iCal feed URL the editor provides (stored
+// on the content row). NOT the internal productions calendar. Cached briefly
+// per feed URL so repeated screen polls don't re-fetch the calendar each time.
+const calendarIcsCache = new Map<string, { at: number; html: string | null }>()
 
-async function getCalendarBoardHtml(service: SupabaseClient): Promise<string | null> {
-  if (calendarBoardCache && Date.now() - calendarBoardCache.at < BROADCAST_BOARD_TTL_MS) {
-    return calendarBoardCache.html
-  }
+function ymdDenver(d: Date): string {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+  return p // en-CA gives YYYY-MM-DD
+}
+
+async function getCalendarFromIcs(url: string): Promise<string | null> {
+  const u = (url || '').trim()
+  if (!u || !/^https?:\/\//i.test(u)) return null
+  const cached = calendarIcsCache.get(u)
+  if (cached && Date.now() - cached.at < BROADCAST_BOARD_TTL_MS) return cached.html
   try {
+    const ctrl = new AbortController()
+    const to = setTimeout(() => ctrl.abort(), 3000)
+    const res = await fetch(u, { signal: ctrl.signal })
+    clearTimeout(to)
+    if (!res.ok) { calendarIcsCache.set(u, { at: Date.now(), html: null }); return null }
+    const text = await res.text()
+    const events = parseOutlookIcal(text)
     const now = new Date()
-    const in31Iso = new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000).toISOString()
-    const { data } = await service
-      .from('productions')
-      .select('id, title, request_type_label, status, start_datetime')
-      .in('status', CALENDAR_STATUSES)
-      .gte('start_datetime', now.toISOString())
-      .lte('start_datetime', in31Iso)
-      .order('start_datetime', { ascending: true })
-      .limit(8)
-    const items: CalendarItem[] = (data ?? [])
-      .filter(p => p.start_datetime)
-      .map(p => {
-        const dt = new Date(p.start_datetime as string)
-        const label = (p.request_type_label as string) || ''
-        return {
-          weekday: dt.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/Denver' }).toUpperCase(),
-          day: dt.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'America/Denver' }),
-          month: dt.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Denver' }).toUpperCase(),
-          timeLabel: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }),
-          title: (p.title as string) || 'CSDtv Production',
-          typeLabel: CALENDAR_TYPE_SHORT[label] || label || 'Event',
-          accent: CALENDAR_TYPE_COLOR[label] || '#8a99b5',
-        }
-      })
-    if (!items.length) { calendarBoardCache = { at: Date.now(), html: null }; return null }
+    const todayStr = ymdDenver(now)
+    const in31Str = ymdDenver(new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000))
+    const upcoming = events
+      .filter(e => e.date >= todayStr && e.date <= in31Str)
+      .sort((a, b) => (a.date + (a.start_time || '')).localeCompare(b.date + (b.start_time || '')))
+      .slice(0, 8)
+    if (!upcoming.length) { calendarIcsCache.set(u, { at: Date.now(), html: null }); return null }
+    const items: CalendarItem[] = upcoming.map(e => {
+      const d = new Date(`${e.date}T00:00:00`)
+      return {
+        weekday: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
+        day: String(d.getDate()),
+        month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+        timeLabel: e.all_day ? 'All day' : (e.start_time ? new Date(e.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }) : ''),
+        title: e.title,
+        typeLabel: e.location || '',
+        accent: '#8a99b5',
+      }
+    })
     const todayLabel = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' })
     const html = buildCalendarBoardHtml(items, todayLabel)
-    calendarBoardCache = { at: Date.now(), html }
+    calendarIcsCache.set(u, { at: Date.now(), html })
     return html
   } catch {
-    return calendarBoardCache?.html ?? null
+    return calendarIcsCache.get(u)?.html ?? null
   }
 }
 
@@ -445,14 +439,20 @@ export async function buildScreenFeed(
   // System "stock" blocks (broadcast board, calendar, website) are content rows
   // rendered dynamically by the feed, but scheduled + targeted exactly like
   // normal content — so they only appear on the screens an editor assigned them to.
-  const [broadcastBoardHtml, calendarHtml, nationalDayHtml] = await Promise.all([
+  const [broadcastBoardHtml, nationalDayHtml] = await Promise.all([
     filteredContent.some(row => row.system_kind === 'broadcast_board') ? getBroadcastBoardHtml(service) : Promise.resolve(null),
-    filteredContent.some(row => row.system_kind === 'calendar') ? getCalendarBoardHtml(service) : Promise.resolve(null),
     filteredContent.some(row => row.system_kind === 'national_day') ? getNationalDayHtml(service, siteRes.data as SiteBrand) : Promise.resolve(null),
   ])
-  const systemHtml = (row: { system_kind?: string | null; html_body?: string | null }): string | null => {
+  // Calendar blocks each carry their own ICS feed URL (in html_body), so resolve per row.
+  const calendarByRow = new Map<string, string | null>()
+  await Promise.all(
+    filteredContent.filter(r => r.system_kind === 'calendar').map(async r => {
+      calendarByRow.set(r.id, await getCalendarFromIcs(String(r.html_body ?? '')))
+    }),
+  )
+  const systemHtml = (row: { id?: string; system_kind?: string | null; html_body?: string | null }): string | null => {
     if (row.system_kind === 'broadcast_board') return broadcastBoardHtml
-    if (row.system_kind === 'calendar') return calendarHtml
+    if (row.system_kind === 'calendar') return (row.id && calendarByRow.get(row.id)) || null
     if (row.system_kind === 'national_day') return nationalDayHtml
     if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
     return null
