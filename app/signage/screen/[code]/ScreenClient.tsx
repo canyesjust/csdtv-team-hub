@@ -21,6 +21,7 @@ import type {
   ScreenFeedWayfinding,
   ScreenFeedVisitor,
 } from '@/lib/signage/screen-feed'
+import { resolveZoneConfig, type RailWidget, type BandWidget } from '@/lib/signage/zones'
 import './signage-screen.css'
 
 // Canonical feed types live in lib/signage/screen-feed.ts and are also consumed
@@ -828,6 +829,84 @@ function Zoned2News({ items }: { items: { title: string; image: string | null }[
   )
 }
 
+// --- Layout-builder zone widgets (zoned2 rail cells + news band) --------------
+// Default keys (brand/weather/board/news) render the exact original components, so
+// the default arrangement stays byte-identical.
+
+function RailDirections({ feed }: { feed: ScreenFeed }) {
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">Directory</div>
+      <WayfindingDirectory entries={feed.wayfinding} compact />
+    </div>
+  )
+}
+
+function RailSpotlight({ feed }: { feed: ScreenFeed }) {
+  const items = feed.spotlight ?? []
+  if (!items.length) {
+    return <div className="cic-rail cic-z2-spot"><div className="cic-railhd">CSDtv Spotlight</div><div className="cic-empty-muted">—</div></div>
+  }
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">CSDtv Spotlight</div>
+      {items.slice(0, 3).map(v => (
+        <div key={v.id} className="cic-z2-ann-row">
+          {v.thumb ? <span className="cic-z2-news-thumb"><img src={v.thumb} alt="" /></span> : null}
+          <div><div className="cic-z2-ann-t">{v.title}</div>{v.duration ? <div className="cic-z2-ann-s">{v.duration}</div> : null}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RailWidgetView({ widget, feed, logoUrl, clock, dateStr }: {
+  widget: RailWidget
+  feed: ScreenFeed
+  logoUrl: string | null
+  clock: string
+  dateStr: string
+}) {
+  switch (widget) {
+    case 'brand': return <Zoned2BrandBox logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+    case 'weather': return <Zoned2Weather weather={feed.weather} />
+    case 'board': return <Zoned2Rotator board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
+    case 'directions': return <RailDirections feed={feed} />
+    case 'announcements': return <AnnCard announcements={feed.announcements} />
+    case 'spotlight': return <RailSpotlight feed={feed} />
+  }
+}
+
+function BandDirections({ feed }: { feed: ScreenFeed }) {
+  return (
+    <footer className="cic-z2-news">
+      <div className="cic-z2-news-badge"><span className="cic-z2-news-w"><span className="dot" />DIRECTORY</span></div>
+      <div className="cic-z2-news-rot"><WayfindingDirectory entries={feed.wayfinding} compact /></div>
+    </footer>
+  )
+}
+
+function BandAnnouncements({ feed }: { feed: ScreenFeed }) {
+  return (
+    <footer className="cic-z2-news">
+      <div className="cic-z2-news-badge"><span className="cic-z2-news-w"><span className="dot" />NOTICES</span></div>
+      <div className="cic-z2-news-rot">
+        {feed.announcements.length
+          ? feed.announcements.slice(0, 4).map(a => <AnnouncementRow key={a.id} ann={a} />)
+          : <div className="cic-empty-muted">No announcements</div>}
+      </div>
+    </footer>
+  )
+}
+
+function BandWidgetView({ widget, feed }: { widget: BandWidget; feed: ScreenFeed }) {
+  switch (widget) {
+    case 'news': return <Zoned2News items={feed.news ?? []} />
+    case 'directions': return <BandDirections feed={feed} />
+    case 'announcements': return <BandAnnouncements feed={feed} />
+  }
+}
+
 function LiveTakeover({
   hlsUrl,
   label,
@@ -1216,16 +1295,20 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               />
             </div>
             <div className="cic-railcol">
-              <Zoned2BrandBox
-                logoUrl={logoUrl}
-                clock={clock}
-                dateStr={now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              />
-              <Zoned2Weather weather={feed.weather} />
-              <Zoned2Rotator board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
+              {(() => {
+                const zc = resolveZoneConfig(feed.screen.zone_config)
+                const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+                return (
+                  <>
+                    <RailWidgetView widget={zc.railTop} feed={feed} logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+                    <RailWidgetView widget={zc.railMid} feed={feed} logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+                    <RailWidgetView widget={zc.railBottom} feed={feed} logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+                  </>
+                )
+              })()}
             </div>
           </div>
-          <Zoned2News items={feed.news ?? []} />
+          <BandWidgetView widget={resolveZoneConfig(feed.screen.zone_config).band} feed={feed} />
         </div>
       )}
 

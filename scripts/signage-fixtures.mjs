@@ -47,7 +47,16 @@ export const CASES = [
   ['zoned2-board', boardFeed('zoned2')],
   ['zoned2-empty', emptyFeed('zoned2')],
   ['zoned-empty', emptyFeed('zoned')],
+  // Layout builder: a non-default arrangement (Directions in the middle rail cell,
+  // Announcements in the bottom band). Exercises the config-driven zone rendering.
+  ['zoned2-custom', customZoneFeed()],
 ]
+
+function customZoneFeed() {
+  const f = baseFeed('zoned2')
+  f.screen.zone_config = { railTop: 'brand', railMid: 'directions', railBottom: 'board', band: 'announcements' }
+  return f
+}
 
 /** A feed with a live CSDtv stream taking over the screen. */
 function liveFeed(layout) {

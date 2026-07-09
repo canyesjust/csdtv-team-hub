@@ -28126,6 +28126,32 @@ function SignageBackground() {
   ] });
 }
 
+// lib/signage/zones.ts
+var RAIL_WIDGETS = ["brand", "weather", "directions", "announcements", "board", "spotlight"];
+var BAND_WIDGETS = ["news", "directions", "announcements"];
+var DEFAULT_ZONE_CONFIG = {
+  railTop: "brand",
+  railMid: "weather",
+  railBottom: "board",
+  band: "news"
+};
+function railOr(value, fallback) {
+  return RAIL_WIDGETS.includes(value) ? value : fallback;
+}
+function bandOr(value, fallback) {
+  return BAND_WIDGETS.includes(value) ? value : fallback;
+}
+function resolveZoneConfig(raw) {
+  if (!raw || typeof raw !== "object") return DEFAULT_ZONE_CONFIG;
+  const r = raw;
+  return {
+    railTop: railOr(r.railTop, DEFAULT_ZONE_CONFIG.railTop),
+    railMid: railOr(r.railMid, DEFAULT_ZONE_CONFIG.railMid),
+    railBottom: railOr(r.railBottom, DEFAULT_ZONE_CONFIG.railBottom),
+    band: bandOr(r.band, DEFAULT_ZONE_CONFIG.band)
+  };
+}
+
 // app/signage/screen/[code]/ScreenClient.tsx
 var import_jsx_runtime2 = __toESM(require_jsx_runtime());
 var REFRESH_MS = 5e3;
@@ -28780,6 +28806,75 @@ function Zoned2News({ items }) {
     ] })
   ] });
 }
+function RailDirections({ feed }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "cic-rail cic-z2-spot", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-railhd", children: "Directory" }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(WayfindingDirectory, { entries: feed.wayfinding, compact: true })
+  ] });
+}
+function RailSpotlight({ feed }) {
+  const items = feed.spotlight ?? [];
+  if (!items.length) {
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "cic-rail cic-z2-spot", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-railhd", children: "CSDtv Spotlight" }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-empty-muted", children: "\u2014" })
+    ] });
+  }
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "cic-rail cic-z2-spot", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-railhd", children: "CSDtv Spotlight" }),
+    items.slice(0, 3).map((v) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "cic-z2-ann-row", children: [
+      v.thumb ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "cic-z2-news-thumb", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("img", { src: v.thumb, alt: "" }) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-z2-ann-t", children: v.title }),
+        v.duration ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-z2-ann-s", children: v.duration }) : null
+      ] })
+    ] }, v.id))
+  ] });
+}
+function RailWidgetView({ widget, feed, logoUrl, clock, dateStr }) {
+  switch (widget) {
+    case "brand":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Zoned2BrandBox, { logoUrl, clock, dateStr });
+    case "weather":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Zoned2Weather, { weather: feed.weather });
+    case "board":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Zoned2Rotator, { board: feed.board_next, closures: feed.closures, announcements: feed.announcements, live: feed.csdtv_live });
+    case "directions":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RailDirections, { feed });
+    case "announcements":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(AnnCard, { announcements: feed.announcements });
+    case "spotlight":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RailSpotlight, { feed });
+  }
+}
+function BandDirections({ feed }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("footer", { className: "cic-z2-news", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-z2-news-badge", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "cic-z2-news-w", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dot" }),
+      "DIRECTORY"
+    ] }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-z2-news-rot", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(WayfindingDirectory, { entries: feed.wayfinding, compact: true }) })
+  ] });
+}
+function BandAnnouncements({ feed }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("footer", { className: "cic-z2-news", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-z2-news-badge", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "cic-z2-news-w", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dot" }),
+      "NOTICES"
+    ] }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-z2-news-rot", children: feed.announcements.length ? feed.announcements.slice(0, 4).map((a) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(AnnouncementRow, { ann: a }, a.id)) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-empty-muted", children: "No announcements" }) })
+  ] });
+}
+function BandWidgetView({ widget, feed }) {
+  switch (widget) {
+    case "news":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Zoned2News, { items: feed.news ?? [] });
+    case "directions":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(BandDirections, { feed });
+    case "announcements":
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(BandAnnouncements, { feed });
+  }
+}
 function LiveTakeover({
   hlsUrl,
   label,
@@ -29115,20 +29210,17 @@ function ScreenClient({ code, initialFeed, imageSeconds }) {
               overlay: currentMedia?.type === "video" ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ScanToWatch, { title: currentMedia.title }) : null
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "cic-railcol", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-              Zoned2BrandBox,
-              {
-                logoUrl,
-                clock,
-                dateStr: now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
-              }
-            ),
-            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Zoned2Weather, { weather: feed.weather }),
-            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Zoned2Rotator, { board: feed.board_next, closures: feed.closures, announcements: feed.announcements, live: feed.csdtv_live })
-          ] })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "cic-railcol", children: (() => {
+            const zc = resolveZoneConfig(feed.screen.zone_config);
+            const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+            return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RailWidgetView, { widget: zc.railTop, feed, logoUrl, clock, dateStr }),
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RailWidgetView, { widget: zc.railMid, feed, logoUrl, clock, dateStr }),
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RailWidgetView, { widget: zc.railBottom, feed, logoUrl, clock, dateStr })
+            ] });
+          })() })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Zoned2News, { items: feed.news ?? [] })
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(BandWidgetView, { widget: resolveZoneConfig(feed.screen.zone_config).band, feed })
       ] }),
       (layout === "zoned" || layout === "zoned2") && showZones && portrait && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
@@ -29314,8 +29406,16 @@ var CASES = [
   ["zoned2-live", liveFeed("zoned2")],
   ["zoned2-board", boardFeed("zoned2")],
   ["zoned2-empty", emptyFeed("zoned2")],
-  ["zoned-empty", emptyFeed("zoned")]
+  ["zoned-empty", emptyFeed("zoned")],
+  // Layout builder: a non-default arrangement (Directions in the middle rail cell,
+  // Announcements in the bottom band). Exercises the config-driven zone rendering.
+  ["zoned2-custom", customZoneFeed()]
 ];
+function customZoneFeed() {
+  const f = baseFeed("zoned2");
+  f.screen.zone_config = { railTop: "brand", railMid: "directions", railBottom: "board", band: "announcements" };
+  return f;
+}
 function liveFeed(layout) {
   const f = baseFeed(layout);
   f.live = { live: true, hls_url: "https://example.org/live.m3u8", label: "CSDtv Live" };
