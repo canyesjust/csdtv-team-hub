@@ -2,8 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
 import { clampDisplaySeconds, sanitizeSignageHtml } from './content-display'
 import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
-import { signageLiveMatchesScreen } from './live-targeting'
-import { normalizeSignageStreamUrl } from './stream-url'
+import { resolveScreenLive, resolveBoardTakeover } from './takeover'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { buildBroadcastBoardHtml, type BroadcastBoardItem } from './broadcast-board'
 import { buildCalendarBoardHtml, buildWebsiteEmbedHtml, buildNationalDayHtml, type CalendarItem } from './system-blocks'
@@ -348,10 +347,7 @@ async function getNationalDayHtml(service: SupabaseClient, site: SiteBrand): Pro
   }
   const useBrand = !!site?.use_brand_colors
   const primary = schoolPrimary || (useBrand && site?.bg_color ? String(site.bg_color) : '') || NEUTRAL_PRIMARY
-  const panel = (useBrand && site?.panel_color ? String(site.panel_color) : '') || schoolSecondary || primary
   const accent = schoolAccent || (useBrand && site?.accent_color ? String(site.accent_color) : '') || NEUTRAL_ACCENT
-  const pillText = hexLuminance(accent) > 0.6 ? '#1a1330' : '#ffffff'
-  const highlight = hexLuminance(accent) > 0.62 ? primary : accent
 
   // Only the location's own logo (reads on a white chip); otherwise show the
   // location name — never a white district logo that would vanish on white.
@@ -367,9 +363,29 @@ async function getNationalDayHtml(service: SupabaseClient, site: SiteBrand): Pro
   return buildNationalDayHtml({
     month: now.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Denver' }).toUpperCase(),
     day: String(parseInt(dd, 10)),
-    name, nameFontVh, primary, bandFrom: primary, bandTo: panel, accent, pillText, highlight,
+    name, nameFontVh,
+    dateLine: now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Denver' }),
+    primary, accent,
     logoDataUri, fallbackText: site?.center_name || 'Canyons School District',
   })
+}
+
+// Render a single stock/system block's HTML on demand — used by the dashboard
+// "Full preview" so editors can see exactly what a block will look like.
+export async function renderSystemBlockHtml(
+  service: SupabaseClient,
+  row: { system_kind: string | null; html_body: string | null; site_id: string | null },
+): Promise<string | null> {
+  if (row.system_kind === 'broadcast_board') return getBroadcastBoardHtml(service)
+  if (row.system_kind === 'calendar') return getCalendarFromIcs(String(row.html_body ?? ''))
+  if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
+  if (row.system_kind === 'national_day') {
+    const { data: site } = row.site_id
+      ? await service.from('signage_sites').select('use_brand_colors, bg_color, panel_color, accent_color, logo_url, school_code, center_name').eq('id', row.site_id).maybeSingle()
+      : { data: null }
+    return getNationalDayHtml(service, site as SiteBrand)
+  }
+  return null
 }
 
 export async function buildScreenFeed(
@@ -548,36 +564,11 @@ export async function buildScreenFeed(
     direction: w.direction,
   }))
 
-  let live: ScreenFeed['live'] = { live: false }
-  const liveRow = liveRes.data
-  const streamUrl = normalizeSignageStreamUrl(liveRow?.hls_url)
-  if (
-    liveRow?.is_live &&
-    streamUrl &&
-    screen.accepts_takeover &&
-    signageLiveMatchesScreen(liveRow, target)
-  ) {
-    live = { live: true, hls_url: streamUrl, label: liveRow.label }
-  }
-
-  // Board meeting takeover — only screens that opted in follow the board meeting.
-  // Fail-safe: a takeover is only honored while its heartbeat is fresh. The
-  // control surface pings the heartbeat while it's open; if the operator forgets
-  // to turn the takeover off, the heartbeat goes stale and screens return to
-  // normal on their own (instead of staying stuck on the pre-roll all day).
-  const TAKEOVER_STALE_MS = 10 * 60 * 1000
-  let board_takeover: ScreenFeed['board_takeover'] = undefined
-  const tk = takeoverRes.data
-  const takeoverFresh = !!tk?.heartbeat_at && (Date.now() - new Date(tk.heartbeat_at).getTime() < TAKEOVER_STALE_MS)
-  if (tk?.active && takeoverFresh && screen.board_takeover_enabled) {
-    const audio = !!screen.board_takeover_audio
-    if (tk.mode === 'preroll' && tk.board_channel_number) {
-      board_takeover = { mode: 'preroll', url: `/board/${tk.board_channel_number}/preroll`, audio, label: tk.label ?? null }
-    } else if (tk.mode === 'live' && tk.youtube_url && tk.board_channel_number) {
-      // Stream + live agenda sidebar (the page reads the YouTube URL from board state).
-      board_takeover = { mode: 'live', url: `/board/${tk.board_channel_number}/stream?audio=${audio ? 1 : 0}`, audio, label: tk.label ?? null }
-    }
-  }
+  // Live (HLS/CSDtv) + board-meeting takeover resolution. Shared with the public
+  // takeover endpoint (lib/signage/takeover.ts) so the React feed and the baked
+  // HTML poll agree on exactly when a screen goes live or follows the board.
+  const live = resolveScreenLive(liveRes.data, screen, target)
+  const board_takeover = resolveBoardTakeover(takeoverRes.data, screen)
 
   // Zoned 2 extras — only fetched for screens using the district-branded layout.
   const resolvedLayout = resolveScreenLayout(screen.layout, site?.default_layout)

@@ -41,4 +41,33 @@ export const CASES = [
   ['zoned2-landscape', baseFeed('zoned2')],
   ['full_bleed-landscape', baseFeed('full_bleed')],
   ['wayfinding-landscape', baseFeed('wayfinding')],
+  // State variants on the live layout (zoned2) so the gate covers the markup
+  // paths a plain feed never exercises: live takeover, board takeover, empties.
+  ['zoned2-live', liveFeed('zoned2')],
+  ['zoned2-board', boardFeed('zoned2')],
+  ['zoned2-empty', emptyFeed('zoned2')],
+  ['zoned-empty', emptyFeed('zoned')],
 ]
+
+/** A feed with a live CSDtv stream taking over the screen. */
+function liveFeed(layout) {
+  const f = baseFeed(layout)
+  f.live = { live: true, hls_url: 'https://example.org/live.m3u8', label: 'CSDtv Live' }
+  return f
+}
+
+/** A feed with a board-meeting takeover (preroll graphics). */
+function boardFeed(layout) {
+  const f = baseFeed(layout)
+  f.board_takeover = { mode: 'preroll', url: 'https://example.org/board.png', audio: false, label: 'Board Meeting' }
+  return f
+}
+
+/** A feed with everything empty — exercises the empty-state markup. */
+function emptyFeed(layout) {
+  const f = baseFeed(layout)
+  f.media = []; f.announcements = []; f.ticker = []; f.wayfinding = []; f.visitors = []
+  f.spotlight = []; f.news = []; f.closures = []; f.board_next = null; f.csdtv_live = null
+  f.weather = { tempF: null, condition: 'Weather unavailable', icon: '🌤', high: null, low: null, windMph: null }
+  return f
+}

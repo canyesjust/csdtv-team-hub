@@ -53,7 +53,10 @@ type Tab = 'pending' | 'approved' | 'rejected'
 const CONTENT_COLUMNS =
   'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, created_at, reviewed_at, reviewed_by'
 
-// Built-in "stock" blocks: always available, added + targeted like content.
+// A template assigned to this location (from the admin library).
+type StockTemplate = { id: string; name: string; description: string | null; kind: string; singleton: boolean; requires_url: boolean }
+
+// Built-in "stock" blocks: label lookup for the gallery tile of a system row.
 const STOCK_BLOCKS: { kind: string; label: string; desc: string; available: boolean }[] = [
   { kind: 'broadcast_board', label: "What's coming up on air", desc: 'Upcoming livestreams & board meetings you feature, with date, time & a scan-to-watch QR.', available: true },
   { kind: 'national_day', label: 'National Day of the day', desc: 'Auto-updates every day to show today’s fun national day.', available: true },
@@ -100,7 +103,16 @@ export default function SignageContentPage() {
   }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [fullPreview, setFullPreview] = useState<{ html?: string; img?: string; video?: string } | null>(null)
+  const [fullPreview, setFullPreview] = useState<{ html?: string; img?: string; video?: string; iframe?: string } | null>(null)
+  const [stockTemplates, setStockTemplates] = useState<StockTemplate[]>([])
+
+  useEffect(() => {
+    if (!activeSiteId) { setStockTemplates([]); return }
+    fetch(`/api/signage/templates?site=${activeSiteId}`)
+      .then(r => r.json())
+      .then(d => setStockTemplates(d.templates || []))
+      .catch(() => setStockTemplates([]))
+  }, [activeSiteId])
   const [busy, setBusy] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [addFile, setAddFile] = useState<File | null>(null)
@@ -401,11 +413,10 @@ export default function SignageContentPage() {
     return parts.join(' · ')
   }
 
-  const addStockBlock = async (kind: string) => {
-    // Broadcast board + national day are singletons (one per location). Website
-    // and calendar are URL-based, so you can add as many as you like.
-    const SINGLETON_KINDS = ['broadcast_board', 'national_day']
-    if (SINGLETON_KINDS.includes(kind)) {
+  const addStockBlock = async (t: StockTemplate) => {
+    const kind = t.kind
+    // Singleton templates (broadcast board, national day) allow one per location.
+    if (t.singleton) {
       const { data: existing } = await supabase
         .from('signage_content').select('id, status')
         .eq('site_id', activeSiteId).eq('system_kind', kind).limit(1).maybeSingle()
@@ -417,12 +428,12 @@ export default function SignageContentPage() {
       }
     }
     let blockUrl = ''
-    let blockTitle = STOCK_BLOCKS.find(b => b.kind === kind)?.label || 'Stock content'
+    let blockTitle = t.name
     if (kind === 'website') {
       blockUrl = (window.prompt('Web page URL to show on screen (the page must allow embedding):', 'https://www.canyonsdistrict.org') || '').trim()
       if (!blockUrl) return
       blockTitle = `Website — ${blockUrl.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}`
-    } else if (kind === 'calendar') {
+    } else if (kind === 'calendar' || t.requires_url) {
       blockUrl = (window.prompt('Calendar link (ICS/iCal URL) to show upcoming events from:', 'https://') || '').trim()
       if (!blockUrl) return
     }
@@ -482,21 +493,25 @@ export default function SignageContentPage() {
       </div>
 
       {isManager && (
-        <div style={{ ...s.card, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Stock content</div>
-          <div style={{ fontSize: 12, color: s.muted, margin: '2px 0 12px' }}>Built-in blocks that are always available. Add one, then choose which screens show it.</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-            {STOCK_BLOCKS.map(b => (
-              <div key={b.kind} style={{ border: `1px solid ${s.border}`, borderRadius: 10, padding: '11px 13px', display: 'flex', flexDirection: 'column', opacity: b.available ? 1 : 0.6 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>{b.label}</div>
-                <div style={{ fontSize: 11.5, color: s.muted, margin: '3px 0 10px', lineHeight: 1.45, flex: 1 }}>{b.desc}</div>
-                {b.available
-                  ? <button type="button" onClick={() => void addStockBlock(b.kind)} style={{ ...s.btnPrimary, alignSelf: 'flex-start' }}>Add to screens</button>
-                  : <span style={{ fontSize: 11, fontWeight: 600, color: s.muted, alignSelf: 'flex-start' }}>Coming soon</span>}
-              </div>
-            ))}
-          </div>
-        </div>
+        <details style={{ ...s.card, marginBottom: 16 }}>
+          <summary style={{ cursor: 'pointer', listStyle: 'revert' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Templates</span>
+            <span style={{ fontSize: 12, color: s.muted, marginLeft: 8 }}>Built-in blocks shared with this location — add and target to screens</span>
+          </summary>
+          {stockTemplates.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: s.muted, marginTop: 10, lineHeight: 1.5 }}>No templates are shared with this location yet. A district admin can assign them from Templates (Admin · all locations).</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginTop: 12 }}>
+              {stockTemplates.map(t => (
+                <div key={t.id} style={{ border: `1px solid ${s.border}`, borderRadius: 10, padding: '11px 13px', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>{t.name}</div>
+                  <div style={{ fontSize: 11.5, color: s.muted, margin: '3px 0 10px', lineHeight: 1.45, flex: 1 }}>{t.description}</div>
+                  <button type="button" onClick={() => void addStockBlock(t)} style={{ ...s.btnPrimary, alignSelf: 'flex-start' }}>Add to screens</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </details>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -684,7 +699,7 @@ export default function SignageContentPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <button
                       type="button"
-                      onClick={() => setFullPreview(isHtml ? { html: e.html_body } : previewImg ? { img: previewImg } : previewVideo ? { video: previewVideo } : null)}
+                      onClick={() => setFullPreview(row.system_kind ? { iframe: `/api/signage/system-preview?id=${row.id}` } : isHtml ? { html: e.html_body } : previewImg ? { img: previewImg } : previewVideo ? { video: previewVideo } : null)}
                       style={{ ...s.btn, padding: '4px 10px', fontSize: 12 }}
                     >
                       ⛶ Full preview
@@ -843,7 +858,9 @@ export default function SignageContentPage() {
           style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(2,8,18,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
         >
           <div onClick={ev => ev.stopPropagation()} style={{ width: 'min(92vw, 1280px)', aspectRatio: '16 / 9', background: '#0a1f3c', borderRadius: 12, overflow: 'hidden', position: 'relative', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-            {fullPreview.html != null ? (
+            {fullPreview.iframe ? (
+              <iframe src={fullPreview.iframe} title="Preview" style={{ width: '100%', height: '100%', border: 'none' }} />
+            ) : fullPreview.html != null ? (
               <ScaledSlide html={fullPreview.html} />
             ) : fullPreview.img ? (
               // eslint-disable-next-line @next/next/no-img-element

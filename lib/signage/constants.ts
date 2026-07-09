@@ -55,12 +55,31 @@ export function signageScreenUrl(code: string): string {
   return `${signageBaseUrl().replace(/\/$/, '')}/signage/screen/${encodeURIComponent(code)}`
 }
 
-/** Server-side AbleSign sync — prefers SIGNAGE_BASE_URL. */
-export function signageScreenPublicUrl(code: string): string {
+/** Absolute Hub base for server-side / baked-HTML links (prefers SIGNAGE_BASE_URL). */
+function signagePublicBaseUrl(): string {
   const base = process.env.SIGNAGE_BASE_URL
     || process.env.NEXT_PUBLIC_SITE_URL
     || 'https://www.csdtvstaff.org'
-  return `${base.replace(/\/$/, '')}/signage/screen/${encodeURIComponent(code)}`
+  return base.replace(/\/$/, '')
+}
+
+/** Absolutize a Hub-relative path against the public base (for the offline baked HTML). */
+export function signageAbsoluteHubUrl(path: string): string {
+  return `${signagePublicBaseUrl()}${path.startsWith('/') ? '' : '/'}${path}`
+}
+
+/** Server-side AbleSign sync — prefers SIGNAGE_BASE_URL. */
+export function signageScreenPublicUrl(code: string): string {
+  return `${signagePublicBaseUrl()}/signage/screen/${encodeURIComponent(code)}`
+}
+
+/**
+ * Absolute URL the baked (offline) HTML polls for live/board takeovers. Must be
+ * absolute because the baked doc plays from local storage on the AbleSign stick,
+ * so its origin is not the Hub.
+ */
+export function signageTakeoverPublicUrl(code: string): string {
+  return `${signagePublicBaseUrl()}/api/signage/screen/${encodeURIComponent(code)}/takeover`
 }
 
 export function signageMediaPublicUrl(path: string): string {

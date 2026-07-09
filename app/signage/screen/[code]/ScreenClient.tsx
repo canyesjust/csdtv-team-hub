@@ -308,12 +308,14 @@ function MediaSlide({
   active,
   imageSeconds,
   onAdvance,
+  onReady,
 }: {
   item: FeedMedia | undefined
   layerClass: string
   active: boolean
   imageSeconds: number
   onAdvance: () => void
+  onReady?: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const onAdvanceRef = useRef(onAdvance)
@@ -376,7 +378,7 @@ function MediaSlide({
     <div className={layerClass}>
       {item.type === 'image' && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.url} alt={item.title || ''} />
+        <img src={item.url} alt={item.title || ''} onLoad={onReady} onError={onReady} />
       )}
       {item.type === 'video' && (
         <video
@@ -386,15 +388,16 @@ function MediaSlide({
           playsInline
           autoPlay
           preload="auto"
+          onLoadedData={onReady}
           onEnded={() => onAdvanceRef.current()}
-          onError={() => onAdvanceRef.current()}
+          onError={() => { onReady?.(); onAdvanceRef.current() }}
         />
       )}
       {item.type === 'html' && item.html && (
         // Render in an iframe so the slide's vh/vw/vmin units measure THIS media
         // zone (16:9), not the whole screen — otherwise it renders full-screen
         // and gets cropped inside a zoned layout's media cell.
-        <iframe className="cic-html-slide" title={item.title || ''} srcDoc={item.html} sandbox="allow-scripts" scrolling="no" />
+        <iframe className="cic-html-slide" title={item.title || ''} srcDoc={item.html} sandbox="allow-scripts" scrolling="no" onLoad={onReady} />
       )}
     </div>
   )
@@ -421,6 +424,7 @@ function MediaCarousel({
 }) {
   const displayedIndexRef = useRef(index)
   const [crossfade, setCrossfade] = useState<{ from: number; to: number; active: boolean } | null>(null)
+  const crossfadeReadyRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (index === displayedIndexRef.current) return
@@ -431,18 +435,30 @@ function MediaCarousel({
     const from = displayedIndexRef.current
     const to = index
     setCrossfade({ from, to, active: false })
-    const raf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+
+    let activated = false
+    let endTimer: ReturnType<typeof setTimeout> | null = null
+    const activate = () => {
+      if (activated) return
+      activated = true
+      crossfadeReadyRef.current = null
+      requestAnimationFrame(() => requestAnimationFrame(() => {
         setCrossfade(cf => (cf && cf.to === to ? { ...cf, active: true } : cf))
-      })
-    })
-    const t = setTimeout(() => {
-      displayedIndexRef.current = to
-      setCrossfade(null)
-    }, CROSSFADE_MS)
+      }))
+      endTimer = setTimeout(() => {
+        displayedIndexRef.current = to
+        setCrossfade(null)
+      }, CROSSFADE_MS)
+    }
+    // Wait for the incoming layer to paint (iframe/image load) before fading it
+    // in, so an HTML slide never fades in blank. Fallback if load never fires.
+    crossfadeReadyRef.current = activate
+    const readyFallback = setTimeout(activate, 1500)
+
     return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(t)
+      crossfadeReadyRef.current = null
+      clearTimeout(readyFallback)
+      if (endTimer) clearTimeout(endTimer)
     }
   }, [index, media.length])
 
@@ -482,6 +498,7 @@ function MediaCarousel({
             active
             imageSeconds={imageSeconds}
             onAdvance={onAdvance}
+            onReady={() => crossfadeReadyRef.current?.()}
           />
         </>
       ) : (

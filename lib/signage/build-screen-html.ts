@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildScreenFeed, type ScreenFeedPayload } from './build-screen-feed'
 import { announcementIconEmoji } from './announcement-icons'
 import { SCREEN_INLINE_CSS } from './screen-inline-css.generated'
-import { WAYFINDING_ARROWS, type WayfindingDirection } from './constants'
+import { WAYFINDING_ARROWS, signageTakeoverPublicUrl, type WayfindingDirection } from './constants'
 import {
   SCREEN_CROSSFADE_MS,
   SCREEN_HEADING_ROTATE_MS,
@@ -614,6 +614,9 @@ function runtimeScript(feed: Feed): string {
     crossfadeMs: CROSSFADE_MS,
     headingRotateMs: HEADING_ROTATE_MS,
     defaultSeconds: DEFAULT_IMAGE_SECONDS,
+    // Absolute Hub URL the baked doc polls for live/board takeovers. Best-effort:
+    // if the poll fails (offline), the screen keeps playing its baked content.
+    takeoverUrl: signageTakeoverPublicUrl(feed.screen.code),
   }
 
   // The JSON is embedded inside a <script> tag — neutralize "</" so a value can
@@ -775,6 +778,103 @@ function runtimeScript(feed: Feed): string {
     restartProgress(media[0]);
     preload(media[1]);
     scheduleNext(media[0]);
+  }
+
+  // ---- Live / board takeover poller (best-effort, online-only enhancement) ----
+  // Every 5s ask the Hub whether this screen should show a live stream or the
+  // board meeting. On ANY network error we do nothing and keep playing the baked
+  // content, so the offline guarantee holds. The overlay only rebuilds when the
+  // takeover actually changes (keyed by its JSON), never on every poll.
+  if(DATA.takeoverUrl){
+    var takeoverKey = null;
+    var overlayEl = null;
+    var hlsInstance = null;
+    var hlsScript = null;
+
+    function destroyOverlay(){
+      if(hlsInstance){ try{ hlsInstance.destroy(); }catch(e){} hlsInstance = null; }
+      if(overlayEl && overlayEl.parentNode){ overlayEl.parentNode.removeChild(overlayEl); }
+      overlayEl = null;
+    }
+
+    function makeIframe(src, allow){
+      var f = document.createElement('iframe');
+      f.setAttribute('src', src);
+      if(allow) f.setAttribute('allow', allow);
+      f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none';
+      return f;
+    }
+
+    function startHls(video, src){
+      function attach(){
+        if(window.Hls && window.Hls.isSupported()){
+          var h = new window.Hls();
+          hlsInstance = h;
+          h.loadSource(src);
+          h.attachMedia(video);
+          h.on(window.Hls.Events.MANIFEST_PARSED, function(){ video.play().catch(function(){}); });
+        } else {
+          video.src = src;
+          video.play().catch(function(){});
+        }
+      }
+      if(window.Hls){ attach(); return; }
+      if(!hlsScript){
+        hlsScript = document.createElement('script');
+        hlsScript.src = 'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js';
+        hlsScript.onload = function(){ if(overlayEl) attach(); };
+        document.head.appendChild(hlsScript);
+      } else {
+        hlsScript.addEventListener('load', function(){ if(overlayEl) attach(); });
+      }
+    }
+
+    function buildOverlay(tk){
+      destroyOverlay();
+      if(!tk) return;
+      if(tk.type === 'board'){
+        overlayEl = document.createElement('div');
+        overlayEl.className = 'cic-fill';
+        overlayEl.style.cssText = 'position:fixed;inset:0;z-index:101;background:#000';
+        overlayEl.appendChild(makeIframe(tk.src, 'autoplay; encrypted-media; picture-in-picture'));
+        document.body.appendChild(overlayEl);
+      } else if(tk.type === 'live'){
+        overlayEl = document.createElement('div');
+        overlayEl.className = 'cic-fill live-bg cic-live-shell';
+        overlayEl.style.cssText = 'position:fixed;inset:0;z-index:100';
+        if(tk.mode === 'youtube'){
+          overlayEl.appendChild(makeIframe(tk.src, 'autoplay; encrypted-media; picture-in-picture'));
+          document.body.appendChild(overlayEl);
+        } else {
+          var video = document.createElement('video');
+          video.className = 'cic-live-video';
+          video.muted = true;
+          video.setAttribute('playsinline', '');
+          video.setAttribute('autoplay', '');
+          video.setAttribute('crossorigin', 'anonymous');
+          overlayEl.appendChild(video);
+          document.body.appendChild(overlayEl);
+          startHls(video, tk.src);
+        }
+      }
+    }
+
+    function pollTakeover(){
+      fetch(DATA.takeoverUrl, { cache: 'no-store' }).then(function(res){
+        if(!res.ok) return;
+        return res.json();
+      }).then(function(payload){
+        if(!payload) return;
+        var tk = payload.takeover || null;
+        var key = tk ? JSON.stringify(tk) : null;
+        if(key === takeoverKey) return;
+        takeoverKey = key;
+        buildOverlay(tk);
+      }).catch(function(){ /* offline: keep playing baked content */ });
+    }
+
+    pollTakeover();
+    setInterval(pollTakeover, 5000);
   }
 })();
 </script>`

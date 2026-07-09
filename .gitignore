@@ -51,4 +51,3 @@ __ssrtmp/
 
 # never commit an unzipped copy of the controller (the .zip is what ships)
 /public/CSDtv Ad Controller/
-.signage-golden/

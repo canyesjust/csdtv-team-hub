@@ -82,63 +82,52 @@ export type NationalDayParams = {
   day: string // "13"
   name: string // "National Good Samaritan Day"
   nameFontVh: number // adaptive size so long names still fit
-  primary: string // site brand dark — day number + band
-  bandFrom: string // band gradient start
-  bandTo: string // band gradient end
-  accent: string // pill background
-  pillText: string // readable text on the pill
-  highlight: string // "Today is" + month (readable on the light card)
-  logoDataUri: string | null // inlined site logo for the band
-  fallbackText: string // shown in the band when there is no logo
+  dateLine: string // "Wednesday, July 8"
+  primary: string // reserved
+  accent: string // site accent — highlights on the dark surface
+  logoDataUri: string | null // inlined site logo (top-right)
+  fallbackText: string // location name when no logo
 }
 
 export function buildNationalDayHtml(p: NationalDayParams): string {
-  const logo = p.logoDataUri
-    ? `<div class="logo-chip"><img src="${esc(p.logoDataUri)}" alt=""></div>`
-    : `<div class="fallback">${esc(p.fallbackText)}</div>`
+  const a = p.accent
+  const brand = p.logoDataUri
+    ? `<div class="logo"><img src="${esc(p.logoDataUri)}" alt=""></div>`
+    : `<div class="site">${esc(p.fallbackText)}</div>`
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:100%;height:100%;font-family:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;overflow:hidden}
-  body{background:#f4f5f9}
-  #app{width:100vw;height:100vh;display:flex;flex-direction:column}
-  .stage{flex:1;display:flex;align-items:center;justify-content:center;gap:4vw;padding:6vh 8vw 3vh}
-  .cal{flex:0 0 auto;width:26vh;background:#fff;border-radius:3vh;box-shadow:0 2vh 5vh rgba(20,30,60,0.16);overflow:hidden;border:0.3vh solid #eef0f6}
-  .cal-top{position:relative;height:5vh;background:#fff;border-bottom:0.3vh solid #eef0f6}
-  .cal-top::before,.cal-top::after{content:'';position:absolute;top:-1.6vh;width:1.2vh;height:3.4vh;border-radius:1vh;background:${esc(p.primary)};border:0.3vh solid #fff}
-  .cal-top::before{left:32%}.cal-top::after{right:32%}
-  .cal-mo{text-align:center;font-size:4.4vh;font-weight:800;letter-spacing:0.2vw;color:${esc(p.highlight)};padding:1.2vh 0 0.4vh}
-  .cal-day{text-align:center;font-size:12vh;font-weight:800;line-height:0.9;color:${esc(p.primary)};padding:0 0 2.4vh}
+  html,body{width:100%;height:100%;background:#0b0e13;color:#f0f4ff;font-family:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;overflow:hidden}
+  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 62% 60% at 16% 26%, ${esc(a)}26, transparent 60%),radial-gradient(ellipse 50% 45% at 92% 96%, ${esc(a)}12, transparent 60%);pointer-events:none}
+  #app{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;padding:5vh 6vw}
+  header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .logo{background:#fff;border-radius:1.2vh;padding:1vh 1.5vw;display:flex;align-items:center}
+  .logo img{max-height:6vh;max-width:13vw;object-fit:contain;display:block}
+  .site{font-size:2.2vh;font-weight:800;color:#f0f4ff;letter-spacing:0.04vw}
+  .date{font-size:2vh;font-weight:700;letter-spacing:0.16vw;text-transform:uppercase;color:#8a99b5}
+  .stage{flex:1;display:flex;align-items:center;gap:5vw}
+  .cal{flex:0 0 auto;width:32vh;background:#12161d;border:0.3vh solid rgba(255,255,255,0.09);border-radius:2.6vh;overflow:hidden;text-align:center;box-shadow:0 2vh 6vh rgba(0,0,0,0.4)}
+  .cal .bar{height:2.6vh;background:${esc(a)}}
+  .cal .mo{font-size:4.8vh;font-weight:800;letter-spacing:0.2vw;color:${esc(a)};padding:2.2vh 0 0.2vh}
+  .cal .dy{font-size:17vh;font-weight:800;line-height:0.82;color:#fff;padding:0 0 2.8vh}
   .msg{flex:1;min-width:0}
-  .msg .eyebrow{font-size:3.4vh;font-weight:800;letter-spacing:0.15vw;text-transform:uppercase;color:${esc(p.highlight)};margin-bottom:0.6vh}
-  .msg .name{font-size:${p.nameFontVh}vh;font-weight:800;line-height:1.04;color:#20233a;letter-spacing:-0.02vw}
-  .band{flex:0 0 auto;height:26vh;background:linear-gradient(120deg,${esc(p.bandFrom)} 0%,${esc(p.bandTo)} 100%);border-radius:14vh 14vh 0 0;display:flex;align-items:center;justify-content:space-between;padding:0 6vw;position:relative}
-  .band .left{color:rgba(255,255,255,0.82);font-size:1.9vh;font-weight:700;line-height:1.35;max-width:22vw}
-  .band .center{position:absolute;left:50%;top:50%;transform:translate(-50%,-56%);text-align:center}
-  .band .pill{display:inline-block;background:${esc(p.accent)};color:${esc(p.pillText)};font-size:2.4vh;font-weight:800;letter-spacing:0.2vw;text-transform:uppercase;padding:1vh 2.6vw;border-radius:6vh;box-shadow:0 1vh 3vh rgba(0,0,0,0.18);margin-bottom:1vh}
-  .band .big{font-size:6.4vh;font-weight:800;letter-spacing:0.35vw;text-transform:uppercase;color:#fff;line-height:1}
-  .logo-chip{background:#fff;border-radius:1.4vh;padding:1.4vh 1.8vw;display:flex;align-items:center;box-shadow:0 1vh 3vh rgba(0,0,0,0.18)}
-  .logo-chip img{max-height:7vh;max-width:12vw;object-fit:contain;display:block}
-  .fallback{color:#fff;font-size:2.2vh;font-weight:800;letter-spacing:0.06vw;text-align:right;max-width:16vw;line-height:1.15}
+  .msg .eyebrow{font-size:3.4vh;font-weight:800;letter-spacing:0.2vw;text-transform:uppercase;color:${esc(a)};margin-bottom:1.2vh}
+  .msg .name{font-size:${p.nameFontVh}vh;font-weight:800;line-height:1.03;color:#fff;letter-spacing:-0.02vw}
+  .msg .sub{font-size:2.4vh;font-weight:700;letter-spacing:0.06vw;color:#8a99b5;margin-top:2vh}
+  footer{flex-shrink:0;text-align:center;font-size:1.6vh;font-weight:700;letter-spacing:0.3vw;text-transform:uppercase;color:#6b7890}
 </style></head>
 <body><div id="app">
+  <header>${brand}<div class="date">${esc(p.dateLine)}</div></header>
   <div class="stage">
-    <div class="cal">
-      <div class="cal-top"></div>
-      <div class="cal-mo">${esc(p.month)}</div>
-      <div class="cal-day">${esc(p.day)}</div>
-    </div>
+    <div class="cal"><div class="bar"></div><div class="mo">${esc(p.month)}</div><div class="dy">${esc(p.day)}</div></div>
     <div class="msg">
       <div class="eyebrow">Today is</div>
       <div class="name">${esc(p.name)}</div>
+      <div class="sub">Check back tomorrow for a new one</div>
     </div>
   </div>
-  <div class="band">
-    <div class="left">Check back tomorrow<br>to see what&rsquo;s new!</div>
-    <div class="center"><div class="pill">National Day</div><div class="big">Calendar</div></div>
-    <div class="right">${logo}</div>
-  </div>
+  <footer>${esc(p.fallbackText)}</footer>
 </div></body></html>`
 }
 

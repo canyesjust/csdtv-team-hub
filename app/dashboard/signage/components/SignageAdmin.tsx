@@ -374,6 +374,7 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     label: 'Admin · all locations',
     admin: true,
     items: [
+      { href: '/dashboard/signage/templates', label: 'Templates', managerOnly: true },
       { href: '/dashboard/signage/sites', label: 'Locations', managerOnly: true },
       { href: '/dashboard/signage/access', label: 'Access', managerOnly: true },
       { href: '/dashboard/signage/settings', label: 'Global settings', managerOnly: true },
