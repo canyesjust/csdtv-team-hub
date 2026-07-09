@@ -1962,6 +1962,43 @@
 .cic-screen.layout-zoned2 .cic-z2-cl-row { padding: 0.38vmax 0; }
 .cic-screen.layout-zoned2 .cic-z2-spot .cic-railhd { margin-bottom: 0.7vmax; }
 
+/* Any content in a zoned2 rail cell fades at the bottom instead of hard-clipping,
+   so whatever widget lands in a slot (directory, announcements, spotlight, the
+   board rotator) degrades gracefully when it has more rows than fit — in ANY of
+   the three rail slots. */
+.cic-screen.layout-zoned2 .cic-z2-spot {
+  -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent);
+  mask-image: linear-gradient(to bottom, #000 88%, transparent);
+}
+
+/* Directory placed in a zoned2 rail cell (layout builder). The rail cell is short,
+   so size the rows to it — smaller/denser than the zoned rail's directory. */
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir.compact {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vmax;
+  overflow: hidden;
+  font-size: 1.1vmax;
+  line-height: 1.2;
+}
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir-row-compact {
+  gap: 0.7vmax;
+  margin-bottom: 0;
+  flex: none;
+}
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir-arrow-badge.compact {
+  width: 2vmax;
+  height: 2vmax;
+  font-size: 1.2vmax;
+  border-width: 0.12vmax;
+  border-radius: 0.45vmax;
+}
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir-label-compact {
+  font-size: 1.2vmax;
+}
+
 /* Zoned 2 v2 — center the weather on its card. */
 .cic-screen.layout-zoned2 .cic-z2-wx { justify-content: center; }
 .cic-screen.layout-zoned2 .cic-z2-wxmeta { justify-content: center; }
