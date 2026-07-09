@@ -62,6 +62,9 @@ export default function SignageSitesPage() {
   type AsStatus = { state: 'loading' | 'ok' | 'error'; screens?: number; error?: string }
   const [asStatus, setAsStatus] = useState<Record<string, AsStatus>>({})
   const asCheckedRef = useRef(false)
+  // AbleSign-linked screen count per site, from the hub (NOT AbleSign's
+  // account-wide total, which is the same for every site sharing one account).
+  const [screenCounts, setScreenCounts] = useState<Record<string, number>>({})
 
   const checkAbleSign = useCallback(async (list: SiteRow[]) => {
     if (list.length === 0) return
@@ -83,14 +86,20 @@ export default function SignageSitesPage() {
   }, [])
 
   const load = useCallback(async () => {
-    const [siteRes, schoolRes, teamRes] = await Promise.all([
+    const [siteRes, schoolRes, teamRes, screenRes] = await Promise.all([
       supabase.from('signage_sites').select('id, name, slug, school_code, use_brand_colors, center_name, weather_lat, weather_lon, ticker_extra, default_theme, bg_color, panel_color, accent_color, text_color, sort_order, active').order('sort_order'),
       supabase.from('schools').select('code, name, primary_color, secondary_color, accent_color, text_color').eq('active', true).order('name'),
       supabase.from('team').select('id, name, role, signage_approver').eq('active', true).order('name'),
+      supabase.from('signage_screens').select('site_id, ablesign_screen_id'),
     ])
     setSites((siteRes.data as SiteRow[]) || [])
     setSchools((schoolRes.data as School[]) || [])
     setTeam((teamRes.data as TeamMember[]) || [])
+    const counts: Record<string, number> = {}
+    for (const row of (screenRes.data as Array<{ site_id: string | null; ablesign_screen_id: number | null }> | null) ?? []) {
+      if (row.site_id && row.ablesign_screen_id != null) counts[row.site_id] = (counts[row.site_id] ?? 0) + 1
+    }
+    setScreenCounts(counts)
     setLoading(false)
   }, [supabase])
 
@@ -356,12 +365,14 @@ export default function SignageSitesPage() {
                 <td style={s.td}>
                   {(() => {
                     const st = asStatus[site.id]
+                    const count = screenCounts[site.id] ?? 0
                     const color = !st || st.state === 'loading' ? '#9aa0ab' : st.state === 'ok' ? '#22c55e' : '#ef4444'
-                    const title = !st ? 'Not checked' : st.state === 'loading' ? 'Checking…' : st.state === 'ok' ? `Connected${st.screens != null ? ` — ${st.screens} screen(s)` : ''}` : (st.error || 'Not connected')
+                    const conn = !st ? 'not checked' : st.state === 'loading' ? 'checking…' : st.state === 'ok' ? 'AbleSign connected' : (st.error || 'not connected')
+                    const title = `${count} screen(s) linked at this location · ${conn}`
                     return (
                       <span title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted }}>
                         <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, flex: 'none' }} />
-                        {st?.state === 'ok' && st.screens != null ? st.screens : st?.state === 'error' ? 'error' : ''}
+                        {count}
                       </span>
                     )
                   })()}
