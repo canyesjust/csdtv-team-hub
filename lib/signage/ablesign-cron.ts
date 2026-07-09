@@ -1,8 +1,6 @@
 import { timingSafeEqualStr } from '@/lib/server/security'
 
 export function verifySignageCron(request: Request): boolean {
-  if (request.headers.get('x-vercel-cron') === '1') return true
-
   const auth = request.headers.get('authorization')
   if (!auth?.startsWith('Bearer ')) return false
 

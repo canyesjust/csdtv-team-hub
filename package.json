@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "gen:css": "node scripts/gen-signage-css.mjs",
+    "predev": "node scripts/gen-signage-css.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/gen-signage-css.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

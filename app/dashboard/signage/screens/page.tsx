@@ -13,6 +13,7 @@ import {
   useSignageAdminStyles,
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
+import { SignagePushStatus } from '../components/SignagePushStatus'
 import { signageScreenUrl, SIGNAGE_THEMES } from '@/lib/signage/constants'
 import {
   AbleSignScreenPanel,
@@ -164,6 +165,7 @@ export default function SignageScreensPage() {
 
   return (
     <SignagePageShell title="Screens" subtitle="The physical displays around the building">
+      <SignagePushStatus />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
         <AbleSignSyncAllButton screenIds={linkedScreenIds} onDone={() => void loadScreens()} />
         <button

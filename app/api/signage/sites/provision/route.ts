@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireManagerApi } from '@/lib/signage/server-auth'
 import { getSiteTemplate, siteAreaSlug } from '@/lib/signage/site-templates'
+import { SITE_COLUMNS } from '../route'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
   const { data: site, error: siteErr } = await service
     .from('signage_sites')
     .insert(siteInsert)
-    .select('*')
+    .select(SITE_COLUMNS)
     .single()
   if (siteErr || !site) {
     return NextResponse.json({ error: siteErr?.message || 'Failed to create site' }, { status: 400 })

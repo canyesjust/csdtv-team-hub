@@ -100,16 +100,18 @@ export function SignageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (cancelled) return
       if (!session) { router.replace('/login'); return }
 
-      const { data: user } = await supabase
+      const { data: user, error: userError } = await supabase
         .from('team')
         .select('id, role, signage_approver, signage_role')
         .eq('supabase_user_id', session.user.id)
         .single()
       if (cancelled) return
+      if (userError) throw userError
 
       const managerRole = user?.role === 'Manager'
       const signageEditor = user?.signage_role === 'editor'
@@ -146,6 +148,14 @@ export function SignageProvider({ children }: { children: ReactNode }) {
       try { stored = window.localStorage.getItem(SITE_STORAGE_KEY) || '' } catch { /* ignore */ }
       setActiveSiteId(list.find(s => s.id === stored)?.id || list[0]?.id || '')
       setAccess('ok')
+     } catch (err) {
+      // Any failure in the init query (auth, team lookup, sites) must not leave
+      // the whole signage area stuck on the loader forever — fail closed.
+      if (!cancelled) {
+        console.error('Signage init failed', err)
+        setAccess('denied')
+      }
+     }
     })()
     return () => { cancelled = true }
   }, [supabase, router])

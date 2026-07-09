@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   // Stock/system blocks (broadcast board, etc.) carry no media — the feed renders
   // them dynamically. They're still scheduled + targeted like normal content.
   const systemKind = String(form.get('system_kind') ?? '').trim()
-  const isSystem = ['broadcast_board', 'calendar', 'website'].includes(systemKind)
+  const isSystem = ['broadcast_board', 'calendar', 'website', 'national_day'].includes(systemKind)
   // Website blocks store the page URL in html_body (the feed wraps it in an iframe).
   const websiteUrl = String(form.get('website_url') ?? '').trim()
   const source = String(form.get('source') ?? '').trim() || null

@@ -13,6 +13,7 @@ import SignageTargetingPicker, {
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import CreateWithAI from '../components/CreateWithAI'
+import { SignagePushStatus } from '../components/SignagePushStatus'
 import { SIGNAGE_DEFAULT_DISPLAY_SECONDS, SIGNAGE_MAX_DISPLAY_SECONDS, SIGNAGE_MIN_DISPLAY_SECONDS } from '@/lib/signage/content-display'
 import { signageMediaPublicUrl, CIC_SUBMIT_URL, SIGNAGE_INDEFINITE_END_DATE, isIndefiniteEndDate } from '@/lib/signage/constants'
 import { prepareSignageImageFile, captureVideoPoster, SIGNAGE_MAX_VIDEO_BYTES } from '@/lib/signage/client-image-upload'
@@ -43,16 +44,19 @@ type ContentRow = {
   reject_reason: string | null
   system_kind: string | null
   created_at?: string
+  reviewed_at?: string | null
+  reviewed_by?: string | null
 }
 
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, created_at'
+  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, created_at, reviewed_at, reviewed_by'
 
 // Built-in "stock" blocks: always available, added + targeted like content.
 const STOCK_BLOCKS: { kind: string; label: string; desc: string; available: boolean }[] = [
   { kind: 'broadcast_board', label: "What's coming up on air", desc: 'Upcoming livestreams & board meetings you feature, with date, time & a scan-to-watch QR.', available: true },
+  { kind: 'national_day', label: 'National Day of the day', desc: 'Auto-updates every day to show today’s fun national day.', available: true },
   { kind: 'calendar', label: 'Calendar', desc: 'An agenda of upcoming scheduled productions and events this month.', available: true },
   { kind: 'website', label: 'Website preview', desc: 'A live view of a district web page (the page must allow embedding).', available: true },
 ]
@@ -114,7 +118,8 @@ export default function SignageContentPage() {
   const loadCounts = useCallback(async () => {
     const d = new Date()
     const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const { data } = await supabase.from('signage_content').select('status, end_date').eq('site_id', activeSiteId)
+    const { data, error } = await supabase.from('signage_content').select('status, end_date').eq('site_id', activeSiteId)
+    if (error) { toast('Could not load counts', 'error'); setCountsLoaded(true); return }
     const next = { ...EMPTY_COUNTS }
     for (const row of data ?? []) {
       const st = row.status as Tab
@@ -134,12 +139,13 @@ export default function SignageContentPage() {
 
   const loadTab = useCallback(async (activeTab: Tab) => {
     setTabLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('signage_content')
       .select(CONTENT_COLUMNS)
       .eq('status', activeTab)
       .eq('site_id', activeSiteId)
       .order('created_at', { ascending: false })
+    if (error) toast('Could not load content', 'error')
     const list = (data as ContentRow[]) || []
     setRows(list)
     setExpandedId(null) // master-detail: nothing selected on open (no auto-expanded card)
@@ -214,37 +220,44 @@ export default function SignageContentPage() {
     })
   }
 
-  const patchContent = async (id: string, body: Record<string, unknown>) => {
+  const patchContent = async (id: string, body: Record<string, unknown>, successMessage = 'Saved — screens update within a few minutes') => {
     setBusy(id)
     const res = await fetch(`/api/signage/content/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json().catch(() => ({}))
     setBusy(null)
-    if (!res.ok) { toast(data.error || 'Update failed', 'error'); return false }
-    toast('Updated', 'success')
+    if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Update failed', 'error'); return false }
+    toast(successMessage, 'success')
     void refreshAll()
     return true
   }
 
   const approve = async (row: ContentRow) => {
     const e = getEdit(row)
-    const targeting =
-      !e.all_screens && e.target_area_ids.length === 0 && e.target_screen_ids.length === 0 && (e.target_buildings ?? []).length === 0
-        ? { ...e, all_screens: true }
-        : e
+    // Do NOT silently widen to all screens — require an explicit target. The API
+    // enforces this too and returns a 400 the toast will surface.
+    if (
+      !e.all_screens &&
+      e.target_area_ids.length === 0 &&
+      e.target_screen_ids.length === 0 &&
+      (e.target_buildings ?? []).length === 0
+    ) {
+      toast('Select at least one target (area, screen, or building) or choose all screens before approving.', 'error')
+      return
+    }
     await patchContent(row.id, {
       status: 'approved',
-      title: targeting.title,
-      full_screen: targeting.full_screen,
-      all_screens: targeting.all_screens,
-      target_area_ids: targeting.target_area_ids,
-      target_screen_ids: targeting.target_screen_ids,
-      target_buildings: targeting.target_buildings ?? [],
-      start_date: targeting.start_date,
-      end_date: targeting.end_date,
-      priority: targeting.priority,
-      display_seconds: targeting.display_seconds,
-      ...(row.type === 'html' ? { html_body: targeting.html_body } : {}),
-    })
+      title: e.title,
+      full_screen: e.full_screen,
+      all_screens: e.all_screens,
+      target_area_ids: e.target_area_ids,
+      target_screen_ids: e.target_screen_ids,
+      target_buildings: e.target_buildings ?? [],
+      start_date: e.start_date,
+      end_date: e.end_date,
+      priority: e.priority,
+      display_seconds: e.display_seconds,
+      ...(row.type === 'html' ? { html_body: e.html_body } : {}),
+    }, 'Approved — screens update within a few minutes')
   }
 
   const reject = async (row: ContentRow) => {
@@ -425,6 +438,14 @@ export default function SignageContentPage() {
     if (data.content?.id) setExpandedId(data.content.id)
   }
 
+  // Small audit line for reviewed items — reviewed_by is a team id (no name
+  // readily joined here), so we surface the decision + date/time only.
+  const reviewedLine = (row: ContentRow) => {
+    if (!row.reviewed_at || (row.status !== 'approved' && row.status !== 'rejected')) return null
+    const verb = row.status === 'approved' ? 'Approved' : 'Rejected'
+    return `${verb} ${formatSignageDate(row.reviewed_at)}`
+  }
+
   const requestLine = (row: ContentRow) => {
     const parts: string[] = []
     if (row.start_date && row.end_date) {
@@ -439,6 +460,7 @@ export default function SignageContentPage() {
   return (
     <SignagePageShell title="Content" subtitle="Images, videos & slides on the screens">
       {showAI && <CreateWithAI onClose={() => setShowAI(false)} onSaved={() => { void refreshAll() }} />}
+      <SignagePushStatus />
       <div style={{ ...s.card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Share the submission link</div>
@@ -673,6 +695,9 @@ export default function SignageContentPage() {
                   {requestLine(row) && (
                     <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{requestLine(row)}</div>
                   )}
+                  {reviewedLine(row) && (
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{reviewedLine(row)}</div>
+                  )}
 
                   <div style={s.divider}>
                     <SignageTargetingPicker
@@ -739,7 +764,15 @@ export default function SignageContentPage() {
                       </div>
                     )}
                     <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
-                      <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
+                      <input
+                        type="checkbox"
+                        checked={e.full_screen}
+                        onChange={async ev => {
+                          const on = ev.target.checked
+                          if (on && !(await confirmDialog({ title: 'Turn on full-screen takeover?', message: 'This slide will black out the entire screen while it shows, hiding all other content and the ticker. Save changes to apply it.', confirmLabel: 'Enable takeover', tone: 'danger' }))) return
+                          setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: on } }))
+                        }}
+                      />
                       Full-screen takeover
                     </label>
 

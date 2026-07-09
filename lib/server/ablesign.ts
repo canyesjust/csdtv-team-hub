@@ -128,6 +128,24 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+/**
+ * Outbound timeout for AbleSign API calls. Without this, a hung connection would
+ * block until the serverless function limit (up to 300s). On timeout the fetch
+ * aborts and is treated like a retryable network error.
+ */
+const ABLESIGN_TIMEOUT_MS = 12_000
+
+/** fetch() with an AbortController timeout. Always clears its timer. */
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ABLESIGN_TIMEOUT_MS)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function asFetch<T>(
   method: string,
   path: string,
@@ -138,12 +156,27 @@ async function asFetch<T>(
   const headers = ablesignHeaders(creds)
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
-  const res = await fetch(`${ABLESIGN_BASE}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: 'no-store',
-  })
+  let res: Response
+  try {
+    res = await fetchWithTimeout(`${ABLESIGN_BASE}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: 'no-store',
+    })
+  } catch (err) {
+    // Thrown fetch (DNS failure, connection reset, abort/timeout) — retry with
+    // the same exponential backoff as HTTP 429/5xx, then surface an informative error.
+    if (attempt < 3) {
+      await sleep(1000 * 2 ** attempt)
+      return asFetch<T>(method, path, body, creds, attempt + 1)
+    }
+    throw new AbleSignApiError(
+      `AbleSign request failed (network error: ${err instanceof Error ? err.message : 'unknown'})`,
+      'NETWORK_ERROR',
+      0,
+    )
+  }
 
   const retryable = res.status === 429 || res.status >= 500
   if (retryable && attempt < 3) {
@@ -168,18 +201,33 @@ export async function listScreens(options: {
   if (options.onlineStatus) params.set('onlineStatus', options.onlineStatus)
 
   const headers = ablesignHeaders(creds)
+  const url = `${ABLESIGN_BASE}/screens?${params}`
 
-  const res = await fetch(`${ABLESIGN_BASE}/screens?${params}`, {
-    headers,
-    cache: 'no-store',
-  })
-
+  // Same timeout + retry contract as asFetch: retry on 429/5xx AND on thrown
+  // network errors (DNS/reset/abort/timeout) with exponential backoff.
   let attempt = 0
-  let response = res
-  while ((response.status === 429 || response.status >= 500) && attempt < 3) {
-    await sleep(1000 * 2 ** attempt)
-    attempt += 1
-    response = await fetch(`${ABLESIGN_BASE}/screens?${params}`, { headers, cache: 'no-store' })
+  let response: Response
+  for (;;) {
+    try {
+      response = await fetchWithTimeout(url, { headers, cache: 'no-store' })
+    } catch (err) {
+      if (attempt < 3) {
+        await sleep(1000 * 2 ** attempt)
+        attempt += 1
+        continue
+      }
+      throw new AbleSignApiError(
+        `AbleSign list screens failed (network error: ${err instanceof Error ? err.message : 'unknown'})`,
+        'NETWORK_ERROR',
+        0,
+      )
+    }
+    if ((response.status === 429 || response.status >= 500) && attempt < 3) {
+      await sleep(1000 * 2 ** attempt)
+      attempt += 1
+      continue
+    }
+    break
   }
 
   const text = await response.text()

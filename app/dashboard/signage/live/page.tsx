@@ -59,6 +59,10 @@ export default function SignageLivePage() {
       const ok = await confirmDialog({ title: 'Go live on the signage screens?', message: 'Every screen with board takeover enabled will switch to the live board stream within about 5 seconds.', confirmLabel: 'Go live', tone: 'danger' })
       if (!ok) return
     }
+    if (action === 'preroll') {
+      const ok = await confirmDialog({ title: 'Start the board preroll?', message: 'Every screen with board takeover enabled will switch to the preroll graphic within about 5 seconds, replacing normal signage.', confirmLabel: 'Start preroll', tone: 'danger' })
+      if (!ok) return
+    }
     setBtSaving(true)
     const res = await fetch('/api/signage/board-takeover', {
       method: 'POST',

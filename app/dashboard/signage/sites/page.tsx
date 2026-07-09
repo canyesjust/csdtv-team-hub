@@ -20,7 +20,6 @@ type SiteRow = {
   slug: string
   school_code: string | null
   use_brand_colors: boolean
-  ablesign_workspace_id: string | null
   center_name: string
   weather_lat: number
   weather_lon: number
@@ -35,7 +34,7 @@ type SiteRow = {
 }
 
 const EMPTY: Omit<SiteRow, 'id'> = {
-  name: '', slug: '', school_code: null, use_brand_colors: false, ablesign_workspace_id: '',
+  name: '', slug: '', school_code: null, use_brand_colors: false,
   center_name: 'Canyons School District', weather_lat: 40.5649, weather_lon: -111.8389, ticker_extra: '',
   default_theme: 'primary', bg_color: null, panel_color: null, accent_color: null, text_color: null,
   sort_order: 0, active: true,
@@ -85,7 +84,7 @@ export default function SignageSitesPage() {
 
   const load = useCallback(async () => {
     const [siteRes, schoolRes, teamRes] = await Promise.all([
-      supabase.from('signage_sites').select('*').order('sort_order'),
+      supabase.from('signage_sites').select('id, name, slug, school_code, use_brand_colors, center_name, weather_lat, weather_lon, ticker_extra, default_theme, bg_color, panel_color, accent_color, text_color, sort_order, active').order('sort_order'),
       supabase.from('schools').select('code, name, primary_color, secondary_color, accent_color, text_color').eq('active', true).order('name'),
       supabase.from('team').select('id, name, role, signage_approver').eq('active', true).order('name'),
     ])
@@ -260,10 +259,12 @@ export default function SignageSitesPage() {
             </div>
           </div>
 
-          <div>
-            <p style={s.lbl}>AbleSign workspace ID</p>
-            <input value={form.ablesign_workspace_id || ''} onChange={e => setForm(f => ({ ...f, ablesign_workspace_id: e.target.value }))} style={s.input} />
-          </div>
+          {/* TODO: AbleSign workspace ID / API key are secret columns that anon &
+              authenticated roles can no longer SELECT. They cannot be read back into
+              this browser form, so the editable input was removed to avoid clobbering
+              stored creds with a blank value. Manage them via the provisioning flow
+              (server-side, service-role) or a dedicated secret-only endpoint. The
+              "AbleSign" column below shows live connect status via the server test API. */}
 
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <div>

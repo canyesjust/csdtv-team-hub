@@ -42,11 +42,17 @@ export async function PATCH(
     patch.reviewed_at = new Date().toISOString()
     if (body.status === 'approved') {
       const allScreens = typeof body.all_screens === 'boolean' ? body.all_screens : existing.all_screens
-      const areaIds = Array.isArray(body.target_area_ids) ? body.target_area_ids : existing.target_area_ids
-      const screenIds = Array.isArray(body.target_screen_ids) ? body.target_screen_ids : existing.target_screen_ids
+      const areaIds = Array.isArray(body.target_area_ids) ? body.target_area_ids : (existing.target_area_ids ?? [])
+      const screenIds = Array.isArray(body.target_screen_ids) ? body.target_screen_ids : (existing.target_screen_ids ?? [])
       const buildings = Array.isArray(body.target_buildings) ? body.target_buildings : (existing.target_buildings ?? [])
+      // Never silently widen to every screen. If nothing is targeted and
+      // all_screens wasn't explicitly chosen, refuse the approval so the
+      // reviewer makes an intentional choice.
       if (!allScreens && areaIds.length === 0 && screenIds.length === 0 && buildings.length === 0) {
-        patch.all_screens = true
+        return NextResponse.json(
+          { error: 'Select at least one target (area, screen, or building) or explicitly choose all screens before approving.' },
+          { status: 400 },
+        )
       }
     }
   }

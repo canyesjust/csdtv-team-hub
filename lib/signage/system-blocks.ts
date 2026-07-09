@@ -76,6 +76,72 @@ export function buildCalendarBoardHtml(items: CalendarItem[], todayLabel: string
 </div></body></html>`
 }
 
+// ── National Day ────────────────────────────────────────────────────────────
+export type NationalDayParams = {
+  month: string // "MAR"
+  day: string // "13"
+  name: string // "National Good Samaritan Day"
+  nameFontVh: number // adaptive size so long names still fit
+  primary: string // site brand dark — day number + band
+  bandFrom: string // band gradient start
+  bandTo: string // band gradient end
+  accent: string // pill background
+  pillText: string // readable text on the pill
+  highlight: string // "Today is" + month (readable on the light card)
+  logoDataUri: string | null // inlined site logo for the band
+  fallbackText: string // shown in the band when there is no logo
+}
+
+export function buildNationalDayHtml(p: NationalDayParams): string {
+  const logo = p.logoDataUri
+    ? `<div class="logo-chip"><img src="${esc(p.logoDataUri)}" alt=""></div>`
+    : `<div class="fallback">${esc(p.fallbackText)}</div>`
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;font-family:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;overflow:hidden}
+  body{background:#f4f5f9}
+  #app{width:100vw;height:100vh;display:flex;flex-direction:column}
+  .stage{flex:1;display:flex;align-items:center;justify-content:center;gap:4vw;padding:6vh 8vw 3vh}
+  .cal{flex:0 0 auto;width:26vh;background:#fff;border-radius:3vh;box-shadow:0 2vh 5vh rgba(20,30,60,0.16);overflow:hidden;border:0.3vh solid #eef0f6}
+  .cal-top{position:relative;height:5vh;background:#fff;border-bottom:0.3vh solid #eef0f6}
+  .cal-top::before,.cal-top::after{content:'';position:absolute;top:-1.6vh;width:1.2vh;height:3.4vh;border-radius:1vh;background:${esc(p.primary)};border:0.3vh solid #fff}
+  .cal-top::before{left:32%}.cal-top::after{right:32%}
+  .cal-mo{text-align:center;font-size:4.4vh;font-weight:800;letter-spacing:0.2vw;color:${esc(p.highlight)};padding:1.2vh 0 0.4vh}
+  .cal-day{text-align:center;font-size:12vh;font-weight:800;line-height:0.9;color:${esc(p.primary)};padding:0 0 2.4vh}
+  .msg{flex:1;min-width:0}
+  .msg .eyebrow{font-size:3.4vh;font-weight:800;letter-spacing:0.15vw;text-transform:uppercase;color:${esc(p.highlight)};margin-bottom:0.6vh}
+  .msg .name{font-size:${p.nameFontVh}vh;font-weight:800;line-height:1.04;color:#20233a;letter-spacing:-0.02vw}
+  .band{flex:0 0 auto;height:26vh;background:linear-gradient(120deg,${esc(p.bandFrom)} 0%,${esc(p.bandTo)} 100%);border-radius:14vh 14vh 0 0;display:flex;align-items:center;justify-content:space-between;padding:0 6vw;position:relative}
+  .band .left{color:rgba(255,255,255,0.82);font-size:1.9vh;font-weight:700;line-height:1.35;max-width:22vw}
+  .band .center{position:absolute;left:50%;top:50%;transform:translate(-50%,-56%);text-align:center}
+  .band .pill{display:inline-block;background:${esc(p.accent)};color:${esc(p.pillText)};font-size:2.4vh;font-weight:800;letter-spacing:0.2vw;text-transform:uppercase;padding:1vh 2.6vw;border-radius:6vh;box-shadow:0 1vh 3vh rgba(0,0,0,0.18);margin-bottom:1vh}
+  .band .big{font-size:6.4vh;font-weight:800;letter-spacing:0.35vw;text-transform:uppercase;color:#fff;line-height:1}
+  .logo-chip{background:#fff;border-radius:1.4vh;padding:1.4vh 1.8vw;display:flex;align-items:center;box-shadow:0 1vh 3vh rgba(0,0,0,0.18)}
+  .logo-chip img{max-height:7vh;max-width:12vw;object-fit:contain;display:block}
+  .fallback{color:#fff;font-size:2.2vh;font-weight:800;letter-spacing:0.06vw;text-align:right;max-width:16vw;line-height:1.15}
+</style></head>
+<body><div id="app">
+  <div class="stage">
+    <div class="cal">
+      <div class="cal-top"></div>
+      <div class="cal-mo">${esc(p.month)}</div>
+      <div class="cal-day">${esc(p.day)}</div>
+    </div>
+    <div class="msg">
+      <div class="eyebrow">Today is</div>
+      <div class="name">${esc(p.name)}</div>
+    </div>
+  </div>
+  <div class="band">
+    <div class="left">Check back tomorrow<br>to see what&rsquo;s new!</div>
+    <div class="center"><div class="pill">National Day</div><div class="big">Calendar</div></div>
+    <div class="right">${logo}</div>
+  </div>
+</div></body></html>`
+}
+
 // ── Website preview ─────────────────────────────────────────────────────────
 // Renders a live district web page full-bleed. NOTE: only works for pages that
 // permit being embedded in a frame (no X-Frame-Options / frame-ancestors block).

@@ -51,6 +51,9 @@ export default function SignageOverviewPage() {
       supabase.from('signage_visitors').select('id, name, note, visit_date, active, pending, submitter_name').eq('site_id', activeSiteId),
     ])
 
+    const loadError = scr.error || con.error || ann.error || vis.error
+    if (loadError) toast('Some overview data could not be loaded', 'error')
+
     const screens = scr.data || []
     setScreensTotal(screens.length)
     setScreensOnline(screens.filter(x => x.ablesign_screen_id && x.ablesign_online).length)
@@ -106,13 +109,26 @@ export default function SignageOverviewPage() {
     let ok = false
     if (item.kind === 'content') {
       const c = item.raw
-      const allScreens = !c.all_screens && (!Array.isArray(c.target_area_ids) || c.target_area_ids.length === 0) && (!Array.isArray(c.target_screen_ids) || c.target_screen_ids.length === 0)
-        ? true : Boolean(c.all_screens)
+      const hasTarget =
+        Boolean(c.all_screens) ||
+        (Array.isArray(c.target_area_ids) && c.target_area_ids.length > 0) ||
+        (Array.isArray(c.target_screen_ids) && c.target_screen_ids.length > 0)
+      // Never silently widen an untargeted submission to every screen — send the
+      // reviewer to the content page to pick a target. The API enforces this too.
+      if (!hasTarget) {
+        toast('Set a target on the content page before approving this item.', 'error')
+        return
+      }
       const res = await fetch(`/api/signage/content/${item.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'approved', all_screens: allScreens, target_area_ids: c.target_area_ids ?? [], target_screen_ids: c.target_screen_ids ?? [], start_date: c.start_date, end_date: c.end_date }),
+        body: JSON.stringify({ status: 'approved', all_screens: Boolean(c.all_screens), target_area_ids: c.target_area_ids ?? [], target_screen_ids: c.target_screen_ids ?? [], start_date: c.start_date, end_date: c.end_date }),
       })
-      ok = res.ok
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast(typeof data.error === 'string' ? data.error : 'Approve failed', 'error')
+        return
+      }
+      ok = true
     } else if (item.kind === 'announcement') {
       const res = await fetch('/api/signage/announcements', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, pending: false, active: true }) })
       ok = res.ok
@@ -122,7 +138,7 @@ export default function SignageOverviewPage() {
       ok = res.ok
     }
     if (!ok) { toast('Approve failed', 'error'); return }
-    toast('Approved', 'success')
+    toast('Approved — screens update within a few minutes', 'success')
     void load()
   }
 

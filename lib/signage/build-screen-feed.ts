@@ -6,7 +6,8 @@ import { signageLiveMatchesScreen } from './live-targeting'
 import { normalizeSignageStreamUrl } from './stream-url'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { buildBroadcastBoardHtml, type BroadcastBoardItem } from './broadcast-board'
-import { buildCalendarBoardHtml, buildWebsiteEmbedHtml, type CalendarItem } from './system-blocks'
+import { buildCalendarBoardHtml, buildWebsiteEmbedHtml, buildNationalDayHtml, type CalendarItem } from './system-blocks'
+import { nationalDayFor } from './national-days.data'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
 import {
@@ -319,6 +320,64 @@ async function getCalendarBoardHtml(service: SupabaseClient): Promise<string | n
   }
 }
 
+// ── National Day block ──────────────────────────────────────────────────────
+type SiteBrand = { use_brand_colors?: boolean | null; bg_color?: string | null; panel_color?: string | null; accent_color?: string | null; logo_url?: string | null; school_code?: string | null; center_name?: string | null } | null
+
+// Neutral, location-agnostic fallback used ONLY when a location has no brand at
+// all (no linked school and no colors set). Never a specific building's colors.
+const NEUTRAL_PRIMARY = '#233145'
+const NEUTRAL_ACCENT = '#e8212a'
+
+function hexLuminance(hex: string): number {
+  const m = (hex || '').replace('#', '')
+  const f = m.length === 3 ? m.split('').map(c => c + c).join('') : m
+  if (f.length < 6) return 0.5
+  return (0.299 * parseInt(f.slice(0, 2), 16) + 0.587 * parseInt(f.slice(2, 4), 16) + 0.114 * parseInt(f.slice(4, 6), 16)) / 255
+}
+
+// Brand resolution mirrors the rest of signage: the location's linked school
+// colors take priority, then colors set directly on the site, then a neutral
+// default. So each location is branded for the building it lives in.
+async function getNationalDayHtml(service: SupabaseClient, site: SiteBrand): Promise<string | null> {
+  const now = new Date()
+  const mm = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', month: '2-digit' }).format(now)
+  const dd = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', day: '2-digit' }).format(now)
+  const name = nationalDayFor(`${mm}${dd}`)
+  if (!name) return null
+
+  let schoolPrimary: string | null = null, schoolSecondary: string | null = null, schoolAccent: string | null = null
+  if (site?.school_code) {
+    const { data: sch } = await service.from('schools').select('primary_color, secondary_color, accent_color').ilike('code', String(site.school_code)).maybeSingle()
+    schoolPrimary = sch?.primary_color ?? null
+    schoolSecondary = sch?.secondary_color ?? null
+    schoolAccent = sch?.accent_color ?? null
+  }
+  const useBrand = !!site?.use_brand_colors
+  const primary = schoolPrimary || (useBrand && site?.bg_color ? String(site.bg_color) : '') || NEUTRAL_PRIMARY
+  const panel = (useBrand && site?.panel_color ? String(site.panel_color) : '') || schoolSecondary || primary
+  const accent = schoolAccent || (useBrand && site?.accent_color ? String(site.accent_color) : '') || NEUTRAL_ACCENT
+  const pillText = hexLuminance(accent) > 0.6 ? '#1a1330' : '#ffffff'
+  const highlight = hexLuminance(accent) > 0.62 ? primary : accent
+
+  // Only the location's own logo (reads on a white chip); otherwise show the
+  // location name — never a white district logo that would vanish on white.
+  let logoDataUri: string | null = null
+  if (site?.logo_url) {
+    let logoRaw = String(site.logo_url)
+    if (logoRaw.startsWith('/')) logoRaw = `https://www.csdtvstaff.org${logoRaw}`
+    logoDataUri = await inlineBroadcastImage(logoRaw)
+  }
+
+  const len = name.length
+  const nameFontVh = len > 46 ? 4.6 : len > 30 ? 5.8 : len > 20 ? 7 : 8.4
+  return buildNationalDayHtml({
+    month: now.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Denver' }).toUpperCase(),
+    day: String(parseInt(dd, 10)),
+    name, nameFontVh, primary, bandFrom: primary, bandTo: panel, accent, pillText, highlight,
+    logoDataUri, fallbackText: site?.center_name || 'Canyons School District',
+  })
+}
+
 export async function buildScreenFeed(
   service: SupabaseClient,
   code: string,
@@ -370,7 +429,10 @@ export async function buildScreenFeed(
       ? service.from('signage_live').select('*').eq('site_id', siteId).maybeSingle()
       : service.from('signage_live').select('*').eq('id', 1).maybeSingle(),
     siteId
-      ? service.from('signage_sites').select('*').eq('id', siteId).maybeSingle()
+      // Explicit column list (never select('*')) so secret columns such as
+      // ablesign_api_key / ablesign_workspace_id are never loaded into or
+      // serialized with the public screen feed.
+      ? service.from('signage_sites').select('weather_lat, weather_lon, show_calendar_ticker, ticker_extra, default_layout, center_name, default_theme, use_brand_colors, bg_color, panel_color, accent_color, school_code, brand_title, brand_subtitle, logo_url, show_weather, show_clock, show_ticker, show_visitor_welcome').eq('id', siteId).maybeSingle()
       : service.from('signage_settings').select('*').eq('id', 1).maybeSingle(),
     service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle(),
   ])
@@ -383,13 +445,15 @@ export async function buildScreenFeed(
   // System "stock" blocks (broadcast board, calendar, website) are content rows
   // rendered dynamically by the feed, but scheduled + targeted exactly like
   // normal content — so they only appear on the screens an editor assigned them to.
-  const [broadcastBoardHtml, calendarHtml] = await Promise.all([
+  const [broadcastBoardHtml, calendarHtml, nationalDayHtml] = await Promise.all([
     filteredContent.some(row => row.system_kind === 'broadcast_board') ? getBroadcastBoardHtml(service) : Promise.resolve(null),
     filteredContent.some(row => row.system_kind === 'calendar') ? getCalendarBoardHtml(service) : Promise.resolve(null),
+    filteredContent.some(row => row.system_kind === 'national_day') ? getNationalDayHtml(service, siteRes.data as SiteBrand) : Promise.resolve(null),
   ])
   const systemHtml = (row: { system_kind?: string | null; html_body?: string | null }): string | null => {
     if (row.system_kind === 'broadcast_board') return broadcastBoardHtml
     if (row.system_kind === 'calendar') return calendarHtml
+    if (row.system_kind === 'national_day') return nationalDayHtml
     if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
     return null
   }

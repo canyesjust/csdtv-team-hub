@@ -41,22 +41,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
 
+  // Server-side length caps on all free-text so a public submitter can't store
+  // unbounded input. Mirrors the existing style where `title` is sliced.
+  const NAME_MAX = 120
+  const TITLE_MAX = 120
+  const NOTE_MAX = 500
+
   const form = await request.formData()
-  const submitterName = String(form.get('submitter_name') ?? '').trim()
-  const submitterEmail = String(form.get('submitter_email') ?? '').trim().toLowerCase()
+  const submitterName = String(form.get('submitter_name') ?? '').trim().slice(0, NAME_MAX)
+  const submitterEmail = String(form.get('submitter_email') ?? '').trim().toLowerCase().slice(0, NAME_MAX)
   const areaId = String(form.get('area_id') ?? '').trim()
   const siteSlug = String(form.get('site_slug') ?? '').trim().toLowerCase()
   const startDate = String(form.get('start_date') ?? '').trim()
   const endDate = String(form.get('end_date') ?? '').trim()
-  const requestedNote = String(form.get('requested_note') ?? '').trim()
+  const requestedNote = String(form.get('requested_note') ?? '').trim().slice(0, NOTE_MAX)
   const termsAccepted = String(form.get('terms_accepted') ?? '')
 
   // Optional announcement section
-  const annTitle = String(form.get('ann_title') ?? '').trim()
-  const annSubtitle = String(form.get('ann_subtitle') ?? '').trim()
+  const annTitle = String(form.get('ann_title') ?? '').trim().slice(0, TITLE_MAX)
+  const annSubtitle = String(form.get('ann_subtitle') ?? '').trim().slice(0, TITLE_MAX)
   // Optional visitor section
-  const visitorName = String(form.get('visitor_name') ?? '').trim()
-  const visitorNote = String(form.get('visitor_note') ?? '').trim()
+  const visitorName = String(form.get('visitor_name') ?? '').trim().slice(0, NAME_MAX)
+  const visitorNote = String(form.get('visitor_note') ?? '').trim().slice(0, NOTE_MAX)
   const visitDate = String(form.get('visit_date') ?? '').trim()
   // Optional media section
   const image = form.get('image')
