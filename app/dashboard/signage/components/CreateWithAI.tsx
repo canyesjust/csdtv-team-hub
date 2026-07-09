@@ -53,6 +53,7 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
   const [canvas, setCanvas] = useState({ w: 1920, h: 1080 })
   const [genMeta, setGenMeta] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [savingLib, setSavingLib] = useState(false)
   const [refineText, setRefineText] = useState('')
   const [refining, setRefining] = useState(false)
   const [showHtmlEdit, setShowHtmlEdit] = useState(false)
@@ -142,6 +143,24 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
       setError('Could not reach the summarizer.')
     } finally {
       setSummarizing(false)
+    }
+  }
+
+  const saveToLibrary = async () => {
+    if (!finalHtml) return
+    const name = (window.prompt('Template name (shown in the district library):', headline || prompt.slice(0, 40) || 'AI slide') || '').trim()
+    if (!name) return
+    setSavingLib(true)
+    try {
+      const res = await fetch('/api/signage/templates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, kind: 'designed_slide', category: 'Design', description: prompt.slice(0, 140) || null, config: { html: finalHtml }, auto_rebrand: true, all_sites: false, active: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Save failed.', 'error'); return }
+      toast('Saved to Templates — assign it to schools from the Templates page.', 'success')
+    } finally {
+      setSavingLib(false)
     }
   }
 
@@ -345,6 +364,9 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
               <button type="button" onClick={onClose} style={s.btn}>Cancel</button>
+              <button type="button" onClick={() => void saveToLibrary()} disabled={!html || savingLib || (qa ? !qa.ok : false)} title="Save as a reusable template in the district library" style={{ ...s.btn }}>
+                {savingLib ? 'Saving…' : 'Save to library'}
+              </button>
               <button type="button" onClick={() => void save()} disabled={!html || saving || (qa ? !qa.ok : false)} title={qa && !qa.ok ? 'Fix the QA issues first' : undefined} style={{ ...s.btnPrimary, opacity: !html || saving || (qa && !qa.ok) ? 0.5 : 1 }}>
                 {saving ? 'Saving…' : 'Send to approval queue'}
               </button>

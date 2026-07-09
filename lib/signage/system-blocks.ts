@@ -89,45 +89,57 @@ export type NationalDayParams = {
   fallbackText: string // location name when no logo
 }
 
+function ndLum(hex: string): number {
+  const m = (hex || '').replace('#', '')
+  const f = m.length === 3 ? m.split('').map(c => c + c).join('') : m
+  if (f.length < 6) return 0.5
+  return (0.299 * parseInt(f.slice(0, 2), 16) + 0.587 * parseInt(f.slice(2, 4), 16) + 0.114 * parseInt(f.slice(4, 6), 16)) / 255
+}
+
 export function buildNationalDayHtml(p: NationalDayParams): string {
-  const a = p.accent
-  const brand = p.logoDataUri
-    ? `<div class="logo"><img src="${esc(p.logoDataUri)}" alt=""></div>`
-    : `<div class="site">${esc(p.fallbackText)}</div>`
+  const onP = ndLum(p.primary) > 0.62 ? '#0b0e13' : '#ffffff'
+  const footLogo = p.logoDataUri ? `<img class="logo" src="${esc(p.logoDataUri)}" alt="">` : '<span></span>'
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:100%;height:100%;background:#0b0e13;color:#f0f4ff;font-family:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;overflow:hidden}
-  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 62% 60% at 16% 26%, ${esc(a)}26, transparent 60%),radial-gradient(ellipse 50% 45% at 92% 96%, ${esc(a)}12, transparent 60%);pointer-events:none}
-  #app{position:relative;width:100vw;height:100vh;display:flex;flex-direction:column;padding:5vh 6vw}
-  header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-  .logo{background:#fff;border-radius:1.2vh;padding:1vh 1.5vw;display:flex;align-items:center}
-  .logo img{max-height:6vh;max-width:13vw;object-fit:contain;display:block}
-  .site{font-size:2.2vh;font-weight:800;color:#f0f4ff;letter-spacing:0.04vw}
-  .date{font-size:2vh;font-weight:700;letter-spacing:0.16vw;text-transform:uppercase;color:#8a99b5}
-  .stage{flex:1;display:flex;align-items:center;gap:5vw}
-  .cal{flex:0 0 auto;width:32vh;background:#12161d;border:0.3vh solid rgba(255,255,255,0.09);border-radius:2.6vh;overflow:hidden;text-align:center;box-shadow:0 2vh 6vh rgba(0,0,0,0.4)}
-  .cal .bar{height:2.6vh;background:${esc(a)}}
-  .cal .mo{font-size:4.8vh;font-weight:800;letter-spacing:0.2vw;color:${esc(a)};padding:2.2vh 0 0.2vh}
-  .cal .dy{font-size:17vh;font-weight:800;line-height:0.82;color:#fff;padding:0 0 2.8vh}
-  .msg{flex:1;min-width:0}
-  .msg .eyebrow{font-size:3.4vh;font-weight:800;letter-spacing:0.2vw;text-transform:uppercase;color:${esc(a)};margin-bottom:1.2vh}
-  .msg .name{font-size:${p.nameFontVh}vh;font-weight:800;line-height:1.03;color:#fff;letter-spacing:-0.02vw}
-  .msg .sub{font-size:2.4vh;font-weight:700;letter-spacing:0.06vw;color:#8a99b5;margin-top:2vh}
-  footer{flex-shrink:0;text-align:center;font-size:1.6vh;font-weight:700;letter-spacing:0.3vw;text-transform:uppercase;color:#6b7890}
+  html,body{width:100%;height:100%;background:#0f1319;color:#f0f4ff;font-family:'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;overflow:hidden}
+  #app{display:grid;grid-template-columns:37% 1fr;width:100vw;height:100vh}
+  .cal{background:${esc(p.primary)};color:${onP};display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .cal::before{content:'';position:absolute;top:0;left:0;right:0;height:8vh;background:rgba(0,0,0,0.17)}
+  .ring{position:absolute;top:3vh;width:1.5vh;height:5vh;border-radius:1vh;background:${onP};opacity:0.9}
+  .ring.l{left:31%}.ring.r{right:31%}
+  .cal .mo{position:relative;font-size:6vh;font-weight:800;letter-spacing:0.3vw;text-transform:uppercase;line-height:1;margin-top:2vh}
+  .cal .dy{font-size:30vh;font-weight:800;line-height:0.8;letter-spacing:-0.6vw}
+  .side{position:relative;display:flex;flex-direction:column;padding:5.5vh 5.5vw}
+  .side::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 75% 65% at 92% 8%, ${esc(p.accent)}1f, transparent 60%);pointer-events:none}
+  .side header{position:relative;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .side header .who{font-size:2.1vh;font-weight:800;color:#f0f4ff;letter-spacing:0.03vw}
+  .side header .date{font-size:1.9vh;font-weight:700;letter-spacing:0.16vw;text-transform:uppercase;color:#8a99b5}
+  .hero{position:relative;flex:1;display:flex;flex-direction:column;justify-content:center}
+  .hero .eyebrow{display:inline-flex;align-items:center;gap:1.1vw;font-size:2.9vh;font-weight:800;letter-spacing:0.24vw;text-transform:uppercase;color:${esc(p.accent)};margin-bottom:1.8vh}
+  .hero .eyebrow::before{content:'';width:4.5vw;height:0.55vh;background:${esc(p.accent)};border-radius:1vh}
+  .hero .name{font-size:${p.nameFontVh}vh;font-weight:800;line-height:1.02;letter-spacing:-0.03vw;color:#fff}
+  .hero .sub{font-size:2.4vh;font-weight:600;color:#8a99b5;margin-top:2.6vh}
+  .side footer{position:relative;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .side footer .logo{max-height:6.4vh;max-width:15vw;object-fit:contain;background:#fff;border-radius:1.1vh;padding:0.9vh 1.1vw}
+  .side footer .tag{font-size:1.6vh;font-weight:800;letter-spacing:0.3vw;text-transform:uppercase;color:#61708c}
 </style></head>
 <body><div id="app">
-  <header>${brand}<div class="date">${esc(p.dateLine)}</div></header>
-  <div class="stage">
-    <div class="cal"><div class="bar"></div><div class="mo">${esc(p.month)}</div><div class="dy">${esc(p.day)}</div></div>
-    <div class="msg">
-      <div class="eyebrow">Today is</div>
-      <div class="name">${esc(p.name)}</div>
-      <div class="sub">Check back tomorrow for a new one</div>
-    </div>
+  <div class="cal">
+    <span class="ring l"></span><span class="ring r"></span>
+    <div class="mo">${esc(p.month)}</div>
+    <div class="dy">${esc(p.day)}</div>
   </div>
-  <footer>${esc(p.fallbackText)}</footer>
+  <div class="side">
+    <header><span class="who">${esc(p.fallbackText)}</span><span class="date">${esc(p.dateLine)}</span></header>
+    <div class="hero">
+      <span class="eyebrow">Today is</span>
+      <div class="name">${esc(p.name)}</div>
+      <div class="sub">A little something to celebrate — check back tomorrow for a new one.</div>
+    </div>
+    <footer>${footLogo}<span class="tag">National Day Calendar</span></footer>
+  </div>
 </div></body></html>`
 }
 
@@ -136,18 +148,17 @@ export function buildNationalDayHtml(p: NationalDayParams): string {
 // permit being embedded in a frame (no X-Frame-Options / frame-ancestors block).
 export function buildWebsiteEmbedHtml(url: string): string {
   const safe = esc(url)
-  // Render the page at a desktop width inside the zone, then scale it down to
-  // exactly fit the zone's width (via calc against 100vw of the slide's own
-  // viewport). This shows the full-width layout instead of an oversized crop
-  // that bleeds past the zone. overflow:hidden clips any height remainder.
-  const DESKTOP_W = 1440
+  // Preview-only embed (dashboard). On real screens the website is rendered as a
+  // distinct `type:'website'` media item in a direct iframe at the zone's native
+  // size. Here we mirror that: fill the zone 1:1 and give the inner frame a
+  // permissive sandbox so SPAs (which need same-origin to boot) actually render
+  // instead of showing blank.
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/>
 <style>
   *{margin:0;padding:0}
   html,body{width:100%;height:100%;background:#0b0e13;overflow:hidden}
-  .wrap{position:absolute;inset:0;overflow:hidden}
-  iframe{border:0;display:block;width:${DESKTOP_W}px;height:${Math.round(DESKTOP_W * 9 / 16)}px;transform-origin:top left;transform:scale(calc(100vw / ${DESKTOP_W}))}
+  iframe{border:0;display:block;width:100vw;height:100vh}
 </style></head>
-<body><div class="wrap"><iframe src="${safe}" scrolling="no" referrerpolicy="no-referrer"></iframe></div></body></html>`
+<body><iframe src="${safe}" scrolling="no" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"></iframe></body></html>`
 }

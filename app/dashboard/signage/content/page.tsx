@@ -54,7 +54,7 @@ const CONTENT_COLUMNS =
   'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, created_at, reviewed_at, reviewed_by'
 
 // A template assigned to this location (from the admin library).
-type StockTemplate = { id: string; name: string; description: string | null; kind: string; singleton: boolean; requires_url: boolean }
+type StockTemplate = { id: string; name: string; description: string | null; kind: string; singleton: boolean; requires_url: boolean; config?: { html?: string } | null }
 
 // Built-in "stock" blocks: label lookup for the gallery tile of a system row.
 const STOCK_BLOCKS: { kind: string; label: string; desc: string; available: boolean }[] = [
@@ -440,6 +440,7 @@ export default function SignageContentPage() {
     const fd = new FormData()
     fd.set('system_kind', kind)
     if (blockUrl) fd.set('website_url', blockUrl)
+    if (kind === 'designed_slide') fd.set('html_body', t.config?.html || '')
     fd.set('title', blockTitle)
     fd.set('start_date', today)
     fd.set('start_date', today)
@@ -924,7 +925,7 @@ function ScaledSlide({ html }: { html: string }) {
  */
 function SlidePreview({ row, edit, fit = 'cover' }: { row: ContentRow; edit?: { html_body: string }; fit?: 'cover' | 'contain' }) {
   if (row.system_kind) {
-    const label = STOCK_BLOCKS.find(b => b.kind === row.system_kind)?.label || 'Live block'
+    const label = STOCK_BLOCKS.find(b => b.kind === row.system_kind)?.label || row.title || 'Stock block'
     return (
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, background: '#0b0e13', textAlign: 'center', padding: 10 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', color: '#ff5760' }}>Stock block</span>

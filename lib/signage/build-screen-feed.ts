@@ -359,7 +359,7 @@ async function getNationalDayHtml(service: SupabaseClient, site: SiteBrand): Pro
   }
 
   const len = name.length
-  const nameFontVh = len > 46 ? 4.6 : len > 30 ? 5.8 : len > 20 ? 7 : 8.4
+  const nameFontVh = len > 48 ? 5.5 : len > 34 ? 7 : len > 22 ? 9 : 11
   return buildNationalDayHtml({
     month: now.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Denver' }).toUpperCase(),
     day: String(parseInt(dd, 10)),
@@ -370,6 +370,45 @@ async function getNationalDayHtml(service: SupabaseClient, site: SiteBrand): Pro
   })
 }
 
+function escHtmlText(s: string): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+type ResolvedBrand = { primary: string; accent: string; logoDataUri: string | null; schoolName: string }
+
+// Location branding for designed slides + national day: linked-school colors →
+// site colors → neutral. Logo inlined for offline-safety.
+async function resolveSiteBrand(service: SupabaseClient, site: SiteBrand): Promise<ResolvedBrand> {
+  let schoolPrimary: string | null = null, schoolAccent: string | null = null
+  if (site?.school_code) {
+    const { data: sch } = await service.from('schools').select('primary_color, accent_color').ilike('code', String(site.school_code)).maybeSingle()
+    schoolPrimary = sch?.primary_color ?? null
+    schoolAccent = sch?.accent_color ?? null
+  }
+  const useBrand = !!site?.use_brand_colors
+  const primary = schoolPrimary || (useBrand && site?.bg_color ? String(site.bg_color) : '') || NEUTRAL_PRIMARY
+  const accent = schoolAccent || (useBrand && site?.accent_color ? String(site.accent_color) : '') || NEUTRAL_ACCENT
+  let logoDataUri: string | null = null
+  if (site?.logo_url) {
+    let logoRaw = String(site.logo_url)
+    if (logoRaw.startsWith('/')) logoRaw = `https://www.csdtvstaff.org${logoRaw}`
+    logoDataUri = await inlineBroadcastImage(logoRaw)
+  }
+  return { primary, accent, logoDataUri, schoolName: site?.center_name || 'Canyons School District' }
+}
+
+// Fill a designed-slide template's placeholders with this location's brand.
+function fillDesignedSlide(html: string, b: ResolvedBrand): string {
+  return html
+    .split('{{primary}}').join(b.primary)
+    .split('{{accent}}').join(b.accent)
+    .split('{{logo}}').join(b.logoDataUri || '')
+    .split('{{school_name}}').join(escHtmlText(b.schoolName))
+    .split('{{schoolName}}').join(escHtmlText(b.schoolName))
+}
+
+const SITE_BRAND_COLUMNS = 'use_brand_colors, bg_color, panel_color, accent_color, logo_url, school_code, center_name'
+
 // Render a single stock/system block's HTML on demand — used by the dashboard
 // "Full preview" so editors can see exactly what a block will look like.
 export async function renderSystemBlockHtml(
@@ -379,10 +418,13 @@ export async function renderSystemBlockHtml(
   if (row.system_kind === 'broadcast_board') return getBroadcastBoardHtml(service)
   if (row.system_kind === 'calendar') return getCalendarFromIcs(String(row.html_body ?? ''))
   if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
-  if (row.system_kind === 'national_day') {
+  if (row.system_kind === 'national_day' || row.system_kind === 'designed_slide') {
     const { data: site } = row.site_id
-      ? await service.from('signage_sites').select('use_brand_colors, bg_color, panel_color, accent_color, logo_url, school_code, center_name').eq('id', row.site_id).maybeSingle()
+      ? await service.from('signage_sites').select(SITE_BRAND_COLUMNS).eq('id', row.site_id).maybeSingle()
       : { data: null }
+    if (row.system_kind === 'designed_slide') {
+      return row.html_body ? fillDesignedSlide(sanitizeSignageHtml(String(row.html_body)), await resolveSiteBrand(service, site as SiteBrand)) : null
+    }
     return getNationalDayHtml(service, site as SiteBrand)
   }
   return null
@@ -466,9 +508,19 @@ export async function buildScreenFeed(
       calendarByRow.set(r.id, await getCalendarFromIcs(String(r.html_body ?? '')))
     }),
   )
+  // Designed slides: fill each template's placeholders with this location's brand.
+  const designedByRow = new Map<string, string | null>()
+  const designedRows = filteredContent.filter(r => r.system_kind === 'designed_slide')
+  if (designedRows.length) {
+    const brand = await resolveSiteBrand(service, siteRes.data as SiteBrand)
+    for (const r of designedRows) {
+      designedByRow.set(r.id, r.html_body ? fillDesignedSlide(sanitizeSignageHtml(String(r.html_body)), brand) : null)
+    }
+  }
   const systemHtml = (row: { id?: string; system_kind?: string | null; html_body?: string | null }): string | null => {
     if (row.system_kind === 'broadcast_board') return broadcastBoardHtml
     if (row.system_kind === 'calendar') return (row.id && calendarByRow.get(row.id)) || null
+    if (row.system_kind === 'designed_slide') return (row.id && designedByRow.get(row.id)) || null
     if (row.system_kind === 'national_day') return nationalDayHtml
     if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
     return null
@@ -476,18 +528,24 @@ export async function buildScreenFeed(
 
   const media = filteredContent
     // Drop a system block when it has nothing to show (e.g. no upcoming items, no URL).
-    .filter(row => !row.system_kind || systemHtml(row))
+    .filter(row => {
+      if (!row.system_kind) return true
+      if (row.system_kind === 'website') return !!row.html_body // needs a URL
+      return !!systemHtml(row)
+    })
     .map(row => {
+      const isWebsite = row.system_kind === 'website'
       const isSystem = !!row.system_kind
-      const type = (isSystem ? 'html' : row.type) as 'image' | 'video' | 'html'
+      // Website = a live external page in a direct iframe (its URL is in html_body).
+      const type = (isWebsite ? 'website' : (isSystem ? 'html' : row.type)) as 'image' | 'video' | 'html' | 'website'
       return {
         id: row.id,
         type,
         title: row.title,
-        url: isSystem || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path),
-        html: isSystem
-          ? systemHtml(row)
-          : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null),
+        url: isWebsite
+          ? String(row.html_body ?? '')
+          : (isSystem || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path)),
+        html: isWebsite ? null : (isSystem ? systemHtml(row) : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null)),
         full_screen: row.full_screen,
         display_seconds: clampDisplaySeconds(row.display_seconds),
       }

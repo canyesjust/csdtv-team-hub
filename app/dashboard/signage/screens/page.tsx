@@ -18,6 +18,7 @@ import { signageScreenUrl, SIGNAGE_THEMES } from '@/lib/signage/constants'
 import {
   AbleSignScreenPanel,
   AbleSignSyncAllButton,
+  AbleSignPushAllHtmlButton,
 } from '../components/AbleSignControls'
 
 type ScreenForm = {
@@ -167,7 +168,7 @@ export default function SignageScreensPage() {
     <SignagePageShell title="Screens" subtitle="The physical displays around the building">
       <SignagePushStatus />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-        <AbleSignSyncAllButton screenIds={linkedScreenIds} onDone={() => void loadScreens()} />
+        <AbleSignPushAllHtmlButton onDone={() => void loadScreens()} />
         <button
           type="button"
           onClick={() => { resetForm(); setShowForm(v => !v) }}
@@ -176,6 +177,16 @@ export default function SignageScreensPage() {
           {showForm ? 'Cancel' : '+ Add screen'}
         </button>
       </div>
+
+      <details style={{ marginBottom: 16 }}>
+        <summary style={{ cursor: 'pointer', fontSize: 12.5, color: s.muted, listStyle: 'revert' }}>Advanced</summary>
+        <div style={{ margin: '10px 0 0', maxWidth: 760 }}>
+          <p style={{ margin: '0 0 10px', fontSize: 12.5, color: s.muted, lineHeight: 1.55 }}>
+            <strong style={{ color: s.text }}>Point all at live URL (not offline).</strong> This switches every screen to the live web page instead of the downloaded HTML. Screens will go blank if the network drops. Only use this to deliberately move screens off the offline HTML — normal updates go through <strong style={{ color: s.text }}>Regenerate &amp; push HTML to all</strong> above.
+          </p>
+          <AbleSignSyncAllButton screenIds={linkedScreenIds} onDone={() => void loadScreens()} />
+        </div>
+      </details>
 
       <details style={{ marginBottom: 16 }}>
         <summary style={{ cursor: 'pointer', fontSize: 12.5, color: s.muted, listStyle: 'revert' }}>How screens work</summary>

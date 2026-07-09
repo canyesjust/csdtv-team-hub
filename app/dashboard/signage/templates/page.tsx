@@ -12,6 +12,7 @@ type Template = {
   description: string | null
   category: string
   kind: string
+  config: { html?: string } & Record<string, unknown>
   thumbnail_url: string | null
   auto_rebrand: boolean
   singleton: boolean
@@ -22,16 +23,16 @@ type Template = {
   site_ids: string[]
 }
 
-// Kinds available to author in Phase 1 (the live/dynamic blocks that render today).
 const KINDS: { value: string; label: string; singleton: boolean; requires_url: boolean }[] = [
   { value: 'broadcast_board', label: "What's coming up on air (broadcasts)", singleton: true, requires_url: false },
   { value: 'national_day', label: 'National Day of the day', singleton: true, requires_url: false },
   { value: 'calendar', label: 'Calendar (ICS/iCal link)', singleton: false, requires_url: true },
   { value: 'website', label: 'Website preview', singleton: false, requires_url: true },
+  { value: 'designed_slide', label: 'Designed slide (custom HTML)', singleton: false, requires_url: false },
 ]
 
 const EMPTY: Omit<Template, 'id'> = {
-  name: '', description: '', category: 'Live', kind: 'broadcast_board', thumbnail_url: null,
+  name: '', description: '', category: 'Live', kind: 'broadcast_board', config: {}, thumbnail_url: null,
   auto_rebrand: true, singleton: true, requires_url: false, all_sites: true, active: true, sort_order: 100, site_ids: [],
 }
 
@@ -126,6 +127,14 @@ export default function SignageTemplatesPage() {
             <p style={s.lbl}>Description</p>
             <textarea value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} style={{ ...s.input, height: 'auto', padding: '8px 10px' }} />
           </div>
+
+          {form.kind === 'designed_slide' && (
+            <div style={{ marginTop: 10 }}>
+              <p style={s.lbl}>Slide HTML</p>
+              <textarea value={(form.config.html as string) || ''} onChange={e => setForm(f => ({ ...f, config: { ...f.config, html: e.target.value } }))} rows={8} style={{ ...s.input, height: 'auto', padding: '8px 10px', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+              <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.45 }}>Full-screen HTML (usually saved from Create with AI). Placeholders auto-fill per location: <code>{'{{primary}}'}</code> <code>{'{{accent}}'}</code> <code>{'{{logo}}'}</code> <code>{'{{school_name}}'}</code>.</p>
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 18, marginTop: 12, flexWrap: 'wrap' }}>
             <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, color: s.text }}>

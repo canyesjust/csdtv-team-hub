@@ -3,7 +3,9 @@ import type { SignageWeather } from './weather'
 
 export type ScreenFeedMedia = {
   id: string
-  type: 'image' | 'video' | 'html'
+  // 'website' = live external page shown in a direct iframe at the zone's native
+  // size (for TV-mode dashboards); 'html' = a self-contained slide document.
+  type: 'image' | 'video' | 'html' | 'website'
   title: string | null
   url: string
   html: string | null

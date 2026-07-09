@@ -372,6 +372,66 @@ export function AbleSignSyncAllButton({
   )
 }
 
+export function AbleSignPushAllHtmlButton({
+  onDone,
+}: {
+  onDone?: () => void
+}) {
+  const { theme } = useTheme()
+  const s = useSignageAdminStyles(theme)
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<{ pushed: number; skipped: number; failed: number; total: number } | null>(null)
+
+  // Re-bake every linked screen and push the offline HTML web app. mode=due
+  // renders all screens; the content-hash skip means only screens whose HTML
+  // actually changed get a new push. force=1 bypasses the overnight quiet window.
+  // This is the OFFLINE path (opposite of "Sync all", which points screens at the
+  // live URL/React page).
+  const pushAll = async () => {
+    if (!window.confirm('Regenerate and push the offline HTML to every linked screen? Each screen briefly reloads as it downloads the new document.')) return
+    setRunning(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/signage/push-all?mode=due&force=1', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast(data.error || 'Push failed', 'error')
+        return
+      }
+      const summary = {
+        pushed: data.pushed ?? 0,
+        skipped: data.skipped ?? 0,
+        failed: data.failed ?? 0,
+        total: data.total ?? 0,
+      }
+      setResult(summary)
+      if (summary.failed > 0) {
+        toast(`HTML push finished with ${summary.failed} error(s)`, 'error')
+      } else {
+        toast(`HTML pushed — ${summary.pushed} updated, ${summary.skipped} unchanged`, 'success')
+      }
+      onDone?.()
+    } catch {
+      toast('Push failed', 'error')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <button type="button" onClick={() => void pushAll()} style={s.btnPrimary} disabled={running}>
+        {running ? 'Pushing HTML…' : 'Regenerate & push HTML to all'}
+      </button>
+      {result ? (
+        <div style={{ fontSize: 12, color: s.muted }}>
+          {result.pushed} updated · {result.skipped} unchanged{result.failed ? ` · ${result.failed} failed` : ''}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function AbleSignTestConnection({
   compact,
   siteId,

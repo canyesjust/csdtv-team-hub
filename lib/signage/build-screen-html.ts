@@ -323,6 +323,9 @@ function slideInner(item: Feed['media'][number]): string {
     // not the whole screen. srcdoc entity-decodes back into the iframe document.
     return `<iframe class="cic-html-slide" srcdoc="${esc(item.html)}" sandbox="allow-scripts" scrolling="no"></iframe>`
   }
+  if (item.type === 'website' && item.url) {
+    return `<iframe class="cic-html-slide" src="${esc(item.url)}" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" scrolling="no"></iframe>`
+  }
   return ''
 }
 
@@ -601,7 +604,7 @@ function runtimeScript(feed: Feed): string {
   // Only the data the runtime needs — keep the baked payload small.
   const data = {
     media: feed.media
-      .filter(m => (m.type === 'image' && m.url) || (m.type === 'html' && m.html))
+      .filter(m => (m.type === 'image' && m.url) || (m.type === 'html' && m.html) || (m.type === 'website' && m.url))
       .map(m => ({ type: m.type, url: m.url, html: m.html, display_seconds: m.display_seconds })),
     layout: feed.screen.layout,
     headings: (() => {
@@ -701,9 +704,14 @@ function runtimeScript(feed: Feed): string {
       }
       var frame = document.createElement('iframe');
       frame.className = 'cic-html-slide';
-      frame.setAttribute('sandbox', 'allow-scripts');
       frame.setAttribute('scrolling', 'no');
-      frame.srcdoc = item.html || '';
+      if(item.type === 'website' && item.url){
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        frame.src = item.url;
+      } else {
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.srcdoc = item.html || '';
+      }
       return frame;
     }
     function setDots(){

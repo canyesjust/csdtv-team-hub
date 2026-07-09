@@ -399,6 +399,11 @@ function MediaSlide({
         // and gets cropped inside a zoned layout's media cell.
         <iframe className="cic-html-slide" title={item.title || ''} srcDoc={item.html} sandbox="allow-scripts" scrolling="no" onLoad={onReady} />
       )}
+      {item.type === 'website' && item.url && (
+        // Live external page (e.g. a TV-mode dashboard). Direct iframe at the
+        // zone's native size, with same-origin so the embedded app can run.
+        <iframe className="cic-html-slide" title={item.title || ''} src={item.url} sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation" scrolling="no" onLoad={onReady} />
+      )}
     </div>
   )
 }
