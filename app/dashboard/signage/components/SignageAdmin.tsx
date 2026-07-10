@@ -356,6 +356,7 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     label: 'Screens',
     items: [
       { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
+      { href: '/dashboard/signage/layout-builder', label: 'Layout builder', managerOnly: true },
       { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
       { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
     ],
@@ -374,6 +375,7 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     label: 'Admin · all locations',
     admin: true,
     items: [
+      { href: '/dashboard/signage/templates', label: 'Templates', managerOnly: true },
       { href: '/dashboard/signage/sites', label: 'Locations', managerOnly: true },
       { href: '/dashboard/signage/access', label: 'Access', managerOnly: true },
       { href: '/dashboard/signage/settings', label: 'Global settings', managerOnly: true },

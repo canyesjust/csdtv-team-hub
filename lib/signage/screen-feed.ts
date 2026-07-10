@@ -1,14 +1,23 @@
 import type { SignageLayout, SignageOrientation, SignageTheme } from './constants'
 import type { SignageWeather } from './weather'
+import type { ZoneConfig } from './zones'
 
 export type ScreenFeedMedia = {
   id: string
-  type: 'image' | 'video' | 'html'
+  // 'website' = live external page shown in a direct iframe at the zone's native
+  // size (for TV-mode dashboards); 'html' = a self-contained slide document.
+  type: 'image' | 'video' | 'html' | 'website'
   title: string | null
   url: string
   html: string | null
   full_screen: boolean
   display_seconds: number
+  // Website slides only. When set, the live page is rendered at this logical CSS
+  // width and scaled to fit the zone — so a tall site (whose full-width layout
+  // would otherwise be clipped below the fold) shows much more of the page. When
+  // null/undefined the page renders at the zone's native size (best for pages
+  // already designed for a TV, e.g. kiosk/TV-mode dashboards).
+  website_width?: number | null
 }
 
 export type ScreenFeedAnnouncement = {
@@ -54,6 +63,9 @@ export type ScreenFeed = {
     brand_title: string | null
     brand_subtitle: string | null
     logo_url: string | null
+    /** Layout-builder slot assignments (zoned2). Resolved to a full config in
+     *  buildScreenFeed; renderers read it to fill the swappable zones. */
+    zone_config?: ZoneConfig | null
   }
   template: ScreenTemplate
   media: ScreenFeedMedia[]

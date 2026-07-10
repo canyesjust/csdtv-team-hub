@@ -20,7 +20,6 @@ type SiteRow = {
   slug: string
   school_code: string | null
   use_brand_colors: boolean
-  ablesign_workspace_id: string | null
   center_name: string
   weather_lat: number
   weather_lon: number
@@ -35,7 +34,7 @@ type SiteRow = {
 }
 
 const EMPTY: Omit<SiteRow, 'id'> = {
-  name: '', slug: '', school_code: null, use_brand_colors: false, ablesign_workspace_id: '',
+  name: '', slug: '', school_code: null, use_brand_colors: false,
   center_name: 'Canyons School District', weather_lat: 40.5649, weather_lon: -111.8389, ticker_extra: '',
   default_theme: 'primary', bg_color: null, panel_color: null, accent_color: null, text_color: null,
   sort_order: 0, active: true,
@@ -63,6 +62,9 @@ export default function SignageSitesPage() {
   type AsStatus = { state: 'loading' | 'ok' | 'error'; screens?: number; error?: string }
   const [asStatus, setAsStatus] = useState<Record<string, AsStatus>>({})
   const asCheckedRef = useRef(false)
+  // AbleSign-linked screen count per site, from the hub (NOT AbleSign's
+  // account-wide total, which is the same for every site sharing one account).
+  const [screenCounts, setScreenCounts] = useState<Record<string, number>>({})
 
   const checkAbleSign = useCallback(async (list: SiteRow[]) => {
     if (list.length === 0) return
@@ -84,14 +86,20 @@ export default function SignageSitesPage() {
   }, [])
 
   const load = useCallback(async () => {
-    const [siteRes, schoolRes, teamRes] = await Promise.all([
-      supabase.from('signage_sites').select('*').order('sort_order'),
+    const [siteRes, schoolRes, teamRes, screenRes] = await Promise.all([
+      supabase.from('signage_sites').select('id, name, slug, school_code, use_brand_colors, center_name, weather_lat, weather_lon, ticker_extra, default_theme, bg_color, panel_color, accent_color, text_color, sort_order, active').order('sort_order'),
       supabase.from('schools').select('code, name, primary_color, secondary_color, accent_color, text_color').eq('active', true).order('name'),
       supabase.from('team').select('id, name, role, signage_approver').eq('active', true).order('name'),
+      supabase.from('signage_screens').select('site_id, ablesign_screen_id'),
     ])
     setSites((siteRes.data as SiteRow[]) || [])
     setSchools((schoolRes.data as School[]) || [])
     setTeam((teamRes.data as TeamMember[]) || [])
+    const counts: Record<string, number> = {}
+    for (const row of (screenRes.data as Array<{ site_id: string | null; ablesign_screen_id: number | null }> | null) ?? []) {
+      if (row.site_id && row.ablesign_screen_id != null) counts[row.site_id] = (counts[row.site_id] ?? 0) + 1
+    }
+    setScreenCounts(counts)
     setLoading(false)
   }, [supabase])
 
@@ -260,10 +268,12 @@ export default function SignageSitesPage() {
             </div>
           </div>
 
-          <div>
-            <p style={s.lbl}>AbleSign workspace ID</p>
-            <input value={form.ablesign_workspace_id || ''} onChange={e => setForm(f => ({ ...f, ablesign_workspace_id: e.target.value }))} style={s.input} />
-          </div>
+          {/* TODO: AbleSign workspace ID / API key are secret columns that anon &
+              authenticated roles can no longer SELECT. They cannot be read back into
+              this browser form, so the editable input was removed to avoid clobbering
+              stored creds with a blank value. Manage them via the provisioning flow
+              (server-side, service-role) or a dedicated secret-only endpoint. The
+              "AbleSign" column below shows live connect status via the server test API. */}
 
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <div>
@@ -355,12 +365,14 @@ export default function SignageSitesPage() {
                 <td style={s.td}>
                   {(() => {
                     const st = asStatus[site.id]
+                    const count = screenCounts[site.id] ?? 0
                     const color = !st || st.state === 'loading' ? '#9aa0ab' : st.state === 'ok' ? '#22c55e' : '#ef4444'
-                    const title = !st ? 'Not checked' : st.state === 'loading' ? 'Checking…' : st.state === 'ok' ? `Connected${st.screens != null ? ` — ${st.screens} screen(s)` : ''}` : (st.error || 'Not connected')
+                    const conn = !st ? 'not checked' : st.state === 'loading' ? 'checking…' : st.state === 'ok' ? 'AbleSign connected' : (st.error || 'not connected')
+                    const title = `${count} screen(s) linked at this location · ${conn}`
                     return (
                       <span title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted }}>
                         <span style={{ width: 9, height: 9, borderRadius: '50%', background: color, flex: 'none' }} />
-                        {st?.state === 'ok' && st.screens != null ? st.screens : st?.state === 'error' ? 'error' : ''}
+                        {count}
                       </span>
                     )
                   })()}

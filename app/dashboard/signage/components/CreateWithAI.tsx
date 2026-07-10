@@ -53,9 +53,13 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
   const [canvas, setCanvas] = useState({ w: 1920, h: 1080 })
   const [genMeta, setGenMeta] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [savingLib, setSavingLib] = useState(false)
   const [refineText, setRefineText] = useState('')
   const [refining, setRefining] = useState(false)
   const [showHtmlEdit, setShowHtmlEdit] = useState(false)
+  const [articleText, setArticleText] = useState('')
+  const [summarizing, setSummarizing] = useState(false)
+  const [showArticle, setShowArticle] = useState(false)
   const [logoPosition, setLogoPosition] = useState('none')
   const [logoVariant, setLogoVariant] = useState<'white' | 'color'>('white')
   const [logoDataUri, setLogoDataUri] = useState<string | null>(null)
@@ -123,6 +127,43 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
     }
   }
 
+  const summarizeArticle = async () => {
+    if (articleText.trim().length < 40) { setError('Paste a bit more of the article first.'); return }
+    setSummarizing(true); setError(null)
+    try {
+      const res = await fetch('/api/signage/article-to-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ article: articleText.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(typeof data.error === 'string' ? data.error : 'Could not summarize.'); return }
+      setPrompt(data.prompt)
+      setShowArticle(false)
+    } catch {
+      setError('Could not reach the summarizer.')
+    } finally {
+      setSummarizing(false)
+    }
+  }
+
+  const saveToLibrary = async () => {
+    if (!finalHtml) return
+    const name = (window.prompt('Template name (shown in the district library):', headline || prompt.slice(0, 40) || 'AI slide') || '').trim()
+    if (!name) return
+    setSavingLib(true)
+    try {
+      const res = await fetch('/api/signage/templates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, kind: 'designed_slide', category: 'Design', description: prompt.slice(0, 140) || null, config: { html: finalHtml }, auto_rebrand: true, all_sites: false, active: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Save failed.', 'error'); return }
+      toast('Saved to Templates — assign it to schools from the Templates page.', 'success')
+    } finally {
+      setSavingLib(false)
+    }
+  }
+
   const save = async () => {
     if (!html) return
     if (qa && !qa.ok) { toast('Fix the flagged QA issues before sending.', 'error'); return }
@@ -174,6 +215,16 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.1fr)', gap: 18, padding: 18 }} className="ai-build-grid">
           {/* Inputs */}
           <div>
+            <details open={showArticle} onToggle={e => setShowArticle((e.target as HTMLDetailsElement).open)} style={{ marginBottom: 12, border: `1px solid ${s.border}`, borderRadius: 10, padding: '9px 11px' }}>
+              <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: s.info, listStyle: 'revert' }}>Have an article? Draft a prompt from it</summary>
+              <div style={{ marginTop: 8 }}>
+                <textarea value={articleText} onChange={e => setArticleText(e.target.value)} placeholder="Paste a news article or announcement here — it'll be distilled into a short, on-screen prompt you can tweak." style={{ ...s.textarea, minHeight: 96 }} />
+                <button type="button" onClick={() => void summarizeArticle()} disabled={summarizing} style={{ ...s.btn, marginTop: 6, fontWeight: 500, opacity: summarizing ? 0.6 : 1 }}>
+                  {summarizing ? 'Reading the article…' : '✨ Turn into a prompt'}
+                </button>
+              </div>
+            </details>
+
             <p style={labelStyle}>Prompt</p>
             <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="e.g. Celebrate America's 250th — patriotic, fireworks, July 4" style={{ ...s.textarea, minHeight: 84, marginBottom: 12 }} />
 
@@ -313,6 +364,9 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
               <button type="button" onClick={onClose} style={s.btn}>Cancel</button>
+              <button type="button" onClick={() => void saveToLibrary()} disabled={!html || savingLib || (qa ? !qa.ok : false)} title="Save as a reusable template in the district library" style={{ ...s.btn }}>
+                {savingLib ? 'Saving…' : 'Save to library'}
+              </button>
               <button type="button" onClick={() => void save()} disabled={!html || saving || (qa ? !qa.ok : false)} title={qa && !qa.ok ? 'Fix the QA issues first' : undefined} style={{ ...s.btnPrimary, opacity: !html || saving || (qa && !qa.ok) ? 0.5 : 1 }}>
                 {saving ? 'Saving…' : 'Send to approval queue'}
               </button>

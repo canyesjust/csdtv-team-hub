@@ -4,63 +4,55 @@ import Hls from 'hls.js'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { WAYFINDING_ARROWS, formatSignageClock, type SignageLayout, type SignageOrientation, type SignageTheme, type WayfindingDirection } from '@/lib/signage/constants'
 import { announcementIconEmoji } from '@/lib/signage/announcement-icons'
+import {
+  SCREEN_CROSSFADE_MS,
+  SCREEN_HEADING_ROTATE_MS,
+  SCREEN_NEWS_QR,
+  denverHour,
+  screenWeatherClass,
+  screenColorVarPairs,
+} from '@/lib/signage/screen-view'
 import { isSignageHlsUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import SignageBackground from '@/app/signage/_components/SignageBackground'
+import type {
+  ScreenFeed,
+  ScreenFeedMedia,
+  ScreenFeedAnnouncement,
+  ScreenFeedWayfinding,
+  ScreenFeedVisitor,
+} from '@/lib/signage/screen-feed'
+import { resolveZoneConfig, type RailWidget, type BandWidget } from '@/lib/signage/zones'
 import './signage-screen.css'
 
-type FeedMedia = {
-  id: string
-  type: 'image' | 'video' | 'html'
-  title: string | null
-  url: string
-  html: string | null
-  full_screen: boolean
-  display_seconds: number
-}
-type FeedAnnouncement = { id: string; title: string; subtitle: string | null; in_ticker: boolean; icon: string; scope_label: string | null; all_screens: boolean }
-type FeedWayfinding = { id: string; destination: string; direction: string }
-type FeedVisitor = { id: string; name: string; note: string | null }
+// Canonical feed types live in lib/signage/screen-feed.ts and are also consumed
+// by the AbleSign HTML builder, so the two renderers can't drift on shape.
+// Local `Feed*` aliases are kept so the component signatures below read unchanged.
+type FeedMedia = ScreenFeedMedia
+type FeedAnnouncement = ScreenFeedAnnouncement
+type FeedWayfinding = ScreenFeedWayfinding
+type FeedVisitor = ScreenFeedVisitor
 
-export type ScreenFeed = {
-  screen: {
-    name: string
-    code: string
-    orientation: SignageOrientation
-    layout: SignageLayout
-    heading: string | null
-    area: { name: string; slug: string; building: string | null; floor: number | null } | null
-    center_name: string
-    theme: SignageTheme
-    colors: { bg: string; panel: string | null; accent: string | null } | null
-    brand_title: string | null
-    brand_subtitle: string | null
-    logo_url: string | null
-  }
-  template?: {
-    show_weather: boolean
-    show_clock: boolean
-    show_ticker: boolean
-    show_visitor_welcome: boolean
-  }
-  media: FeedMedia[]
-  announcements: FeedAnnouncement[]
-  ticker: string[]
-  wayfinding: FeedWayfinding[]
-  visitors: FeedVisitor[]
-  live: { live: true; hls_url: string; label: string | null } | { live: false }
-  board_takeover?: { mode: 'preroll' | 'live'; url: string; audio: boolean; label: string | null }
-  weather: { tempF: number | null; condition: string; icon: string; high: number | null; low: number | null; windMph: number | null }
-  spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]
-  csdtv_live?: { title: string; channel: number | null } | null
-  news?: { title: string; image: string | null }[]
-  closures?: { date: string; label: string }[]
-  board_next?: { date: string; time: string; title: string } | null
-  offline?: boolean
-}
+export type { ScreenFeed }
 
 const REFRESH_MS = 5_000
-const CROSSFADE_MS = 700
-const HEADING_ROTATE_MS = 3_500
+const CROSSFADE_MS = SCREEN_CROSSFADE_MS
+const HEADING_ROTATE_MS = SCREEN_HEADING_ROTATE_MS
+
+// Feed watchdog thresholds (counted in consecutive failed 5s polls).
+const OFFLINE_AFTER_FAILURES = 12 // ~60s of failures → show the stale/offline UI
+const RELOAD_AFTER_FAILURES = 60 // ~5min of failures → attempt a full-page recovery
+// Hard cap for a video slide that never fires `onEnded` (bad URL, blocked
+// autoplay, corrupt file) and has no configured display_seconds.
+const VIDEO_HARD_CAP_SECONDS = 60
+
+function denverDateStr(): string {
+  try {
+    // en-CA formats as YYYY-MM-DD, ideal for a stable per-day key.
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver' }).format(new Date())
+  } catch {
+    return new Date().toISOString().slice(0, 10)
+  }
+}
 
 function ConfettiIcon() {
   return <span className="cic-confetti-icon" aria-hidden>✦</span>
@@ -317,12 +309,14 @@ function MediaSlide({
   active,
   imageSeconds,
   onAdvance,
+  onReady,
 }: {
   item: FeedMedia | undefined
   layerClass: string
   active: boolean
   imageSeconds: number
   onAdvance: () => void
+  onReady?: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const onAdvanceRef = useRef(onAdvance)
@@ -366,13 +360,26 @@ function MediaSlide({
     return () => { cancelled = true }
   }, [active, item])
 
+  // Watchdog: video slides normally advance via `onEnded`, but a video that
+  // never ends (bad URL, blocked autoplay, corrupt file) would otherwise freeze
+  // the carousel forever. Force-advance after a sensible cap. A small buffer is
+  // added so a well-behaved video that fires `onEnded` near its display time
+  // still wins the race and isn't clipped early.
+  useEffect(() => {
+    if (!active || !item || item.type !== 'video') return
+    const capSeconds =
+      item.display_seconds && item.display_seconds > 0 ? item.display_seconds : VIDEO_HARD_CAP_SECONDS
+    const t = setTimeout(() => onAdvanceRef.current(), capSeconds * 1000 + 5000)
+    return () => clearTimeout(t)
+  }, [active, item?.id, item?.type, item?.display_seconds])
+
   if (!item) return null
 
   return (
     <div className={layerClass}>
       {item.type === 'image' && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.url} alt={item.title || ''} />
+        <img src={item.url} alt={item.title || ''} onLoad={onReady} onError={onReady} />
       )}
       {item.type === 'video' && (
         <video
@@ -382,15 +389,94 @@ function MediaSlide({
           playsInline
           autoPlay
           preload="auto"
+          onLoadedData={onReady}
           onEnded={() => onAdvanceRef.current()}
+          onError={() => { onReady?.(); onAdvanceRef.current() }}
         />
       )}
       {item.type === 'html' && item.html && (
         // Render in an iframe so the slide's vh/vw/vmin units measure THIS media
         // zone (16:9), not the whole screen — otherwise it renders full-screen
         // and gets cropped inside a zoned layout's media cell.
-        <iframe className="cic-html-slide" title={item.title || ''} srcDoc={item.html} sandbox="allow-scripts" scrolling="no" />
+        <iframe className="cic-html-slide" title={item.title || ''} srcDoc={item.html} sandbox="allow-scripts" scrolling="no" onLoad={onReady} />
       )}
+      {item.type === 'website' && item.url && (
+        // Live external page. Native size for TV-designed pages; scaled-to-fit
+        // (rendered wider, zoomed out) when a page-zoom width is set so a tall
+        // site shows more of the page instead of being clipped below the fold.
+        <WebsiteSlide url={item.url} title={item.title || ''} width={item.website_width ?? null} onReady={onReady} />
+      )}
+    </div>
+  )
+}
+
+const WEBSITE_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation'
+
+// Renders a live external page inside a media zone. With no `width` the page
+// fills the zone at native size (best for pages built for a TV). With a `width`
+// (logical CSS px) the page is rendered that wide and scaled down to fit the
+// zone — zooming out so a tall site shows far more of the page than a native
+// fill would (which only shows the top slice above the fold).
+function WebsiteSlide({ url, title, width, onReady }: {
+  url: string
+  title: string
+  width: number | null
+  onReady?: () => void
+}) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null)
+
+  useEffect(() => {
+    if (!width) return
+    const el = boxRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w > 0 && h > 0) setBox({ w, h })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [width])
+
+  if (!width) {
+    return (
+      <iframe
+        className="cic-html-slide"
+        title={title}
+        src={url}
+        sandbox={WEBSITE_SANDBOX}
+        scrolling="no"
+        onLoad={onReady}
+      />
+    )
+  }
+
+  const scale = box ? box.w / width : 1
+  // Logical height so the scaled iframe exactly fills the zone's height.
+  const logicalH = box ? Math.ceil(box.h / scale) : 0
+  return (
+    <div ref={boxRef} className="cic-html-slide" style={{ overflow: 'hidden', background: '#fff' }}>
+      <iframe
+        title={title}
+        src={url}
+        sandbox={WEBSITE_SANDBOX}
+        scrolling="no"
+        onLoad={onReady}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          border: 0,
+          width: width,
+          height: logicalH || '100%',
+          transformOrigin: 'top left',
+          transform: `scale(${scale})`,
+          background: '#fff',
+        }}
+      />
     </div>
   )
 }
@@ -416,6 +502,7 @@ function MediaCarousel({
 }) {
   const displayedIndexRef = useRef(index)
   const [crossfade, setCrossfade] = useState<{ from: number; to: number; active: boolean } | null>(null)
+  const crossfadeReadyRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (index === displayedIndexRef.current) return
@@ -426,18 +513,30 @@ function MediaCarousel({
     const from = displayedIndexRef.current
     const to = index
     setCrossfade({ from, to, active: false })
-    const raf = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+
+    let activated = false
+    let endTimer: ReturnType<typeof setTimeout> | null = null
+    const activate = () => {
+      if (activated) return
+      activated = true
+      crossfadeReadyRef.current = null
+      requestAnimationFrame(() => requestAnimationFrame(() => {
         setCrossfade(cf => (cf && cf.to === to ? { ...cf, active: true } : cf))
-      })
-    })
-    const t = setTimeout(() => {
-      displayedIndexRef.current = to
-      setCrossfade(null)
-    }, CROSSFADE_MS)
+      }))
+      endTimer = setTimeout(() => {
+        displayedIndexRef.current = to
+        setCrossfade(null)
+      }, CROSSFADE_MS)
+    }
+    // Wait for the incoming layer to paint (iframe/image load) before fading it
+    // in, so an HTML slide never fades in blank. Fallback if load never fires.
+    crossfadeReadyRef.current = activate
+    const readyFallback = setTimeout(activate, 1500)
+
     return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(t)
+      crossfadeReadyRef.current = null
+      clearTimeout(readyFallback)
+      if (endTimer) clearTimeout(endTimer)
     }
   }, [index, media.length])
 
@@ -477,6 +576,7 @@ function MediaCarousel({
             active
             imageSeconds={imageSeconds}
             onAdvance={onAdvance}
+            onReady={() => crossfadeReadyRef.current?.()}
           />
         </>
       ) : (
@@ -527,7 +627,7 @@ function ScanToWatch({ title }: { title: string | null }) {
 }
 
 const Z2_NEWS_MS = 8_000
-const NEWS_QR = 'data:image/png;base64,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'
+const NEWS_QR = SCREEN_NEWS_QR
 
 function Zoned2BrandBox({ logoUrl, clock, dateStr }: { logoUrl: string | null; clock: string; dateStr: string }) {
   return (
@@ -541,17 +641,6 @@ function Zoned2BrandBox({ logoUrl, clock, dateStr }: { logoUrl: string | null; c
       <div className="cic-z2-bb-date">{dateStr}</div>
     </div>
   )
-}
-
-function wxClass(condition: string): string {
-  const t = (condition || '').toLowerCase()
-  if (/thunder|storm|t-storm/.test(t)) return 'storm'
-  if (/snow|sleet|blizzard|flurr|wintry/.test(t)) return 'snow'
-  if (/rain|shower|drizzle/.test(t)) return 'rain'
-  if (/cloud|overcast/.test(t)) return 'cloudy'
-  const h = new Date().getHours()
-  if (h < 6 || h >= 20) return 'night'
-  return 'sunny'
 }
 
 function Zoned2WxIcon({ cls }: { cls: string }) {
@@ -593,7 +682,7 @@ function Zoned2WxScene({ cls }: { cls: string }) {
 }
 
 function Zoned2Weather({ weather }: { weather: { tempF: number | null; condition: string; icon: string; high: number | null; low: number | null; windMph: number | null } }) {
-  const cls = wxClass(weather.condition)
+  const cls = screenWeatherClass(weather.condition)
   return (
     <div className={`cic-rail cic-z2-weather z2wx-${cls}`}>
       <Zoned2WxScene cls={cls} />
@@ -740,6 +829,84 @@ function Zoned2News({ items }: { items: { title: string; image: string | null }[
   )
 }
 
+// --- Layout-builder zone widgets (zoned2 rail cells + news band) --------------
+// Default keys (brand/weather/board/news) render the exact original components, so
+// the default arrangement stays byte-identical.
+
+function RailDirections({ feed }: { feed: ScreenFeed }) {
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">Directory</div>
+      <WayfindingDirectory entries={feed.wayfinding} compact />
+    </div>
+  )
+}
+
+function RailSpotlight({ feed }: { feed: ScreenFeed }) {
+  const items = feed.spotlight ?? []
+  if (!items.length) {
+    return <div className="cic-rail cic-z2-spot"><div className="cic-railhd">CSDtv Spotlight</div><div className="cic-empty-muted">—</div></div>
+  }
+  return (
+    <div className="cic-rail cic-z2-spot">
+      <div className="cic-railhd">CSDtv Spotlight</div>
+      {items.slice(0, 3).map(v => (
+        <div key={v.id} className="cic-z2-ann-row">
+          {v.thumb ? <span className="cic-z2-news-thumb"><img src={v.thumb} alt="" /></span> : null}
+          <div><div className="cic-z2-ann-t">{v.title}</div>{v.duration ? <div className="cic-z2-ann-s">{v.duration}</div> : null}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RailWidgetView({ widget, feed, logoUrl, clock, dateStr }: {
+  widget: RailWidget
+  feed: ScreenFeed
+  logoUrl: string | null
+  clock: string
+  dateStr: string
+}) {
+  switch (widget) {
+    case 'brand': return <Zoned2BrandBox logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+    case 'weather': return <Zoned2Weather weather={feed.weather} />
+    case 'board': return <Zoned2Rotator board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
+    case 'directions': return <RailDirections feed={feed} />
+    case 'announcements': return <AnnCard announcements={feed.announcements} />
+    case 'spotlight': return <RailSpotlight feed={feed} />
+  }
+}
+
+function BandDirections({ feed }: { feed: ScreenFeed }) {
+  return (
+    <footer className="cic-z2-news">
+      <div className="cic-z2-news-badge"><span className="cic-z2-news-w"><span className="dot" />DIRECTORY</span></div>
+      <div className="cic-z2-news-rot"><WayfindingDirectory entries={feed.wayfinding} compact /></div>
+    </footer>
+  )
+}
+
+function BandAnnouncements({ feed }: { feed: ScreenFeed }) {
+  return (
+    <footer className="cic-z2-news">
+      <div className="cic-z2-news-badge"><span className="cic-z2-news-w"><span className="dot" />NOTICES</span></div>
+      <div className="cic-z2-news-rot">
+        {feed.announcements.length
+          ? feed.announcements.slice(0, 4).map(a => <AnnouncementRow key={a.id} ann={a} />)
+          : <div className="cic-empty-muted">No announcements</div>}
+      </div>
+    </footer>
+  )
+}
+
+function BandWidgetView({ widget, feed }: { widget: BandWidget; feed: ScreenFeed }) {
+  switch (widget) {
+    case 'news': return <Zoned2News items={feed.news ?? []} />
+    case 'directions': return <BandDirections feed={feed} />
+    case 'announcements': return <BandAnnouncements feed={feed} />
+  }
+}
+
 function LiveTakeover({
   hlsUrl,
   label,
@@ -797,6 +964,7 @@ function LiveTakeover({
           src={youtubeEmbed}
           title={title}
           allow="autoplay; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
         />
       ) : (
@@ -840,28 +1008,12 @@ type ScreenClientProps = {
   imageSeconds: number
 }
 
-// Per-site brand colors → CSS variables. Light brand backgrounds are auto-
-// darkened so white signage text stays legible.
-function ensureDarkBg(hex: string): string {
-  const m = hex.replace('#', '')
-  const full = m.length === 3 ? m.split('').map(c => c + c).join('') : m
-  if (full.length !== 6) return hex
-  const r = parseInt(full.slice(0, 2), 16)
-  const g = parseInt(full.slice(2, 4), 16)
-  const b = parseInt(full.slice(4, 6), 16)
-  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-  return lum > 110 ? `color-mix(in srgb, ${hex} 52%, #0a0a0a)` : hex
-}
-
+// Per-site brand colors → React CSS variables. Thin wrapper over the shared
+// `screenColorVarPairs` so the live page and the baked HTML emit identical vars.
 function siteColorVars(colors: { bg: string; panel: string | null; accent: string | null } | null): CSSProperties | undefined {
-  if (!colors?.bg) return undefined
-  const bg = ensureDarkBg(colors.bg)
-  const vars: Record<string, string> = {
-    '--navy': bg,
-    '--panel': colors.panel || `color-mix(in srgb, ${bg} 78%, #ffffff)`,
-  }
-  if (colors.accent) vars['--accent'] = colors.accent
-  return vars as CSSProperties
+  const pairs = screenColorVarPairs(colors)
+  if (pairs.length === 0) return undefined
+  return Object.fromEntries(pairs) as CSSProperties
 }
 
 export default function ScreenClient({ code, initialFeed, imageSeconds }: ScreenClientProps) {
@@ -873,6 +1025,31 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const [headingIndex, setHeadingIndex] = useState(0)
   const [offline, setOffline] = useState(Boolean(initialFeed.offline))
 
+  // Feed watchdog state: consecutive poll failures + a guard so a wedged page
+  // reloads at most once (per page life) to attempt recovery without looping.
+  const failuresRef = useRef(0)
+  const didReloadRef = useRef(false)
+
+  // Reload the page at most once per session, throttled across reloads via
+  // sessionStorage so a persistent fault can't trigger a tight crash loop.
+  const safeReload = useCallback(() => {
+    if (didReloadRef.current) return
+    try {
+      const key = 'cic-signage-last-reload'
+      const now = Date.now()
+      const last = Number(sessionStorage.getItem(key) || '0')
+      if (now - last < 10 * 60 * 1000) {
+        didReloadRef.current = true
+        return
+      }
+      sessionStorage.setItem(key, String(now))
+    } catch {
+      /* sessionStorage unavailable — still reload, but only once this session */
+    }
+    didReloadRef.current = true
+    window.location.reload()
+  }, [])
+
   useEffect(() => {
     mediaIndexRef.current = mediaIndex
   }, [mediaIndex])
@@ -881,6 +1058,19 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
     mediaLengthRef.current = feed.media.length
   }, [feed.media.length])
 
+  // A successful fetch means the page can still reach the server, so clear the
+  // failure counter. A failed fetch increments it and, past thresholds, surfaces
+  // the stale UI and eventually forces a recovery reload.
+  const registerReachable = useCallback(() => {
+    failuresRef.current = 0
+  }, [])
+
+  const registerUnreachable = useCallback(() => {
+    failuresRef.current += 1
+    if (failuresRef.current >= OFFLINE_AFTER_FAILURES) setOffline(true)
+    if (failuresRef.current >= RELOAD_AFTER_FAILURES) safeReload()
+  }, [safeReload])
+
   const loadFeed = useCallback(async () => {
     try {
       // credentials:'omit' — public service-role endpoint; drop the same-origin session
@@ -888,8 +1078,14 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
       const res = await fetch(`/api/signage/screen/${encodeURIComponent(code)}/feed`, {
         credentials: 'omit',
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        registerUnreachable()
+        return
+      }
       const data = (await res.json()) as ScreenFeed
+      // The fetch itself succeeded, so the page is reachable even if the server
+      // is deliberately serving offline mode — don't count this toward reloads.
+      registerReachable()
       if (data.offline) {
         setOffline(true)
         return
@@ -908,19 +1104,29 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
         return data
       })
     } catch {
-      /* keep last feed when offline */
+      /* keep last feed when offline, but surface staleness via the watchdog */
+      registerUnreachable()
     }
-  }, [code])
+  }, [code, registerReachable, registerUnreachable])
 
   useEffect(() => { setFeed(initialFeed) }, [initialFeed])
 
+  // Once-daily self-heal: reload during the quiet ~4am local hour to pick up
+  // deploys and clear any wedged tab. A per-day localStorage key makes it fire
+  // at most once per calendar day, so it can't loop across the reload.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/signage-sw.js').catch(() => {})
-      }
-    }, 3000)
-    return () => clearTimeout(timer)
+    const KEY = 'cic-signage-daily-reload'
+    const check = () => {
+      if (denverHour() !== 4) return
+      const today = denverDateStr()
+      let last = ''
+      try { last = localStorage.getItem(KEY) || '' } catch { /* storage unavailable */ }
+      if (last === today) return
+      try { localStorage.setItem(KEY, today) } catch { /* storage unavailable */ }
+      window.location.reload()
+    }
+    const t = window.setInterval(check, 60_000)
+    return () => window.clearInterval(t)
   }, [])
 
   useEffect(() => {
@@ -1018,6 +1224,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
             src={feed.board_takeover.url}
             title={feed.board_takeover.label || 'Board meeting'}
             allow="autoplay; encrypted-media; picture-in-picture"
+            referrerPolicy="strict-origin-when-cross-origin"
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
           />
         </div>
@@ -1088,16 +1295,20 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
               />
             </div>
             <div className="cic-railcol">
-              <Zoned2BrandBox
-                logoUrl={logoUrl}
-                clock={clock}
-                dateStr={now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              />
-              <Zoned2Weather weather={feed.weather} />
-              <Zoned2Rotator board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
+              {(() => {
+                const zc = resolveZoneConfig(feed.screen.zone_config)
+                const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+                return (
+                  <>
+                    <RailWidgetView widget={zc.railTop} feed={feed} logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+                    <RailWidgetView widget={zc.railMid} feed={feed} logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+                    <RailWidgetView widget={zc.railBottom} feed={feed} logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
+                  </>
+                )
+              })()}
             </div>
           </div>
-          <Zoned2News items={feed.news ?? []} />
+          <BandWidgetView widget={resolveZoneConfig(feed.screen.zone_config).band} feed={feed} />
         </div>
       )}
 

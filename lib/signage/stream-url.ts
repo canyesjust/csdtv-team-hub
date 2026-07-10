@@ -35,7 +35,10 @@ export function youtubeEmbedUrlFromStreamUrl(
     params.set('cc_load_policy', '1')
     params.set('cc_lang_pref', 'en')
   }
-  return `https://www.youtube.com/embed/${id}?${params.toString()}`
+  // Use the privacy-enhanced (no-cookie) host. Alongside a non-stripped
+  // Referer, this is YouTube's documented fix for the "Error 153 — video
+  // player configuration" failure on embedded players.
+  return `https://www.youtube-nocookie.com/embed/${id}?${params.toString()}`
 }
 
 export function isSignageStreamUrl(url: string): boolean {

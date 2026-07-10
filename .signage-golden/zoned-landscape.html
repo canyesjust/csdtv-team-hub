@@ -1,0 +1,2321 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>West Front Entrance — westfront</title><style>/* CIC signage screen styles — port of signage-screens-reference.html (TV sections only) */
+
+.cic-screen {
+  /* CIC brand palette — six colors only */
+  --navy: #162844;
+  --panel: #1e3649;
+  --gray: #585555;
+  --accent: #96b7c8;
+  --white: #fefefe;
+  --black: #000000;
+
+  /* Semantic aliases (palette-only) */
+  --muted: var(--gray);
+  --bezel: var(--black);
+
+  /* Derived tints — mixes of palette colors only */
+  --accent-border: color-mix(in srgb, var(--accent) 25%, transparent);
+  --accent-border-light: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-border-faint: color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-fill-strong: color-mix(in srgb, var(--accent) 50%, transparent);
+  --accent-fill-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 15%, transparent);
+  --navy-overlay-90: color-mix(in srgb, var(--navy) 90%, transparent);
+  --navy-overlay-92: color-mix(in srgb, var(--navy) 92%, transparent);
+  --black-overlay-85: color-mix(in srgb, var(--black) 85%, transparent);
+  --white-overlay-30: color-mix(in srgb, var(--white) 30%, transparent);
+  --black-shadow: color-mix(in srgb, var(--black) 35%, transparent);
+
+  position: fixed;
+  inset: 0;
+  background: var(--navy);
+  color: var(--white);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  cursor: none;
+}
+
+.cic-screen-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.cic-screen.portrait {
+  /* 9:16 logical frame; full viewport on portrait displays */
+}
+
+.cic-tvhead {
+  background: var(--navy);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--accent-border);
+  flex-shrink: 0;
+}
+
+.cic-tvhead.portrait {
+  padding: 8px 10px;
+}
+
+.cic-head-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.cic-head-left.portrait {
+  gap: 8px;
+}
+
+.cic-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+}
+
+.cic-logo.portrait {
+  width: 28px;
+  height: 28px;
+}
+
+.cic-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cic-brand {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.cic-brand.portrait {
+  font-size: 12px;
+}
+
+.cic-brandsub {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.cic-brandsub.portrait {
+  font-size: 10px;
+}
+
+.cic-head-right {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  flex-shrink: 0;
+}
+
+.cic-wx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.cic-wx.portrait {
+  font-size: 12px;
+}
+
+.cic-clk {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.cic-welcome {
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--accent-border-light);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.cic-welcome.portrait {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.cic-welcome b {
+  font-weight: 500;
+}
+
+.cic-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.cic-body.portrait-stack {
+  flex-direction: column;
+}
+
+.cic-media16 {
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--panel);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+}
+
+.cic-media16.portrait-top {
+  width: 100%;
+  height: auto;
+  flex: none;
+}
+
+.cic-media16.fill {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.cic-media-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  transition: opacity var(--crossfade-ms, 700ms) ease-in-out;
+}
+
+.cic-media-layer--out {
+  z-index: 1;
+}
+
+.cic-media-layer--in {
+  z-index: 2;
+  opacity: 0;
+}
+
+.cic-media-layer--out.is-fading {
+  opacity: 0;
+}
+
+.cic-media-layer--in.is-fading {
+  opacity: 1;
+}
+
+.cic-media16 img,
+.cic-media16 video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cic-html-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: var(--panel);
+}
+
+.cic-html-slide a {
+  color: var(--accent);
+}
+
+.cic-html-slide h1,
+.cic-html-slide h2,
+.cic-html-slide h3 {
+  color: var(--white);
+  margin: 0 0 0.5em;
+  font-weight: 500;
+}
+
+.cic-media-overlay {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.cic-kicker {
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.cic-kicker.portrait {
+  font-size: 9px;
+}
+
+.cic-mtitle {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 4px 0;
+}
+
+.cic-mtitle.portrait {
+  font-size: 15px;
+  margin-top: 3px;
+}
+
+.cic-msub {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.cic-dots {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+}
+
+.cic-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--white-overlay-30);
+}
+
+.cic-dot.on {
+  background: var(--accent);
+}
+
+.cic-rail {
+  flex: 1;
+  min-width: 0;
+  background: var(--navy);
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+
+.cic-railhd {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 9px;
+}
+
+.cic-railhd.tight {
+  margin-bottom: 6px;
+}
+
+.cic-rail-divider {
+  border-top: 1px solid var(--accent-border);
+  margin: 12px 0 10px;
+}
+
+.cic-dir.compact {
+  font-size: 11px;
+  line-height: 1.85;
+}
+
+.cic-dir-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cic-dir-label-compact {
+  color: var(--white);
+  font-weight: 500;
+}
+
+.cic-ann {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+
+.cic-ann-icon {
+  font-size: 13px;
+  color: var(--accent);
+  margin-top: 1px;
+  flex: none;
+  line-height: 1;
+}
+
+.cic-anntop {
+  font-size: 11.5px;
+  line-height: 1.2;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cic-annsub {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.cic-spill {
+  font-size: 8.5px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--accent-fill-strong);
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+.cic-spill.all {
+  background: var(--accent-fill-soft);
+  color: var(--accent);
+}
+
+.cic-ticker {
+  background: var(--accent);
+  height: 26px;
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cic-ticker.portrait {
+  height: 22px;
+}
+
+.cic-tickin {
+  display: inline-block;
+  padding-left: 100%;
+  animation: cic-tk 18s linear infinite;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--navy);
+}
+
+.cic-ticker.portrait .cic-tickin {
+  font-size: 11px;
+}
+
+@keyframes cic-tk {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+.cic-locchip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: var(--navy-overlay-90);
+  border-left: 4px solid var(--accent);
+  padding: 7px 12px;
+  border-radius: 0 6px 6px 0;
+  font-size: 15px;
+  font-weight: 500;
+  z-index: 2;
+}
+
+.cic-welchip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: var(--navy-overlay-90);
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--accent);
+  z-index: 2;
+}
+
+.cic-fill {
+  flex: 1;
+  position: relative;
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.cic-fill.live-bg {
+  background: var(--bezel);
+}
+
+/* Live takeover — viewer context overlay (all layouts / orientations) */
+.cic-live-shell {
+  --cic-live-title: 1.458vmax;
+  --cic-live-body: 1.042vmax;
+  --cic-live-kicker: 0.729vmax;
+  --cic-live-pad: 0.833vmax;
+}
+
+.cic-live-shell .cic-live-badge {
+  top: 0.729vmax;
+  left: 0.729vmax;
+  font-size: var(--cic-live-body);
+  padding: 0.26vmax 0.677vmax;
+  border-radius: 1.04vmax;
+  z-index: 3;
+}
+
+.cic-live-shell .cic-live-dot {
+  width: 0.365vmax;
+  height: 0.365vmax;
+  margin-right: 0.26vmax;
+}
+
+.cic-live-context {
+  position: absolute;
+  left: 0.729vmax;
+  bottom: 4.5vmax;
+  max-width: min(42vmax, 78%);
+  z-index: 3;
+  background: var(--navy-overlay-92);
+  border-left: 0.21vmax solid var(--accent);
+  border-radius: 0 0.42vmax 0.42vmax 0;
+  padding: var(--cic-live-pad) 1.04vmax;
+  box-shadow: 0 0.21vmax 0.83vmax var(--black-shadow);
+}
+
+.cic-live-context-kicker {
+  font-size: var(--cic-live-kicker);
+  font-weight: 500;
+  letter-spacing: 0.08vmax;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.31vmax;
+}
+
+.cic-live-context-title {
+  font-size: var(--cic-live-title);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--white);
+  margin-bottom: 0.42vmax;
+}
+
+.cic-live-context-sub {
+  font-size: var(--cic-live-body);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.cic-live-shell .cic-capbar {
+  padding: 0.677vmax 0.833vmax;
+  font-size: var(--cic-live-body);
+  z-index: 3;
+}
+
+.cic-fill.offline-bg {
+  background: var(--navy);
+  flex-direction: column;
+}
+
+.cic-dir {
+  font-size: 14px;
+  line-height: 2.1;
+}
+
+.cic-dir.portrait {
+  font-size: 13px;
+  line-height: 1.95;
+}
+
+.cic-dir-arrow {
+  display: inline-block;
+  font-size: 16px;
+  color: var(--accent);
+  vertical-align: -3px;
+  margin-right: 6px;
+  width: 16px;
+  text-align: center;
+}
+
+.cic-live-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: var(--black);
+  color: var(--white);
+  border: 2px solid var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 11px;
+  border-radius: 20px;
+  z-index: 2;
+  text-transform: lowercase;
+}
+
+.cic-live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--white);
+  vertical-align: 1px;
+  margin-right: 5px;
+}
+
+.cic-capbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--black-overlay-85);
+  padding: 8px 14px;
+  font-size: 11.5px;
+  color: var(--accent);
+  z-index: 2;
+}
+
+.cic-wayfind-dir {
+  flex: 1 1 50%;
+  padding: 14px 16px;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--navy) 0%, color-mix(in srgb, var(--panel) 35%, var(--navy)) 100%);
+}
+
+.cic-wayfind-dir-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cic-wayfind-welcome {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--accent);
+}
+
+.cic-wayfind-welcome.portrait {
+  margin-top: 10px;
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+.cic-wayfind-welcome b {
+  color: var(--white);
+  font-weight: 500;
+}
+
+.cic-wayfind-welcome .cic-confetti-icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.cic-dir-arrow-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 12px;
+  background: var(--navy);
+  border: 3px solid var(--accent);
+  color: var(--white);
+  font-weight: 700;
+  line-height: 1;
+  box-shadow:
+    0 0 0 1px var(--accent-ring),
+    0 0.35vmax 1vmax var(--black-shadow);
+}
+
+.cic-dir-arrow-badge.compact {
+  width: 44px;
+  height: 44px;
+  font-size: 26px;
+}
+
+.cic-dir-arrow-badge.hero {
+  width: 88px;
+  height: 88px;
+  font-size: 52px;
+  border-radius: 14px;
+  border-width: 4px;
+}
+
+.cic-dir-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  background: var(--panel);
+  border: 1px solid var(--accent-border);
+  border-left: 5px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 0.25vmax 0.75vmax var(--black-shadow);
+}
+
+.cic-dir.prominent {
+  line-height: 1.2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cic-dir.prominent .cic-dir-label {
+  font-weight: 500;
+  color: var(--white);
+  flex: 1;
+  min-width: 0;
+}
+
+.cic-body-wayfind {
+  min-height: 0;
+}
+
+.cic-wayfind-side {
+  flex: 1 1 50%;
+  height: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr minmax(11rem, 26%);
+  gap: 0;
+  background: var(--navy);
+  border-left: 1px solid var(--accent-border-faint);
+}
+
+.cic-wayfind-media-wrap {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 10px 12px 14px;
+  background: var(--panel);
+}
+
+.cic-wayfind-ann-rail {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 12px 10px;
+  border-left: 1px solid var(--accent-border-faint);
+  background: var(--navy);
+}
+
+.cic-wayfind-ann-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cic-wayfind-ann-title {
+  margin-bottom: 10px;
+}
+
+.cic-media16.wayfind-media {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  flex: none;
+}
+
+.cic-portrait-section {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--accent-border-light);
+}
+
+.cic-portrait-ann {
+  padding: 9px 12px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cic-offline-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.cic-offline-title {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.cic-offline-foot {
+  font-size: 10.5px;
+  color: var(--gray);
+  margin-top: 18px;
+}
+
+.cic-live-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cic-empty-muted {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Landscape TV scaling (1920×1080 baseline) ──
+   Sizes use vmax (longest edge) except ticker height (vh). */
+
+.cic-screen:not(.portrait) {
+  --cic-title: 1.5625vmax;   /* ~30px @ 1920 */
+  --cic-body: 1.25vmax;       /* ~24px @ 1920 — subtitle, clock, weather */
+  --cic-welcome: 1.458vmax;   /* ~28px @ 1920 */
+  --cic-media-title: 3.333vmax; /* ~64px @ 1920 */
+  --cic-ann-title: 1.458vmax; /* ~28px @ 1920 */
+  --cic-ann-sub: 1.042vmax;   /* ~20px @ 1920 */
+  --cic-dir-title: 2.083vmax; /* ~40px @ 1920 — wayfinding destinations */
+  --cic-ticker-h: 5.93vh;     /* ~64px @ 1080 */
+  --cic-ticker-text: 1.458vmax; /* ~28px @ 1920 */
+  --cic-label: 0.833vmax;     /* ~16px @ 1920 — rail section headers */
+  --cic-gap: 0.625vmax;       /* ~12px @ 1920 */
+  --cic-pad: 0.833vmax;       /* ~16px @ 1920 */
+  --cic-pad-lg: 1.25vmax;     /* ~24px @ 1920 */
+}
+
+.cic-screen:not(.portrait) .cic-tvhead {
+  padding: var(--cic-pad) var(--cic-pad-lg);
+  border-bottom-width: 0.052vmax;
+}
+
+.cic-screen:not(.portrait) .cic-head-left {
+  gap: var(--cic-gap);
+}
+
+.cic-screen:not(.portrait) .cic-logo {
+  width: 1.667vmax;
+  height: 1.667vmax;
+  border-radius: 0.365vmax;
+}
+
+.cic-screen:not(.portrait) .cic-brand {
+  font-size: var(--cic-title);
+}
+
+.cic-screen:not(.portrait) .cic-brandsub {
+  font-size: var(--cic-body);
+}
+
+.cic-screen:not(.portrait) .cic-head-right {
+  gap: 0.677vmax;
+}
+
+.cic-screen:not(.portrait) .cic-wx {
+  gap: 0.313vmax;
+  font-size: var(--cic-body);
+}
+
+.cic-screen:not(.portrait) .cic-clk {
+  font-size: var(--cic-body);
+}
+
+.cic-screen:not(.portrait) .cic-welcome {
+  gap: 0.417vmax;
+  padding: 0.521vmax var(--cic-pad-lg);
+  border-bottom-width: 0.052vmax;
+  font-size: var(--cic-welcome);
+}
+
+.cic-screen:not(.portrait) .cic-confetti-icon {
+  font-size: var(--cic-welcome);
+  color: var(--accent);
+  flex: none;
+}
+
+.cic-screen:not(.portrait) .cic-media-overlay {
+  padding: var(--cic-pad-lg);
+}
+
+.cic-screen:not(.portrait) .cic-kicker {
+  font-size: 0.729vmax;
+  letter-spacing: 0.104vmax;
+}
+
+.cic-screen:not(.portrait) .cic-mtitle {
+  font-size: var(--cic-media-title);
+  margin: 0.208vmax 0;
+}
+
+.cic-screen:not(.portrait) .cic-msub {
+  font-size: var(--cic-body);
+}
+
+.cic-screen:not(.portrait) .cic-dots {
+  bottom: 0.469vmax;
+  gap: 0.313vmax;
+}
+
+.cic-screen:not(.portrait) .cic-dot {
+  width: 0.313vmax;
+  height: 0.313vmax;
+}
+
+.cic-screen:not(.portrait) .cic-ticker {
+  height: var(--cic-ticker-h);
+}
+
+.cic-screen:not(.portrait) .cic-tickin {
+  font-size: var(--cic-ticker-text);
+}
+
+.cic-screen:not(.portrait) .cic-empty-muted {
+  font-size: var(--cic-body);
+}
+
+.cic-screen:not(.portrait) .cic-offline-logo {
+  width: 2.5vmax;
+  height: 2.5vmax;
+  border-radius: 0.521vmax;
+  margin-bottom: 0.729vmax;
+}
+
+.cic-screen:not(.portrait) .cic-offline-title {
+  font-size: var(--cic-title);
+}
+
+.cic-screen:not(.portrait) .cic-offline-foot {
+  font-size: var(--cic-ann-sub);
+  margin-top: 0.938vmax;
+}
+
+/* Zoned — announcements rail */
+.cic-screen.layout-zoned:not(.portrait) .cic-rail {
+  padding: var(--cic-pad) 0.75vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-railhd {
+  font-size: var(--cic-label);
+  letter-spacing: 0.052vmax;
+  margin-bottom: 1.042vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-ann {
+  gap: 0.521vmax;
+  margin-bottom: 1.458vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-ann-icon {
+  font-size: var(--cic-ann-title);
+  margin-top: 0.104vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-anntop {
+  font-size: var(--cic-ann-title);
+  gap: 0.417vmax;
+  line-height: 1.25;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-annsub {
+  font-size: var(--cic-ann-sub);
+  margin-top: 0.313vmax;
+  line-height: 1.35;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-spill {
+  font-size: 0.729vmax;
+  padding: 0.104vmax 0.417vmax;
+  border-radius: 0.625vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-rail-divider {
+  margin: 1.042vmax 0 0.833vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir.compact {
+  font-size: 1.1vmax;
+  line-height: 1.5;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-arrow-badge.compact {
+  width: 3.25vmax;
+  height: 3.25vmax;
+  font-size: 2vmax;
+  border-width: 0.16vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-row-compact {
+  gap: 0.75vmax;
+  margin-bottom: 0.75vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-label-compact {
+  font-size: 1.1vmax;
+}
+
+/* Full bleed — location / welcome chips */
+.cic-screen.layout-full_bleed:not(.portrait) .cic-locchip {
+  top: var(--cic-pad-lg);
+  left: var(--cic-pad-lg);
+  border-left-width: 0.208vmax;
+  padding: 0.365vmax 0.625vmax;
+  border-radius: 0 0.313vmax 0.313vmax 0;
+  font-size: var(--cic-title);
+}
+
+.cic-screen.layout-full_bleed:not(.portrait) .cic-welchip {
+  top: var(--cic-pad-lg);
+  right: var(--cic-pad-lg);
+  padding: 0.26vmax 0.573vmax;
+  border-radius: 0.313vmax;
+  font-size: var(--cic-ann-sub);
+}
+
+.cic-screen.layout-full_bleed:not(.portrait) .cic-welchip .cic-confetti-icon {
+  font-size: var(--cic-ann-sub);
+}
+
+/* Wayfinding — destination cards + media/announcements split */
+.cic-screen.layout-wayfinding:not(.portrait) {
+  --cic-dir-title: 3.75vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-body-wayfind {
+  gap: 0;
+  align-items: stretch;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir {
+  flex: 1 1 50%;
+  padding: var(--cic-pad-lg);
+  border-right: 1px solid var(--accent-border-faint);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir-title {
+  font-size: var(--cic-title);
+  letter-spacing: 0.04vmax;
+  margin-bottom: 1.25vmax;
+  color: var(--white);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir.prominent {
+  font-size: var(--cic-dir-title);
+  gap: 0.75vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-card {
+  gap: 1.5vmax;
+  padding: 1.1vmax 1.35vmax;
+  margin-bottom: 1.1vmax;
+  border-left-width: 0.35vmax;
+  border-radius: 0.65vmax;
+  min-height: 9vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-arrow-badge.hero {
+  width: 8vmax;
+  height: 8vmax;
+  font-size: 5vmax;
+  border-radius: 1vmax;
+  border-width: 0.26vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-arrow-badge.compact {
+  width: 3.25vmax;
+  height: 3.25vmax;
+  font-size: 2vmax;
+  border-width: 0.16vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-dir-row-compact {
+  gap: 0.75vmax;
+  margin-bottom: 0.75vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-welcome {
+  margin-top: auto;
+  padding: 0.9vmax 1vmax;
+  font-size: var(--cic-welcome);
+  gap: 0.6vmax;
+  border-radius: 0.55vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-welcome .cic-confetti-icon {
+  font-size: var(--cic-welcome);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-side {
+  flex: 1 1 50%;
+  grid-template-columns: 1fr minmax(14vmax, 24%);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-media-wrap {
+  padding: var(--cic-pad-lg) 0.6vmax var(--cic-pad-lg) var(--cic-pad-lg);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail {
+  padding: var(--cic-pad-lg) var(--cic-pad-lg) var(--cic-pad-lg) 0.6vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-title {
+  font-size: var(--cic-label);
+  margin-bottom: 0.75vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail .cic-ann {
+  margin-bottom: 0.85vmax;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail .cic-anntop {
+  font-size: var(--cic-ann-sub);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-ann-rail .cic-ann-icon {
+  font-size: var(--cic-ann-sub);
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-media16.wayfind-media {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.cic-screen.layout-wayfinding:not(.portrait) .cic-wayfind-dir .cic-railhd {
+  font-size: var(--cic-label);
+  letter-spacing: 0.052vmax;
+  margin-bottom: 0.833vmax;
+}
+
+/* ── Portrait TV scaling (1080×1920 baseline, same vmax tokens) ── */
+
+.cic-screen.portrait {
+  --cic-title: 1.5625vmax;
+  --cic-body: 1.25vmax;
+  --cic-welcome: 1.458vmax;
+  --cic-media-title: 2.5vmax;
+  --cic-ann-title: 1.458vmax;
+  --cic-ann-sub: 1.042vmax;
+  --cic-dir-title: 1.458vmax;
+  --cic-ticker-h: 3.33vh;
+  --cic-ticker-text: 1.458vmax;
+  --cic-label: 0.833vmax;
+  --cic-gap: 0.625vmax;
+  --cic-pad: 0.833vmax;
+  --cic-pad-lg: 1.25vmax;
+}
+
+.cic-screen.portrait .cic-tvhead {
+  padding: var(--cic-pad) var(--cic-pad);
+  border-bottom-width: 0.052vmax;
+}
+
+.cic-screen.portrait .cic-head-left {
+  gap: var(--cic-gap);
+}
+
+.cic-screen.portrait .cic-logo {
+  width: 1.458vmax;
+  height: 1.458vmax;
+  border-radius: 0.365vmax;
+}
+
+.cic-screen.portrait .cic-brand {
+  font-size: var(--cic-title);
+}
+
+.cic-screen.portrait .cic-brandsub {
+  font-size: var(--cic-body);
+}
+
+.cic-screen.portrait .cic-wx {
+  gap: 0.313vmax;
+  font-size: var(--cic-body);
+}
+
+.cic-screen.portrait .cic-welcome {
+  gap: 0.417vmax;
+  padding: 0.417vmax var(--cic-pad);
+  border-bottom-width: 0.052vmax;
+  font-size: var(--cic-welcome);
+}
+
+.cic-screen.portrait .cic-confetti-icon {
+  font-size: var(--cic-welcome);
+  color: var(--accent);
+  flex: none;
+}
+
+.cic-screen.portrait .cic-kicker {
+  font-size: 0.729vmax;
+  letter-spacing: 0.104vmax;
+}
+
+.cic-screen.portrait .cic-mtitle {
+  font-size: var(--cic-media-title);
+  margin: 0.156vmax 0;
+}
+
+.cic-screen.portrait .cic-msub {
+  font-size: var(--cic-body);
+}
+
+.cic-screen.portrait .cic-dots {
+  bottom: 0.417vmax;
+  gap: 0.313vmax;
+}
+
+.cic-screen.portrait .cic-dot {
+  width: 0.313vmax;
+  height: 0.313vmax;
+}
+
+.cic-screen.portrait .cic-ticker {
+  height: var(--cic-ticker-h);
+}
+
+.cic-screen.portrait .cic-tickin {
+  font-size: var(--cic-ticker-text);
+}
+
+.cic-screen.portrait .cic-railhd {
+  font-size: var(--cic-label);
+  letter-spacing: 0.052vmax;
+  margin-bottom: 0.833vmax;
+}
+
+.cic-screen.portrait .cic-ann {
+  gap: 0.521vmax;
+  margin-bottom: 1.25vmax;
+}
+
+.cic-screen.portrait .cic-ann-icon {
+  font-size: var(--cic-ann-title);
+}
+
+.cic-screen.portrait .cic-anntop {
+  font-size: var(--cic-ann-title);
+  gap: 0.417vmax;
+  line-height: 1.25;
+}
+
+.cic-screen.portrait .cic-annsub {
+  font-size: var(--cic-ann-sub);
+  margin-top: 0.26vmax;
+}
+
+.cic-screen.portrait .cic-spill {
+  font-size: 0.729vmax;
+  padding: 0.104vmax 0.417vmax;
+  border-radius: 0.625vmax;
+}
+
+.cic-screen.portrait .cic-empty-muted {
+  font-size: var(--cic-body);
+}
+
+.cic-screen.portrait .cic-rail-divider {
+  margin: 0.833vmax 0 0.625vmax;
+}
+
+.cic-screen.portrait .cic-portrait-section {
+  padding: var(--cic-pad) var(--cic-pad);
+  border-bottom-width: 0.052vmax;
+}
+
+.cic-screen.portrait .cic-portrait-ann {
+  padding: var(--cic-pad) var(--cic-pad);
+}
+
+.cic-screen.portrait.layout-zoned .cic-dir.compact,
+.cic-screen.portrait.layout-wayfinding .cic-dir.compact {
+  font-size: 1.05vmax;
+  line-height: 1.5;
+}
+
+.cic-screen.portrait.layout-zoned .cic-dir-arrow-badge.compact,
+.cic-screen.portrait.layout-wayfinding .cic-dir-arrow-badge.compact {
+  width: 2.75vmax;
+  height: 2.75vmax;
+  font-size: 1.75vmax;
+  border-width: 0.14vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding {
+  --cic-dir-title: 2.75vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir.prominent {
+  font-size: var(--cic-dir-title);
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir-card {
+  gap: 1.1vmax;
+  padding: 1vmax 1.1vmax;
+  margin-bottom: 1vmax;
+  border-left-width: 0.3vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-dir-arrow-badge.hero {
+  width: 5.5vmax;
+  height: 5.5vmax;
+  font-size: 3.5vmax;
+  border-radius: 0.75vmax;
+  border-width: 0.2vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-wayfind-welcome {
+  font-size: var(--cic-welcome);
+  gap: 0.5vmax;
+  margin-top: 0.9vmax;
+  padding: 0.75vmax 0.85vmax;
+}
+
+.cic-screen.portrait.layout-wayfinding .cic-wayfind-welcome .cic-confetti-icon {
+  font-size: var(--cic-welcome);
+}
+
+.cic-screen.portrait.layout-full_bleed .cic-locchip {
+  top: var(--cic-pad-lg);
+  left: var(--cic-pad);
+  border-left-width: 0.208vmax;
+  padding: 0.365vmax 0.625vmax;
+  border-radius: 0 0.313vmax 0.313vmax 0;
+  font-size: var(--cic-title);
+}
+
+.cic-screen.portrait.layout-full_bleed .cic-welchip {
+  top: var(--cic-pad-lg);
+  right: var(--cic-pad);
+  padding: 0.26vmax 0.573vmax;
+  border-radius: 0.313vmax;
+  font-size: var(--cic-ann-sub);
+}
+
+.cic-screen.portrait.layout-full_bleed .cic-welchip .cic-confetti-icon {
+  font-size: var(--cic-ann-sub);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Zoned landscape — motion & polish (subtle, six-color palette only).
+   All true motion is gated behind prefers-reduced-motion: no-preference.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Ticker structure shared by all layouts (neutral; pill/mask only in zoned). */
+.cic-ticker-scroll {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.cic-ticker-pill { display: none; }
+
+/* Slide progress bar — hidden by default, shown in zoned (replaces dots). */
+.cic-mediaprog { display: none; }
+.cic-mediaprog-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+
+/* 1 + 6. Reveal the ambient drift behind the header; soft accent glow line. */
+.cic-screen.layout-zoned:not(.portrait) .cic-tvhead {
+  background: transparent;
+  border-bottom: none;
+  box-shadow:
+    0 0.05vmax 0 var(--accent-border),
+    0 0.6vmax 1.2vmax -0.6vmax var(--accent-ring);
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-logo {
+  box-shadow: 0 0 0 0.14vmax var(--accent-ring);
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-rail {
+  background: color-mix(in srgb, var(--navy) 88%, transparent);
+}
+
+/* 4. Announcements become soft cards with an accent edge. */
+.cic-screen.layout-zoned:not(.portrait) .cic-ann {
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  border-left: 0.2vmax solid var(--accent);
+  border-radius: 0 0.5vmax 0.5vmax 0;
+  padding: 0.6vmax 0.8vmax;
+}
+
+/* 5. Ticker — fixed label pill + soft edge fades. */
+.cic-screen.layout-zoned:not(.portrait) .cic-ticker-pill {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 0.9vmax;
+  background: var(--navy);
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.08vmax;
+  font-size: var(--cic-ticker-text);
+  flex: none;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-ticker-scroll {
+  -webkit-mask: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+
+/* 3. Slide progress bar shown in zoned (dots hidden). */
+.cic-screen.layout-zoned:not(.portrait) .cic-dots { display: none; }
+.cic-screen.layout-zoned:not(.portrait) .cic-mediaprog {
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.28vmax;
+  background: color-mix(in srgb, var(--white) 12%, transparent);
+  z-index: 3;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* 4. Announcement entrance (staggered fade-up). */
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann {
+    animation: cic-card-in 0.7s ease both;
+  }
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann:nth-child(2) { animation-delay: 0.1s; }
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann:nth-child(3) { animation-delay: 0.2s; }
+  .cic-screen.layout-zoned:not(.portrait) .cic-ann:nth-child(4) { animation-delay: 0.3s; }
+  /* 7. Welcome sheen. */
+  .cic-screen.layout-zoned:not(.portrait) .cic-welcome { position: relative; overflow: hidden; }
+  .cic-screen.layout-zoned:not(.portrait) .cic-welcome::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 35%;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 16%, transparent), transparent);
+    transform: translateX(-120%);
+    animation: cic-sheen 9s ease-in-out infinite;
+    pointer-events: none;
+  }
+  /* 8. Clock colon blink. */
+  .cic-screen.layout-zoned:not(.portrait) .cic-clk-colon {
+    animation: cic-blink 1.1s steps(1) infinite;
+  }
+  /* 3. Progress fill (duration set inline per slide; restarts via React key). */
+  .cic-screen.layout-zoned:not(.portrait) .cic-mediaprog-fill {
+    animation-name: cic-prog;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
+}
+
+@keyframes cic-kenburns {
+  from { transform: scale(1); }
+  to { transform: scale(1.06) translate(-1%, -0.8%); }
+}
+@keyframes cic-card-in {
+  from { opacity: 0; transform: translateY(0.6vmax); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cic-sheen {
+  0%, 55% { transform: translateX(-120%); }
+  100% { transform: translateX(360%); }
+}
+@keyframes cic-blink {
+  50% { opacity: 0.25; }
+}
+@keyframes cic-prog {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Zoned landscape — floating-panel zones (separation + breathing room).
+   Each zone becomes a contained panel on the navy backdrop; the drifting
+   SignageBackground reads through the gutters between panels.
+   ───────────────────────────────────────────────────────────────────────── */
+.cic-screen.layout-zoned:not(.portrait) .cic-zoned-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5vmax;
+  gap: 1.25vmax;
+  box-sizing: border-box;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-tvhead,
+.cic-screen.layout-zoned:not(.portrait) .cic-welcome,
+.cic-screen.layout-zoned:not(.portrait) .cic-media16,
+.cic-screen.layout-zoned:not(.portrait) .cic-rail,
+.cic-screen.layout-zoned:not(.portrait) .cic-ticker {
+  border-radius: 0.7vmax;
+  box-shadow:
+    0 0 0 0.05vmax var(--accent-border),
+    0 0.6vmax 1.4vmax -0.8vmax var(--black-shadow);
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-tvhead {
+  background: var(--panel);
+  border-bottom: none;
+  padding: 0.9vmax 1.4vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-welcome {
+  border-bottom: none;
+  border-left: 0.3vmax solid var(--accent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 26%, var(--panel)), var(--panel));
+  padding: 0.8vmax 1.3vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-body {
+  gap: 1.25vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-railcol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-rail {
+  background: var(--panel);
+  overflow: hidden;
+  padding: 1.1vmax 1.2vmax;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-rail-ann { flex: 1; min-height: 0; }
+.cic-screen.layout-zoned:not(.portrait) .cic-rail-dir { flex: none; }
+
+.cic-screen.layout-zoned:not(.portrait) .cic-railhd {
+  font-weight: 700;
+  letter-spacing: 0.12vmax;
+  color: var(--accent);
+  padding-bottom: 0.5vmax;
+  margin-bottom: 0.9vmax;
+  border-bottom: 0.1vmax solid var(--accent-border);
+  position: relative;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-railhd::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -0.1vmax;
+  width: 2vmax;
+  height: 0.1vmax;
+  background: var(--accent);
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-ann {
+  background: transparent;
+  border-left: none;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: 1.1vmax;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-row-compact {
+  padding: 0.55vmax 0;
+  margin-bottom: 0;
+  border-bottom: 0.05vmax solid var(--accent-border-faint);
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-dir-row-compact:last-child {
+  border-bottom: none;
+}
+
+.cic-screen.layout-zoned:not(.portrait) .cic-rail-divider { display: none; }
+
+.cic-screen.layout-zoned:not(.portrait) .cic-ticker-pill {
+  border-radius: 0.7vmax 0 0 0.7vmax;
+}
+
+/* Zoned header — compact bar: area label · centered welcome · weather/clock.
+   The welcome fills what used to be empty space and is the prominent name. */
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead {
+  display: flex;
+  align-items: center;
+  gap: 1vmax;
+  padding: 0.5vmax 1.3vmax;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-id {
+  display: flex;
+  align-items: center;
+  gap: 0.7vmax;
+  flex: none;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-area {
+  font-size: var(--cic-ann-sub);
+  color: var(--accent);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05vmax;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-welcome {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5vmax;
+  font-size: 1.9vmax;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-welcome b {
+  color: var(--white);
+  font-weight: 600;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead-note {
+  font-size: var(--cic-body);
+  color: var(--accent);
+  font-weight: 400;
+}
+.cic-screen.layout-zoned:not(.portrait) .cic-zhead .cic-head-right {
+  flex: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Color themes (Canyons Innovation Center brand palette).
+   Each theme overrides the base palette vars; the derived tints (which are
+   color-mix() of --accent) follow automatically. 'primary' is the base.
+   ───────────────────────────────────────────────────────────────────────── */
+/* Register the palette vars as animatable colors so Spectrum can fade them. */
+@property --navy {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #162844;
+}
+@property --panel {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1e3649;
+}
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #96b7c8;
+}
+
+/* Secondary — cool slate; lighter, bluer background than Primary. */
+.cic-screen.cic-theme-secondary {
+  --navy: #2e3b4b;
+  --panel: #46586e;
+  --gray: #8493a8;
+  --accent: #c2cbda;
+}
+
+/* Colorful — deep plum/magenta background with a bright pink accent. */
+.cic-screen.cic-theme-special {
+  --navy: #2a1533;
+  --panel: #481f4f;
+  --gray: #9a6f9c;
+  --accent: #ef5aa6;
+}
+
+/* Spectrum — the whole screen (background + panels + accent) fades through
+   the brand palette, slowly. */
+@media (prefers-reduced-motion: no-preference) {
+  .cic-screen.cic-theme-spectrum {
+    animation: cic-spectrum 32s linear infinite;
+  }
+}
+@keyframes cic-spectrum {
+  0%, 100% { --navy: #162844; --panel: #1e3649; --accent: #96b7c8; }
+  20% { --navy: #21303f; --panel: #3a4b60; --accent: #c2cbda; }
+  40% { --navy: #2a1533; --panel: #481f4f; --accent: #cf5fb0; }
+  60% { --navy: #321537; --panel: #52204f; --accent: #d4419a; }
+  80% { --navy: #34122b; --panel: #501c3f; --accent: #ec5a84; }
+}
+
+/* =========================================================================
+   Zoned 2 — district-branded office signage (big, readable, TV-scaled).
+   Brand bar · large 16:9 media + scan overlay · weather + Spotlight rail ·
+   full-headline NEWS rotator. Sizes in vmax (1920x1080 baseline).
+   ========================================================================= */
+.cic-screen.layout-zoned2 {
+  --navy: #04263f;
+  --navy-2: #021a2c;
+  --panel: #063a5c;
+  --blue1: #065687;
+  --accent: #3abfe8;
+  --csd-yellow: #fbae42;
+  --line: rgba(255, 255, 255, 0.14);
+  --muted: #b6d0e2;
+  /* Liquid-glass tokens — translucent frosted panels with a bright top edge. */
+  --glass-fill: rgba(255, 255, 255, 0.085);
+  --glass-br: rgba(255, 255, 255, 0.16);
+  --glass-blur: blur(1.5vmax) saturate(155%);
+  --glass-hi: inset 0 0.14vmax 0 rgba(255, 255, 255, 0.30);
+  --glass-shadow: 0 0.7vmax 2.2vmax rgba(0, 0, 0, 0.24);
+  --glass-radius: 1.1vmax;
+  /* Ambient brand-colored glow so the frosted panels have something to refract. */
+  background:
+    radial-gradient(48% 44% at 85% 9%, rgba(74, 162, 222, 0.22), transparent 60%),
+    radial-gradient(46% 42% at 5% 93%, rgba(251, 174, 66, 0.13), transparent 60%),
+    radial-gradient(62% 56% at 50% 55%, rgba(34, 84, 130, 0.30), transparent 72%),
+    var(--navy-2);
+}
+/* One shared glass surface for every panel. */
+.cic-screen.layout-zoned2 .cic-rail,
+.cic-screen.layout-zoned2 .cic-z2-brandbox,
+.cic-screen.layout-zoned2 .cic-z2-news {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-br);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-hi), var(--glass-shadow);
+}
+/* Fallback for players without backdrop-filter: solid translucent panel. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cic-screen.layout-zoned2 .cic-rail,
+  .cic-screen.layout-zoned2 .cic-z2-brandbox,
+  .cic-screen.layout-zoned2 .cic-z2-news {
+    background: rgba(13, 46, 72, 0.92);
+  }
+}
+.cic-screen.layout-zoned2 .cic-zoned2-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1vmax;
+  gap: 1.05vmax;
+  box-sizing: border-box;
+}
+
+/* brand bar */
+.cic-screen.layout-zoned2 .cic-z2-brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--navy);
+  border: 1px solid var(--line);
+  border-radius: 0.7vmax;
+  padding: 0 1.6vmax;
+  height: 9vh;
+}
+.cic-screen.layout-zoned2 .cic-z2-brand-left { display: flex; align-items: center; gap: 1.1vmax; }
+.cic-screen.layout-zoned2 .cic-z2-logo {
+  width: 3.2vmax;
+  height: 3.2vmax;
+  border-radius: 0.45vmax;
+  flex: none;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--accent), var(--blue1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 2vmax;
+  color: var(--navy-2);
+}
+.cic-screen.layout-zoned2 .cic-z2-logo img { width: 100%; height: 100%; object-fit: contain; }
+.cic-screen.layout-zoned2 .cic-z2-word { font-weight: 800; font-size: 1.8vmax; letter-spacing: 0.03vmax; text-transform: uppercase; line-height: 1; }
+.cic-screen.layout-zoned2 .cic-z2-word b { color: var(--accent); }
+.cic-screen.layout-zoned2 .cic-z2-brand-div { width: 1px; height: 4vh; background: var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-brand-tag { font-weight: 500; font-size: 1.5vmax; color: var(--muted); }
+.cic-screen.layout-zoned2 .cic-z2-brand-right { display: flex; align-items: center; gap: 1.6vmax; }
+.cic-screen.layout-zoned2 .cic-z2-onair { display: flex; align-items: center; gap: 0.5vmax; font-weight: 700; font-size: 1.25vmax; letter-spacing: 0.18vmax; text-transform: uppercase; color: var(--muted); }
+.cic-screen.layout-zoned2 .cic-z2-onair .dot { width: 1vmax; height: 1vmax; border-radius: 50%; background: #37d27a; }
+.cic-screen.layout-zoned2 .cic-z2-clock { text-align: right; }
+.cic-screen.layout-zoned2 .cic-z2-time { font-weight: 700; font-size: 2.4vmax; line-height: 1; font-variant-numeric: tabular-nums; }
+.cic-screen.layout-zoned2 .cic-z2-date { font-weight: 500; font-size: 1.3vmax; color: var(--accent); margin-top: 0.3vh; }
+
+/* body */
+.cic-screen.layout-zoned2 .cic-body { flex: 1; min-height: 0; display: flex; gap: 1.05vmax; }
+.cic-screen.layout-zoned2 .cic-media16 {
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  position: relative;
+  border-radius: var(--glass-radius);
+  overflow: hidden;
+  border: 1px solid var(--glass-br);
+  box-shadow: var(--glass-hi), var(--glass-shadow);
+  background: #062338;
+}
+.cic-screen.layout-zoned2 .cic-media16 img,
+.cic-screen.layout-zoned2 .cic-media16 video { object-fit: contain; }
+
+/* scan-to-watch overlay */
+.cic-screen.layout-zoned2 .cic-z2-scan { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; align-items: flex-end; justify-content: space-between; gap: 1vmax; padding: 1.1vmax 1.2vmax; background: linear-gradient(0deg, rgba(2, 18, 30, 0.9), transparent); pointer-events: none; }
+.cic-screen.layout-zoned2 .cic-z2-scan-cap { background: rgba(2, 18, 30, 0.72); border-radius: 0.6vmax; padding: 0.7vmax 1vmax; max-width: 64%; }
+.cic-screen.layout-zoned2 .cic-z2-scan-k { font-weight: 700; font-size: 0.95vmax; letter-spacing: 0.14vmax; text-transform: uppercase; color: var(--csd-yellow); }
+.cic-screen.layout-zoned2 .cic-z2-scan-t { font-weight: 600; font-size: 1.5vmax; margin-top: 0.2vh; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-scan-hint { background: var(--csd-yellow); color: #06304d; font-weight: 800; font-size: 1.25vmax; padding: 0.6vmax 1vmax; border-radius: 0.5vmax; flex: none; }
+
+/* rail */
+.cic-screen.layout-zoned2 .cic-railcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1.05vmax; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-rail { padding: 1.4vmax; }
+.cic-screen.layout-zoned2 .cic-railhd { font-weight: 700; font-size: 1.3vmax; letter-spacing: 0.18vmax; text-transform: uppercase; color: var(--accent); margin-bottom: 1vmax; display: flex; justify-content: space-between; align-items: baseline; }
+.cic-screen.layout-zoned2 .cic-railhd .sub { color: var(--muted); font-size: 1.2vmax; letter-spacing: 0; }
+
+/* weather card */
+.cic-screen.layout-zoned2 .cic-z2-weather { flex: none; }
+.cic-screen.layout-zoned2 .cic-z2-wx { display: flex; align-items: center; gap: 1.2vmax; }
+.cic-screen.layout-zoned2 .cic-z2-wxico { font-size: 5.5vmax; line-height: 1; flex: none; }
+.cic-screen.layout-zoned2 .cic-z2-temp { font-weight: 800; font-size: 6vmax; line-height: 0.9; font-variant-numeric: tabular-nums; }
+.cic-screen.layout-zoned2 .cic-z2-temp sup { font-size: 2.6vmax; font-weight: 700; top: -2.4vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cond { font-weight: 600; font-size: 1.7vmax; color: #dcefff; margin-top: 0.4vh; }
+.cic-screen.layout-zoned2 .cic-z2-wxmeta { display: flex; gap: 1.6vmax; margin-top: 1.4vh; padding-top: 1.2vh; border-top: 1px solid var(--line); font-weight: 500; font-size: 1.4vmax; color: var(--muted); }
+.cic-screen.layout-zoned2 .cic-z2-wxmeta b { color: #fff; }
+
+/* spotlight card */
+.cic-screen.layout-zoned2 .cic-z2-spot { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* Thumb keeps 16:9 when there's room, but shrinks (img covers) when the rail is
+   tight — so the Spotlight card never pushes past the bottom of the screen. */
+.cic-screen.layout-zoned2 .cic-z2-thumb { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 0.6vmax; overflow: hidden; background: #04304d; flex: 0 1 auto; min-height: 0; }
+.cic-screen.layout-zoned2 .cic-z2-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cic-screen.layout-zoned2 .cic-z2-dur { position: absolute; right: 0.6vmax; bottom: 0.6vmax; background: rgba(2, 18, 30, 0.78); font-weight: 700; font-size: 1.1vmax; padding: 0.2vmax 0.5vmax; border-radius: 0.3vmax; color: #fff; }
+.cic-screen.layout-zoned2 .cic-z2-sptitle { font-weight: 700; font-size: 1.8vmax; line-height: 1.16; margin-top: 1vh; color: #eef7fd; flex: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-spmeta { font-weight: 500; font-size: 1.35vmax; color: var(--muted); margin-top: 0.5vh; }
+
+/* now-on-csdtv live card */
+.cic-screen.layout-zoned2 .cic-z2-livepill { display: inline-flex; align-items: center; gap: 0.5vmax; background: #e0322f; color: #fff; font-weight: 800; font-size: 1.2vmax; letter-spacing: 0.12vmax; text-transform: uppercase; padding: 0.4vmax 0.8vmax; border-radius: 0.5vmax; }
+.cic-screen.layout-zoned2 .cic-z2-livedot { width: 0.7vmax; height: 0.7vmax; border-radius: 50%; background: #fff; display: inline-block; }
+.cic-screen.layout-zoned2 .cic-z2-live-title { font-weight: 800; font-size: 2.2vmax; line-height: 1.12; margin-top: 1vh; color: #fff; }
+.cic-screen.layout-zoned2 .cic-z2-live-sub { font-weight: 500; font-size: 1.4vmax; color: var(--muted); margin-top: 0.5vh; }
+
+/* full-headline NEWS rotator band */
+.cic-screen.layout-zoned2 .cic-z2-news { flex: none; height: 15vh; display: flex; align-items: stretch; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-news-badge { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 0.2vmax; padding: 0 2vmax; border-right: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-news-k { font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; font-size: 1.3vmax; color: var(--accent); white-space: nowrap; }
+.cic-screen.layout-zoned2 .cic-z2-news-w { display: flex; align-items: center; gap: 0.5vmax; font-weight: 900; font-size: 4vmax; line-height: 0.95; }
+.cic-screen.layout-zoned2 .cic-z2-news-w .dot { width: 0.8vmax; height: 0.8vmax; border-radius: 50%; background: var(--csd-yellow); }
+.cic-screen.layout-zoned2 .cic-z2-news-rot { flex: 1; position: relative; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-headline { position: absolute; inset: 0; display: flex; align-items: center; gap: 1.8vmax; padding: 0 2.4vmax; opacity: 0; transition: opacity .6s ease; }
+.cic-screen.layout-zoned2 .cic-z2-headline.show { opacity: 1; }
+.cic-screen.layout-zoned2 .cic-z2-news-thumb { flex: none; height: 10.5vh; aspect-ratio: 16 / 10; border-radius: 0.6vmax; overflow: hidden; background: #04263f; border: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-news-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cic-screen.layout-zoned2 .cic-z2-headline > span:not(.cic-z2-news-thumb) { flex: 1; min-width: 0; font-weight: 700; font-size: 2.1vmax; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-news-cta { flex: none; display: flex; align-items: center; gap: 1.2vmax; padding: 0 1.8vmax; border-left: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-news-cta .lead { font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; font-size: 1.1vmax; color: var(--csd-yellow); text-align: right; }
+.cic-screen.layout-zoned2 .cic-z2-news-cta .url { font-weight: 600; font-size: 1.35vmax; color: var(--accent); text-align: right; }
+.cic-screen.layout-zoned2 .cic-z2-qr { width: 8vh; height: 8vh; background: #fff; border-radius: 0.5vmax; flex: none; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-qr img { width: 100%; height: 100%; display: block; }
+
+/* Zoned 2 — real district logo in the brand bar (replaces the placeholder tile). */
+.cic-screen.layout-zoned2 .cic-z2-brandlogo { height: 5vh; width: auto; display: block; }
+
+/* =========================================================================
+   Zoned 2 — animated weather scenes + rotating card modules.
+   ========================================================================= */
+.cic-screen.layout-zoned2 .cic-z2-weather { position: relative; overflow: hidden; }
+.cic-screen.layout-zoned2 .cic-z2-weather > .cic-railhd,
+.cic-screen.layout-zoned2 .cic-z2-weather > .cic-z2-wx,
+.cic-screen.layout-zoned2 .cic-z2-weather > .cic-z2-wxmeta { position: relative; z-index: 2; }
+.cic-screen.layout-zoned2 .z2wx-scene { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+
+/* Condition mood tints — kept translucent so they layer over the frosted glass
+   fill (sky color + animated scene, without becoming an opaque colored box). */
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-sunny { background: linear-gradient(160deg, rgba(58, 191, 232, 0.16), rgba(6, 58, 92, 0.04)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-cloudy { background: linear-gradient(160deg, rgba(120, 156, 184, 0.14), rgba(6, 49, 79, 0.04)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-rain { background: linear-gradient(160deg, rgba(40, 96, 138, 0.18), rgba(4, 38, 63, 0.05)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-snow { background: linear-gradient(160deg, rgba(150, 192, 222, 0.18), rgba(10, 44, 66, 0.05)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-storm { background: linear-gradient(160deg, rgba(12, 22, 33, 0.34), rgba(7, 15, 24, 0.12)), var(--glass-fill); }
+.cic-screen.layout-zoned2 .cic-z2-weather.z2wx-night { background: linear-gradient(160deg, rgba(12, 30, 56, 0.30), rgba(4, 16, 31, 0.10)), var(--glass-fill); }
+
+/* icon box now holds CSS shapes, not an emoji */
+.cic-screen.layout-zoned2 .cic-z2-wxico { position: relative; width: 6.5vmax; height: 6.5vmax; flex: none; font-size: 0; }
+
+/* sun */
+.cic-screen.layout-zoned2 .z2wx-sun { position: absolute; inset: 0; }
+.cic-screen.layout-zoned2 .z2wx-core { position: absolute; inset: 1.7vmax; border-radius: 50%; background: radial-gradient(circle at 38% 38%, #ffe0a0, #fbae42); }
+.cic-screen.layout-zoned2 .z2wx-rays { position: absolute; inset: 0; animation: z2spin 22s linear infinite; }
+.cic-screen.layout-zoned2 .z2wx-rays span { position: absolute; left: 50%; top: 50%; width: 0.35vmax; height: 1.1vmax; margin: -0.55vmax 0 0 -0.18vmax; background: #fbae42; border-radius: 0.3vmax; }
+@keyframes z2spin { to { transform: rotate(360deg); } }
+
+/* moon */
+.cic-screen.layout-zoned2 .z2wx-moon { position: absolute; inset: 1.5vmax; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f3f6ff, #c7d3e6); box-shadow: 0 0 1.4vmax rgba(220, 230, 255, 0.32); }
+
+/* clouds (icon + scene) */
+.cic-screen.layout-zoned2 .z2wx-cloud { background: #cfe0ee; border-radius: 5vmax; position: absolute; }
+.cic-screen.layout-zoned2 .z2wx-cloud::before,
+.cic-screen.layout-zoned2 .z2wx-cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
+.cic-screen.layout-zoned2 .z2wx-cloud-ico { left: 0.6vmax; top: 2.5vmax; width: 5vmax; height: 1.7vmax; opacity: 0.95; }
+.cic-screen.layout-zoned2 .z2wx-cloud-ico::before { width: 2.3vmax; height: 2.3vmax; top: -1.1vmax; left: 0.7vmax; }
+.cic-screen.layout-zoned2 .z2wx-cloud-ico::after { width: 1.7vmax; height: 1.7vmax; top: -0.8vmax; left: 2.6vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .z2wx-cloud { opacity: 0.42; }
+.cic-screen.layout-zoned2 .z2wx-scene .c1 { width: 6vmax; height: 1.9vmax; top: 2vmax; left: -7vmax; animation: z2drift 16s linear infinite; }
+.cic-screen.layout-zoned2 .z2wx-scene .c1::before { width: 2.6vmax; height: 2.6vmax; top: -1.2vmax; left: 0.9vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .c1::after { width: 1.9vmax; height: 1.9vmax; top: -0.8vmax; left: 3.1vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .c2 { width: 4.5vmax; height: 1.5vmax; top: 6vmax; left: -6vmax; opacity: 0.26; animation: z2drift 26s linear infinite; animation-delay: -8s; }
+.cic-screen.layout-zoned2 .z2wx-scene .c2::before { width: 2vmax; height: 2vmax; top: -1vmax; left: 0.7vmax; }
+@keyframes z2drift { to { transform: translateX(36vmax); } }
+
+/* rain / snow / storm / stars */
+.cic-screen.layout-zoned2 .z2wx-scene .z2wx-rain { position: absolute; inset: 0; opacity: 0.5; background: repeating-linear-gradient(105deg, rgba(159,208,239,0) 0 0.45vmax, rgba(159,208,239,0.5) 0.45vmax 0.52vmax); background-size: 1vmax 1vmax; animation: z2rain 0.5s linear infinite; }
+@keyframes z2rain { from { background-position: 0 0; } to { background-position: -1vmax 2vmax; } }
+.cic-screen.layout-zoned2 .z2wx-scene .z2wx-snow { position: absolute; inset: 0; opacity: 0.75; background-image: radial-gradient(circle, rgba(255,255,255,0.9) 0.16vmax, transparent 0.2vmax); background-size: 2.4vmax 2.4vmax; animation: z2snow 6s linear infinite; }
+@keyframes z2snow { to { background-position: 1vmax 14vmax; } }
+.cic-screen.layout-zoned2 .z2wx-flash { position: absolute; inset: 0; background: #fff; opacity: 0; animation: z2flash 6s linear infinite; }
+@keyframes z2flash { 0%, 92%, 100% { opacity: 0; } 93% { opacity: 0.4; } 94% { opacity: 0; } 96% { opacity: 0.55; } 97% { opacity: 0; } }
+.cic-screen.layout-zoned2 .z2wx-star { position: absolute; width: 0.3vmax; height: 0.3vmax; border-radius: 50%; background: #fff; animation: z2tw 3s ease-in-out infinite; }
+@keyframes z2tw { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+
+/* rotating card wrapper */
+.cic-screen.layout-zoned2 .cic-z2-rotwrap { flex: 1; min-height: 0; display: flex; }
+.cic-screen.layout-zoned2 .cic-z2-rotcard { flex: 1; min-width: 0; min-height: 0; display: flex; animation: z2fade 0.5s ease; }
+.cic-screen.layout-zoned2 .cic-z2-rotcard > .cic-rail { flex: 1; min-height: 0; overflow: hidden; }
+@keyframes z2fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* board meeting card */
+.cic-screen.layout-zoned2 .cic-z2-bm-day { font-weight: 900; font-size: 3.4vmax; line-height: 1; color: var(--csd-yellow); margin-top: 0.5vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bm-title { font-weight: 700; font-size: 1.7vmax; margin-top: 0.7vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-bm-row { font-size: 1.4vmax; color: #dcefff; margin-top: 1vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bm-pill { display: inline-block; background: var(--accent); color: #06304d; font-weight: 800; font-size: 1.1vmax; padding: 0.4vmax 0.9vmax; border-radius: 0.5vmax; margin-top: 1.3vmax; }
+
+/* closures card */
+.cic-screen.layout-zoned2 .cic-z2-cl-row { display: flex; gap: 1.1vmax; align-items: baseline; padding: 0.7vmax 0; border-bottom: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-cl-row:last-child { border-bottom: none; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { font-weight: 900; font-size: 1.5vmax; color: var(--csd-yellow); min-width: 7.5vmax; font-variant-numeric: tabular-nums; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { font-size: 1.35vmax; color: #e4f3fc; }
+
+/* announcements card */
+.cic-screen.layout-zoned2 .cic-z2-ann-row { display: flex; gap: 0.9vmax; padding: 0.7vmax 0; border-bottom: 1px solid var(--line); }
+.cic-screen.layout-zoned2 .cic-z2-ann-row:last-child { border-bottom: none; }
+.cic-screen.layout-zoned2 .cic-z2-ann-row .cic-ann-icon { font-size: 1.7vmax; color: var(--accent); flex: none; }
+.cic-screen.layout-zoned2 .cic-z2-ann-t { font-weight: 700; font-size: 1.45vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-ann-s { font-size: 1.2vmax; color: var(--muted); margin-top: 0.2vmax; }
+
+/* =========================================================================
+   Zoned 2 — layout v2: no top bar, slim rail, maximized 16:9, brand/clock box.
+   ========================================================================= */
+.cic-screen.layout-zoned2 .cic-z2-mediacell { flex: 1; min-width: 0; min-height: 0; container-type: size; display: grid; place-items: center; }
+.cic-screen.layout-zoned2 .cic-z2-mediacell .cic-media16 { height: auto; width: min(100cqw, 177.78cqh); flex: none; }
+.cic-screen.layout-zoned2 .cic-railcol { flex: none; width: 21vw; }
+
+.cic-screen.layout-zoned2 .cic-z2-brandbox { flex: none; text-align: center; padding: 1.3vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-logo { width: 78%; height: auto; display: block; margin: 0 auto 0.9vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-row { display: flex; align-items: center; justify-content: center; gap: 0.8vmax; border-top: 1px solid var(--line); padding-top: 0.9vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-time { font-weight: 800; font-size: 2.6vmax; line-height: 1; font-variant-numeric: tabular-nums; }
+.cic-screen.layout-zoned2 .cic-z2-bb-date { font-size: 1.2vmax; color: var(--accent); margin-top: 0.4vmax; text-align: center; }
+
+/* Zoned 2 v2 — tighten weather/brand sizing for the slim rail so the rotating card has room. */
+.cic-screen.layout-zoned2 .cic-rail { padding: 1.1vmax; }
+.cic-screen.layout-zoned2 .cic-z2-brandbox { padding: 1vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-logo { width: 64%; margin-bottom: 0.7vmax; }
+.cic-screen.layout-zoned2 .cic-z2-bb-time { font-size: 2.3vmax; }
+.cic-screen.layout-zoned2 .cic-z2-temp { font-size: 4.8vmax; }
+.cic-screen.layout-zoned2 .cic-z2-temp sup { font-size: 2vmax; top: -1.9vmax; }
+.cic-screen.layout-zoned2 .cic-z2-wxico { width: 6vmax; height: 6vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cond { font-size: 1.45vmax; }
+.cic-screen.layout-zoned2 .cic-z2-wxmeta { gap: 0.9vmax; font-size: 1.1vmax; margin-top: 1vh; padding-top: 0.9vh; }
+.cic-screen.layout-zoned2 .cic-z2-sptitle { font-size: 1.6vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { min-width: 6.5vmax; font-size: 1.35vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { font-size: 1.2vmax; }
+
+/* Zoned 2 v2 — stack closure date over label (fits the slim rail without wrapping wide). */
+.cic-screen.layout-zoned2 .cic-z2-cl-row { display: block; padding: 0.5vmax 0; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { display: block; min-width: 0; font-size: 1.15vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { display: block; font-size: 1.3vmax; margin-top: 0.05vmax; line-height: 1.15; }
+.cic-screen.layout-zoned2 .cic-z2-ann-t { font-size: 1.3vmax; }
+.cic-screen.layout-zoned2 .cic-z2-ann-s { font-size: 1.1vmax; }
+
+/* Zoned 2 v2 — closures: label one line at full rail width. */
+.cic-screen.layout-zoned2 .cic-z2-cl-row { padding: 0.45vmax 0; }
+.cic-screen.layout-zoned2 .cic-z2-cl-date { font-size: 1.0vmax; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { font-size: 1.1vmax; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
+/* Zoned 2 v2 — tighten closure rows so all fit the slim rail. */
+.cic-screen.layout-zoned2 .cic-z2-cl-date { line-height: 1; }
+.cic-screen.layout-zoned2 .cic-z2-cl-lbl { line-height: 1.05; }
+.cic-screen.layout-zoned2 .cic-z2-cl-row { padding: 0.38vmax 0; }
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-railhd { margin-bottom: 0.7vmax; }
+
+/* Any content in a zoned2 rail cell fades at the bottom instead of hard-clipping,
+   so whatever widget lands in a slot (directory, announcements, spotlight, the
+   board rotator) degrades gracefully when it has more rows than fit — in ANY of
+   the three rail slots. */
+.cic-screen.layout-zoned2 .cic-z2-spot {
+  -webkit-mask-image: linear-gradient(to bottom, #000 88%, transparent);
+  mask-image: linear-gradient(to bottom, #000 88%, transparent);
+}
+
+/* Directory placed in a zoned2 rail cell (layout builder). The rail cell is short,
+   so size the rows to it — smaller/denser than the zoned rail's directory. */
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir.compact {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vmax;
+  overflow: hidden;
+  font-size: 1.1vmax;
+  line-height: 1.2;
+}
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir-row-compact {
+  gap: 0.7vmax;
+  margin-bottom: 0;
+  flex: none;
+}
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir-arrow-badge.compact {
+  width: 2vmax;
+  height: 2vmax;
+  font-size: 1.2vmax;
+  border-width: 0.12vmax;
+  border-radius: 0.45vmax;
+}
+.cic-screen.layout-zoned2 .cic-z2-spot .cic-dir-label-compact {
+  font-size: 1.2vmax;
+}
+
+/* Zoned 2 v2 — center the weather on its card. */
+.cic-screen.layout-zoned2 .cic-z2-wx { justify-content: center; }
+.cic-screen.layout-zoned2 .cic-z2-wxmeta { justify-content: center; }
+
+/* Zoned 2 — nicer clear-night: glowing stars + a moon with craters. */
+.cic-screen.layout-zoned2 .z2wx-star { width: 0.26vmax; height: 0.26vmax; box-shadow: 0 0 0.5vmax rgba(255, 255, 255, 0.6); }
+.cic-screen.layout-zoned2 .z2wx-moon {
+  background:
+    radial-gradient(circle at 64% 32%, rgba(150, 168, 196, 0.5) 0 0.32vmax, transparent 0.42vmax),
+    radial-gradient(circle at 40% 62%, rgba(150, 168, 196, 0.42) 0 0.46vmax, transparent 0.56vmax),
+    radial-gradient(circle at 70% 66%, rgba(150, 168, 196, 0.38) 0 0.26vmax, transparent 0.36vmax),
+    radial-gradient(circle at 35% 35%, #f6f9ff, #cdd8ea);
+  box-shadow: 0 0 1.6vmax rgba(200, 215, 255, 0.35);
+}
+
+/* Zoned 2 — weather scene polish: keep clouds below the header, softer snow. */
+.cic-screen.layout-zoned2 .z2wx-scene .c1 { top: 4.5vmax; }
+.cic-screen.layout-zoned2 .z2wx-scene .c2 { top: 8vmax; }
+.cic-screen.layout-zoned2 .z2wx-snow { opacity: 0.85; background-image: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0.22vmax, transparent 0.3vmax); background-size: 3.2vmax 3.2vmax; }
+.cic-screen.layout-zoned2 .z2wx-rain { opacity: 0.55; }
+</style></head><body><div class="cic-screen layout-zoned cic-theme-primary" style="--navy:#162844;--panel:#1e3649;--accent:#96b7c8"><div class="sig-glow" aria-hidden="true"><div class="sig-glow__blob sig-glow__b1"></div><div class="sig-glow__blob sig-glow__b2"></div><div class="sig-glow__blob sig-glow__b3"></div></div><div class="cic-screen-content"><div class="cic-zoned-stage"><div class="cic-tvhead cic-zhead"><div class="cic-zhead-id"><div class="cic-logo"><img src="https://example.org/logo.png" alt=""></div><span class="cic-zhead-area">West Front</span></div><div class="cic-zhead-welcome"><span class="cic-confetti-icon" aria-hidden>✦</span><span>Welcome, <b>Dr. Smith</b><span class="cic-zhead-note"> — Room 204</span></span></div><div class="cic-head-right"><div class="cic-wx"><span aria-hidden>☀</span><span>72°</span></div><div class="cic-clk" data-clock></div></div></div><div class="cic-body"><div class="cic-media16" data-carousel style="--crossfade-ms:700ms"><div class="cic-media-layer"><img src="https://example.org/a.jpg" alt="Welcome"></div><div class="cic-dots" data-dots><span class="cic-dot on"></span><span class="cic-dot"></span></div><div class="cic-mediaprog" aria-hidden><span class="cic-mediaprog-fill" data-prog style="animation-duration:10s"></span></div></div><div class="cic-railcol"><div class="cic-rail cic-rail-ann"><div class="cic-railhd">Announcements</div><div class="cic-ann"><span class="cic-ann-icon" aria-hidden>⭐</span><div><div class="cic-anntop">Picture Day<span class="cic-spill">All</span></div><div class="cic-annsub">Wear your best</div></div></div><div class="cic-ann"><span class="cic-ann-icon" aria-hidden>🕐</span><div><div class="cic-anntop">Late Start</div></div></div></div><div class="cic-rail cic-rail-dir"><div class="cic-railhd">Directory</div><div class="cic-dir compact"><div class="cic-dir-row cic-dir-row-compact"><span class="cic-dir-arrow-badge compact" aria-hidden>←</span><span class="cic-dir-label-compact">Front Office</span></div><div class="cic-dir-row cic-dir-row-compact"><span class="cic-dir-arrow-badge compact" aria-hidden>→</span><span class="cic-dir-label-compact">Gym</span></div></div></div></div></div><div class="cic-ticker"><span class="cic-ticker-pill" aria-hidden>C</span><div class="cic-ticker-scroll"><div class="cic-tickin">Go Cougars   •   Spirit week is here</div></div></div></div></div></div><script>
+(function(){
+  var DATA = JSON.parse("{\"media\":[{\"type\":\"image\",\"url\":\"https://example.org/a.jpg\",\"html\":null,\"display_seconds\":10,\"website_width\":null},{\"type\":\"html\",\"url\":\"\",\"html\":\"\\u003ch1>Hi\\u003c/h1>\",\"display_seconds\":8,\"website_width\":null}],\"layout\":\"zoned\",\"headings\":[\"Find your way around Canyons Innovation Center\"],\"crossfadeMs\":700,\"headingRotateMs\":3500,\"defaultSeconds\":10,\"takeoverUrl\":\"https://www.csdtvstaff.org/api/signage/screen/westfront/takeover\"}");
+
+  // ---- Clock (always Mountain Time, never the device timezone) ----
+  var clockEls = document.querySelectorAll('[data-clock]');
+  function fmtClock(){
+    try {
+      return new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Denver'});
+    } catch(e){
+      return new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    }
+  }
+  function renderClock(){
+    if(!clockEls.length) return;
+    var parts = fmtClock().split(':');
+    var html = '';
+    for(var i=0;i<parts.length;i++){
+      if(i>0) html += '<span class="cic-clk-colon">:</span>';
+      html += '<span>'+parts[i]+'</span>';
+    }
+    for(var j=0;j<clockEls.length;j++){ clockEls[j].innerHTML = html; }
+  }
+  renderClock();
+  setInterval(renderClock, 1000);
+
+  // ---- Scaled website slides ----
+  // Render the page at its logical width, then scale it to fit the zone so a
+  // tall site shows more of the page (matches the live React player).
+  function sizeWebScaled(box){
+    if(!box) return;
+    var w = parseFloat(box.getAttribute('data-web-width')) || 0;
+    var frame = box.querySelector('iframe');
+    if(!w || !frame) return;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if(bw <= 0 || bh <= 0) return;
+    var k = bw / w;
+    frame.style.width = w + 'px';
+    frame.style.height = Math.ceil(bh / k) + 'px';
+    frame.style.transform = 'scale(' + k + ')';
+  }
+  function sizeAllWebScaled(){
+    var boxes = document.querySelectorAll('.cic-web-scaled');
+    for(var i=0;i<boxes.length;i++){ sizeWebScaled(boxes[i]); }
+  }
+  sizeAllWebScaled();
+  window.addEventListener('resize', sizeAllWebScaled);
+
+  // ---- Zoned 2 rail card rotation ----
+  var z2rot = document.querySelector('[data-z2rot]');
+  if(z2rot){
+    var z2cards = z2rot.querySelectorAll('[data-z2card]');
+    if(z2cards.length > 1){
+      var z2i = 0;
+      setInterval(function(){
+        z2cards[z2i].style.display = 'none';
+        z2i = (z2i + 1) % z2cards.length;
+        z2cards[z2i].style.display = '';
+      }, 9000);
+    }
+  }
+
+  // ---- Zoned 2 news headline rotation ----
+  var z2news = document.querySelectorAll('[data-z2news]');
+  if(z2news.length > 1){
+    var ni = 0;
+    setInterval(function(){
+      z2news[ni].classList.remove('show');
+      ni = (ni + 1) % z2news.length;
+      z2news[ni].classList.add('show');
+    }, 8000);
+  }
+
+  // ---- Wayfinding heading rotation ----
+  var headingEl = document.querySelector('[data-wayheading]');
+  if(headingEl && DATA.layout === 'wayfinding' && DATA.headings.length > 1){
+    var hi = 0;
+    setInterval(function(){
+      hi = (hi + 1) % DATA.headings.length;
+      headingEl.textContent = DATA.headings[hi];
+    }, DATA.headingRotateMs);
+  }
+
+  // ---- Media slide rotation (crossfade, dots, progress) ----
+  var carousel = document.querySelector('[data-carousel]');
+  var media = DATA.media;
+  if(carousel && media.length > 1){
+    var dotsWrap = carousel.querySelector('[data-dots]');
+    var dots = dotsWrap ? dotsWrap.querySelectorAll('.cic-dot') : [];
+    var index = 0;
+    var advanceTimer = null;
+
+    function slideMarkup(item){
+      if(item.type === 'image' && item.url){
+        var img = document.createElement('img');
+        img.src = item.url; img.alt = '';
+        return img;
+      }
+      if(item.type === 'website' && item.url && item.website_width){
+        // Scaled website: render wide, then the sizer scales it to fit the zone.
+        var box = document.createElement('div');
+        box.className = 'cic-html-slide cic-web-scaled';
+        box.setAttribute('data-web-width', String(item.website_width));
+        box.style.overflow = 'hidden'; box.style.background = '#fff';
+        var wf = document.createElement('iframe');
+        wf.setAttribute('scrolling', 'no');
+        wf.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        wf.style.position = 'absolute'; wf.style.top = '0'; wf.style.left = '0';
+        wf.style.border = '0'; wf.style.transformOrigin = 'top left'; wf.style.background = '#fff';
+        wf.src = item.url;
+        box.appendChild(wf);
+        setTimeout(function(){ sizeWebScaled(box); }, 0);
+        return box;
+      }
+      var frame = document.createElement('iframe');
+      frame.className = 'cic-html-slide';
+      frame.setAttribute('scrolling', 'no');
+      if(item.type === 'website' && item.url){
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        frame.src = item.url;
+      } else {
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.srcdoc = item.html || '';
+      }
+      return frame;
+    }
+    function setDots(){
+      for(var i=0;i<dots.length;i++){
+        if(i === index) dots[i].classList.add('on'); else dots[i].classList.remove('on');
+      }
+    }
+    function restartProgress(item){
+      var old = carousel.querySelector('[data-prog]');
+      if(!old) return;
+      var fresh = old.cloneNode(false);
+      fresh.style.animationDuration = Math.max(3, item.display_seconds || DATA.defaultSeconds) + 's';
+      old.parentNode.replaceChild(fresh, old);
+    }
+    function preload(item){
+      if(item && item.type === 'image' && item.url){ var im = new Image(); im.src = item.url; }
+    }
+    function scheduleNext(item){
+      if(advanceTimer) clearTimeout(advanceTimer);
+      var secs = Math.max(3, item.display_seconds || DATA.defaultSeconds);
+      advanceTimer = setTimeout(advance, secs * 1000);
+    }
+    function advance(){
+      var to = (index + 1) % media.length;
+      var outLayer = carousel.querySelector('.cic-media-layer');
+      // New incoming layer starts transparent, fades in over crossfadeMs.
+      var inLayer = document.createElement('div');
+      inLayer.className = 'cic-media-layer cic-media-layer--in';
+      var node = slideMarkup(media[to]);
+      inLayer.appendChild(node);
+      carousel.insertBefore(inLayer, outLayer ? outLayer.nextSibling : null);
+      if(outLayer) outLayer.classList.add('cic-media-layer--out');
+
+      var started = false;
+      function startFade(){
+        if(started) return; started = true;
+        // double rAF so the transition actually runs
+        requestAnimationFrame(function(){
+          requestAnimationFrame(function(){
+            inLayer.classList.add('is-fading');
+            if(outLayer) outLayer.classList.add('is-fading');
+          });
+        });
+        setTimeout(function(){
+          if(outLayer && outLayer.parentNode) outLayer.parentNode.removeChild(outLayer);
+          inLayer.className = 'cic-media-layer';
+          index = to;
+          setDots();
+          restartProgress(media[index]);
+          preload(media[(index + 1) % media.length]);
+          scheduleNext(media[index]);
+        }, DATA.crossfadeMs);
+      }
+
+      // HTML slides render in an iframe that starts blank and only paints once
+      // its document (and any inlined fonts) load. Fading in before that paints
+      // shows the blank frame mid-transition — the "flash". Wait for load (with
+      // a fallback) so the content is on-screen before we reveal it. Images are
+      // already preloaded, so they fade immediately.
+      if(node.tagName === 'IFRAME'){
+        var fallback = setTimeout(startFade, 1500);
+        node.addEventListener('load', function(){
+          clearTimeout(fallback);
+          // one more paint frame so first contentful paint lands before reveal
+          requestAnimationFrame(function(){ requestAnimationFrame(startFade); });
+        });
+      } else {
+        startFade();
+      }
+    }
+
+    restartProgress(media[0]);
+    preload(media[1]);
+    scheduleNext(media[0]);
+  }
+
+  // ---- Live / board takeover poller (best-effort, online-only enhancement) ----
+  // Every 5s ask the Hub whether this screen should show a live stream or the
+  // board meeting. On ANY network error we do nothing and keep playing the baked
+  // content, so the offline guarantee holds. The overlay only rebuilds when the
+  // takeover actually changes (keyed by its JSON), never on every poll.
+  if(DATA.takeoverUrl){
+    var takeoverKey = null;
+    var overlayEl = null;
+    var hlsInstance = null;
+    var hlsScript = null;
+
+    function destroyOverlay(){
+      if(hlsInstance){ try{ hlsInstance.destroy(); }catch(e){} hlsInstance = null; }
+      if(overlayEl && overlayEl.parentNode){ overlayEl.parentNode.removeChild(overlayEl); }
+      overlayEl = null;
+    }
+
+    function makeIframe(src, allow){
+      var f = document.createElement('iframe');
+      f.setAttribute('src', src);
+      if(allow) f.setAttribute('allow', allow);
+      // YouTube embeds reject requests with a stripped referrer (error 153).
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none';
+      return f;
+    }
+
+    function startHls(video, src){
+      function attach(){
+        if(window.Hls && window.Hls.isSupported()){
+          var h = new window.Hls();
+          hlsInstance = h;
+          h.loadSource(src);
+          h.attachMedia(video);
+          h.on(window.Hls.Events.MANIFEST_PARSED, function(){ video.play().catch(function(){}); });
+        } else {
+          video.src = src;
+          video.play().catch(function(){});
+        }
+      }
+      if(window.Hls){ attach(); return; }
+      if(!hlsScript){
+        hlsScript = document.createElement('script');
+        hlsScript.src = 'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js';
+        hlsScript.onload = function(){ if(overlayEl) attach(); };
+        document.head.appendChild(hlsScript);
+      } else {
+        hlsScript.addEventListener('load', function(){ if(overlayEl) attach(); });
+      }
+    }
+
+    function buildOverlay(tk){
+      destroyOverlay();
+      if(!tk) return;
+      if(tk.type === 'board'){
+        overlayEl = document.createElement('div');
+        overlayEl.className = 'cic-fill';
+        overlayEl.style.cssText = 'position:fixed;inset:0;z-index:101;background:#000';
+        overlayEl.appendChild(makeIframe(tk.src, 'autoplay; encrypted-media; picture-in-picture'));
+        document.body.appendChild(overlayEl);
+      } else if(tk.type === 'live'){
+        overlayEl = document.createElement('div');
+        overlayEl.className = 'cic-fill live-bg cic-live-shell';
+        overlayEl.style.cssText = 'position:fixed;inset:0;z-index:100';
+        if(tk.mode === 'youtube'){
+          overlayEl.appendChild(makeIframe(tk.src, 'autoplay; encrypted-media; picture-in-picture'));
+          document.body.appendChild(overlayEl);
+        } else {
+          var video = document.createElement('video');
+          video.className = 'cic-live-video';
+          video.muted = true;
+          video.setAttribute('playsinline', '');
+          video.setAttribute('autoplay', '');
+          video.setAttribute('crossorigin', 'anonymous');
+          overlayEl.appendChild(video);
+          document.body.appendChild(overlayEl);
+          startHls(video, tk.src);
+        }
+      }
+    }
+
+    function pollTakeover(){
+      fetch(DATA.takeoverUrl, { cache: 'no-store' }).then(function(res){
+        if(!res.ok) return;
+        return res.json();
+      }).then(function(payload){
+        if(!payload) return;
+        var tk = payload.takeover || null;
+        var key = tk ? JSON.stringify(tk) : null;
+        if(key === takeoverKey) return;
+        takeoverKey = key;
+        buildOverlay(tk);
+      }).catch(function(){ /* offline: keep playing baked content */ });
+    }
+
+    pollTakeover();
+    setInterval(pollTakeover, 5000);
+  }
+})();
+</script></body></html>

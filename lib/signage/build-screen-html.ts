@@ -3,7 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildScreenFeed, type ScreenFeedPayload } from './build-screen-feed'
 import { announcementIconEmoji } from './announcement-icons'
 import { SCREEN_INLINE_CSS } from './screen-inline-css.generated'
-import { WAYFINDING_ARROWS, type WayfindingDirection } from './constants'
+import { WAYFINDING_ARROWS, signageTakeoverPublicUrl, type WayfindingDirection } from './constants'
+import {
+  SCREEN_CROSSFADE_MS,
+  SCREEN_HEADING_ROTATE_MS,
+  SCREEN_NEWS_QR,
+  screenWeatherClass,
+  screenColorVarPairs,
+} from './screen-view'
+import { resolveZoneConfig, type RailWidget, type BandWidget } from './zones'
 
 /**
  * Self-contained HTML render pipeline for the AbleSign HTML web app changeover.
@@ -28,8 +36,8 @@ import { WAYFINDING_ARROWS, type WayfindingDirection } from './constants'
 
 type Feed = ScreenFeedPayload
 
-const CROSSFADE_MS = 700
-const HEADING_ROTATE_MS = 3500
+const CROSSFADE_MS = SCREEN_CROSSFADE_MS
+const HEADING_ROTATE_MS = SCREEN_HEADING_ROTATE_MS
 const DEFAULT_IMAGE_SECONDS = 10
 
 // ---------------------------------------------------------------------------
@@ -49,14 +57,23 @@ function esc(value: unknown): string {
 // Asset inlining (server-side fetch + compress → data URI)
 // ---------------------------------------------------------------------------
 
+// One slow asset must not stall the whole HTML build (and thus the AbleSign
+// push). Bound each server-side asset fetch; on timeout/error we fall through to
+// the existing graceful "skip the image" behavior (return null) rather than throw.
+const ASSET_FETCH_TIMEOUT_MS = 6_000
+
 async function fetchBuffer(url: string): Promise<Buffer | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ASSET_FETCH_TIMEOUT_MS)
   try {
-    const res = await fetch(url, { cache: 'no-store' })
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal })
     if (!res.ok) return null
     const ab = await res.arrayBuffer()
     return Buffer.from(ab)
   } catch {
     return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -307,7 +324,24 @@ function slideInner(item: Feed['media'][number]): string {
     // not the whole screen. srcdoc entity-decodes back into the iframe document.
     return `<iframe class="cic-html-slide" srcdoc="${esc(item.html)}" sandbox="allow-scripts" scrolling="no"></iframe>`
   }
+  if (item.type === 'website' && item.url) {
+    return websiteSlideHtml(item.url, item.type === 'website' ? (item.website_width ?? null) : null)
+  }
   return ''
+}
+
+const WEBSITE_SANDBOX = 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation'
+
+// Live external page in a media zone. No width → native fill (best for pages
+// built for a TV). A width (logical CSS px) → the page is rendered that wide and
+// scaled to fit the zone by the runtime sizer (`data-web-width`), so a tall site
+// shows more of the page than a native fill (which only shows the top slice).
+function websiteSlideHtml(url: string, width: number | null): string {
+  const src = esc(url)
+  if (!width) {
+    return `<iframe class="cic-html-slide" src="${src}" sandbox="${WEBSITE_SANDBOX}" scrolling="no"></iframe>`
+  }
+  return `<div class="cic-html-slide cic-web-scaled" data-web-width="${width}" style="overflow:hidden;background:#fff"><iframe src="${src}" sandbox="${WEBSITE_SANDBOX}" scrolling="no" style="position:absolute;top:0;left:0;border:0;transform-origin:top left;background:#fff"></iframe></div>`
 }
 
 function mediaCarousel(
@@ -333,7 +367,7 @@ function mediaCarousel(
 }
 
 /** Zoned 2 rail: CSDtv Spotlight (or Now-on-CSDtv live) over announcements. */
-const NEWS_QR = 'data:image/png;base64,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'
+const NEWS_QR = SCREEN_NEWS_QR
 
 function zoned2BrandBox(opts: { logoUrl: string | null; dateStr: string }): string {
   const logo = opts.logoUrl
@@ -344,17 +378,6 @@ function zoned2BrandBox(opts: { logoUrl: string | null; dateStr: string }): stri
     `<div class="cic-z2-bb-row"><span class="cic-z2-bb-time" data-clock></span></div>` +
     `<div class="cic-z2-bb-date">${esc(opts.dateStr)}</div></div>`
   )
-}
-
-function wxClassHtml(condition: string): string {
-  const t = (condition || '').toLowerCase()
-  if (/thunder|storm|t-storm/.test(t)) return 'storm'
-  if (/snow|sleet|blizzard|flurr|wintry/.test(t)) return 'snow'
-  if (/rain|shower|drizzle/.test(t)) return 'rain'
-  if (/cloud|overcast/.test(t)) return 'cloudy'
-  const hour = Number(new Date().toLocaleString('en-US', { timeZone: 'America/Denver', hour: '2-digit', hour12: false }))
-  if (hour < 6 || hour >= 20) return 'night'
-  return 'sunny'
 }
 
 function wxIconHtml(cls: string): string {
@@ -380,7 +403,7 @@ function wxSceneHtml(cls: string): string {
 }
 
 function zoned2Weather(w: Feed['weather']): string {
-  const cls = wxClassHtml(w.condition)
+  const cls = screenWeatherClass(w.condition)
   const cond = w.condition ? `<div class="cic-z2-cond">${esc(w.condition)}</div>` : ''
   const meta =
     (w.high != null ? `<span>High <b>${esc(w.high)}°</b></span>` : '') +
@@ -424,6 +447,55 @@ function liveCardHtml(live: NonNullable<Feed['csdtv_live']>): string {
   )
 }
 
+// --- Layout-builder zone widgets (zoned2 rail cells + news band) --------------
+// A widget rendered into a swappable slot. Default keys (brand/weather/board/news)
+// call the exact original functions so the default layout stays byte-identical.
+
+function railDirectionsHtml(feed: Feed): string {
+  return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">Directory</div>${wayfindingDirectory(feed.wayfinding, { compact: true })}</div>`
+}
+
+function railSpotlightHtml(feed: Feed): string {
+  const items = feed.spotlight ?? []
+  if (!items.length) return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight</div><div class="cic-empty-muted">—</div></div>`
+  const rows = items.slice(0, 3).map(v => {
+    const thumb = v.thumb ? `<span class="cic-z2-news-thumb"><img src="${esc(v.thumb)}" alt=""></span>` : ''
+    const sub = v.duration ? `<div class="cic-z2-ann-s">${esc(v.duration)}</div>` : ''
+    return `<div class="cic-z2-ann-row">${thumb}<div><div class="cic-z2-ann-t">${esc(v.title)}</div>${sub}</div></div>`
+  }).join('')
+  return `<div class="cic-rail cic-z2-spot"><div class="cic-railhd">CSDtv Spotlight</div>${rows}</div>`
+}
+
+function railWidgetHtml(key: RailWidget, feed: Feed, ctx: { dateStr: string }): string {
+  switch (key) {
+    case 'brand': return zoned2BrandBox({ logoUrl: feed.screen.logo_url, dateStr: ctx.dateStr })
+    case 'weather': return zoned2Weather(feed.weather)
+    case 'board': return zoned2Rail(feed)
+    case 'directions': return railDirectionsHtml(feed)
+    case 'announcements': return annCardHtml(feed.announcements)
+    case 'spotlight': return railSpotlightHtml(feed)
+  }
+}
+
+function bandWidgetHtml(key: BandWidget, feed: Feed): string {
+  switch (key) {
+    case 'news':
+      return zoned2News(feed.news ?? [])
+    case 'directions':
+      return (
+        `<footer class="cic-z2-news"><div class="cic-z2-news-badge"><span class="cic-z2-news-w"><span class="dot"></span>DIRECTORY</span></div>` +
+        `<div class="cic-z2-news-rot">${wayfindingDirectory(feed.wayfinding, { compact: true })}</div></footer>`
+      )
+    case 'announcements': {
+      const rows = feed.announcements.slice(0, 4).map(announcementRow).join('') || '<div class="cic-empty-muted">No announcements</div>'
+      return (
+        `<footer class="cic-z2-news"><div class="cic-z2-news-badge"><span class="cic-z2-news-w"><span class="dot"></span>NOTICES</span></div>` +
+        `<div class="cic-z2-news-rot">${rows}</div></footer>`
+      )
+    }
+  }
+}
+
 function zoned2Rail(feed: Feed): string {
   const cards: string[] = []
   if (feed.csdtv_live) cards.push(liveCardHtml(feed.csdtv_live))
@@ -455,26 +527,15 @@ function zoned2News(items: { title: string; image: string | null }[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Theme / color vars (mirror siteColorVars + ensureDarkBg)
+// Theme / color vars (shared with ScreenClient via screen-view.ts)
 // ---------------------------------------------------------------------------
 
-function ensureDarkBg(hex: string): string {
-  const m = hex.replace('#', '')
-  const full = m.length === 3 ? m.split('').map(c => c + c).join('') : m
-  if (full.length !== 6) return hex
-  const r = parseInt(full.slice(0, 2), 16)
-  const g = parseInt(full.slice(2, 4), 16)
-  const b = parseInt(full.slice(4, 6), 16)
-  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-  return lum > 110 ? `color-mix(in srgb, ${hex} 52%, #0a0a0a)` : hex
-}
-
+// Thin wrapper over the shared `screenColorVarPairs` so this baked HTML and the
+// live ScreenClient page emit an identical set of brand CSS variables.
 function siteStyleAttr(colors: Feed['screen']['colors']): string {
-  if (!colors?.bg) return ''
-  const bg = ensureDarkBg(colors.bg)
-  const parts = [`--navy:${bg}`, `--panel:${colors.panel || `color-mix(in srgb, ${bg} 78%, #ffffff)`}`]
-  if (colors.accent) parts.push(`--accent:${colors.accent}`)
-  return ` style="${parts.join(';')}"`
+  const pairs = screenColorVarPairs(colors)
+  if (pairs.length === 0) return ''
+  return ` style="${pairs.map(([name, value]) => `${name}:${value}`).join(';')}"`
 }
 
 // ---------------------------------------------------------------------------
@@ -530,11 +591,12 @@ function composeBody(feed: Feed): string {
       ? `<div class="cic-z2-scan"><div class="cic-z2-scan-cap"><div class="cic-z2-scan-k">Now playing</div>${cur.title ? `<div class="cic-z2-scan-t">${esc(cur.title)}</div>` : ''}</div><div class="cic-z2-scan-hint">Scan to watch with sound</div></div>`
       : ''
     const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Denver' })
+    const zc = resolveZoneConfig(s.zone_config)
     return (
       `<div class="cic-zoned-stage cic-zoned2-stage">` +
       `<div class="cic-body"><div class="cic-z2-mediacell">${mediaCarousel(feed.media, { overlayHtml: scan })}</div>` +
-      `<div class="cic-railcol">${zoned2BrandBox({ logoUrl: s.logo_url, dateStr })}${zoned2Weather(feed.weather)}${zoned2Rail(feed)}</div></div>` +
-      zoned2News(feed.news ?? []) +
+      `<div class="cic-railcol">${railWidgetHtml(zc.railTop, feed, { dateStr })}${railWidgetHtml(zc.railMid, feed, { dateStr })}${railWidgetHtml(zc.railBottom, feed, { dateStr })}</div></div>` +
+      bandWidgetHtml(zc.band, feed) +
       `</div>`
     )
   }
@@ -607,8 +669,8 @@ function runtimeScript(feed: Feed): string {
   // Only the data the runtime needs — keep the baked payload small.
   const data = {
     media: feed.media
-      .filter(m => (m.type === 'image' && m.url) || (m.type === 'html' && m.html))
-      .map(m => ({ type: m.type, url: m.url, html: m.html, display_seconds: m.display_seconds })),
+      .filter(m => (m.type === 'image' && m.url) || (m.type === 'html' && m.html) || (m.type === 'website' && m.url))
+      .map(m => ({ type: m.type, url: m.url, html: m.html, display_seconds: m.display_seconds, website_width: m.type === 'website' ? (m.website_width ?? null) : null })),
     layout: feed.screen.layout,
     headings: (() => {
       const list: string[] = []
@@ -620,6 +682,9 @@ function runtimeScript(feed: Feed): string {
     crossfadeMs: CROSSFADE_MS,
     headingRotateMs: HEADING_ROTATE_MS,
     defaultSeconds: DEFAULT_IMAGE_SECONDS,
+    // Absolute Hub URL the baked doc polls for live/board takeovers. Best-effort:
+    // if the poll fails (offline), the screen keeps playing its baked content.
+    takeoverUrl: signageTakeoverPublicUrl(feed.screen.code),
   }
 
   // The JSON is embedded inside a <script> tag — neutralize "</" so a value can
@@ -651,6 +716,28 @@ function runtimeScript(feed: Feed): string {
   }
   renderClock();
   setInterval(renderClock, 1000);
+
+  // ---- Scaled website slides ----
+  // Render the page at its logical width, then scale it to fit the zone so a
+  // tall site shows more of the page (matches the live React player).
+  function sizeWebScaled(box){
+    if(!box) return;
+    var w = parseFloat(box.getAttribute('data-web-width')) || 0;
+    var frame = box.querySelector('iframe');
+    if(!w || !frame) return;
+    var bw = box.clientWidth, bh = box.clientHeight;
+    if(bw <= 0 || bh <= 0) return;
+    var k = bw / w;
+    frame.style.width = w + 'px';
+    frame.style.height = Math.ceil(bh / k) + 'px';
+    frame.style.transform = 'scale(' + k + ')';
+  }
+  function sizeAllWebScaled(){
+    var boxes = document.querySelectorAll('.cic-web-scaled');
+    for(var i=0;i<boxes.length;i++){ sizeWebScaled(boxes[i]); }
+  }
+  sizeAllWebScaled();
+  window.addEventListener('resize', sizeAllWebScaled);
 
   // ---- Zoned 2 rail card rotation ----
   var z2rot = document.querySelector('[data-z2rot]');
@@ -702,11 +789,32 @@ function runtimeScript(feed: Feed): string {
         img.src = item.url; img.alt = '';
         return img;
       }
+      if(item.type === 'website' && item.url && item.website_width){
+        // Scaled website: render wide, then the sizer scales it to fit the zone.
+        var box = document.createElement('div');
+        box.className = 'cic-html-slide cic-web-scaled';
+        box.setAttribute('data-web-width', String(item.website_width));
+        box.style.overflow = 'hidden'; box.style.background = '#fff';
+        var wf = document.createElement('iframe');
+        wf.setAttribute('scrolling', 'no');
+        wf.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        wf.style.position = 'absolute'; wf.style.top = '0'; wf.style.left = '0';
+        wf.style.border = '0'; wf.style.transformOrigin = 'top left'; wf.style.background = '#fff';
+        wf.src = item.url;
+        box.appendChild(wf);
+        setTimeout(function(){ sizeWebScaled(box); }, 0);
+        return box;
+      }
       var frame = document.createElement('iframe');
       frame.className = 'cic-html-slide';
-      frame.setAttribute('sandbox', 'allow-scripts');
       frame.setAttribute('scrolling', 'no');
-      frame.srcdoc = item.html || '';
+      if(item.type === 'website' && item.url){
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms allow-presentation');
+        frame.src = item.url;
+      } else {
+        frame.setAttribute('sandbox', 'allow-scripts');
+        frame.srcdoc = item.html || '';
+      }
       return frame;
     }
     function setDots(){
@@ -782,6 +890,105 @@ function runtimeScript(feed: Feed): string {
     preload(media[1]);
     scheduleNext(media[0]);
   }
+
+  // ---- Live / board takeover poller (best-effort, online-only enhancement) ----
+  // Every 5s ask the Hub whether this screen should show a live stream or the
+  // board meeting. On ANY network error we do nothing and keep playing the baked
+  // content, so the offline guarantee holds. The overlay only rebuilds when the
+  // takeover actually changes (keyed by its JSON), never on every poll.
+  if(DATA.takeoverUrl){
+    var takeoverKey = null;
+    var overlayEl = null;
+    var hlsInstance = null;
+    var hlsScript = null;
+
+    function destroyOverlay(){
+      if(hlsInstance){ try{ hlsInstance.destroy(); }catch(e){} hlsInstance = null; }
+      if(overlayEl && overlayEl.parentNode){ overlayEl.parentNode.removeChild(overlayEl); }
+      overlayEl = null;
+    }
+
+    function makeIframe(src, allow){
+      var f = document.createElement('iframe');
+      f.setAttribute('src', src);
+      if(allow) f.setAttribute('allow', allow);
+      // YouTube embeds reject requests with a stripped referrer (error 153).
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+      f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none';
+      return f;
+    }
+
+    function startHls(video, src){
+      function attach(){
+        if(window.Hls && window.Hls.isSupported()){
+          var h = new window.Hls();
+          hlsInstance = h;
+          h.loadSource(src);
+          h.attachMedia(video);
+          h.on(window.Hls.Events.MANIFEST_PARSED, function(){ video.play().catch(function(){}); });
+        } else {
+          video.src = src;
+          video.play().catch(function(){});
+        }
+      }
+      if(window.Hls){ attach(); return; }
+      if(!hlsScript){
+        hlsScript = document.createElement('script');
+        hlsScript.src = 'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js';
+        hlsScript.onload = function(){ if(overlayEl) attach(); };
+        document.head.appendChild(hlsScript);
+      } else {
+        hlsScript.addEventListener('load', function(){ if(overlayEl) attach(); });
+      }
+    }
+
+    function buildOverlay(tk){
+      destroyOverlay();
+      if(!tk) return;
+      if(tk.type === 'board'){
+        overlayEl = document.createElement('div');
+        overlayEl.className = 'cic-fill';
+        overlayEl.style.cssText = 'position:fixed;inset:0;z-index:101;background:#000';
+        overlayEl.appendChild(makeIframe(tk.src, 'autoplay; encrypted-media; picture-in-picture'));
+        document.body.appendChild(overlayEl);
+      } else if(tk.type === 'live'){
+        overlayEl = document.createElement('div');
+        overlayEl.className = 'cic-fill live-bg cic-live-shell';
+        overlayEl.style.cssText = 'position:fixed;inset:0;z-index:100';
+        if(tk.mode === 'youtube'){
+          overlayEl.appendChild(makeIframe(tk.src, 'autoplay; encrypted-media; picture-in-picture'));
+          document.body.appendChild(overlayEl);
+        } else {
+          var video = document.createElement('video');
+          video.className = 'cic-live-video';
+          video.muted = true;
+          video.setAttribute('playsinline', '');
+          video.setAttribute('autoplay', '');
+          video.setAttribute('crossorigin', 'anonymous');
+          overlayEl.appendChild(video);
+          document.body.appendChild(overlayEl);
+          startHls(video, tk.src);
+        }
+      }
+    }
+
+    function pollTakeover(){
+      fetch(DATA.takeoverUrl, { cache: 'no-store' }).then(function(res){
+        if(!res.ok) return;
+        return res.json();
+      }).then(function(payload){
+        if(!payload) return;
+        var tk = payload.takeover || null;
+        var key = tk ? JSON.stringify(tk) : null;
+        if(key === takeoverKey) return;
+        takeoverKey = key;
+        buildOverlay(tk);
+      }).catch(function(){ /* offline: keep playing baked content */ });
+    }
+
+    pollTakeover();
+    setInterval(pollTakeover, 5000);
+  }
 })();
 </script>`
 }
@@ -790,7 +997,9 @@ function runtimeScript(feed: Feed): string {
 // Document assembly
 // ---------------------------------------------------------------------------
 
-function renderScreenDocument(feed: Feed): string {
+// Exported for the golden-master render test (scripts/signage-golden.mjs), which
+// diffs the baked HTML before/after refactors. Pure: no Supabase, no network.
+export function renderScreenDocument(feed: Feed): string {
   const s = feed.screen
   const portrait = s.orientation === 'portrait'
   const layout = s.layout ?? 'zoned'

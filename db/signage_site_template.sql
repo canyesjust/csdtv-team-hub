@@ -19,14 +19,13 @@ ALTER TABLE public.signage_sites
   ADD COLUMN IF NOT EXISTS brand_subtitle       text;
 -- logo_url already added in signage_sites_foundation.sql
 
--- Constrain default_layout to the known layouts (idempotent).
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'signage_sites_default_layout_chk') THEN
-    ALTER TABLE public.signage_sites ADD CONSTRAINT signage_sites_default_layout_chk
-      CHECK (default_layout IN ('full_bleed', 'zoned', 'wayfinding'));
-  END IF;
-END $$;
+-- Constrain default_layout to the known layouts. Recreated so the set stays in
+-- sync with the app (LAYOUTS in app/api/signage/sites/route.ts).
+ALTER TABLE public.signage_sites
+  DROP CONSTRAINT IF EXISTS signage_sites_default_layout_chk;
+ALTER TABLE public.signage_sites
+  ADD CONSTRAINT signage_sites_default_layout_chk
+    CHECK (default_layout IN ('full_bleed', 'zoned', 'zoned2', 'wayfinding'));
 
 -- Existing screens keep their explicit layout. New screens may use 'inherit' to
 -- follow the site template; the feed treats 'inherit' (or null) as "site default".

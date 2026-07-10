@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "gen:css": "node scripts/gen-signage-css.mjs",
+    "predev": "node scripts/gen-signage-css.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/gen-signage-css.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:signage": "tsx scripts/signage-golden.mjs check && node scripts/signage-react-golden.mjs check",
+    "test:signage:update": "tsx scripts/signage-golden.mjs snapshot && node scripts/signage-react-golden.mjs snapshot"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
@@ -32,9 +37,11 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "esbuild": "^0.28.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
+    "tsx": "^4.23.0",
     "typescript": "^5"
   }
 }

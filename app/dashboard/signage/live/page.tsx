@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Hls from 'hls.js'
 import { useTheme } from '@/lib/theme'
 import { toast } from '@/lib/toast'
 import { confirmDialog } from '@/lib/confirm'
-import { isSignageStreamUrl, normalizeSignageStreamUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
+import { isSignageHlsUrl, isSignageStreamUrl, normalizeSignageStreamUrl, youtubeEmbedUrlFromStreamUrl } from '@/lib/signage/stream-url'
 import SignageTargetingPicker, { SignagePageShell, useSignageTheme, type TargetingValue } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 
@@ -59,6 +60,10 @@ export default function SignageLivePage() {
       const ok = await confirmDialog({ title: 'Go live on the signage screens?', message: 'Every screen with board takeover enabled will switch to the live board stream within about 5 seconds.', confirmLabel: 'Go live', tone: 'danger' })
       if (!ok) return
     }
+    if (action === 'preroll') {
+      const ok = await confirmDialog({ title: 'Start the board preroll?', message: 'Every screen with board takeover enabled will switch to the preroll graphic within about 5 seconds, replacing normal signage.', confirmLabel: 'Start preroll', tone: 'danger' })
+      if (!ok) return
+    }
     setBtSaving(true)
     const res = await fetch('/api/signage/board-takeover', {
       method: 'POST',
@@ -74,10 +79,17 @@ export default function SignageLivePage() {
     toast(action === 'off' ? 'Board takeover ended' : action === 'live' ? 'Screens switched to the live stream' : 'Board preroll is on the signage screens', 'success')
   }
 
-  // Live preview of the entered YouTube stream — autoplays muted with captions on.
+  // Live preview of the entered stream — YouTube renders in an embed iframe, an
+  // HLS (.m3u8) manifest plays through hls.js in a <video>, exactly as the
+  // screens do. Autoplays muted with captions on.
+  const normalizedUrl = useMemo(() => normalizeSignageStreamUrl(form.hls_url) || '', [form.hls_url])
   const previewEmbed = useMemo(
-    () => youtubeEmbedUrlFromStreamUrl(normalizeSignageStreamUrl(form.hls_url) || '', { controls: true }),
-    [form.hls_url],
+    () => youtubeEmbedUrlFromStreamUrl(normalizedUrl, { controls: true }),
+    [normalizedUrl],
+  )
+  const previewHls = useMemo(
+    () => (!previewEmbed && isSignageHlsUrl(normalizedUrl) ? normalizedUrl : null),
+    [previewEmbed, normalizedUrl],
   )
 
   const load = useCallback(async () => {
@@ -240,15 +252,23 @@ export default function SignageLivePage() {
                     title="Live stream preview"
                     allow="autoplay; encrypted-media; picture-in-picture"
                     allowFullScreen
+                    referrerPolicy="strict-origin-when-cross-origin"
                     style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
                   />
                 </div>
                 <p style={{ fontSize: 12, color: muted, margin: '8px 0 0' }}>Autoplays muted with captions on, matching the screens.</p>
               </>
+            ) : previewHls ? (
+              <>
+                <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: 12, overflow: 'hidden', background: '#000', border: `1px solid ${border}` }}>
+                  <HlsPreview url={previewHls} />
+                </div>
+                <p style={{ fontSize: 12, color: muted, margin: '8px 0 0' }}>HLS stream, autoplaying muted — matching the screens.</p>
+              </>
             ) : (
               <div style={{ width: '100%', paddingTop: '56.25%', position: 'relative', borderRadius: 12, border: `1px dashed ${border}`, background: inputBg }}>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 20 }}>
-                  <span style={{ fontSize: 13, color: muted, lineHeight: 1.5 }}>Paste a stream URL on the left to preview it here — exactly as it will look on the screens.</span>
+                  <span style={{ fontSize: 13, color: muted, lineHeight: 1.5 }}>{form.hls_url.trim() ? 'That doesn’t look like a supported stream URL yet. Paste a YouTube live link or an HLS (.m3u8) URL.' : 'Paste a stream URL on the left to preview it here — exactly as it will look on the screens.'}</span>
                 </div>
               </div>
             )}
@@ -276,5 +296,57 @@ export default function SignageLivePage() {
         }
       `}</style>
     </SignagePageShell>
+  )
+}
+
+// Plays an HLS (.m3u8) stream in the dashboard preview via hls.js, mirroring the
+// on-screen player. Muted + autoplay so browsers allow it without interaction.
+function HlsPreview({ url }: { url: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    setError(false)
+    const video = videoRef.current
+    if (!video) return
+    let hls: Hls | null = null
+    let cancelled = false
+
+    if (Hls.isSupported()) {
+      hls = new Hls({ enableWorker: true, lowLatencyMode: true })
+      hls.loadSource(url)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { if (!cancelled) void video.play().catch(() => {}) })
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) { setError(true); hls?.destroy(); hls = null }
+      })
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari plays HLS natively.
+      video.src = url
+      void video.play().catch(() => {})
+    } else {
+      setError(true)
+    }
+
+    return () => { cancelled = true; hls?.destroy() }
+  }, [url])
+
+  return (
+    <>
+      <video
+        ref={videoRef}
+        muted
+        playsInline
+        autoPlay
+        controls
+        crossOrigin="anonymous"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+      />
+      {error && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 20, color: '#fca5a5', fontSize: 13, lineHeight: 1.5 }}>
+          Couldn’t load this stream. Check the URL is a live, publicly reachable HLS (.m3u8) manifest.
+        </div>
+      )}
+    </>
   )
 }

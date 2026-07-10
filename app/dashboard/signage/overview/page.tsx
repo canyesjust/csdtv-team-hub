@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast'
 import { SignagePageShell, useSignageAdminStyles } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import { dateRangeLifecycle, todayISO, LifecyclePill, type Lifecycle } from '@/lib/signage/lifecycle'
+import { signageMediaPublicUrl } from '@/lib/signage/constants'
 
 type ReviewKind = 'content' | 'announcement' | 'visitor'
 type ReviewItem = {
@@ -17,7 +18,16 @@ type ReviewItem = {
   meta: string
   raw: Record<string, unknown>
 }
-type ShowingItem = { id: string; label: string; lifecycle: Lifecycle; kind: string }
+type ShowingItem = {
+  id: string
+  label: string
+  lifecycle: Lifecycle
+  kind: string
+  // Real thumbnail (image/video content), or a system-block kind for a matching icon.
+  thumbUrl?: string | null
+  systemKind?: string | null
+  contentType?: string | null
+}
 
 const BASE = '/dashboard/signage'
 
@@ -46,10 +56,13 @@ export default function SignageOverviewPage() {
     setLoading(true)
     const [scr, con, ann, vis] = await Promise.all([
       supabase.from('signage_screens').select('id, ablesign_screen_id, ablesign_online').eq('site_id', activeSiteId).eq('active', true),
-      supabase.from('signage_content').select('id, title, type, status, start_date, end_date, all_screens, target_area_ids, target_screen_ids, submitter_name').eq('site_id', activeSiteId),
+      supabase.from('signage_content').select('id, title, type, status, start_date, end_date, all_screens, target_area_ids, target_screen_ids, submitter_name, media_path, thumb_path, system_kind').eq('site_id', activeSiteId),
       supabase.from('signage_announcements').select('id, title, subtitle, start_date, end_date, active, pending, submitter_name, area_id').eq('site_id', activeSiteId),
       supabase.from('signage_visitors').select('id, name, note, visit_date, active, pending, submitter_name').eq('site_id', activeSiteId),
     ])
+
+    const loadError = scr.error || con.error || ann.error || vis.error
+    if (loadError) toast('Some overview data could not be loaded', 'error')
 
     const screens = scr.data || []
     setScreensTotal(screens.length)
@@ -82,7 +95,18 @@ export default function SignageOverviewPage() {
     content.filter(c => c.status === 'approved').forEach(c => {
       const lc = dateRangeLifecycle(c.start_date, c.end_date, today)
       if (lc === 'active' || lc === 'upcoming') {
-        showingItems.push({ id: `c-${c.id}`, label: c.title || (c.type === 'video' ? 'Video' : c.type === 'html' ? 'HTML slide' : 'Image'), lifecycle: lc, kind: 'Content' })
+        const thumbUrl = !c.system_kind && c.type !== 'html'
+          ? (c.thumb_path ? signageMediaPublicUrl(c.thumb_path) : (c.type !== 'video' && c.media_path ? signageMediaPublicUrl(c.media_path) : null))
+          : null
+        showingItems.push({
+          id: `c-${c.id}`,
+          label: c.title || (c.type === 'video' ? 'Video' : c.type === 'html' ? 'HTML slide' : 'Image'),
+          lifecycle: lc,
+          kind: 'Content',
+          thumbUrl,
+          systemKind: c.system_kind,
+          contentType: c.type,
+        })
       }
     })
     let liveAnn = 0
@@ -106,13 +130,26 @@ export default function SignageOverviewPage() {
     let ok = false
     if (item.kind === 'content') {
       const c = item.raw
-      const allScreens = !c.all_screens && (!Array.isArray(c.target_area_ids) || c.target_area_ids.length === 0) && (!Array.isArray(c.target_screen_ids) || c.target_screen_ids.length === 0)
-        ? true : Boolean(c.all_screens)
+      const hasTarget =
+        Boolean(c.all_screens) ||
+        (Array.isArray(c.target_area_ids) && c.target_area_ids.length > 0) ||
+        (Array.isArray(c.target_screen_ids) && c.target_screen_ids.length > 0)
+      // Never silently widen an untargeted submission to every screen — send the
+      // reviewer to the content page to pick a target. The API enforces this too.
+      if (!hasTarget) {
+        toast('Set a target on the content page before approving this item.', 'error')
+        return
+      }
       const res = await fetch(`/api/signage/content/${item.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'approved', all_screens: allScreens, target_area_ids: c.target_area_ids ?? [], target_screen_ids: c.target_screen_ids ?? [], start_date: c.start_date, end_date: c.end_date }),
+        body: JSON.stringify({ status: 'approved', all_screens: Boolean(c.all_screens), target_area_ids: c.target_area_ids ?? [], target_screen_ids: c.target_screen_ids ?? [], start_date: c.start_date, end_date: c.end_date }),
       })
-      ok = res.ok
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast(typeof data.error === 'string' ? data.error : 'Approve failed', 'error')
+        return
+      }
+      ok = true
     } else if (item.kind === 'announcement') {
       const res = await fetch('/api/signage/announcements', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, pending: false, active: true }) })
       ok = res.ok
@@ -122,7 +159,7 @@ export default function SignageOverviewPage() {
       ok = res.ok
     }
     if (!ok) { toast('Approve failed', 'error'); return }
-    toast('Approved', 'success')
+    toast('Approved — screens update within a few minutes', 'success')
     void load()
   }
 
@@ -149,17 +186,41 @@ export default function SignageOverviewPage() {
     </div>
   )
 
-  const thumb = (kind: string) => {
-    const isAnn = kind.toLowerCase().includes('announc')
-    return (
-      <span style={{ width: 38, height: 38, borderRadius: 9, background: s.infoBg, color: s.info, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        {isAnn ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l16-5v12L3 13z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>
-        ) : (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-        )}
-      </span>
-    )
+  const iconFor = (key: string) => {
+    const p = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+    switch (key) {
+      case 'announcement':
+        return <svg {...p}><path d="M3 11l16-5v12L3 13z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>
+      case 'website':
+        return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg>
+      case 'calendar':
+        return <svg {...p}><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+      case 'national_day':
+        return <svg {...p}><path d="M12 3l2.4 5 5.5.7-4 3.8 1 5.4-4.9-2.7L7.1 21l1-5.4-4-3.8 5.5-.7z"/></svg>
+      case 'broadcast_board':
+        return <svg {...p}><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 3l4 4 4-4"/></svg>
+      case 'designed_slide':
+      case 'html':
+        return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 8l-3 4 3 4M15 8l3 4-3 4"/></svg>
+      case 'video':
+        return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>
+      default:
+        return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    }
+  }
+
+  const thumb = (opts: { kind: string; thumbUrl?: string | null; systemKind?: string | null; contentType?: string | null }) => {
+    const box = { width: 38, height: 38, borderRadius: 9, background: s.infoBg, color: s.info, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' } as const
+    if (opts.thumbUrl) {
+      // eslint-disable-next-line @next/next/no-img-element
+      return <span style={box}><img src={opts.thumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></span>
+    }
+    const key = opts.systemKind
+      || (opts.kind.toLowerCase().includes('announc') ? 'announcement'
+        : opts.contentType === 'video' ? 'video'
+        : opts.contentType === 'html' ? 'html'
+        : 'image')
+    return <span style={box}>{iconFor(key)}</span>
   }
 
   const showingNow = showing.filter(x => x.lifecycle === 'active').length
@@ -183,7 +244,7 @@ export default function SignageOverviewPage() {
               {review.map(item => (
                 <div key={`${item.kind}-${item.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 0', borderTop: `1px solid ${s.border}`, marginTop: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                    {thumb(item.kind)}
+                    {thumb({ kind: item.kind })}
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13.5, fontWeight: 600, color: s.text }}>{item.title}</div>
                       <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{item.meta}</div>
@@ -208,7 +269,7 @@ export default function SignageOverviewPage() {
                 <p style={{ fontSize: 13, color: s.muted, margin: '8px 0 0' }}>Nothing scheduled right now.</p>
               ) : showing.slice(0, 8).map(item => (
                 <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderTop: `1px solid ${s.border}` }}>
-                  {thumb(item.kind)}
+                  {thumb({ kind: item.kind, thumbUrl: item.thumbUrl, systemKind: item.systemKind, contentType: item.contentType })}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600, color: s.text }}>{item.label}</div>
                     <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{item.kind} · {item.lifecycle === 'active' ? 'Showing now' : 'Scheduled'}</div>

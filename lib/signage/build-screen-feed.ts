@@ -1,11 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
-import { clampDisplaySeconds, sanitizeSignageHtml } from './content-display'
+import { clampDisplaySeconds, sanitizeSignageHtml, websiteWidthFromMeta } from './content-display'
 import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
-import { signageLiveMatchesScreen } from './live-targeting'
-import { normalizeSignageStreamUrl } from './stream-url'
+import { resolveScreenLive, resolveBoardTakeover } from './takeover'
+import { resolveZoneConfig } from './zones'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
 import { buildBroadcastBoardHtml, type BroadcastBoardItem } from './broadcast-board'
+import { buildCalendarBoardHtml, buildWebsiteEmbedHtml, buildNationalDayHtml, type CalendarItem } from './system-blocks'
+import { nationalDayFor } from './national-days.data'
+import { parseOutlookIcal } from '@/lib/outlook-ical-parse'
 import { fetchSignageWeather, type SignageWeather } from './weather'
 import { loadScheduleTickerItems, mergeTickerItems, type TickerItem } from './ticker'
 import {
@@ -258,13 +261,183 @@ async function getBroadcastBoardHtml(service: SupabaseClient): Promise<string | 
   }
 }
 
+// ── Calendar block ──────────────────────────────────────────────────────────
+// Renders upcoming events from an ICS/iCal feed URL the editor provides (stored
+// on the content row). NOT the internal productions calendar. Cached briefly
+// per feed URL so repeated screen polls don't re-fetch the calendar each time.
+const calendarIcsCache = new Map<string, { at: number; html: string | null }>()
+
+function ymdDenver(d: Date): string {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+  return p // en-CA gives YYYY-MM-DD
+}
+
+async function getCalendarFromIcs(url: string): Promise<string | null> {
+  const u = (url || '').trim()
+  if (!u || !/^https?:\/\//i.test(u)) return null
+  const cached = calendarIcsCache.get(u)
+  if (cached && Date.now() - cached.at < BROADCAST_BOARD_TTL_MS) return cached.html
+  try {
+    const ctrl = new AbortController()
+    const to = setTimeout(() => ctrl.abort(), 3000)
+    const res = await fetch(u, { signal: ctrl.signal })
+    clearTimeout(to)
+    if (!res.ok) { calendarIcsCache.set(u, { at: Date.now(), html: null }); return null }
+    const text = await res.text()
+    const events = parseOutlookIcal(text)
+    const now = new Date()
+    const todayStr = ymdDenver(now)
+    const in31Str = ymdDenver(new Date(now.getTime() + 31 * 24 * 60 * 60 * 1000))
+    const upcoming = events
+      .filter(e => e.date >= todayStr && e.date <= in31Str)
+      .sort((a, b) => (a.date + (a.start_time || '')).localeCompare(b.date + (b.start_time || '')))
+      .slice(0, 8)
+    if (!upcoming.length) { calendarIcsCache.set(u, { at: Date.now(), html: null }); return null }
+    const items: CalendarItem[] = upcoming.map(e => {
+      const d = new Date(`${e.date}T00:00:00`)
+      return {
+        weekday: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
+        day: String(d.getDate()),
+        month: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+        timeLabel: e.all_day ? 'All day' : (e.start_time ? new Date(e.start_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Denver' }) : ''),
+        title: e.title,
+        typeLabel: e.location || '',
+        accent: '#8a99b5',
+      }
+    })
+    const todayLabel = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Denver' })
+    const html = buildCalendarBoardHtml(items, todayLabel)
+    calendarIcsCache.set(u, { at: Date.now(), html })
+    return html
+  } catch {
+    return calendarIcsCache.get(u)?.html ?? null
+  }
+}
+
+// ── National Day block ──────────────────────────────────────────────────────
+type SiteBrand = { use_brand_colors?: boolean | null; bg_color?: string | null; panel_color?: string | null; accent_color?: string | null; logo_url?: string | null; school_code?: string | null; center_name?: string | null } | null
+
+// Neutral, location-agnostic fallback used ONLY when a location has no brand at
+// all (no linked school and no colors set). Never a specific building's colors.
+const NEUTRAL_PRIMARY = '#233145'
+const NEUTRAL_ACCENT = '#e8212a'
+
+function hexLuminance(hex: string): number {
+  const m = (hex || '').replace('#', '')
+  const f = m.length === 3 ? m.split('').map(c => c + c).join('') : m
+  if (f.length < 6) return 0.5
+  return (0.299 * parseInt(f.slice(0, 2), 16) + 0.587 * parseInt(f.slice(2, 4), 16) + 0.114 * parseInt(f.slice(4, 6), 16)) / 255
+}
+
+// Brand resolution mirrors the rest of signage: the location's linked school
+// colors take priority, then colors set directly on the site, then a neutral
+// default. So each location is branded for the building it lives in.
+async function getNationalDayHtml(service: SupabaseClient, site: SiteBrand): Promise<string | null> {
+  const now = new Date()
+  const mm = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', month: '2-digit' }).format(now)
+  const dd = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', day: '2-digit' }).format(now)
+  const name = nationalDayFor(`${mm}${dd}`)
+  if (!name) return null
+
+  let schoolPrimary: string | null = null, schoolSecondary: string | null = null, schoolAccent: string | null = null
+  if (site?.school_code) {
+    const { data: sch } = await service.from('schools').select('primary_color, secondary_color, accent_color').ilike('code', String(site.school_code)).maybeSingle()
+    schoolPrimary = sch?.primary_color ?? null
+    schoolSecondary = sch?.secondary_color ?? null
+    schoolAccent = sch?.accent_color ?? null
+  }
+  const useBrand = !!site?.use_brand_colors
+  const primary = schoolPrimary || (useBrand && site?.bg_color ? String(site.bg_color) : '') || NEUTRAL_PRIMARY
+  const accent = schoolAccent || (useBrand && site?.accent_color ? String(site.accent_color) : '') || NEUTRAL_ACCENT
+
+  // Only the location's own logo (reads on a white chip); otherwise show the
+  // location name — never a white district logo that would vanish on white.
+  let logoDataUri: string | null = null
+  if (site?.logo_url) {
+    let logoRaw = String(site.logo_url)
+    if (logoRaw.startsWith('/')) logoRaw = `https://www.csdtvstaff.org${logoRaw}`
+    logoDataUri = await inlineBroadcastImage(logoRaw)
+  }
+
+  const len = name.length
+  const nameFontVh = len > 48 ? 5.5 : len > 34 ? 7 : len > 22 ? 9 : 11
+  return buildNationalDayHtml({
+    month: now.toLocaleDateString('en-US', { month: 'short', timeZone: 'America/Denver' }).toUpperCase(),
+    day: String(parseInt(dd, 10)),
+    name, nameFontVh,
+    dateLine: now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Denver' }),
+    primary, accent,
+    logoDataUri, fallbackText: site?.center_name || 'Canyons School District',
+  })
+}
+
+function escHtmlText(s: string): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+type ResolvedBrand = { primary: string; accent: string; logoDataUri: string | null; schoolName: string }
+
+// Location branding for designed slides + national day: linked-school colors →
+// site colors → neutral. Logo inlined for offline-safety.
+async function resolveSiteBrand(service: SupabaseClient, site: SiteBrand): Promise<ResolvedBrand> {
+  let schoolPrimary: string | null = null, schoolAccent: string | null = null
+  if (site?.school_code) {
+    const { data: sch } = await service.from('schools').select('primary_color, accent_color').ilike('code', String(site.school_code)).maybeSingle()
+    schoolPrimary = sch?.primary_color ?? null
+    schoolAccent = sch?.accent_color ?? null
+  }
+  const useBrand = !!site?.use_brand_colors
+  const primary = schoolPrimary || (useBrand && site?.bg_color ? String(site.bg_color) : '') || NEUTRAL_PRIMARY
+  const accent = schoolAccent || (useBrand && site?.accent_color ? String(site.accent_color) : '') || NEUTRAL_ACCENT
+  let logoDataUri: string | null = null
+  if (site?.logo_url) {
+    let logoRaw = String(site.logo_url)
+    if (logoRaw.startsWith('/')) logoRaw = `https://www.csdtvstaff.org${logoRaw}`
+    logoDataUri = await inlineBroadcastImage(logoRaw)
+  }
+  return { primary, accent, logoDataUri, schoolName: site?.center_name || 'Canyons School District' }
+}
+
+// Fill a designed-slide template's placeholders with this location's brand.
+function fillDesignedSlide(html: string, b: ResolvedBrand): string {
+  return html
+    .split('{{primary}}').join(b.primary)
+    .split('{{accent}}').join(b.accent)
+    .split('{{logo}}').join(b.logoDataUri || '')
+    .split('{{school_name}}').join(escHtmlText(b.schoolName))
+    .split('{{schoolName}}').join(escHtmlText(b.schoolName))
+}
+
+const SITE_BRAND_COLUMNS = 'use_brand_colors, bg_color, panel_color, accent_color, logo_url, school_code, center_name'
+
+// Render a single stock/system block's HTML on demand — used by the dashboard
+// "Full preview" so editors can see exactly what a block will look like.
+export async function renderSystemBlockHtml(
+  service: SupabaseClient,
+  row: { system_kind: string | null; html_body: string | null; site_id: string | null; gen_meta?: unknown },
+): Promise<string | null> {
+  if (row.system_kind === 'broadcast_board') return getBroadcastBoardHtml(service)
+  if (row.system_kind === 'calendar') return getCalendarFromIcs(String(row.html_body ?? ''))
+  if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body), websiteWidthFromMeta(row.gen_meta)) : null
+  if (row.system_kind === 'national_day' || row.system_kind === 'designed_slide') {
+    const { data: site } = row.site_id
+      ? await service.from('signage_sites').select(SITE_BRAND_COLUMNS).eq('id', row.site_id).maybeSingle()
+      : { data: null }
+    if (row.system_kind === 'designed_slide') {
+      return row.html_body ? fillDesignedSlide(sanitizeSignageHtml(String(row.html_body)), await resolveSiteBrand(service, site as SiteBrand)) : null
+    }
+    return getNationalDayHtml(service, site as SiteBrand)
+  }
+  return null
+}
+
 export async function buildScreenFeed(
   service: SupabaseClient,
   code: string,
 ): Promise<{ feed: ScreenFeed } | { error: 'not_found' | 'server_error' }> {
   const { data: screen, error: screenErr } = await service
     .from('signage_screens')
-    .select('id, code, name, orientation, layout, theme, site_id, wayfinding_heading, accepts_takeover, board_takeover_enabled, board_takeover_audio, area_id, building, floor, active, signage_areas(id, name, slug, building, floor)')
+    .select('id, code, name, orientation, layout, theme, site_id, wayfinding_heading, accepts_takeover, board_takeover_enabled, board_takeover_audio, area_id, building, floor, active, zone_config, signage_areas(id, name, slug, building, floor)')
     .eq('code', code)
     .maybeSingle()
 
@@ -309,7 +482,10 @@ export async function buildScreenFeed(
       ? service.from('signage_live').select('*').eq('site_id', siteId).maybeSingle()
       : service.from('signage_live').select('*').eq('id', 1).maybeSingle(),
     siteId
-      ? service.from('signage_sites').select('*').eq('id', siteId).maybeSingle()
+      // Explicit column list (never select('*')) so secret columns such as
+      // ablesign_api_key / ablesign_workspace_id are never loaded into or
+      // serialized with the public screen feed.
+      ? service.from('signage_sites').select('weather_lat, weather_lon, show_calendar_ticker, ticker_extra, default_layout, center_name, default_theme, use_brand_colors, bg_color, panel_color, accent_color, school_code, brand_title, brand_subtitle, logo_url, show_weather, show_clock, show_ticker, show_visitor_welcome').eq('id', siteId).maybeSingle()
       : service.from('signage_settings').select('*').eq('id', 1).maybeSingle(),
     service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle(),
   ])
@@ -319,28 +495,61 @@ export async function buildScreenFeed(
     .filter(row => signageTargetMatches(row, target))
     .sort((a, b) => b.priority - a.priority || String(b.created_at).localeCompare(String(a.created_at)))
 
-  // System "stock" blocks (e.g. the broadcast board) are content rows rendered
-  // dynamically by the feed, but scheduled + targeted exactly like normal
-  // content — so they only appear on the screens an editor assigned them to.
-  const needsBoard = filteredContent.some(row => row.system_kind === 'broadcast_board')
-  const broadcastBoardHtml = needsBoard ? await getBroadcastBoardHtml(service) : null
+  // System "stock" blocks (broadcast board, calendar, website) are content rows
+  // rendered dynamically by the feed, but scheduled + targeted exactly like
+  // normal content — so they only appear on the screens an editor assigned them to.
+  const [broadcastBoardHtml, nationalDayHtml] = await Promise.all([
+    filteredContent.some(row => row.system_kind === 'broadcast_board') ? getBroadcastBoardHtml(service) : Promise.resolve(null),
+    filteredContent.some(row => row.system_kind === 'national_day') ? getNationalDayHtml(service, siteRes.data as SiteBrand) : Promise.resolve(null),
+  ])
+  // Calendar blocks each carry their own ICS feed URL (in html_body), so resolve per row.
+  const calendarByRow = new Map<string, string | null>()
+  await Promise.all(
+    filteredContent.filter(r => r.system_kind === 'calendar').map(async r => {
+      calendarByRow.set(r.id, await getCalendarFromIcs(String(r.html_body ?? '')))
+    }),
+  )
+  // Designed slides: fill each template's placeholders with this location's brand.
+  const designedByRow = new Map<string, string | null>()
+  const designedRows = filteredContent.filter(r => r.system_kind === 'designed_slide')
+  if (designedRows.length) {
+    const brand = await resolveSiteBrand(service, siteRes.data as SiteBrand)
+    for (const r of designedRows) {
+      designedByRow.set(r.id, r.html_body ? fillDesignedSlide(sanitizeSignageHtml(String(r.html_body)), brand) : null)
+    }
+  }
+  const systemHtml = (row: { id?: string; system_kind?: string | null; html_body?: string | null }): string | null => {
+    if (row.system_kind === 'broadcast_board') return broadcastBoardHtml
+    if (row.system_kind === 'calendar') return (row.id && calendarByRow.get(row.id)) || null
+    if (row.system_kind === 'designed_slide') return (row.id && designedByRow.get(row.id)) || null
+    if (row.system_kind === 'national_day') return nationalDayHtml
+    if (row.system_kind === 'website') return row.html_body ? buildWebsiteEmbedHtml(String(row.html_body)) : null
+    return null
+  }
 
   const media = filteredContent
-    // Drop a board slide when there are no upcoming broadcasts (nothing to show).
-    .filter(row => row.system_kind !== 'broadcast_board' || broadcastBoardHtml)
+    // Drop a system block when it has nothing to show (e.g. no upcoming items, no URL).
+    .filter(row => {
+      if (!row.system_kind) return true
+      if (row.system_kind === 'website') return !!row.html_body // needs a URL
+      return !!systemHtml(row)
+    })
     .map(row => {
-      const isBoard = row.system_kind === 'broadcast_board'
-      const type = (isBoard ? 'html' : row.type) as 'image' | 'video' | 'html'
+      const isWebsite = row.system_kind === 'website'
+      const isSystem = !!row.system_kind
+      // Website = a live external page in a direct iframe (its URL is in html_body).
+      const type = (isWebsite ? 'website' : (isSystem ? 'html' : row.type)) as 'image' | 'video' | 'html' | 'website'
       return {
         id: row.id,
         type,
         title: row.title,
-        url: isBoard || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path),
-        html: isBoard
-          ? broadcastBoardHtml
-          : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null),
+        url: isWebsite
+          ? String(row.html_body ?? '')
+          : (isSystem || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path)),
+        html: isWebsite ? null : (isSystem ? systemHtml(row) : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null)),
         full_screen: row.full_screen,
         display_seconds: clampDisplaySeconds(row.display_seconds),
+        website_width: isWebsite ? websiteWidthFromMeta(row.gen_meta) : null,
       }
     })
 
@@ -415,36 +624,11 @@ export async function buildScreenFeed(
     direction: w.direction,
   }))
 
-  let live: ScreenFeed['live'] = { live: false }
-  const liveRow = liveRes.data
-  const streamUrl = normalizeSignageStreamUrl(liveRow?.hls_url)
-  if (
-    liveRow?.is_live &&
-    streamUrl &&
-    screen.accepts_takeover &&
-    signageLiveMatchesScreen(liveRow, target)
-  ) {
-    live = { live: true, hls_url: streamUrl, label: liveRow.label }
-  }
-
-  // Board meeting takeover — only screens that opted in follow the board meeting.
-  // Fail-safe: a takeover is only honored while its heartbeat is fresh. The
-  // control surface pings the heartbeat while it's open; if the operator forgets
-  // to turn the takeover off, the heartbeat goes stale and screens return to
-  // normal on their own (instead of staying stuck on the pre-roll all day).
-  const TAKEOVER_STALE_MS = 10 * 60 * 1000
-  let board_takeover: ScreenFeed['board_takeover'] = undefined
-  const tk = takeoverRes.data
-  const takeoverFresh = !!tk?.heartbeat_at && (Date.now() - new Date(tk.heartbeat_at).getTime() < TAKEOVER_STALE_MS)
-  if (tk?.active && takeoverFresh && screen.board_takeover_enabled) {
-    const audio = !!screen.board_takeover_audio
-    if (tk.mode === 'preroll' && tk.board_channel_number) {
-      board_takeover = { mode: 'preroll', url: `/board/${tk.board_channel_number}/preroll`, audio, label: tk.label ?? null }
-    } else if (tk.mode === 'live' && tk.youtube_url && tk.board_channel_number) {
-      // Stream + live agenda sidebar (the page reads the YouTube URL from board state).
-      board_takeover = { mode: 'live', url: `/board/${tk.board_channel_number}/stream?audio=${audio ? 1 : 0}`, audio, label: tk.label ?? null }
-    }
-  }
+  // Live (HLS/CSDtv) + board-meeting takeover resolution. Shared with the public
+  // takeover endpoint (lib/signage/takeover.ts) so the React feed and the baked
+  // HTML poll agree on exactly when a screen goes live or follows the board.
+  const live = resolveScreenLive(liveRes.data, screen, target)
+  const board_takeover = resolveBoardTakeover(takeoverRes.data, screen)
 
   // Zoned 2 extras — only fetched for screens using the district-branded layout.
   const resolvedLayout = resolveScreenLayout(screen.layout, site?.default_layout)
@@ -543,6 +727,7 @@ export async function buildScreenFeed(
         brand_title: site?.brand_title ?? null,
         brand_subtitle: site?.brand_subtitle ?? null,
         logo_url: resolvedLayout === 'zoned2' ? (site?.logo_url ?? DISTRICT_LOGO_URL) : (site?.logo_url ?? null),
+        zone_config: resolveZoneConfig(screen.zone_config),
       },
       template: {
         show_weather: site?.show_weather ?? true,

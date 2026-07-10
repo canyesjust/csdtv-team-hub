@@ -13,6 +13,7 @@ import SignageTargetingPicker, {
 } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
 import CreateWithAI from '../components/CreateWithAI'
+import { SignagePushStatus } from '../components/SignagePushStatus'
 import { SIGNAGE_DEFAULT_DISPLAY_SECONDS, SIGNAGE_MAX_DISPLAY_SECONDS, SIGNAGE_MIN_DISPLAY_SECONDS } from '@/lib/signage/content-display'
 import { signageMediaPublicUrl, CIC_SUBMIT_URL, SIGNAGE_INDEFINITE_END_DATE, isIndefiniteEndDate } from '@/lib/signage/constants'
 import { prepareSignageImageFile, captureVideoPoster, SIGNAGE_MAX_VIDEO_BYTES } from '@/lib/signage/client-image-upload'
@@ -42,19 +43,26 @@ type ContentRow = {
   full_screen: boolean
   reject_reason: string | null
   system_kind: string | null
+  gen_meta: { website_width?: number | null } & Record<string, unknown> | null
   created_at?: string
+  reviewed_at?: string | null
+  reviewed_by?: string | null
 }
 
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, created_at'
+  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, gen_meta, created_at, reviewed_at, reviewed_by'
 
-// Built-in "stock" blocks: always available, added + targeted like content.
+// A template assigned to this location (from the admin library).
+type StockTemplate = { id: string; name: string; description: string | null; kind: string; singleton: boolean; requires_url: boolean; config?: { html?: string } | null }
+
+// Built-in "stock" blocks: label lookup for the gallery tile of a system row.
 const STOCK_BLOCKS: { kind: string; label: string; desc: string; available: boolean }[] = [
   { kind: 'broadcast_board', label: "What's coming up on air", desc: 'Upcoming livestreams & board meetings you feature, with date, time & a scan-to-watch QR.', available: true },
-  { kind: 'calendar', label: 'Calendar', desc: 'A month/agenda view of upcoming productions and events.', available: false },
-  { kind: 'website', label: 'Website preview', desc: 'A live snapshot of a district web page.', available: false },
+  { kind: 'national_day', label: 'National Day of the day', desc: 'Auto-updates every day to show today’s fun national day.', available: true },
+  { kind: 'calendar', label: 'Calendar', desc: 'Upcoming events from a calendar (ICS/iCal) link you provide.', available: true },
+  { kind: 'website', label: 'Website preview', desc: 'A live view of a district web page (the page must allow embedding).', available: true },
 ]
 
 const EMPTY_COUNTS: Record<Tab, number> = { pending: 0, approved: 0, rejected: 0 }
@@ -93,10 +101,20 @@ export default function SignageContentPage() {
     full_screen: boolean
     display_seconds: number
     html_body: string
+    website_width: number
   }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [fullPreview, setFullPreview] = useState<{ html?: string; img?: string; video?: string } | null>(null)
+  const [fullPreview, setFullPreview] = useState<{ html?: string; img?: string; video?: string; iframe?: string } | null>(null)
+  const [stockTemplates, setStockTemplates] = useState<StockTemplate[]>([])
+
+  useEffect(() => {
+    if (!activeSiteId) { setStockTemplates([]); return }
+    fetch(`/api/signage/templates?site=${activeSiteId}`)
+      .then(r => r.json())
+      .then(d => setStockTemplates(d.templates || []))
+      .catch(() => setStockTemplates([]))
+  }, [activeSiteId])
   const [busy, setBusy] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [addFile, setAddFile] = useState<File | null>(null)
@@ -112,24 +130,36 @@ export default function SignageContentPage() {
   })
 
   const loadCounts = useCallback(async () => {
-    const { data } = await supabase.from('signage_content').select('status').eq('site_id', activeSiteId)
+    const d = new Date()
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const { data, error } = await supabase.from('signage_content').select('status, end_date').eq('site_id', activeSiteId)
+    if (error) { toast('Could not load counts', 'error'); setCountsLoaded(true); return }
     const next = { ...EMPTY_COUNTS }
     for (const row of data ?? []) {
       const st = row.status as Tab
-      if (st in next) next[st] += 1
+      if (!(st in next)) continue
+      // The Approved list hides past items unless "Show past" is on — keep the
+      // tab count in sync so the number matches what's actually shown.
+      if (st === 'approved' && !showPast) {
+        const end = (row.end_date as string | null)?.slice(0, 10)
+        const expired = !!end && !isIndefiniteEndDate(row.end_date as string) && end < todayStr
+        if (expired) continue
+      }
+      next[st] += 1
     }
     setCounts(next)
     setCountsLoaded(true)
-  }, [supabase, activeSiteId])
+  }, [supabase, activeSiteId, showPast])
 
   const loadTab = useCallback(async (activeTab: Tab) => {
     setTabLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('signage_content')
       .select(CONTENT_COLUMNS)
       .eq('status', activeTab)
       .eq('site_id', activeSiteId)
       .order('created_at', { ascending: false })
+    if (error) toast('Could not load content', 'error')
     const list = (data as ContentRow[]) || []
     setRows(list)
     setExpandedId(null) // master-detail: nothing selected on open (no auto-expanded card)
@@ -163,6 +193,7 @@ export default function SignageContentPage() {
     full_screen: row.full_screen,
     display_seconds: row.display_seconds ?? SIGNAGE_DEFAULT_DISPLAY_SECONDS,
     html_body: row.html_body ?? '',
+    website_width: row.gen_meta?.website_width ?? 0,
   }
 
   const today = useMemo(() => {
@@ -200,41 +231,49 @@ export default function SignageContentPage() {
       priority: e.priority,
       display_seconds: e.display_seconds,
       ...(row.type === 'html' ? { html_body: e.html_body } : {}),
+      ...(row.system_kind === 'website' ? { website_width: e.website_width || null } : {}),
       ...extra,
     })
   }
 
-  const patchContent = async (id: string, body: Record<string, unknown>) => {
+  const patchContent = async (id: string, body: Record<string, unknown>, successMessage = 'Saved — screens update within a few minutes') => {
     setBusy(id)
     const res = await fetch(`/api/signage/content/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data = await res.json().catch(() => ({}))
     setBusy(null)
-    if (!res.ok) { toast(data.error || 'Update failed', 'error'); return false }
-    toast('Updated', 'success')
+    if (!res.ok) { toast(typeof data.error === 'string' ? data.error : 'Update failed', 'error'); return false }
+    toast(successMessage, 'success')
     void refreshAll()
     return true
   }
 
   const approve = async (row: ContentRow) => {
     const e = getEdit(row)
-    const targeting =
-      !e.all_screens && e.target_area_ids.length === 0 && e.target_screen_ids.length === 0 && (e.target_buildings ?? []).length === 0
-        ? { ...e, all_screens: true }
-        : e
+    // Do NOT silently widen to all screens — require an explicit target. The API
+    // enforces this too and returns a 400 the toast will surface.
+    if (
+      !e.all_screens &&
+      e.target_area_ids.length === 0 &&
+      e.target_screen_ids.length === 0 &&
+      (e.target_buildings ?? []).length === 0
+    ) {
+      toast('Select at least one target (area, screen, or building) or choose all screens before approving.', 'error')
+      return
+    }
     await patchContent(row.id, {
       status: 'approved',
-      title: targeting.title,
-      full_screen: targeting.full_screen,
-      all_screens: targeting.all_screens,
-      target_area_ids: targeting.target_area_ids,
-      target_screen_ids: targeting.target_screen_ids,
-      target_buildings: targeting.target_buildings ?? [],
-      start_date: targeting.start_date,
-      end_date: targeting.end_date,
-      priority: targeting.priority,
-      display_seconds: targeting.display_seconds,
-      ...(row.type === 'html' ? { html_body: targeting.html_body } : {}),
-    })
+      title: e.title,
+      full_screen: e.full_screen,
+      all_screens: e.all_screens,
+      target_area_ids: e.target_area_ids,
+      target_screen_ids: e.target_screen_ids,
+      target_buildings: e.target_buildings ?? [],
+      start_date: e.start_date,
+      end_date: e.end_date,
+      priority: e.priority,
+      display_seconds: e.display_seconds,
+      ...(row.type === 'html' ? { html_body: e.html_body } : {}),
+    }, 'Approved — screens update within a few minutes')
   }
 
   const reject = async (row: ContentRow) => {
@@ -378,20 +417,36 @@ export default function SignageContentPage() {
     return parts.join(' · ')
   }
 
-  const addStockBlock = async (kind: string) => {
-    // If this stock block already exists for the site, just open it to assign screens.
-    const { data: existing } = await supabase
-      .from('signage_content').select('id, status')
-      .eq('site_id', activeSiteId).eq('system_kind', kind).limit(1).maybeSingle()
-    if (existing) {
-      setTab(existing.status === 'rejected' ? 'rejected' : existing.status === 'pending' ? 'pending' : 'approved')
-      setExpandedId(existing.id)
-      toast('Already added — assign it to screens below', 'success')
-      return
+  const addStockBlock = async (t: StockTemplate) => {
+    const kind = t.kind
+    // Singleton templates (broadcast board, national day) allow one per location.
+    if (t.singleton) {
+      const { data: existing } = await supabase
+        .from('signage_content').select('id, status')
+        .eq('site_id', activeSiteId).eq('system_kind', kind).limit(1).maybeSingle()
+      if (existing) {
+        setTab(existing.status === 'rejected' ? 'rejected' : existing.status === 'pending' ? 'pending' : 'approved')
+        setExpandedId(existing.id)
+        toast('Already added — assign it to screens below', 'success')
+        return
+      }
+    }
+    let blockUrl = ''
+    let blockTitle = t.name
+    if (kind === 'website') {
+      blockUrl = (window.prompt('Web page URL to show on screen (the page must allow embedding):', 'https://www.canyonsdistrict.org') || '').trim()
+      if (!blockUrl) return
+      blockTitle = `Website — ${blockUrl.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}`
+    } else if (kind === 'calendar' || t.requires_url) {
+      blockUrl = (window.prompt('Calendar link (ICS/iCal URL) to show upcoming events from:', 'https://') || '').trim()
+      if (!blockUrl) return
     }
     const fd = new FormData()
     fd.set('system_kind', kind)
-    fd.set('title', STOCK_BLOCKS.find(b => b.kind === kind)?.label || 'Stock content')
+    if (blockUrl) fd.set('website_url', blockUrl)
+    if (kind === 'designed_slide') fd.set('html_body', t.config?.html || '')
+    fd.set('title', blockTitle)
+    fd.set('start_date', today)
     fd.set('start_date', today)
     fd.set('end_date', SIGNAGE_INDEFINITE_END_DATE)
     fd.set('all_screens', 'false')
@@ -409,6 +464,14 @@ export default function SignageContentPage() {
     if (data.content?.id) setExpandedId(data.content.id)
   }
 
+  // Small audit line for reviewed items — reviewed_by is a team id (no name
+  // readily joined here), so we surface the decision + date/time only.
+  const reviewedLine = (row: ContentRow) => {
+    if (!row.reviewed_at || (row.status !== 'approved' && row.status !== 'rejected')) return null
+    const verb = row.status === 'approved' ? 'Approved' : 'Rejected'
+    return `${verb} ${formatSignageDate(row.reviewed_at)}`
+  }
+
   const requestLine = (row: ContentRow) => {
     const parts: string[] = []
     if (row.start_date && row.end_date) {
@@ -423,6 +486,7 @@ export default function SignageContentPage() {
   return (
     <SignagePageShell title="Content" subtitle="Images, videos & slides on the screens">
       {showAI && <CreateWithAI onClose={() => setShowAI(false)} onSaved={() => { void refreshAll() }} />}
+      <SignagePushStatus />
       <div style={{ ...s.card, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Share the submission link</div>
@@ -434,21 +498,25 @@ export default function SignageContentPage() {
       </div>
 
       {isManager && (
-        <div style={{ ...s.card, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Stock content</div>
-          <div style={{ fontSize: 12, color: s.muted, margin: '2px 0 12px' }}>Built-in blocks that are always available. Add one, then choose which screens show it.</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-            {STOCK_BLOCKS.map(b => (
-              <div key={b.kind} style={{ border: `1px solid ${s.border}`, borderRadius: 10, padding: '11px 13px', display: 'flex', flexDirection: 'column', opacity: b.available ? 1 : 0.6 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>{b.label}</div>
-                <div style={{ fontSize: 11.5, color: s.muted, margin: '3px 0 10px', lineHeight: 1.45, flex: 1 }}>{b.desc}</div>
-                {b.available
-                  ? <button type="button" onClick={() => void addStockBlock(b.kind)} style={{ ...s.btnPrimary, alignSelf: 'flex-start' }}>Add to screens</button>
-                  : <span style={{ fontSize: 11, fontWeight: 600, color: s.muted, alignSelf: 'flex-start' }}>Coming soon</span>}
-              </div>
-            ))}
-          </div>
-        </div>
+        <details style={{ ...s.card, marginBottom: 16 }}>
+          <summary style={{ cursor: 'pointer', listStyle: 'revert' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: s.text }}>Templates</span>
+            <span style={{ fontSize: 12, color: s.muted, marginLeft: 8 }}>Built-in blocks shared with this location — add and target to screens</span>
+          </summary>
+          {stockTemplates.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: s.muted, marginTop: 10, lineHeight: 1.5 }}>No templates are shared with this location yet. A district admin can assign them from Templates (Admin · all locations).</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10, marginTop: 12 }}>
+              {stockTemplates.map(t => (
+                <div key={t.id} style={{ border: `1px solid ${s.border}`, borderRadius: 10, padding: '11px 13px', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: s.text }}>{t.name}</div>
+                  <div style={{ fontSize: 11.5, color: s.muted, margin: '3px 0 10px', lineHeight: 1.45, flex: 1 }}>{t.description}</div>
+                  <button type="button" onClick={() => void addStockBlock(t)} style={{ ...s.btnPrimary, alignSelf: 'flex-start' }}>Add to screens</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </details>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -636,7 +704,7 @@ export default function SignageContentPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <button
                       type="button"
-                      onClick={() => setFullPreview(isHtml ? { html: e.html_body } : previewImg ? { img: previewImg } : previewVideo ? { video: previewVideo } : null)}
+                      onClick={() => setFullPreview(row.system_kind ? { iframe: `/api/signage/system-preview?id=${row.id}` } : isHtml ? { html: e.html_body } : previewImg ? { img: previewImg } : previewVideo ? { video: previewVideo } : null)}
                       style={{ ...s.btn, padding: '4px 10px', fontSize: 12 }}
                     >
                       ⛶ Full preview
@@ -656,6 +724,9 @@ export default function SignageContentPage() {
                   )}
                   {requestLine(row) && (
                     <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{requestLine(row)}</div>
+                  )}
+                  {reviewedLine(row) && (
+                    <div style={{ fontSize: 12, color: s.muted, marginTop: 2 }}>{reviewedLine(row)}</div>
                   )}
 
                   <div style={s.divider}>
@@ -710,8 +781,44 @@ export default function SignageContentPage() {
                         />
                       </div>
                     )}
+                    {(row.system_kind === 'website' || row.system_kind === 'calendar') && (
+                      <div style={{ marginTop: 12 }}>
+                        <p style={s.lbl}>{row.system_kind === 'calendar' ? 'Calendar link (ICS/iCal URL)' : 'Web page URL'}</p>
+                        <input
+                          value={e.html_body}
+                          onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, html_body: ev.target.value } }))}
+                          placeholder={row.system_kind === 'calendar' ? 'https://…/calendar.ics' : 'https://www.canyonsdistrict.org'}
+                          style={s.input}
+                        />
+                        <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>{row.system_kind === 'calendar' ? 'Paste a public ICS/iCal feed URL. Upcoming events auto-update on screen.' : 'The page must allow being embedded (some sites block this). Test on a screen after saving.'}</p>
+                      </div>
+                    )}
+                    {row.system_kind === 'website' && (
+                      <div style={{ marginTop: 12 }}>
+                        <p style={s.lbl}>Page zoom</p>
+                        <select
+                          value={String(e.website_width || 0)}
+                          onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, website_width: parseInt(ev.target.value, 10) || 0 } }))}
+                          style={s.input}
+                        >
+                          <option value="0">Fit to screen — native size (best for TV/kiosk pages)</option>
+                          <option value="1920">Show more — zoom out (good for full websites)</option>
+                          <option value="2560">Show a lot more — zoom out further</option>
+                          <option value="3200">Show the most — smallest text</option>
+                        </select>
+                        <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>Native fits a page built for a screen. For a normal website that runs off the bottom, zoom out to fit more of the page (text gets smaller).</p>
+                      </div>
+                    )}
                     <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
-                      <input type="checkbox" checked={e.full_screen} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: ev.target.checked } }))} />
+                      <input
+                        type="checkbox"
+                        checked={e.full_screen}
+                        onChange={async ev => {
+                          const on = ev.target.checked
+                          if (on && !(await confirmDialog({ title: 'Turn on full-screen takeover?', message: 'This slide will black out the entire screen while it shows, hiding all other content and the ticker. Save changes to apply it.', confirmLabel: 'Enable takeover', tone: 'danger' }))) return
+                          setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: on } }))
+                        }}
+                      />
                       Full-screen takeover
                     </label>
 
@@ -772,7 +879,9 @@ export default function SignageContentPage() {
           style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(2,8,18,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
         >
           <div onClick={ev => ev.stopPropagation()} style={{ width: 'min(92vw, 1280px)', aspectRatio: '16 / 9', background: '#0a1f3c', borderRadius: 12, overflow: 'hidden', position: 'relative', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-            {fullPreview.html != null ? (
+            {fullPreview.iframe ? (
+              <iframe src={fullPreview.iframe} title="Preview" style={{ width: '100%', height: '100%', border: 'none' }} />
+            ) : fullPreview.html != null ? (
               <ScaledSlide html={fullPreview.html} />
             ) : fullPreview.img ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -836,7 +945,7 @@ function ScaledSlide({ html }: { html: string }) {
  */
 function SlidePreview({ row, edit, fit = 'cover' }: { row: ContentRow; edit?: { html_body: string }; fit?: 'cover' | 'contain' }) {
   if (row.system_kind) {
-    const label = STOCK_BLOCKS.find(b => b.kind === row.system_kind)?.label || 'Live block'
+    const label = STOCK_BLOCKS.find(b => b.kind === row.system_kind)?.label || row.title || 'Stock block'
     return (
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, background: '#0b0e13', textAlign: 'center', padding: 10 }}>
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', color: '#ff5760' }}>Stock block</span>

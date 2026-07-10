@@ -42,11 +42,17 @@ export async function PATCH(
     patch.reviewed_at = new Date().toISOString()
     if (body.status === 'approved') {
       const allScreens = typeof body.all_screens === 'boolean' ? body.all_screens : existing.all_screens
-      const areaIds = Array.isArray(body.target_area_ids) ? body.target_area_ids : existing.target_area_ids
-      const screenIds = Array.isArray(body.target_screen_ids) ? body.target_screen_ids : existing.target_screen_ids
+      const areaIds = Array.isArray(body.target_area_ids) ? body.target_area_ids : (existing.target_area_ids ?? [])
+      const screenIds = Array.isArray(body.target_screen_ids) ? body.target_screen_ids : (existing.target_screen_ids ?? [])
       const buildings = Array.isArray(body.target_buildings) ? body.target_buildings : (existing.target_buildings ?? [])
+      // Never silently widen to every screen. If nothing is targeted and
+      // all_screens wasn't explicitly chosen, refuse the approval so the
+      // reviewer makes an intentional choice.
       if (!allScreens && areaIds.length === 0 && screenIds.length === 0 && buildings.length === 0) {
-        patch.all_screens = true
+        return NextResponse.json(
+          { error: 'Select at least one target (area, screen, or building) or explicitly choose all screens before approving.' },
+          { status: 400 },
+        )
       }
     }
   }
@@ -62,6 +68,17 @@ export async function PATCH(
   if (typeof body.title === 'string') patch.title = body.title
   if (body.display_seconds !== undefined) patch.display_seconds = clampDisplaySeconds(body.display_seconds)
   if (typeof body.html_body === 'string') patch.html_body = sanitizeSignageHtml(body.html_body)
+  // Website "page zoom": logical render width merged into gen_meta. 0/null clears
+  // it (back to native fill). Other gen_meta keys (AI provenance, etc.) are kept.
+  if (body.website_width !== undefined) {
+    const w = typeof body.website_width === 'number'
+      ? body.website_width
+      : parseInt(String(body.website_width ?? ''), 10)
+    const meta = (existing.gen_meta && typeof existing.gen_meta === 'object') ? { ...existing.gen_meta } : {}
+    if (Number.isFinite(w) && w > 0) meta.website_width = Math.min(6000, Math.max(640, Math.round(w)))
+    else delete meta.website_width
+    patch.gen_meta = meta
+  }
   if (body.reject_reason === null || typeof body.reject_reason === 'string') {
     patch.reject_reason = body.reject_reason
   }
