@@ -5,21 +5,19 @@ name: Build Blackmagic Update Checker
 # download page links to the "latest release" assets, so those links always point
 # at the newest build.
 #
-# How to cut a build:
-#   Option A (button): Actions tab -> "Build Blackmagic Update Checker" -> Run workflow.
-#   Option B (tag):    git tag bmuc-v1.1 && git push origin bmuc-v1.1
-# Either way, when both jobs finish you get a Release with the two zips attached.
+# You don't have to do anything special to trigger this. It runs automatically
+# whenever the app source changes on main. It also has a manual "Run workflow"
+# button in the Actions tab if you ever want it, but you never need that.
+# When it finishes it publishes/updates a single Release ("app-latest") with the
+# two app zips attached, which is what the download page links to.
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version tag (e.g. 1.1)'
-        required: true
-        default: '1.1'
   push:
-    tags:
-      - 'bmuc-v*'
+    branches: [main]
+    paths:
+      - 'desktop/blackmagic-updater/**'
+      - '.github/workflows/build-blackmagic-app.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -89,21 +87,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Resolve release tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=bmuc-v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Publish release
+      - name: Publish / update the latest release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: Blackmagic Update Checker ${{ steps.tag.outputs.tag }}
+          tag_name: app-latest
+          name: Blackmagic Update Checker (latest)
+          make_latest: true
           body: |
-            Self-contained builds of the Blackmagic Update Checker.
+            Self-contained builds of the Blackmagic Update Checker. Rebuilt automatically on every update.
 
             - macOS: download the zip, unzip, drag the app to Applications. First launch: right-click the app and choose Open (it's unsigned).
             - Windows: download the zip, unzip, run the .exe. If SmartScreen warns, click More info -> Run anyway (it's unsigned).
