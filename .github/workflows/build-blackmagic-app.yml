@@ -28,7 +28,10 @@ env:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    # Intel runner on purpose: an Intel-built app runs on both Intel Macs
+    # (natively) and Apple Silicon (via Rosetta). Building on Apple Silicon
+    # (macos-latest) would produce an arm64-only app that Intel Macs can't run.
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
