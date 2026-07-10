@@ -1,0 +1,112 @@
+name: Build Blackmagic Update Checker
+
+# Builds the desktop app into a real double-click .app (macOS) and .exe (Windows)
+# and publishes them as assets on a GitHub Release. The /blackmagic-updater
+# download page links to the "latest release" assets, so those links always point
+# at the newest build.
+#
+# How to cut a build:
+#   Option A (button): Actions tab -> "Build Blackmagic Update Checker" -> Run workflow.
+#   Option B (tag):    git tag bmuc-v1.1 && git push origin bmuc-v1.1
+# Either way, when both jobs finish you get a Release with the two zips attached.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. 1.1)'
+        required: true
+        default: '1.1'
+  push:
+    tags:
+      - 'bmuc-v*'
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: Blackmagic Update Checker
+  SRC_DIR: desktop/blackmagic-updater
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+      - name: Build icon.icns
+        working-directory: ${{ env.SRC_DIR }}
+        run: iconutil -c icns icon.iconset -o icon.icns
+      - name: Build .app
+        working-directory: ${{ env.SRC_DIR }}
+        run: |
+          pyinstaller --noconfirm --windowed --onefile \
+            --name "$APP_NAME" \
+            --icon icon.icns \
+            --add-data "catalog.json:." \
+            blackmagic_updater.py
+      - name: Zip the .app
+        working-directory: ${{ env.SRC_DIR }}/dist
+        run: ditto -c -k --keepParent "$APP_NAME.app" "Blackmagic-Update-Checker-macOS.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: ${{ env.SRC_DIR }}/dist/Blackmagic-Update-Checker-macOS.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+      - name: Build .exe
+        working-directory: ${{ env.SRC_DIR }}
+        run: |
+          pyinstaller --noconfirm --windowed --onefile `
+            --name "$env:APP_NAME" `
+            --icon icon.ico `
+            --add-data "catalog.json;." `
+            blackmagic_updater.py
+      - name: Zip the .exe
+        working-directory: ${{ env.SRC_DIR }}/dist
+        run: Compress-Archive -Path "$env:APP_NAME.exe" -DestinationPath "Blackmagic-Update-Checker-Windows.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: ${{ env.SRC_DIR }}/dist/Blackmagic-Update-Checker-Windows.zip
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=bmuc-v${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Blackmagic Update Checker ${{ steps.tag.outputs.tag }}
+          body: |
+            Self-contained builds of the Blackmagic Update Checker.
+
+            - macOS: download the zip, unzip, drag the app to Applications. First launch: right-click the app and choose Open (it's unsigned).
+            - Windows: download the zip, unzip, run the .exe. If SmartScreen warns, click More info -> Run anyway (it's unsigned).
+          files: |
+            artifacts/macos/Blackmagic-Update-Checker-macOS.zip
+            artifacts/windows/Blackmagic-Update-Checker-Windows.zip

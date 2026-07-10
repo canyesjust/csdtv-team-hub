@@ -19,7 +19,10 @@ const c = {
   amber: '#8a5a00',
 }
 
-const DOWNLOAD_HREF = '/downloads/blackmagic-update-checker.zip'
+const GH = 'https://github.com/canyesjust/csdtv-team-hub/releases/latest/download'
+const DOWNLOAD_MAC = `${GH}/Blackmagic-Update-Checker-macOS.zip`
+const DOWNLOAD_WIN = `${GH}/Blackmagic-Update-Checker-Windows.zip`
+const DOWNLOAD_SRC = '/downloads/blackmagic-update-checker.zip'
 
 type CatalogProduct = {
   name: string
@@ -64,17 +67,26 @@ export default async function BlackmagicUpdaterPage() {
         </header>
 
         <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: 14, padding: '22px 24px', marginBottom: 22 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>Download</div>
-              <div style={{ fontSize: 14, color: c.muted, marginTop: 4 }}>Works on macOS and Windows. Free.</div>
-            </div>
+          <div style={{ fontSize: 18, fontWeight: 800 }}>Download</div>
+          <div style={{ fontSize: 14, color: c.muted, marginTop: 4 }}>Free. Pick your platform, unzip, and open the app.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
             <a
-              href={DOWNLOAD_HREF}
+              href={DOWNLOAD_MAC}
               style={{ background: c.accent, color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 15, padding: '12px 20px', borderRadius: 10, whiteSpace: 'nowrap' }}
             >
-              Download the app (.zip)
+              Download for macOS
             </a>
+            <a
+              href={DOWNLOAD_WIN}
+              style={{ background: c.accent, color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 15, padding: '12px 20px', borderRadius: 10, whiteSpace: 'nowrap' }}
+            >
+              Download for Windows
+            </a>
+          </div>
+          <div style={{ fontSize: 13, color: c.muted, marginTop: 14, lineHeight: 1.5 }}>
+            First launch, the app is unsigned. On macOS, right-click it and choose <strong>Open</strong>. On Windows, if
+            SmartScreen warns, click <strong>More info → Run anyway</strong>. Prefer the raw script or want to build it
+            yourself? <a href={DOWNLOAD_SRC} style={{ color: c.text }}>Download the source</a>.
           </div>
         </div>
 
