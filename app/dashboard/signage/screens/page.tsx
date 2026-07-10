@@ -77,6 +77,9 @@ export default function SignageScreensPage() {
   const [form, setForm] = useState<ScreenForm>(empty)
   const [editId, setEditId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [creatingArea, setCreatingArea] = useState(false)
+  const [newAreaName, setNewAreaName] = useState('')
+  const [savingArea, setSavingArea] = useState(false)
   const [assigned, setAssigned] = useState<{ content: AssignedItem[]; anns: AssignedItem[] } | null>(null)
 
   const areaName = (areaId: string | null) => areas.find(a => a.id === areaId)?.name ?? '—'
@@ -122,6 +125,32 @@ export default function SignageScreensPage() {
     setForm(empty)
     setEditId(null)
     setShowForm(false)
+    setCreatingArea(false)
+    setNewAreaName('')
+  }
+
+  // Create a new area inline from the screen form, then link this screen to it.
+  // Reuses the areas endpoint, which owns slug generation + uniqueness.
+  const createArea = async () => {
+    const name = newAreaName.trim()
+    if (!name) { toast('Area name is required', 'error'); return }
+    setSavingArea(true)
+    try {
+      const res = await fetch('/api/signage/areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, site_id: activeSiteId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast(data.error || 'Could not create area', 'error'); return }
+      await refreshCatalog()
+      setForm(f => ({ ...f, area_id: data.area?.id ?? null }))
+      setCreatingArea(false)
+      setNewAreaName('')
+      toast('Area created', 'success')
+    } finally {
+      setSavingArea(false)
+    }
   }
 
   const save = async () => {
@@ -224,12 +253,41 @@ export default function SignageScreensPage() {
             </div>
             <div>
               <p style={s.lbl}>Area</p>
-              <select value={form.area_id || ''} onChange={e => setForm(f => ({ ...f, area_id: e.target.value || null }))} style={s.input}>
-                <option value="">No area</option>
-                {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              {creatingArea ? (
+                <>
+                  <input
+                    value={newAreaName}
+                    onChange={e => setNewAreaName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void createArea() } }}
+                    placeholder="New area name"
+                    autoFocus
+                    style={s.input}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button type="button" onClick={() => void createArea()} disabled={savingArea} style={s.btnPrimary}>
+                      {savingArea ? 'Creating…' : 'Create area'}
+                    </button>
+                    <button type="button" onClick={() => { setCreatingArea(false); setNewAreaName('') }} disabled={savingArea} style={s.btn}>
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <select
+                  value={form.area_id || ''}
+                  onChange={e => {
+                    if (e.target.value === '__new') { setCreatingArea(true); return }
+                    setForm(f => ({ ...f, area_id: e.target.value || null }))
+                  }}
+                  style={s.input}
+                >
+                  <option value="">No area</option>
+                  {areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  <option value="__new">+ New area…</option>
+                </select>
+              )}
               <p style={{ ...s.lbl, margin: '6px 0 0', lineHeight: 1.45 }}>
-                Links this screen to a zone. Wayfinding entries for that area show in the directory on this screen.
+                Links this screen to an area. Wayfinding entries for that area show in the directory on this screen.
               </p>
             </div>
             <div>

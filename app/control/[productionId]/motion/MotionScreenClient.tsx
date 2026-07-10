@@ -102,12 +102,29 @@ export default function MotionScreenClient({ productionId, initialBundle, inline
   }, [refresh])
 
   const refreshDebounced = useCallback(() => {
-    if (Date.now() < suppressRefreshUntilRef.current) return
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
-    refreshTimerRef.current = setTimeout(() => {
-      void refresh()
+    refreshTimerRef.current = setTimeout(async () => {
+      // The optimistic-suppress window keeps a background reload from wiping an
+      // in-progress mover / second / vote before the server commits it. But it must
+      // NOT swallow the reload that carries a NEW on-air agenda item — otherwise the
+      // motion screen keeps showing the previous item's motion text until some later
+      // broadcast happens to land outside the window. So during the window we still
+      // fetch and apply the update when the agenda item changed; same-item refreshes
+      // stay suppressed.
+      const suppressed = Date.now() < suppressRefreshUntilRef.current
+      try {
+        const res = await fetch(`/api/board-meetings/${productionId}/motion/bundle`, { cache: 'no-store' })
+        if (!res.ok) return
+        const data = (await res.json()) as MotionScreenBundle
+        if (suppressed && data.current_agenda_item_id === bundleRef.current.current_agenda_item_id) {
+          return
+        }
+        setBundle(data)
+      } catch {
+        // swallow
+      }
     }, 400)
-  }, [refresh])
+  }, [productionId])
 
   const resolveMotionId = useCallback((motionId: string) => {
     if (!isPendingMotionId(motionId)) return motionId
