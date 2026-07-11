@@ -32,6 +32,15 @@ jobs:
     # (natively) and Apple Silicon (via Rosetta). Building on Apple Silicon
     # (macos-latest) would produce an arm64-only app that Intel Macs can't run.
     runs-on: macos-13
+    env:
+      # These come from repo Secrets. If they're empty, signing is skipped and
+      # the app is built unsigned (still works, just shows a first-launch warning).
+      MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,6 +59,27 @@ jobs:
             --icon icon.icns \
             --add-data "catalog.json:." \
             blackmagic_updater.py
+      - name: Sign and notarize (only if certs are configured)
+        if: env.MACOS_CERT_P12_BASE64 != ''
+        working-directory: ${{ env.SRC_DIR }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PW="$(openssl rand -base64 24)"
+          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          codesign --deep --force --options runtime --timestamp \
+            --sign "$MACOS_SIGN_IDENTITY" "dist/$APP_NAME.app"
+          ditto -c -k --keepParent "dist/$APP_NAME.app" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "dist/$APP_NAME.app"
       - name: Zip the .app
         working-directory: ${{ env.SRC_DIR }}/dist
         run: ditto -c -k --keepParent "$APP_NAME.app" "Blackmagic-Update-Checker-macOS.zip"
@@ -60,6 +90,10 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    env:
+      # From repo Secrets. Empty = skip signing, build unsigned.
+      WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -75,6 +109,18 @@ jobs:
             --icon icon.ico `
             --add-data "catalog.json;." `
             blackmagic_updater.py
+      - name: Sign (only if a cert is configured)
+        if: env.WINDOWS_CERT_PFX_BASE64 != ''
+        working-directory: ${{ env.SRC_DIR }}
+        shell: pwsh
+        run: |
+          $pfx = "$env:RUNNER_TEMP\cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName | Select-Object -Last 1
+          & $signtool.FullName sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            "dist\$env:APP_NAME.exe"
       - name: Zip the .exe
         working-directory: ${{ env.SRC_DIR }}/dist
         run: Compress-Archive -Path "$env:APP_NAME.exe" -DestinationPath "Blackmagic-Update-Checker-Windows.zip"
