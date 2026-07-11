@@ -16,6 +16,13 @@ import { NextResponse } from 'next/server'
 const FEED_URL = 'https://www.blackmagicdesign.com/api/support/us/downloads.json'
 const REVALIDATE_SECONDS = 21600 // 6 hours
 
+// The current published version of the desktop app itself. Bump this when you
+// ship a new Update Checker build. The app compares its own version to this and,
+// if this is newer, shows a one-time notice with a download link. It never
+// updates itself — that stays a conscious choice.
+const APP_LATEST_VERSION = '1.2'
+const APP_DOWNLOAD_URL = 'https://www.csdtvstaff.org/blackmagic-updater'
+
 type FeedBuild = {
   product: string
   major: number
@@ -27,6 +34,8 @@ type FeedBuild = {
 
 type FeedEntry = {
   name?: string
+  desc?: string
+  date?: string
   numericDate?: number
   urls?: Record<string, FeedBuild[]>
 }
@@ -145,6 +154,8 @@ export function buildCatalog(feed: Feed) {
     const slugSet = new Set(p.slugs)
     let stable: string | null = null
     let stableDate = -1
+    let notes = ''
+    let releaseDate = ''
     let beta: string | null = null
     let betaDate = -1
 
@@ -156,7 +167,12 @@ export function buildCatalog(feed: Feed) {
       const isBeta = !isSdkNoBeta && b.beta !== 255
 
       if (!isBeta || (isSdkNoBeta && p.treatSdkAsStable)) {
-        if (date > stableDate) { stable = formatVersion(b); stableDate = date }
+        if (date > stableDate) {
+          stable = formatVersion(b)
+          stableDate = date
+          notes = (entry.desc || '').trim()
+          releaseDate = entry.date || ''
+        }
       } else {
         if (date > betaDate) { beta = betaLabel(entry, b); betaDate = date }
       }
@@ -174,6 +190,8 @@ export function buildCatalog(feed: Feed) {
       url: p.url,
     }
     if (beta) out.latest_beta = beta
+    if (notes) out.notes = notes
+    if (releaseDate) out.latest_date = releaseDate
     return out
   })
 
@@ -181,6 +199,7 @@ export function buildCatalog(feed: Feed) {
     _comment: 'Auto-generated from the blackmagicdesign.com download feed. Do not edit by hand.',
     _updated: new Date().toISOString().slice(0, 10),
     _source: 'live',
+    app: { version: APP_LATEST_VERSION, download_url: APP_DOWNLOAD_URL },
     products,
   }
 }

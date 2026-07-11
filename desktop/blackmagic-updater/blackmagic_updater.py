@@ -28,9 +28,18 @@ import webbrowser
 import glob
 import urllib.request
 
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 IS_WINDOWS = platform.system() == "Windows"
 IS_MAC = platform.system() == "Darwin"
+
+# Name fragments that mark an app as Blackmagic-made, for the "found but not in
+# catalog" catch-all.
+BM_NAME_HINTS = (
+    "blackmagic", "davinci", "atem", "fusion", "ultimatte", "hyperdeck",
+    "videohub", "teranex", "smartview", "smartscope", "desktop video",
+    "cintel", "web presenter", "multiview", "decklink", "ultrastudio",
+    "proxy generator", "media express",
+)
 
 SUPPORT_URL = "https://www.blackmagicdesign.com/support/"
 
@@ -145,13 +154,94 @@ def _iter_windows_uninstall_entries():
 
 
 def detect_windows(entry, installed_cache):
+    """Return (version, matched_display_name) or (None, None)."""
     matches = entry.get("win_match", [])
     for name, ver in installed_cache:
         low = name.lower()
         for m in matches:
             if m.lower() in low:
-                return ver or "installed (unknown version)"
+                return ver or "installed (unknown version)", name
+    return None, None
+
+
+# ----------------------------------------------------------------------------
+# Edition + catch-all helpers
+# ----------------------------------------------------------------------------
+def davinci_edition(win_cache, mac_hit_path=None):
+    """Best-effort 'Studio' / 'Free' for DaVinci Resolve. Reliable on Windows
+    (the installed name says 'Studio'); on macOS both editions share one app
+    bundle, so we only label it if a Studio marker is present."""
+    if IS_WINDOWS:
+        for name, _ in win_cache:
+            if "davinci resolve studio" in name.lower():
+                return "Studio"
+        for name, _ in win_cache:
+            if "davinci resolve" in name.lower():
+                return "Free"
+    elif IS_MAC:
+        # Studio ships a licensing bundle; if present, call it Studio.
+        studio_markers = [
+            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/.license",
+            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Resolve.dmeupgrade",
+        ]
+        for m in studio_markers:
+            if os.path.exists(m):
+                return "Studio"
     return None
+
+
+def _all_installed_bm_apps_mac():
+    """List (app_name, version, path) for every Blackmagic-looking .app."""
+    import plistlib
+    found = []
+    for base in ("/Applications", os.path.expanduser("~/Applications")):
+        try:
+            names = os.listdir(base)
+        except OSError:
+            continue
+        for name in names:
+            if not name.endswith(".app"):
+                continue
+            low = name.lower()
+            if not any(h in low for h in BM_NAME_HINTS):
+                continue
+            plist_path = os.path.join(base, name, "Contents", "Info.plist")
+            ver = "-"
+            try:
+                with open(plist_path, "rb") as fh:
+                    data = plistlib.load(fh)
+                ver = str(data.get("CFBundleShortVersionString")
+                          or data.get("CFBundleVersion") or "-")
+            except Exception:
+                pass
+            found.append((name, ver, os.path.join(base, name)))
+    return found
+
+
+def find_unknown_products(catalog, win_cache):
+    """Blackmagic apps installed on this machine that the catalog doesn't cover."""
+    unknown = []
+    if IS_WINDOWS:
+        known_fragments = []
+        for entry in catalog.get("products", []):
+            known_fragments += [m.lower() for m in entry.get("win_match", [])]
+        for name, ver in win_cache:
+            low = name.lower()
+            if not any(h in low for h in BM_NAME_HINTS):
+                continue
+            if any(f in low for f in known_fragments):
+                continue
+            unknown.append({"name": name, "installed": ver or "-"})
+    elif IS_MAC:
+        known_apps = set()
+        for entry in catalog.get("products", []):
+            for a in entry.get("mac_app", []):
+                known_apps.add(a.lower())
+        for name, ver, _ in _all_installed_bm_apps_mac():
+            if name.lower() in known_apps:
+                continue
+            unknown.append({"name": name, "installed": ver})
+    return unknown
 
 
 # ----------------------------------------------------------------------------
@@ -162,11 +252,18 @@ def scan(catalog):
     win_cache = list(_iter_windows_uninstall_entries()) if IS_WINDOWS else []
     for entry in catalog.get("products", []):
         if IS_WINDOWS:
-            installed = detect_windows(entry, win_cache)
+            installed, _matched = detect_windows(entry, win_cache)
         elif IS_MAC:
             installed = detect_mac(entry)
         else:
             installed = None
+
+        # DaVinci Resolve edition label (Free / Studio) when we can tell.
+        if installed is not None and entry.get("id") == "davinci_resolve":
+            edition = davinci_edition(win_cache)
+            if edition:
+                installed = "%s (%s)" % (installed, edition)
+
         latest = latest_for_os(entry)
         status = "not_installed" if installed is None else compare_versions(installed, latest)
         verified = entry.get("verified", True)
@@ -181,7 +278,25 @@ def scan(catalog):
             "status": status,
             "verified": verified,
             "beta": entry.get("latest_beta", ""),
+            "notes": entry.get("notes", ""),
+            "latest_date": entry.get("latest_date", ""),
             "url": entry.get("url", SUPPORT_URL),
+        })
+
+    # Catch-all: Blackmagic apps on this machine that the catalog doesn't list.
+    for u in find_unknown_products(catalog, win_cache):
+        results.append({
+            "name": u["name"],
+            "family": "Other (not in catalog)",
+            "installed": u["installed"],
+            "latest": "?",
+            "status": "unknown",
+            "verified": False,
+            "beta": "",
+            "notes": "Found on this machine but not tracked by the catalog. "
+                     "Check the Blackmagic support site for the current version.",
+            "latest_date": "",
+            "url": SUPPORT_URL,
         })
     return results
 
@@ -263,6 +378,17 @@ def run_gui():
     ttk.Label(header, textvariable=meta_var,
               foreground="#888888", font=("Helvetica", 10)).pack(side="right")
 
+    # --- app self-update notice (notify only, never auto-installs) ---
+    app_notice = tk.Label(root, anchor="w", padx=16, pady=7, font=("Helvetica", 11),
+                          bg="#eef2fb", fg="#1a3f8a", cursor="hand2")
+    app_dl = {"url": ""}
+
+    def open_app_update(_e=None):
+        if app_dl["url"]:
+            webbrowser.open(app_dl["url"])
+
+    app_notice.bind("<Button-1>", open_app_update)
+
     # --- banner ---
     banner = tk.Label(root, anchor="w", padx=16, pady=8, font=("Helvetica", 12))
     banner.pack(fill="x", padx=16, pady=(4, 8))
@@ -292,7 +418,18 @@ def run_gui():
     tree.tag_configure("unknown", foreground="#8a5a00")
     tree.tag_configure("odd", background="#f6f5f2")
 
+    # --- "what's new" detail pane ---
+    detail_wrap = ttk.Frame(root, padding=(16, 0, 16, 4))
+    detail_wrap.pack(fill="x")
+    ttk.Label(detail_wrap, text="What's new", font=("Helvetica", 10, "bold"),
+              foreground="#555555").pack(anchor="w")
+    detail = tk.Label(detail_wrap, anchor="w", justify="left", wraplength=840,
+                      fg="#333333", font=("Helvetica", 11),
+                      text="Select a product to see what changed in its latest release.")
+    detail.pack(anchor="w", fill="x", pady=(2, 0))
+
     row_urls = {}
+    row_notes = {}
 
     def refresh(reload_remote=False):
         if reload_remote:
@@ -304,6 +441,7 @@ def run_gui():
         for item in tree.get_children():
             tree.delete(item)
         row_urls.clear()
+        row_notes.clear()
         results = scan(state["catalog"])
         updates = 0
         for idx, r in enumerate(results):
@@ -318,6 +456,11 @@ def run_gui():
                 r["latest"], status_text,
             ), tags=tuple(tags))
             row_urls[iid] = r["url"]
+            note = r.get("notes", "")
+            if r.get("latest_date"):
+                note = ("Latest release %s. " % r["latest_date"]) + note if note else \
+                       ("Latest release %s." % r["latest_date"])
+            row_notes[iid] = note or "No release notes for this product."
             if r["status"] == "update_available":
                 updates += 1
 
@@ -333,6 +476,18 @@ def run_gui():
         else:
             banner.config(text="  ✓  Everything installed is up to date.",
                           bg="#eaf3ea", fg="#1a7f37")
+
+        # App self-update notice: show only if the catalog reports a newer app.
+        app_info = state["catalog"].get("app") or {}
+        newer = compare_versions(APP_VERSION, app_info.get("version", ""))
+        if newer == "update_available":
+            app_dl["url"] = app_info.get("download_url", "")
+            app_notice.config(
+                text="  ↑  A newer Update Checker (v%s) is available. Click here to "
+                     "download it when you're ready." % app_info.get("version", ""))
+            app_notice.pack(fill="x", padx=16, pady=(4, 0), before=banner)
+        else:
+            app_notice.pack_forget()
 
     def open_selected():
         sel = tree.selection()
@@ -351,6 +506,12 @@ def run_gui():
             "Downloads open on blackmagicdesign.com (registration required there)."
             % (APP_VERSION, "online" if state["source"] == "online" else "bundled"))
 
+    def on_select(_e=None):
+        sel = tree.selection()
+        if sel:
+            detail.config(text=row_notes.get(sel[0], ""))
+
+    tree.bind("<<TreeviewSelect>>", on_select)
     tree.bind("<Double-1>", lambda e: open_selected())
 
     # --- menu bar ---
@@ -398,6 +559,12 @@ def run_cli():
     for r in results:
         if r["status"] == "update_available":
             print("Update %s:  %s" % (r["name"], r["url"]))
+            if r.get("notes"):
+                print("   What's new: %s" % r["notes"])
+    app_info = catalog.get("app") or {}
+    if compare_versions(APP_VERSION, app_info.get("version", "")) == "update_available":
+        print("\nA newer Update Checker (v%s) is available: %s"
+              % (app_info.get("version", ""), app_info.get("download_url", "")))
 
 
 if __name__ == "__main__":
