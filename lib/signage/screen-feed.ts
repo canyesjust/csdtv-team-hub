@@ -63,6 +63,9 @@ export type ScreenFeed = {
     brand_title: string | null
     brand_subtitle: string | null
     logo_url: string | null
+    /** 'webpage' layout only: the single external URL the screen displays
+     *  full-screen. Null on every other layout. */
+    webpage_url?: string | null
     /** Layout-builder slot assignments (zoned2). Resolved to a full config in
      *  buildScreenFeed; renderers read it to fill the swappable zones. */
     zone_config?: ZoneConfig | null
@@ -91,7 +94,7 @@ export type ScreenFeed = {
 }
 
 const ORIENTATIONS = new Set<SignageOrientation>(['landscape', 'portrait'])
-const LAYOUTS = new Set<SignageLayout>(['full_bleed', 'zoned', 'zoned2', 'wayfinding'])
+const LAYOUTS = new Set<SignageLayout>(['full_bleed', 'zoned', 'zoned2', 'wayfinding', 'webpage'])
 
 export function normalizeSignageOrientation(value: string): SignageOrientation {
   return ORIENTATIONS.has(value as SignageOrientation) ? (value as SignageOrientation) : 'landscape'

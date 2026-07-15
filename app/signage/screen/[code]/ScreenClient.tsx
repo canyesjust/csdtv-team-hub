@@ -1194,6 +1194,31 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const screenClass = `cic-screen${portrait ? ' portrait' : ''} layout-${layout} cic-theme-${feed.screen.theme}`
   const siteStyle = siteColorVars(feed.screen.colors)
 
+  // "Web address" screens are a single external page, edge to edge, and nothing
+  // else — no zones, header, ticker, background, or offline overlay. The live
+  // page is what matters here, not our feed, so this branch runs before the
+  // offline watchdog.
+  if (layout === 'webpage') {
+    const url = feed.screen.webpage_url
+    if (!url) {
+      return (
+        <div className={screenClass} style={{ ...siteStyle, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'system-ui, sans-serif', padding: 24, textAlign: 'center' }}>
+          No web address is configured for this screen.
+        </div>
+      )
+    }
+    return (
+      <iframe
+        src={url}
+        title={feed.screen.name}
+        sandbox={WEBSITE_SANDBOX}
+        allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+        referrerPolicy="strict-origin-when-cross-origin"
+        style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', border: 'none', background: '#fff' }}
+      />
+    )
+  }
+
   if (offline) {
     return (
       <div className={screenClass} style={siteStyle}>

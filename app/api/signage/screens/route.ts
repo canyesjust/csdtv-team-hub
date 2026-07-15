@@ -3,6 +3,20 @@ import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
+// 'webpage' layout screens store one external URL. Only accept a bounded
+// http(s) URL; anything else (javascript:, data:, junk, over-long) becomes null.
+function sanitizeWebpageUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.length > 2048) return null
+  try {
+    const u = new URL(trimmed)
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.toString() : null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
@@ -19,6 +33,7 @@ export async function POST(request: NextRequest) {
     theme: body.theme || null,
     site_id: body.site_id || null,
     wayfinding_heading: body.wayfinding_heading || null,
+    webpage_url: sanitizeWebpageUrl(body.webpage_url),
     accepts_takeover: body.accepts_takeover ?? true,
     board_takeover_enabled: body.board_takeover_enabled ?? false,
     board_takeover_audio: body.board_takeover_audio ?? false,
@@ -45,6 +60,7 @@ export async function PATCH(request: NextRequest) {
     layout: body.layout,
     theme: body.theme ?? null,
     wayfinding_heading: body.wayfinding_heading,
+    webpage_url: sanitizeWebpageUrl(body.webpage_url),
     accepts_takeover: body.accepts_takeover,
     board_takeover_enabled: body.board_takeover_enabled,
     board_takeover_audio: body.board_takeover_audio,
