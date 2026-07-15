@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildScreenHtml } from './build-screen-html'
-import { pushScreenHtmlWebApp, writeAbleSignLog } from './ablesign-helpers'
+import { pushScreenHtmlWebApp, syncScreenToUrl, writeAbleSignLog } from './ablesign-helpers'
 import { getSiteAbleSignCreds } from './ablesign-creds'
 
 export type PushTrigger = 'manual' | 'content' | 'cron-dirty' | 'cron-due'
@@ -16,14 +16,17 @@ type ScreenRow = {
   code: string
   name: string
   site_id: string | null
+  layout: string | null
+  webpage_url: string | null
   ablesign_screen_id: number | null
+  ablesign_webapp_id: number | null
   ablesign_html_webapp_id: number | null
   ablesign_html_hash: string | null
   ablesign_html_dirty_at: string | null
 }
 
 const SCREEN_COLUMNS =
-  'id, code, name, site_id, ablesign_screen_id, ablesign_html_webapp_id, ablesign_html_hash, ablesign_html_dirty_at'
+  'id, code, name, site_id, layout, webpage_url, ablesign_screen_id, ablesign_webapp_id, ablesign_html_webapp_id, ablesign_html_hash, ablesign_html_dirty_at'
 
 /**
  * Render a screen's self-contained HTML and push it to AbleSign as an HTML web
@@ -51,6 +54,37 @@ export async function renderAndPushScreen(
   if (!screen.ablesign_screen_id) {
     await clearDirty(service, screen.id, screen.ablesign_html_dirty_at)
     return { ok: true, skipped: true, reason: 'not_linked' }
+  }
+
+  // Webpage-layout screens show a live external site — don't bake HTML, point the
+  // AbleSign playlist straight at the URL web app so the kiosk loads it natively.
+  if (screen.layout === 'webpage') {
+    const url = (screen.webpage_url || '').trim()
+    if (!url) {
+      await clearDirty(service, screen.id, screen.ablesign_html_dirty_at)
+      return { ok: true, skipped: true, reason: 'not_linked' }
+    }
+    try {
+      const creds = await getSiteAbleSignCreds(service, screen.site_id)
+      const { webappId } = await syncScreenToUrl(
+        service,
+        {
+          id: screen.id,
+          name: screen.name,
+          ablesign_screen_id: screen.ablesign_screen_id,
+          ablesign_webapp_id: screen.ablesign_webapp_id,
+        },
+        url,
+        creds,
+      )
+      await clearDirty(service, screen.id, screen.ablesign_html_dirty_at)
+      await logPush(service, screen.id, 'ok', { trigger: opts.trigger, webappId, detail: 'webpage url' })
+      return { ok: true, skipped: false, webappId, bytes: 0, replacedOldId: null }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Webpage sync failed'
+      await logPush(service, screen.id, 'error', { trigger: opts.trigger, detail: message })
+      return { ok: false, error: message }
+    }
   }
 
   const built = await buildScreenHtml(service, code)

@@ -29113,6 +29113,23 @@ function ScreenClient({ code, initialFeed, imageSeconds }) {
   const tickerFallback = feed.screen.center_name;
   const screenClass = `cic-screen${portrait ? " portrait" : ""} layout-${layout} cic-theme-${feed.screen.theme}`;
   const siteStyle = siteColorVars(feed.screen.colors);
+  if (layout === "webpage") {
+    const url = feed.screen.webpage_url;
+    if (!url) {
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: screenClass, style: { ...siteStyle, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "system-ui, sans-serif", padding: 24, textAlign: "center" }, children: "No web address is configured for this screen." });
+    }
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+      "iframe",
+      {
+        src: url,
+        title: feed.screen.name,
+        sandbox: WEBSITE_SANDBOX,
+        allow: "autoplay; encrypted-media; fullscreen; picture-in-picture",
+        referrerPolicy: "strict-origin-when-cross-origin",
+        style: { position: "fixed", inset: 0, width: "100vw", height: "100vh", border: "none", background: "#fff" }
+      }
+    );
+  }
   if (offline) {
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: screenClass, style: siteStyle, children: [
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(SignageBackground, {}),

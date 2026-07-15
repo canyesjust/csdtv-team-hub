@@ -144,6 +144,42 @@ export async function syncHubScreenToAbleSign(
 }
 
 /**
+ * Point a screen's AbleSign playlist at a URL web app for an ARBITRARY url —
+ * used by webpage-layout screens to show a live external site directly. The
+ * kiosk browser loads it natively (no baked HTML, no iframe framing limits).
+ */
+export async function syncScreenToUrl(
+  service: SupabaseClient,
+  screen: { id: string; name: string; ablesign_screen_id: number; ablesign_webapp_id: number | null },
+  url: string,
+  creds?: AbleSignCreds,
+): Promise<{ webappId: number }> {
+  let webappId = screen.ablesign_webapp_id
+  if (webappId) {
+    await updateWebApp(webappId, { url, zoom: 100 }, creds)
+  } else {
+    const created = await createWebApp({ title: screen.name, url }, creds)
+    webappId = created.id
+    await updateWebApp(webappId, { zoom: 100 }, creds)
+    await service.from('signage_screens').update({ ablesign_webapp_id: webappId }).eq('id', screen.id)
+  }
+
+  await saveScreenPlaylist(screen.ablesign_screen_id, {
+    items: [{ webAppId: webappId, sequenceNumber: 0, displayDuration: 86400 }],
+    shufflePlay: false,
+    enableWebappTransitions: false,
+    enableImageTransitions: false,
+  }, creds)
+
+  await service
+    .from('signage_screens')
+    .update({ ablesign_synced_at: new Date().toISOString() })
+    .eq('id', screen.id)
+
+  return { webappId }
+}
+
+/**
  * Push a self-contained HTML document to AbleSign as an HTML-type web app and
  * point the screen's playlist at it. Because the AbleSign API cannot mutate the
  * `html` of an existing web app, every push CREATES a new HTML web app,
