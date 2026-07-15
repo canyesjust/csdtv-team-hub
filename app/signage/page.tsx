@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase'
 import { getSchoolName as getSchoolNameFallback } from '@/lib/schools'
 import { outlookEventMatchesProduction } from '@/lib/signage-outlook-dedup'
 import { resolveDayHours, toLocalDateStr } from '@/lib/team-schedule'
@@ -79,8 +78,8 @@ function GoneDayPills({ names, scale }: { names: string[]; scale: number }) {
 }
 
 export default function SignagePage() {
-  const supabase = createClient()
   const [now, setNow] = useState(new Date())
+  const [unauthorized, setUnauthorized] = useState(false)
   const [productions, setProductions] = useState<Production[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [schedDefaults, setSchedDefaults] = useState<SchedDefault[]>([])
@@ -104,23 +103,29 @@ export default function SignagePage() {
     rangeEndDate.setDate(rangeEndDate.getDate() + 34)
     const rangeEnd = toLocalDateStr(rangeEndDate)
 
-    const [prodsRes, teamRes, defsRes, ovrsRes, schoolsRes, eventsRes, goneRes, closedRes] = await Promise.all([
-      supabase.from('productions').select('id, production_number, title, request_type_label, status, school_year, start_datetime, start_datetime_label, event_date, filming_location, school_department, deliverables_count, production_members(user_id, team(name, avatar_color))').order('production_number'),
-      supabase.from('team').select('id, name, avatar_color, role').eq('active', true),
-      supabase.from('schedule_defaults').select('*'),
-      supabase.from('schedule_overrides').select('*'),
-      supabase.from('schools').select('code, name'),
-      supabase.from('calendar_events').select('id, title, date, start_time, color').order('date'),
-      supabase.from('schedule_gone_days').select('id, user_id, date').gte('date', rangeStart).lte('date', rangeEnd),
-      supabase.from('schedule_office_closed_days').select('id, date, label').gte('date', rangeStart).lte('date', rangeEnd),
-    ])
-    setProductions(((prodsRes.data as unknown as Production[]) || []).map(p => normalizeProductionDatetimeFields(p)))
-    setTeam(teamRes.data || [])
-    setSchedDefaults(defsRes.data || [])
-    setSchedOverrides(ovrsRes.data || [])
-    setCalEvents(eventsRes.data || [])
-    setGoneDays((goneRes.data as ScheduleGoneDay[]) || [])
-    setOfficeClosedDays((closedRes.data as ScheduleOfficeClosedDay[]) || [])
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+    const token = params.get('k') || ''
+    const boardRes = await fetch(
+      `/api/signage/board?k=${encodeURIComponent(token)}&start=${rangeStart}&end=${rangeEnd}`,
+      { cache: 'no-store', credentials: 'omit' },
+    )
+    if (!boardRes.ok) {
+      setUnauthorized(true)
+      setLoading(false)
+      return
+    }
+    setUnauthorized(false)
+    const d = await boardRes.json()
+    setProductions(((d.productions as unknown as Production[]) || []).map(p => normalizeProductionDatetimeFields(p)))
+    setTeam(d.team || [])
+    setSchedDefaults(d.schedDefaults || [])
+    setSchedOverrides(d.schedOverrides || [])
+    setCalEvents(d.calEvents || [])
+    setGoneDays((d.goneDays as ScheduleGoneDay[]) || [])
+    setOfficeClosedDays((d.officeClosedDays as ScheduleOfficeClosedDay[]) || [])
+    const schoolMapData: Record<string, string> = {}
+    ;(d.schools || []).forEach((s: { code: string; name: string }) => { schoolMapData[s.code] = s.name })
+    setSchoolMap(schoolMapData)
     try {
       const cfgRes = await fetch('/api/signage/config', { cache: 'no-store', credentials: 'omit' })
       const cfg = cfgRes.ok ? ((await cfgRes.json()) as { outlookEnabled?: boolean }) : null
@@ -141,11 +146,8 @@ export default function SignagePage() {
       setOutlookEnabled(false)
       setOutlookEvents([])
     }
-    const m: Record<string, string> = {}
-    ;(schoolsRes.data || []).forEach((s: any) => { m[s.code] = s.name })
-    setSchoolMap(m)
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { const r = setInterval(() => loadData(), 300000); return () => clearInterval(r) }, [loadData])
@@ -212,6 +214,7 @@ export default function SignagePage() {
   const todayOfficeClosed = officeClosedOnDate(todayStr, officeClosedDays)
   const todayClosedLabel = formatOfficeClosedSignageLine(todayOfficeClosed)
 
+  if (unauthorized) return <div style={{ background: bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' as const, padding: 24, textAlign: 'center' as const }}><p style={{ color: muted, fontSize: '20px', fontFamily: 'system-ui', maxWidth: 560, lineHeight: 1.5 }}>This board needs its access link. Open it with the <code>?k=</code> token from the signage admin.</p></div>
   if (loading) return <div style={{ background: bg, height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' as const }}><p style={{ color: muted, fontSize: '22px', fontFamily: 'system-ui' }}>Loading...</p></div>
 
   return (
