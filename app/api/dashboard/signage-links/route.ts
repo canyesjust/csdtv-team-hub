@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
+import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { canPublishTaskSignageIntake } from '@/lib/equipment-access'
 
 export const dynamic = 'force-dynamic'
@@ -30,9 +31,29 @@ export async function GET() {
       ? `${siteBase.replace(/\/$/, '')}${taskSignagePath}`
       : ''
 
+  // Broadcast board (/signage) token lives in app_settings (rotatable), not env.
+  let boardSignagePath = '/signage'
+  let boardKeyConfigured = false
+  const service = getServiceSupabaseClient()
+  if (service) {
+    const { data } = await service.from('app_settings').select('value').eq('key', 'signage_board_token').maybeSingle()
+    const boardToken = ((data?.value as string | undefined) || '').trim()
+    if (boardToken) {
+      boardSignagePath = `/signage?k=${encodeURIComponent(boardToken)}`
+      boardKeyConfigured = true
+    }
+  }
+  const absoluteBoardSignageUrl =
+    siteBase && siteBase.trim()
+      ? `${siteBase.replace(/\/$/, '')}${boardSignagePath}`
+      : ''
+
   return NextResponse.json({
     taskSignagePath,
     absoluteTaskSignageUrl,
     keyConfigured: Boolean(key),
+    boardSignagePath,
+    absoluteBoardSignageUrl,
+    boardKeyConfigured,
   })
 }

@@ -155,6 +155,8 @@ export default function SettingsPage() {
   const [taskSignageHref, setTaskSignageHref] = useState<string>('/signage/tasks')
   const [taskSignageAbsolute, setTaskSignageAbsolute] = useState<string>('')
   const [signageTasksKeyConfigured, setSignageTasksKeyConfigured] = useState<boolean | null>(null)
+  const [boardSignageHref, setBoardSignageHref] = useState<string>('/signage')
+  const [boardSignageAbsolute, setBoardSignageAbsolute] = useState<string>('')
   const [signageOutlookEnabled, setSignageOutlookEnabled] = useState(false)
   const [signageOutlookConfigured, setSignageOutlookConfigured] = useState(false)
   const [signageOutlookBusy, setSignageOutlookBusy] = useState(false)
@@ -202,6 +204,8 @@ export default function SettingsPage() {
         setTaskSignageHref(sigBody.taskSignagePath)
         setTaskSignageAbsolute(typeof sigBody.absoluteTaskSignageUrl === 'string' ? sigBody.absoluteTaskSignageUrl : '')
         setSignageTasksKeyConfigured(Boolean(sigBody.keyConfigured))
+        if (typeof sigBody.boardSignagePath === 'string') setBoardSignageHref(sigBody.boardSignagePath)
+        setBoardSignageAbsolute(typeof sigBody.absoluteBoardSignageUrl === 'string' ? sigBody.absoluteBoardSignageUrl : '')
       } else {
         setSignageTasksKeyConfigured(false)
       }
@@ -1130,7 +1134,7 @@ export default function SettingsPage() {
         </p>
         <div style={{ display: 'grid', gap: '8px' }}>
           <a
-            href="/signage"
+            href={boardSignageHref}
             target="_blank"
             rel="noopener noreferrer"
             style={{ fontSize: '14px', color: 'var(--brand-primary)', textDecoration: 'none', fontWeight: 600 }}
@@ -1151,9 +1155,15 @@ export default function SettingsPage() {
             Set the server env var <code style={{ fontSize: '11px' }}>SIGNAGE_TASKS_KEY</code> in Vercel (same value you use for the signage API). Until then, task signage opens without authorization and may not load data.
           </p>
         )}
+        {boardSignageAbsolute && (
+          <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>
+            Production calendar full URL for TVs:{' '}
+            <span style={{ wordBreak: 'break-all' as const, color: text }}>{boardSignageAbsolute}</span>
+          </p>
+        )}
         {taskSignageAbsolute && signageTasksKeyConfigured && (
           <p style={{ fontSize: '12px', color: muted, margin: '10px 0 0' }}>
-            Full URL for TVs:{' '}
+            Task ops full URL for TVs:{' '}
             <span style={{ wordBreak: 'break-all' as const, color: text }}>{taskSignageAbsolute}</span>
           </p>
         )}
