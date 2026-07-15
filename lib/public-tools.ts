@@ -23,4 +23,10 @@ export const PUBLIC_TOOLS: PublicTool[] = [
     href: '/layout',
     accent: '#5C7762',
   },
+  {
+    title: 'Blackmagic Update Checker',
+    description: 'Desktop app that finds installed Blackmagic software, flags what’s out of date, and links to the download. Mac and Windows.',
+    href: '/blackmagic-updater',
+    accent: '#0e1116',
+  },
 ]

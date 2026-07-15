@@ -1,0 +1,226 @@
+{
+  "_comment": "Latest published stable versions of Blackmagic Design software / setup utilities. Edit the 'latest' values when new releases come out. 'windows'/'macos' allow per-OS versions. 'mac_app' = .app name(s) under /Applications. 'win_match' = substring matched against the Windows installed-programs display name. 'url' = the Blackmagic support/download page. 'verified' = true means the version was confirmed as of _updated; false means best-effort, so the app shows it with a '?' — confirm on the support site before relying on it.",
+  "_updated": "2026-07-10",
+  "products": [
+    {
+      "id": "davinci_resolve",
+      "name": "DaVinci Resolve / Studio",
+      "family": "DaVinci Resolve and Fusion",
+      "mac_app": ["DaVinci Resolve.app"],
+      "win_match": ["DaVinci Resolve"],
+      "latest": { "windows": "20.3.3", "macos": "20.3.3" },
+      "verified": true,
+      "url": "https://www.blackmagicdesign.com/products/davinciresolve"
+    },
+    {
+      "id": "fusion_studio",
+      "name": "Fusion Studio",
+      "family": "DaVinci Resolve and Fusion",
+      "mac_app": ["Fusion.app", "Fusion Studio.app"],
+      "win_match": ["Fusion Studio", "Blackmagic Fusion"],
+      "latest": { "windows": "19.1.4", "macos": "19.1.4" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/products/fusion"
+    },
+    {
+      "id": "proxy_generator",
+      "name": "Blackmagic Proxy Generator",
+      "family": "DaVinci Resolve and Fusion",
+      "mac_app": ["Blackmagic Proxy Generator.app", "Blackmagic Proxy Generator Lite.app"],
+      "win_match": ["Proxy Generator"],
+      "latest": { "windows": "2.2", "macos": "2.2" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/products/davinciresolve"
+    },
+    {
+      "id": "camera_setup",
+      "name": "Blackmagic Camera Setup",
+      "family": "Professional Cameras",
+      "mac_app": ["Blackmagic Camera Setup.app"],
+      "win_match": ["Blackmagic Camera Setup", "Camera Setup"],
+      "latest": { "windows": "10.2", "macos": "10.2" },
+      "verified": true,
+      "url": "https://www.blackmagicdesign.com/support/family/cameras"
+    },
+    {
+      "id": "atem_software_control",
+      "name": "ATEM Software Control",
+      "family": "ATEM Production Switchers",
+      "mac_app": ["ATEM Software Control.app", "ATEM Setup.app"],
+      "win_match": ["ATEM Switchers", "ATEM Software Control", "ATEM Setup"],
+      "latest": { "windows": "10.2.1", "macos": "10.2.1" },
+      "verified": true,
+      "url": "https://www.blackmagicdesign.com/support/family/atem-live-production-switchers"
+    },
+    {
+      "id": "ultimatte",
+      "name": "Ultimatte Software / Setup",
+      "family": "Ultimatte",
+      "mac_app": ["Ultimatte Software.app", "Blackmagic Ultimatte Setup.app", "Ultimatte Setup.app"],
+      "win_match": ["Ultimatte"],
+      "latest": { "windows": "5.4", "macos": "5.4" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/ultimatte"
+    },
+    {
+      "id": "hyperdeck_setup",
+      "name": "HyperDeck Setup",
+      "family": "Disk Recorders",
+      "mac_app": ["Blackmagic HyperDeck Setup.app"],
+      "win_match": ["HyperDeck Setup"],
+      "latest": { "windows": "9.5", "macos": "9.5" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/capture-and-playback"
+    },
+    {
+      "id": "desktop_video",
+      "name": "Desktop Video (DeckLink / UltraStudio drivers)",
+      "family": "Capture and Playback",
+      "mac_app": ["Blackmagic Desktop Video Setup.app"],
+      "win_match": ["Desktop Video"],
+      "latest": { "windows": "16.1", "macos": "16.0.1" },
+      "verified": true,
+      "url": "https://www.blackmagicdesign.com/support/family/capture-and-playback"
+    },
+    {
+      "id": "media_express",
+      "name": "Blackmagic Media Express",
+      "family": "Capture and Playback",
+      "mac_app": ["Blackmagic Media Express.app"],
+      "win_match": ["Media Express"],
+      "latest": { "windows": "3.9", "macos": "3.9" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/capture-and-playback"
+    },
+    {
+      "id": "disk_speed_test",
+      "name": "Blackmagic Disk Speed Test",
+      "family": "Capture and Playback",
+      "mac_app": ["Blackmagic Disk Speed Test.app"],
+      "win_match": ["Disk Speed Test"],
+      "latest": { "windows": "3.4", "macos": "3.4" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/capture-and-playback"
+    },
+    {
+      "id": "raw",
+      "name": "Blackmagic RAW (Player / Speed Test / SDK)",
+      "family": "Capture and Playback",
+      "mac_app": ["Blackmagic RAW Player.app", "Blackmagic RAW Speed Test.app"],
+      "win_match": ["Blackmagic RAW"],
+      "latest": { "windows": "4.6", "macos": "4.6" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/capture-and-playback"
+    },
+    {
+      "id": "teranex_setup",
+      "name": "Teranex Setup (Standards Conversion)",
+      "family": "Standards Conversion",
+      "mac_app": ["Blackmagic Teranex Setup.app", "Teranex Setup.app"],
+      "win_match": ["Teranex"],
+      "latest": { "windows": "3.4", "macos": "3.4" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/standards-conversion"
+    },
+    {
+      "id": "converters_setup",
+      "name": "Blackmagic Converters Setup (Broadcast / Mini / Micro)",
+      "family": "Broadcast Converters",
+      "mac_app": ["Blackmagic Converter Setup.app", "Blackmagic Converters Setup.app"],
+      "win_match": ["Converter Setup", "Converters Setup"],
+      "latest": { "windows": "8.9.1", "macos": "8.9.1" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/capture-and-playback"
+    },
+    {
+      "id": "smartview_setup",
+      "name": "Blackmagic SmartView / SmartScope Setup",
+      "family": "Monitoring",
+      "mac_app": ["Blackmagic SmartView Setup.app", "SmartView Setup.app"],
+      "win_match": ["SmartView", "SmartScope"],
+      "latest": { "windows": "4.2", "macos": "4.2" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/video-audio-monitoring"
+    },
+    {
+      "id": "audio_monitor",
+      "name": "Blackmagic Audio Monitor / Sync Generator Setup",
+      "family": "Monitoring",
+      "mac_app": ["Blackmagic Audio Setup.app", "Blackmagic Sync Generator Setup.app"],
+      "win_match": ["Audio Monitor", "Sync Generator"],
+      "latest": { "windows": "", "macos": "" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/video-audio-monitoring"
+    },
+    {
+      "id": "cloud_store_setup",
+      "name": "Blackmagic Cloud Store Setup",
+      "family": "Network Storage",
+      "mac_app": ["Blackmagic Cloud Store Setup.app", "Blackmagic Cloud Setup.app"],
+      "win_match": ["Cloud Store", "Cloud Setup"],
+      "latest": { "windows": "2.3", "macos": "2.3" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/network-storage"
+    },
+    {
+      "id": "multiview_setup",
+      "name": "Blackmagic MultiView Setup",
+      "family": "MultiView",
+      "mac_app": ["Blackmagic MultiView Setup.app", "MultiView Setup.app"],
+      "win_match": ["MultiView"],
+      "latest": { "windows": "", "macos": "" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/multiview"
+    },
+    {
+      "id": "videohub_setup",
+      "name": "Videohub Control / Setup",
+      "family": "Routing and Distribution",
+      "mac_app": ["Blackmagic Videohub Setup.app", "Videohub Control.app", "Videohub Master Control.app", "Videohub Smart Control.app"],
+      "win_match": ["Videohub"],
+      "latest": { "windows": "8.9.1", "macos": "8.9.1" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/routing-and-distribution"
+    },
+    {
+      "id": "web_presenter_setup",
+      "name": "Web Presenter Setup",
+      "family": "Streaming and Encoding",
+      "mac_app": ["Blackmagic Web Presenter Setup.app"],
+      "win_match": ["Web Presenter"],
+      "latest": { "windows": "3.5", "macos": "3.5" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/streaming-and-encoding"
+    },
+    {
+      "id": "streaming_bridge",
+      "name": "Blackmagic Streaming Bridge Setup",
+      "family": "Streaming and Encoding",
+      "mac_app": ["Blackmagic Streaming Bridge Setup.app", "ATEM Streaming Bridge Setup.app"],
+      "win_match": ["Streaming Bridge"],
+      "latest": { "windows": "", "macos": "" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/streaming-and-encoding"
+    },
+    {
+      "id": "video_assist_setup",
+      "name": "Blackmagic Video Assist Setup",
+      "family": "Disk Recorders",
+      "mac_app": ["Blackmagic Video Assist Setup.app"],
+      "win_match": ["Video Assist"],
+      "latest": { "windows": "", "macos": "" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/capture-and-playback"
+    },
+    {
+      "id": "cintel_setup",
+      "name": "Cintel Scanner Setup",
+      "family": "Cintel Scanner",
+      "mac_app": ["Blackmagic Cintel Setup.app", "Cintel Setup.app"],
+      "win_match": ["Cintel"],
+      "latest": { "windows": "", "macos": "" },
+      "verified": false,
+      "url": "https://www.blackmagicdesign.com/support/family/cintel-film-scanning"
+    }
+  ]
+}

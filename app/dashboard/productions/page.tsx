@@ -1701,6 +1701,52 @@ function ProductionsPageContent() {
                         ✉ Email organizer
                       </button>
                     )}
+                    {selectedProd.status !== 'Complete' && selectedProd.status !== 'Abandoned' && (
+                      isCompleteRequested(selectedProd) ? (
+                        <span
+                          style={{
+                            flex: 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            background: surface2,
+                            color: muted,
+                            border: `1px solid ${border}`,
+                          }}
+                        >
+                          ✓ Complete requested
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => overdueStripComplete(selectedProd)}
+                          disabled={overdueQuickActionId === selectedProd.id}
+                          style={{
+                            flex: 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            background: successBg,
+                            color: success,
+                            border: `1px solid ${border}`,
+                            cursor: overdueQuickActionId === selectedProd.id ? 'wait' : 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          {overdueQuickActionId === selectedProd.id ? 'Sending…' : '✓ Mark complete'}
+                        </button>
+                      )
+                    )}
                   </div>
 
                   {/* FACTS */}

@@ -1187,16 +1187,21 @@ export async function buildPublicVoteResultPayload(
 
   const voteMap = new Map((votes || []).map(v => [v.person_id, v.vote]))
 
-  // Show EVERY board member on the result, in board order. Members who did not
-  // cast a vote (e.g. absent) are surfaced as 'absent' so the dais/overlay can
-  // grey them out instead of dropping them entirely.
+  // Show EVERY board member on the result, in board order. A member with no
+  // recorded vote row is NOT automatically absent: on a voice vote we don't write
+  // an Aye row for every member, so an eligible member with no row voted Aye
+  // (this mirrors computeMotionVoteTallyForDisplay). Only members who are actually
+  // ineligible (absent / left / not yet arrived) surface as 'absent'.
   const attendance = await loadAttendance(service, boardMeetingId)
+  const at = new Date()
   let resultVotes: { person_name: string; vote: string }[]
   if (attendance.records.length > 0) {
-    resultVotes = attendance.records.map(r => ({
-      person_name: r.name,
-      vote: voteMap.get(r.person_id) || 'absent',
-    }))
+    resultVotes = attendance.records.map(r => {
+      const recorded = voteMap.get(r.person_id)
+      const vote =
+        recorded ?? (isEligibleToVote(r.status, at, r.arrived_at, r.left_at) ? 'yea' : 'absent')
+      return { person_name: r.name, vote }
+    })
   } else {
     // Fallback: no attendance roster — list only those who actually voted.
     const personIds = (votes || []).map(v => v.person_id)
