@@ -28,10 +28,11 @@ env:
 
 jobs:
   build-macos:
-    # Intel runner on purpose: an Intel-built app runs on both Intel Macs
-    # (natively) and Apple Silicon (via Rosetta). Building on Apple Silicon
-    # (macos-latest) would produce an arm64-only app that Intel Macs can't run.
-    runs-on: macos-13
+    # Was macos-13 (Intel), but those runners now queue for hours and often never
+    # pick up the job. Moved to macos-latest (Apple Silicon) so the build runs.
+    # Trade-off: this produces an Apple Silicon app. Intel Macs would need a
+    # universal2 build (a follow-up); most current staff Macs are Apple Silicon.
+    runs-on: macos-latest
     env:
       # These come from repo Secrets. If they're empty, signing is skipped and
       # the app is built unsigned (still works, just shows a first-launch warning).
