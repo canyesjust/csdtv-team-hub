@@ -8,7 +8,8 @@ import { createClient } from '@/lib/supabase'
 import Loader from '../../components/Loader'
 import FilePickButton from '@/components/FilePickButton'
 import { toast } from '@/lib/toast'
-import { canAddOrEditEquipment, canManageEquipmentKits } from '@/lib/equipment-access'
+import { confirmDialog } from '@/lib/confirm'
+import { canAddOrEditEquipment, canDeleteEquipment, canManageEquipmentKits } from '@/lib/equipment-access'
 import { resolveEffectiveTeamRow } from '@/lib/effective-team-client'
 import {
   DEFAULT_EQUIPMENT_CONDITION,
@@ -115,6 +116,7 @@ export default function EquipmentDetailPage() {
   const [dupTag, setDupTag] = useState('')
   const [dupSaving, setDupSaving] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
 
   const loadData = useCallback(async () => {
@@ -159,6 +161,7 @@ export default function EquipmentDetailPage() {
   const getCatName = (id: string | null) => id ? categories.find(c => c.id === id)?.name || '' : ''
   const topCategories = categories.filter(c => !c.parent_id)
   const canEdit = canAddOrEditEquipment(userRole)
+  const canDelete = canDeleteEquipment(userRole)
   const canLoan = canManageEquipmentKits(userRole)
   const itemIsPower = item ? isPowerCableRow(item) : false
 
@@ -372,6 +375,31 @@ export default function EquipmentDetailPage() {
     loadData()
   }
 
+  const handleDelete = async () => {
+    if (!item || !canDelete || deleting) return
+    // Don't delete something that's still physically out. Make them check it in first.
+    if (loans.some(l => !l.checked_in_at)) {
+      toast('Check this item in before deleting it.', 'error')
+      return
+    }
+    const ok = await confirmDialog({
+      title: 'Delete equipment',
+      message: `Delete ${item.asset_tag} — ${item.name}? This permanently removes the record along with its loan and activity history. This can't be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setDeleting(true)
+    const { error } = await supabase.from('equipment').delete().eq('id', item.id)
+    if (error) {
+      toast(error.message || 'Delete failed', 'error')
+      setDeleting(false)
+      return
+    }
+    toast('Equipment deleted', 'success')
+    router.push('/dashboard/equipment')
+  }
+
   const activeLoan = loans.find(l => !l.checked_in_at)
   const statusStyle = STATUS_COLORS[item?.status || ''] || STATUS_COLORS['available']
 
@@ -462,6 +490,11 @@ export default function EquipmentDetailPage() {
             {canEdit && !editing && (
             <button onClick={() => { setDupTag(''); setDupOpen(true) }} style={{ fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: cardBg, color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}>
               Duplicate
+            </button>
+            )}
+            {canDelete && !editing && (
+            <button onClick={handleDelete} disabled={deleting} style={{ marginLeft: 'auto', fontSize: '14px', padding: '9px 18px', borderRadius: '10px', background: 'transparent', color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.5)', cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit', opacity: deleting ? 0.6 : 1 }}>
+              {deleting ? 'Deleting…' : 'Delete'}
             </button>
             )}
           </div>
