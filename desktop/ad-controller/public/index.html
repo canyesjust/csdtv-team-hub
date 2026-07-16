@@ -112,14 +112,6 @@
     <span id="conn" class="dot">OBS</span>
   </div>
 
-  <div class="card" style="padding:10px 12px">
-    <p class="sechead" style="margin-bottom:6px">OBS browser dock URL</p>
-    <div style="display:flex;gap:8px;align-items:center">
-      <code id="addr" style="flex:1;background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:12px ui-monospace,Menlo,monospace;color:var(--text);overflow:auto;white-space:nowrap">http://127.0.0.1:4466</code>
-      <button id="copyAddr" style="width:auto;padding:8px 14px;flex:none">Copy</button>
-    </div>
-  </div>
-
   <div class="card now" id="nowCard">
     <div class="airtag"><span class="pulse"></span> AD ON AIR</div>
     <div class="label" id="nowLabel">Next ad in</div>
@@ -143,7 +135,28 @@
   </div>
 
   <div class="card">
-    <details id="hubDetails" open>
+    <p class="sechead">Click an ad to air it</p>
+    <div class="adlist" id="ads"></div>
+  </div>
+
+  <div class="card btns">
+    <button id="toggle">Auto rotation: off</button>
+    <button id="reload">Reload folder</button>
+    <div class="row"><span>Ads loaded</span><span id="count">0</span></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>OBS browser dock URL</summary>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
+        <code id="addr" style="flex:1;background:var(--card2);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:12px ui-monospace,Menlo,monospace;color:var(--text);overflow:auto;white-space:nowrap">http://127.0.0.1:4466</code>
+        <button id="copyAddr" style="width:auto;padding:8px 14px;flex:none">Copy</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <details id="hubDetails">
       <summary>Commercials from the hub</summary>
       <div style="margin-top:12px">
         <div class="btns two">
@@ -155,17 +168,6 @@
         <p class="hint" id="syncHint">Pulls commercials straight into the ads folder. No moving files.</p>
       </div>
     </details>
-  </div>
-
-  <div class="card">
-    <p class="sechead">Click an ad to air it</p>
-    <div class="adlist" id="ads"></div>
-  </div>
-
-  <div class="card btns">
-    <button id="toggle">Auto rotation: off</button>
-    <button id="reload">Reload folder</button>
-    <div class="row"><span>Ads loaded</span><span id="count">0</span></div>
   </div>
 
   <div class="card">

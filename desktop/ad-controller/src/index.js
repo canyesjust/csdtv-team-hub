@@ -29,6 +29,10 @@ const DEFAULT_CFG = {
   preshowMinGapSec: 60,
   preshowMaxGapSec: 120,
   imageDurationSec: 12,
+  startingSoonVolumeDb: -30, // pre-show music tops out here (dB)
+  duckFloorDb: -60,          // how far it ducks under an ad (dB)
+  fadeDownMs: 1800,          // fade-out length when an ad starts
+  fadeUpMs: 1400,            // fade-in length when the ad clears
   noRepeat: true,
   autoStart: false,
   autoSyncOnStart: true,

@@ -11,7 +11,7 @@ export class ObsClient extends EventEmitter {
     this.obs = new OBSWebSocket();
     this.connected = false;
     this._reconnect = null;
-    this._vol = {};    // last volume multiplier we set per source
+    this._db = {};     // last volume (dB) we set per source
     this._fadeSeq = 0; // cancels an in-flight fade when a newer one starts
 
     // Register socket listeners ONCE. The OBSWebSocket instance survives
@@ -88,8 +88,9 @@ export class ObsClient extends EventEmitter {
       inputName: this.cfg.startingSoonSource,
       inputSettings: { is_local_file: true, local_file: fullPath, looping: true },
     });
-    // Start at full volume so a leftover duck from a previous ad doesn't stick.
-    await this.setVolume(this.cfg.startingSoonSource, 1);
+    // Set to the configured pre-show level (dB) so a leftover duck doesn't stick
+    // and it never blasts back to full.
+    await this.setVolumeDb(this.cfg.startingSoonSource, this.cfg.startingSoonVolumeDb ?? -30);
     await this.setVisible(this.cfg.startingSoonSource, true);
     await this.obs.call('TriggerMediaInputAction', {
       inputName: this.cfg.startingSoonSource,
@@ -125,30 +126,32 @@ export class ObsClient extends EventEmitter {
     if (this.cfg.imageSource) await this.setVisible(this.cfg.imageSource, false);
   }
 
-  // Set a source's volume now (0..1 multiplier, 1 = full).
-  async setVolume(sourceName, mul) {
+  // Set a source's volume now, in dB.
+  async setVolumeDb(sourceName, db) {
     if (!this.connected || !sourceName) return;
     try {
-      await this.obs.call('SetInputVolume', { inputName: sourceName, inputVolumeMul: mul });
-      this._vol[sourceName] = mul;
+      await this.obs.call('SetInputVolume', { inputName: sourceName, inputVolumeDb: db });
+      this._db[sourceName] = db;
     } catch { /* source may have no audio; ignore */ }
   }
 
-  // Smoothly ramp a source's volume to a target over ms. Used to fade the
-  // Starting Soon music down under an ad and back up when it clears.
-  async fadeSource(sourceName, toMul, ms = 800) {
+  // Smoothly ramp a source's volume to a target dB over ms. Ramping in dB (not a
+  // linear multiplier) sounds natural to the ear, so the fade is gradual instead
+  // of snapping. Used to duck the Starting Soon music under an ad and bring it
+  // back. A newer fade cancels an in-flight one.
+  async fadeToDb(sourceName, toDb, ms = 1500) {
     if (!this.connected || !sourceName) return;
     const seq = ++this._fadeSeq;
-    const from = this._vol[sourceName] ?? 1;
-    const steps = 16;
+    const from = (this._db[sourceName] != null) ? this._db[sourceName] : toDb;
+    const steps = Math.max(8, Math.round(ms / 30)); // ~30ms per step keeps it smooth
     for (let i = 1; i <= steps; i++) {
       if (seq !== this._fadeSeq) return; // a newer fade took over
-      const mul = from + (toMul - from) * (i / steps);
+      const db = from + (toDb - from) * (i / steps);
       try {
-        await this.obs.call('SetInputVolume', { inputName: sourceName, inputVolumeMul: mul });
+        await this.obs.call('SetInputVolume', { inputName: sourceName, inputVolumeDb: db });
       } catch { return; }
-      this._vol[sourceName] = mul;
-      await new Promise(r => setTimeout(r, Math.max(0, ms) / steps));
+      this._db[sourceName] = db;
+      await new Promise(r => setTimeout(r, ms / steps));
     }
   }
 

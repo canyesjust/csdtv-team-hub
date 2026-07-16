@@ -110,7 +110,7 @@
 
   <!-- LOWER THIRD (primary — always visible) -->
   <section class="card t-lower" id="secLower">
-    <div class="head"><span class="lbl" style="flex:1">Lower third</span><span class="badge" id="badgeLower">off</span></div>
+    <div class="head"><span class="lbl" style="flex:1">Lower third</span><button class="ghost mini" id="reloadLineup" title="Reload names from the sheet" style="display:none">&#8635; Sheet</button><span class="badge" id="badgeLower">off</span></div>
     <div class="list" id="lineup"></div>
     <div class="row">
       <button class="ghost" id="prev">‹ Prev</button>
@@ -182,7 +182,7 @@
       <label>Image URL (optional)</label><input id="pnLogo" placeholder="https://.../logo.png">
       <div class="row"><button class="air" id="airPanel">Air panel</button></div>
       <div class="hint">Sponsors — click one to fill slate &amp; panel · <a href="#" id="dlSponsors">template</a></div>
-      <div class="row" style="margin-top:2px"><input id="spSheetUrl" placeholder="Published sponsors CSV URL" style="flex:1;min-width:150px;"><button class="ghost" id="loadSp">Load</button></div>
+      <div class="row" style="margin-top:2px"><input id="spSheetUrl" placeholder="Published sponsors CSV URL" style="flex:1;min-width:150px;"><button class="ghost" id="loadSp">Load</button><button class="ghost mini" id="reloadSp" title="Reload sponsors from the sheet" style="display:none">&#8635;</button></div>
       <div class="list" id="sponsors"></div>
     </div>
   </details>
@@ -207,6 +207,16 @@
 </div>
 <script>
 (function(){
+  // ==================== EDIT ME: permanent Google Sheet =====================
+  // Publish the sheet ONE time: File -> Share -> Publish to web -> pick the tab
+  // -> Comma-separated values (.csv) -> Publish. Paste the link(s) below.
+  // After that you never publish again — just edit rows in the sheet and hit
+  // "Reload Sheet" in the panel (or reopen the dock) to pull the latest.
+  var SHEETS={
+    lineup:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRoBBMpOMfId7J-xm5FrZBFYft0llpL60mxDnIhMgJ-X63xncnekbO0SOO35ODAC5sV9yVdDotlEGAe/pub?gid=1080320705&single=true&output=csv',
+    sponsors:'https://docs.google.com/spreadsheets/d/e/2PACX-1vRoBBMpOMfId7J-xm5FrZBFYft0llpL60mxDnIhMgJ-X63xncnekbO0SOO35ODAC5sV9yVdDotlEGAe/pub?gid=1590419680&single=true&output=csv'
+  };
+  // ==========================================================================
   var LINEUP=[];
   var SPONSORS=[];
   var idx=-1;
@@ -224,7 +234,7 @@
     render(); }
 
   function renderLineup(){
-    if(!LINEUP.length){ E('lineup').innerHTML='<div class="empty">No lineup loaded. Open "Manual entry &amp; load lineup" below to paste a CSV URL (columns: <b>num, name, org</b>) or download the template. Or use Manual for one-offs.</div>'; return; }
+    if(!LINEUP.length){ E('lineup').innerHTML='<div class="empty">'+(SHEETS.lineup?'Loading the lineup from the sheet… If this stays, check the sheet link. Use the &#8635; Sheet button to retry.':'No lineup loaded. Open "Manual entry &amp; load lineup" below to paste a CSV URL (columns: <b>num, name, org</b>) or download the template. Or use Manual for one-offs.')+'</div>'; return; }
     E('lineup').innerHTML=LINEUP.map(function(e,i){
       return '<div class="ent'+(i===idx?' cur':'')+'" data-i="'+i+'"><span class="num">'+esc(e.num)+'</span>'
         +'<span class="nm">'+esc(e.name)+'</span> <span class="og">'+esc(e.org)+'</span></div>';
@@ -282,22 +292,31 @@
   E('airManual').onclick=function(){ idx=-1; state.lower={on:true,name:E('mName').value,org:E('mOrg').value}; push(); };
   E('clearAll').onclick=function(){ idx=-1; state.lower.on=false; state.coming.on=false; state.full={on:false}; state.cta={on:false,kind:''}; state.panel={on:false}; state.bug.on=false; state.clock.on=false; state.ticker.on=false; push(); };
 
-  E('loadSp').onclick=function(){ var url=E('spSheetUrl').value.trim(); if(!url) return;
-    fetch(url).then(function(r){return r.text();}).then(function(t){
-      var rows=t.split(/\r?\n/).filter(Boolean).map(function(l){return l.split(',');});
-      var start=/sponsor|name/i.test(rows[0].join(','))?1:0;
-      SPONSORS=rows.slice(start).map(function(c){return {name:(c[0]||'').trim(),tagline:(c[1]||'').trim(),logo:(c[2]||'').trim()};});
-      renderSponsors();
-    }).catch(function(){ alert('Could not load that CSV. Make sure it is Published to web as CSV.'); }); };
-
-  E('loadSheet').onclick=function(){ var url=E('sheetUrl').value.trim(); if(!url) return;
-    fetch(url).then(function(r){return r.text();}).then(function(t){
+  // Load from a CSV URL (the permanent sheet, or a manually pasted one). The
+  // cache-buster nudges Google to hand back the freshest export.
+  function bust(u){ return u + (u.indexOf('?')>-1?'&':'?') + '_=' + Date.now(); }
+  function loadLineup(url, silent){
+    if(!url) return;
+    fetch(bust(url)).then(function(r){return r.text();}).then(function(t){
       var rows=t.split(/\r?\n/).filter(Boolean).map(function(l){ return l.split(','); });
       var start=/num|name/i.test(rows[0].join(','))?1:0;
       LINEUP=rows.slice(start).map(function(c,i){ return {num:(c[0]||i+1),name:(c[1]||'').trim(),org:(c[2]||'').trim()}; });
       idx=-1; renderLineup(); render();
-    }).catch(function(){ alert('Could not load that CSV URL. Make sure the sheet is Published to web as CSV.'); });
-  };
+    }).catch(function(){ if(!silent) alert('Could not load the lineup CSV. Check the link and that the sheet is shared or published.'); });
+  }
+  function loadSponsors(url, silent){
+    if(!url) return;
+    fetch(bust(url)).then(function(r){return r.text();}).then(function(t){
+      var rows=t.split(/\r?\n/).filter(Boolean).map(function(l){return l.split(',');});
+      var start=/sponsor|name/i.test(rows[0].join(','))?1:0;
+      SPONSORS=rows.slice(start).map(function(c){return {name:(c[0]||'').trim(),tagline:(c[1]||'').trim(),logo:(c[2]||'').trim()};});
+      renderSponsors();
+    }).catch(function(){ if(!silent) alert('Could not load the sponsors CSV.'); }); }
+
+  E('loadSheet').onclick=function(){ loadLineup(E('sheetUrl').value.trim()||SHEETS.lineup, false); };
+  E('loadSp').onclick=function(){ loadSponsors(E('spSheetUrl').value.trim()||SHEETS.sponsors, false); };
+  if(E('reloadLineup')) E('reloadLineup').onclick=function(){ loadLineup(E('sheetUrl').value.trim()||SHEETS.lineup, false); };
+  if(E('reloadSp')) E('reloadSp').onclick=function(){ loadSponsors(E('spSheetUrl').value.trim()||SHEETS.sponsors, false); };
 
   function renderSponsors(){
     if(!SPONSORS.length){ E('sponsors').innerHTML='<div class="empty">No sponsors loaded. Paste a published CSV URL above and Load (columns: <b>sponsor, tagline, logo_url</b>), or download the template.</div>'; return; }
@@ -335,8 +354,17 @@
       state.full=Object.assign({on:true},p); push(); };
   });
 
+  // Show the reload buttons and auto-pull the permanent sheet(s) on open.
+  if(SHEETS.lineup){ E('sheetUrl').value=SHEETS.lineup; E('sheetUrl').placeholder='Using the permanent sheet';
+    if(E('reloadLineup')) E('reloadLineup').style.display=''; }
+  if(SHEETS.sponsors){ E('spSheetUrl').value=SHEETS.sponsors;
+    if(E('reloadSp')) E('reloadSp').style.display=''; }
+
   renderLineup(); renderSponsors();
   render(); push();
+
+  if(SHEETS.lineup) loadLineup(SHEETS.lineup, true);
+  if(SHEETS.sponsors) loadSponsors(SHEETS.sponsors, true);
 })();
 </script>
 </body>

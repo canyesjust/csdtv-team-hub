@@ -122,7 +122,7 @@ export class Rotator extends EventEmitter {
     this.nowPlayingLabel = ad.label || ad.file;
     this.emit('log', 'Playing ' + (ad.label || ad.file));
     // Fade the Starting Soon music down under the ad.
-    if (this.preshow) this.obs.fadeSource(this.cfg.startingSoonSource, 0, 700);
+    if (this.preshow) this.obs.fadeToDb(this.cfg.startingSoonSource, this.cfg.duckFloorDb ?? -60, this.cfg.fadeDownMs ?? 1800);
     try {
       if (ad.type === 'image') {
         await this.obs.showImage(full);
@@ -135,7 +135,7 @@ export class Rotator extends EventEmitter {
     } catch (err) {
       this.nowPlaying = null; this.nowPlayingLabel = null;
       this.emit('log', 'Play failed: ' + err.message);
-      if (this.preshow) this.obs.fadeSource(this.cfg.startingSoonSource, 1, 500);
+      if (this.preshow) this.obs.fadeToDb(this.cfg.startingSoonSource, this.cfg.startingSoonVolumeDb ?? -30, this.cfg.fadeUpMs ?? 1400);
       if (this.rotating()) this.schedule();
     }
   }
@@ -151,7 +151,7 @@ export class Rotator extends EventEmitter {
   async stop() {
     clearTimeout(this.imageTimer);
     await this.obs.stopAll();
-    if (this.preshow) this.obs.fadeSource(this.cfg.startingSoonSource, 1, 500);
+    if (this.preshow) this.obs.fadeToDb(this.cfg.startingSoonSource, this.cfg.startingSoonVolumeDb ?? -30, this.cfg.fadeUpMs ?? 1400);
     if (this.nowPlaying) this.emit('log', 'Stopped ' + this.nowPlaying);
     this.nowPlaying = null; this.nowPlayingLabel = null;
     if (this.rotating()) this.schedule();
@@ -161,7 +161,7 @@ export class Rotator extends EventEmitter {
     clearTimeout(this.imageTimer);
     this.nowPlaying = null; this.nowPlayingLabel = null;
     // Bring the music back up now that the ad has cleared.
-    if (this.preshow) this.obs.fadeSource(this.cfg.startingSoonSource, 1, 700);
+    if (this.preshow) this.obs.fadeToDb(this.cfg.startingSoonSource, this.cfg.startingSoonVolumeDb ?? -30, this.cfg.fadeUpMs ?? 1400);
     if (this.rotating()) this.schedule();
   }
 

@@ -126,6 +126,16 @@ export function startServer(cfg, rotator, log, sync, saveConfig) {
     }
   }, 1000);
 
+  // Handle a busy port gracefully instead of crashing the whole app. This
+  // happens when another copy of the controller is already running on 4466.
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      log.add(`Port ${cfg.panelPort} is already in use — another copy of the controller is probably running. Close the other one and reopen this app.`);
+    } else {
+      log.add('Server error: ' + (err && err.message ? err.message : String(err)));
+    }
+  });
+
   server.listen(cfg.panelPort, () => {
     log.add(`Operator panel at http://127.0.0.1:${cfg.panelPort}`);
   });
