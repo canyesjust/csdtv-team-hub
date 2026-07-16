@@ -43,8 +43,8 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install PyInstaller
@@ -84,7 +84,7 @@ jobs:
       - name: Zip the .app
         working-directory: ${{ env.SRC_DIR }}/dist
         run: ditto -c -k --keepParent "$APP_NAME.app" "Blackmagic-Update-Checker-macOS.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: macos
           path: ${{ env.SRC_DIR }}/dist/Blackmagic-Update-Checker-macOS.zip
@@ -96,8 +96,8 @@ jobs:
       WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
       WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install PyInstaller
@@ -125,7 +125,7 @@ jobs:
       - name: Zip the .exe
         working-directory: ${{ env.SRC_DIR }}/dist
         run: Compress-Archive -Path "$env:APP_NAME.exe" -DestinationPath "Blackmagic-Update-Checker-Windows.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: windows
           path: ${{ env.SRC_DIR }}/dist/Blackmagic-Update-Checker-Windows.zip
@@ -134,11 +134,11 @@ jobs:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
       - name: Publish / update the latest release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: app-latest
           name: Blackmagic Update Checker (latest)

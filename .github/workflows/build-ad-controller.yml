@@ -34,8 +34,8 @@ jobs:
       # identity in the CI keychain, so it builds the app unsigned and passes.
       CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
       - name: Install dependencies
@@ -44,7 +44,7 @@ jobs:
       - name: Build macOS app (universal — Intel + Apple Silicon)
         working-directory: ${{ env.SRC_DIR }}
         run: npx electron-builder --mac --universal --publish never
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: macos
           path: |
@@ -55,8 +55,8 @@ jobs:
     runs-on: windows-latest
     # No signing certificate — electron-builder builds an unsigned .exe by default.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
       - name: Install dependencies
@@ -65,7 +65,7 @@ jobs:
       - name: Build Windows app
         working-directory: ${{ env.SRC_DIR }}
         run: npx electron-builder --win --publish never
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: windows
           path: |
@@ -75,15 +75,17 @@ jobs:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
       - name: Publish / update the latest release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ad-controller-latest
           name: CSDtv Ad Controller (latest)
-          make_latest: true
+          # Not "latest" for the whole repo — the Blackmagic download page uses the
+          # repo's latest-release links, so this release stays tied to its own tag.
+          make_latest: false
           body: |
             Own-window builds of the CSDtv Ad Controller for macOS and Windows.
             Rebuilt automatically on every update.

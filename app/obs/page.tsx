@@ -141,15 +141,22 @@ export default function ObsAssetsPage() {
         <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 22 }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>1. Controller</h2>
           <p style={{ margin: '8px 0 14px', fontSize: 14, color: colors.muted, lineHeight: 1.55 }}>
-            The controller runs the Ad Control dock that plays commercials and switches scenes inside OBS.
+            The controller runs the Ad Control panel that plays commercials and switches scenes inside OBS. Download the version for your computer. Nothing else to install.
           </p>
-          <a
-            href="/csdtv-obs-controller.zip"
-            download
-            style={{ display: 'inline-block', height: 42, lineHeight: '42px', padding: '0 18px', borderRadius: 10, border: `1px solid ${colors.ok}`, background: colors.ok, color: '#fff', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}
-          >
-            Download controller (.zip)
-          </a>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <a
+              href="https://github.com/canyesjust/csdtv-team-hub/releases/download/ad-controller-latest/CSDtv-Ad-Controller-mac.dmg"
+              style={{ display: 'inline-block', height: 42, lineHeight: '42px', padding: '0 18px', borderRadius: 10, border: `1px solid ${colors.ok}`, background: colors.ok, color: '#fff', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}
+            >
+              Download for Mac (.dmg)
+            </a>
+            <a
+              href="https://github.com/canyesjust/csdtv-team-hub/releases/download/ad-controller-latest/CSDtv-Ad-Controller-windows-setup.exe"
+              style={{ display: 'inline-block', height: 42, lineHeight: '42px', padding: '0 18px', borderRadius: 10, border: `1px solid ${colors.blue}`, background: colors.blue, color: '#fff', fontSize: 14, fontWeight: 700, textDecoration: 'none' }}
+            >
+              Download for Windows (.exe)
+            </a>
+          </div>
         </section>
 
         {/* Asset lists */}
@@ -159,14 +166,13 @@ export default function ObsAssetsPage() {
         {/* Setup steps */}
         <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18 }}>
           <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>4. Setup</h2>
-          <p style={stepStyle}><strong>1. Install Node.js.</strong> Download the macOS Installer (.pkg) from <span style={codeStyle}>nodejs.org</span> and click through to Finish. The controller needs it. Do <strong>not</strong> use nvm; a double-clicked launcher can&apos;t find nvm-installed Node. Use the plain .pkg installer.</p>
-          <p style={stepStyle}><strong>2. Unzip the controller</strong> somewhere permanent, like Documents. Don&apos;t leave it in Downloads.</p>
-          <p style={stepStyle}><strong>3. Add the OBS sources.</strong> In your OBS scene, create three sources named exactly <span style={codeStyle}>Commercials</span> (media source, videos), <span style={codeStyle}>CommercialsImage</span> (image source, image ads), and <span style={codeStyle}>StartingSoon</span> (media source, the pre-show slate). Leave their files empty. Put <span style={codeStyle}>StartingSoon</span> below the two Commercials sources so ads cover it.</p>
-          <p style={stepStyle}><strong>4. Turn on the OBS WebSocket.</strong> In OBS go to <span style={codeStyle}>Tools → WebSocket Server Settings</span>, check <span style={codeStyle}>Enable WebSocket Server</span>, keep the port at <span style={codeStyle}>4455</span>, and set the password to <strong>the same password you used to open this page</strong>. (Ask Justin if you&apos;re not sure.)</p>
-          <p style={stepStyle}><strong>5. Run the controller.</strong> Double-click <strong>CSDtv Ad Controller</strong> (the app with the CSDtv icon). It opens the Ad Control panel in your browser, no Terminal, and on first run it creates a <span style={codeStyle}>CSDtv Ad Controller</span> folder in your <strong>Documents</strong> with its settings and ad folders. To stop it later, quit the app. The first time, macOS blocks it because the app isn&apos;t signed by Apple, see <em>&ldquo;macOS says it can&apos;t verify the app&rdquo;</em> below.</p>
-          <p style={stepStyle}><strong>6. Set the password and scene.</strong> In the Ad Control panel, open <strong>Settings</strong>. Enter the <strong>shared password</strong> (the same one you used to open this page) and your <strong>OBS scene name</strong> (defaults to <span style={codeStyle}>Live</span>), then click <strong>Save</strong>. No file editing. That one password covers both OBS and the hub downloads.</p>
-          <p style={stepStyle}><strong>7. Add the Ad Control dock.</strong> In OBS choose <span style={codeStyle}>Docks → Custom Browser Docks</span> and add one pointing to <span style={codeStyle}>http://127.0.0.1:4466</span>.</p>
-          <p style={{ ...stepStyle, marginBottom: 0 }}><strong>8. Load the commercials.</strong> In the panel, click <strong>Download missing</strong> and every commercial drops into the app&apos;s ads folder for you. The Starting Soon video comes down the same way, upload it once on the hub&apos;s OBS assets page and every machine pulls it automatically. No moving files by hand. Run Download missing again anytime to pick up changes.</p>
+          <p style={stepStyle}><strong>1. Install the app.</strong> On Mac, open the <span style={codeStyle}>.dmg</span> and drag <strong>CSDtv Ad Controller</strong> into Applications. On Windows, run the <span style={codeStyle}>.exe</span> installer. That&apos;s it, no Node.js and no unzipping.</p>
+          <p style={stepStyle}><strong>2. Add the OBS sources.</strong> In your OBS scene, create three sources named exactly <span style={codeStyle}>Commercials</span> (media source, videos), <span style={codeStyle}>CommercialsImage</span> (image source, image ads), and <span style={codeStyle}>StartingSoon</span> (media source, the pre-show slate). Leave their files empty. Put <span style={codeStyle}>StartingSoon</span> below the two Commercials sources so ads cover it.</p>
+          <p style={stepStyle}><strong>3. Turn on the OBS WebSocket.</strong> In OBS go to <span style={codeStyle}>Tools → WebSocket Server Settings</span>, check <span style={codeStyle}>Enable WebSocket Server</span>, keep the port at <span style={codeStyle}>4455</span>, and set the password to <strong>the same password you used to open this page</strong>. (Ask Justin if you&apos;re not sure.)</p>
+          <p style={stepStyle}><strong>4. Open the app.</strong> Launch <strong>CSDtv Ad Controller</strong>. It opens in its own window, no browser and no Terminal. The first time, Mac and Windows warn that the app isn&apos;t signed, see <em>&ldquo;It won&apos;t open the first time&rdquo;</em> below to get past that once.</p>
+          <p style={stepStyle}><strong>5. Set the password and scene.</strong> In the app, open <strong>Settings</strong>. Enter the <strong>shared password</strong> (the same one you used to open this page) and your <strong>OBS scene name</strong> (defaults to <span style={codeStyle}>Live</span>), then click <strong>Save</strong>. That one password covers both OBS and the hub downloads.</p>
+          <p style={stepStyle}><strong>6. Load the commercials.</strong> Click <strong>Download missing</strong> and every commercial drops into the app&apos;s ads folder for you. The Starting Soon video comes down the same way, upload it once on the hub&apos;s OBS assets page and every machine pulls it automatically. Run Download missing again anytime to pick up changes.</p>
+          <p style={{ ...stepStyle, marginBottom: 0 }}><strong>7. (Optional) Dock it inside OBS.</strong> If you&apos;d rather see the controls inside OBS than in a separate window, add <span style={codeStyle}>Docks → Custom Browser Docks</span> pointing to <span style={codeStyle}>http://127.0.0.1:4466</span> while the app is running.</p>
         </section>
 
         {/* Parade graphics */}
@@ -181,17 +187,14 @@ export default function ObsAssetsPage() {
         <section style={{ background: colors.cardBg, border: `1px solid ${colors.line}`, borderRadius: 14, padding: '20px 22px', marginTop: 18, marginBottom: 40 }}>
           <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>5. If something goes wrong</h2>
 
-          <p style={qStyle}>The launcher says Node isn&apos;t installed, but I installed it</p>
-          <p style={aStyle}>Open Terminal and run <span style={codeStyle}>which node</span>. If it prints nothing, Node didn&apos;t install, or you used nvm. Reinstall with the <strong>.pkg</strong> from nodejs.org and open a fresh Terminal. If it prints a path, quit the app and open it again.</p>
-
-          <p style={qStyle}>macOS says it can&apos;t verify the app</p>
-          <p style={aStyle}>If you see &ldquo;Apple could not verify CSDtv Ad Controller is free of malware,&rdquo; that&apos;s just because the app isn&apos;t signed by Apple, not an actual problem. Click <strong>Done</strong> (not Move to Trash). Open the Apple menu → <strong>System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and click <strong>Open Anyway</strong> next to the CSDtv Ad Controller message. Authenticate, then click <strong>Open</strong>. It launches normally after that. You only do this once per Mac.</p>
+          <p style={qStyle}>It won&apos;t open the first time</p>
+          <p style={aStyle}><strong>Mac:</strong> if you see &ldquo;Apple could not verify CSDtv Ad Controller is free of malware,&rdquo; that&apos;s just because the app isn&apos;t signed by Apple, not an actual problem. Click <strong>Done</strong> (not Move to Trash), then open the Apple menu → <strong>System Settings → Privacy &amp; Security</strong>, scroll to the Security section, and click <strong>Open Anyway</strong> next to the CSDtv Ad Controller message. <strong>Windows:</strong> if SmartScreen says &ldquo;Windows protected your PC,&rdquo; click <strong>More info → Run anyway</strong>. You only do this once per computer.</p>
 
           <p style={qStyle}>The panel says &quot;OBS offline&quot;</p>
-          <p style={aStyle}>Make sure OBS is running and the WebSocket server is enabled. Confirm the port is <span style={codeStyle}>4455</span> and that the password in <span style={codeStyle}>config.json</span> exactly matches the OBS Server Password. A mismatched password is the most common cause. Ask Justin to confirm the password.</p>
+          <p style={aStyle}>Make sure OBS is running and the WebSocket server is enabled. Confirm the port is <span style={codeStyle}>4455</span> and that the password in the app&apos;s <strong>Settings</strong> exactly matches the OBS Server Password. A mismatched password is the most common cause. Ask Justin to confirm the password.</p>
 
           <p style={qStyle}>It says &quot;Connected to OBS&quot; but no ad appears</p>
-          <p style={aStyle}>Check the source names are exactly <span style={codeStyle}>Commercials</span>, <span style={codeStyle}>CommercialsImage</span>, and <span style={codeStyle}>StartingSoon</span>. Check that <span style={codeStyle}>&quot;scene&quot;</span> in <span style={codeStyle}>config.json</span> matches your real scene name, and that the sources are in that scene and not hidden.</p>
+          <p style={aStyle}>Check the source names are exactly <span style={codeStyle}>Commercials</span>, <span style={codeStyle}>CommercialsImage</span>, and <span style={codeStyle}>StartingSoon</span>. Check that the <strong>scene name</strong> in the app&apos;s <strong>Settings</strong> matches your real OBS scene, and that the sources are in that scene and not hidden.</p>
 
           <p style={qStyle}>An image ad shows blank</p>
           <p style={aStyle}>Confirm you added the <span style={codeStyle}>CommercialsImage</span> image source.</p>

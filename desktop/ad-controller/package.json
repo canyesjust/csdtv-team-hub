@@ -38,10 +38,16 @@
       "icon": "build/icon.icns"
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "target": ["nsis"]
     },
     "linux": {
       "target": ["AppImage"]
+    },
+    "dmg": {
+      "artifactName": "CSDtv-Ad-Controller-mac.${ext}"
+    },
+    "nsis": {
+      "artifactName": "CSDtv-Ad-Controller-windows-setup.${ext}"
     }
   }
 }
