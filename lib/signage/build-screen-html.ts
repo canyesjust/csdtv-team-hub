@@ -653,11 +653,18 @@ function composeBody(feed: Feed): string {
     )
   }
 
-  // Fallback (should be unreachable) — render the zoned landscape stage.
+  // Fallback — a layout with no renderer (misconfigured / unsupported). Show a
+  // clean branded placeholder instead of a half-built zoned screen so it reads
+  // as intentional rather than broken.
+  const fallbackLogo = s.logo_url
+    ? `<img src="${esc(s.logo_url)}" alt="" style="width:min(220px,16vmax);height:auto;margin-bottom:2.4vmax">`
+    : ''
   return (
-    `<div class="cic-zoned-stage">` +
-    zonedHeader({ centerName: s.center_name, areaLabel, weatherIcon, tempF, visitor, logoUrl: s.logo_url, showWeather, showClock }) +
-    `<div class="cic-body">${mediaCarousel(feed.media)}${announcementsRail(feed.announcements, feed.wayfinding)}</div></div>`
+    `<div class="cic-fill" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6vmax">` +
+    fallbackLogo +
+    `<div style="font-size:2.6vmax;font-weight:700;line-height:1.2">${esc(s.name || s.center_name)}</div>` +
+    `<div style="font-size:1.5vmax;color:var(--muted);margin-top:1vmax">This screen isn’t set up yet.</div>` +
+    `</div>`
   )
 }
 

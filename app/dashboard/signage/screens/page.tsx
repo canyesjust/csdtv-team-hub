@@ -31,6 +31,7 @@ type ScreenForm = {
   layout: string
   theme: string | null
   wayfinding_heading: string | null
+  webpage_url: string | null
   accepts_takeover: boolean
   board_takeover_enabled: boolean
   board_takeover_audio: boolean
@@ -66,7 +67,7 @@ type AssignedItem = {
 
 const empty: ScreenForm = {
   code: '', name: '', area_id: null, building: '', floor: null, orientation: 'landscape', layout: 'inherit',
-  theme: '', wayfinding_heading: '', accepts_takeover: true, board_takeover_enabled: false, board_takeover_audio: false, active: true, notes: '',
+  theme: '', wayfinding_heading: '', webpage_url: '', accepts_takeover: true, board_takeover_enabled: false, board_takeover_audio: false, active: true, notes: '',
 }
 
 export default function SignageScreensPage() {
@@ -156,7 +157,7 @@ export default function SignageScreensPage() {
   }
 
   const save = async () => {
-    const body = { ...form, area_id: form.area_id || null, floor: form.floor ? Number(form.floor) : null, building: form.building || null, wayfinding_heading: form.wayfinding_heading || null, notes: form.notes || null, theme: form.theme || null, site_id: activeSiteId }
+    const body = { ...form, area_id: form.area_id || null, floor: form.floor ? Number(form.floor) : null, building: form.building || null, wayfinding_heading: form.wayfinding_heading || null, webpage_url: form.webpage_url?.trim() || null, notes: form.notes || null, theme: form.theme || null, site_id: activeSiteId }
     const res = await fetch('/api/signage/screens', { method: editId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editId ? { id: editId, ...body } : body) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) { toast(data.error || 'Save failed', 'error'); return }
@@ -182,6 +183,7 @@ export default function SignageScreensPage() {
       layout: sc.layout,
       theme: sc.theme || '',
       wayfinding_heading: sc.wayfinding_heading || '',
+      webpage_url: sc.webpage_url || '',
       accepts_takeover: sc.accepts_takeover,
       board_takeover_enabled: sc.board_takeover_enabled,
       board_takeover_audio: sc.board_takeover_audio,
@@ -326,6 +328,7 @@ export default function SignageScreensPage() {
                 <option value="zoned2">Zoned 2 — district-branded (big 16:9, weather, spotlight, news band)</option>
                 <option value="full_bleed">Full bleed — media only (hallways)</option>
                 <option value="wayfinding">Wayfinding — large directory + media (entrances)</option>
+                <option value="webpage">Web address — one live web page, full screen</option>
               </select>
               <p style={{ ...s.lbl, margin: '6px 0 0', lineHeight: 1.45 }}>
                 Zoned is the default department screen. Full bleed hides the side rail. Wayfinding dedicates most of the screen to the directory.
@@ -338,6 +341,20 @@ export default function SignageScreensPage() {
                 {SIGNAGE_THEMES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
+            {form.layout === 'webpage' && (
+              <div>
+                <p style={s.lbl}>Web address</p>
+                <input
+                  value={form.webpage_url || ''}
+                  onChange={e => setForm(f => ({ ...f, webpage_url: e.target.value }))}
+                  placeholder="https://www.csdtvstaff.org/signage?k=…"
+                  style={s.input}
+                />
+                <p style={{ ...s.lbl, margin: '6px 0 0', lineHeight: 1.45 }}>
+                  The screen shows only this page, edge to edge — no header, ticker, or announcements. The page must allow embedding (some sites block it).
+                </p>
+              </div>
+            )}
             {form.layout === 'wayfinding' && (
               <div>
                 <p style={s.lbl}>Wayfinding heading</p>

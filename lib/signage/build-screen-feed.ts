@@ -437,7 +437,7 @@ export async function buildScreenFeed(
 ): Promise<{ feed: ScreenFeed } | { error: 'not_found' | 'server_error' }> {
   const { data: screen, error: screenErr } = await service
     .from('signage_screens')
-    .select('id, code, name, orientation, layout, theme, site_id, wayfinding_heading, accepts_takeover, board_takeover_enabled, board_takeover_audio, area_id, building, floor, active, zone_config, signage_areas(id, name, slug, building, floor)')
+    .select('id, code, name, orientation, layout, theme, site_id, wayfinding_heading, webpage_url, accepts_takeover, board_takeover_enabled, board_takeover_audio, area_id, building, floor, active, zone_config, signage_areas(id, name, slug, building, floor)')
     .eq('code', code)
     .maybeSingle()
 
@@ -727,6 +727,7 @@ export async function buildScreenFeed(
         brand_title: site?.brand_title ?? null,
         brand_subtitle: site?.brand_subtitle ?? null,
         logo_url: resolvedLayout === 'zoned2' ? (site?.logo_url ?? DISTRICT_LOGO_URL) : (site?.logo_url ?? null),
+        webpage_url: (screen.webpage_url as string | null) ?? null,
         zone_config: resolveZoneConfig(screen.zone_config),
       },
       template: {
