@@ -101,6 +101,7 @@ curation on top of it.
 | min_gap_sec | int default 180 | |
 | max_gap_sec | int default 600 | |
 | no_repeat | boolean default true | |
+| mute_during_ads | text[] default '{}' | OBS audio sources to mute under an ad |
 | updated_at | timestamptz | |
 
 ### `ad_commands` — command queue (hub → runner)
@@ -158,6 +159,7 @@ string.
       {
         "spot_id": "uuid",
         "media_asset_id": "uuid",
+        "name": "Back to School 2026",
         "filename": "back-to-school.mp4",
         "content_hash": "sha256:...",
         "download_url": "https://<signed-supabase-url>",
@@ -209,6 +211,11 @@ created (hash the object, or store `sha256` in `ad_spots`). If a hash isn't
 available at first, fall back to `media_assets.updated_at + size_bytes` as the
 version string. Without a stable version the runner would re-download constantly.
 
+**Names.** Play by `filename`, but display the assigned `name` (from
+`media_assets.name`) everywhere the operator sees it — the on-air indicator, the
+ad list, and the play log. Operators think in ad names, not filenames. The
+heartbeat `now_playing` should be the name, not the file.
+
 **Rotation loop.** Honor `config` (min/max gap, no_repeat). **Only pick from files
 present in the local manifest.** A scheduled ad that hasn't finished syncing is
 skipped, never streamed. This is the guardrail that enforces requirement #1.
@@ -218,7 +225,17 @@ skipped, never streamed. This is the guardrail that enforces requirement #1.
   (`{ is_local_file: true, local_file, looping: false }`)
 - `GetSceneItemId` + `SetSceneItemEnabled` — show/hide the source in the scene
 - `TriggerMediaInputAction` with `OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART` — play
-- `MediaInputPlaybackEnded` event — hide the source and schedule the next ad
+- `SetInputMute` — mute the configured background audio sources while the ad is
+  on air, unmute when it ends (see audio note below)
+- `MediaInputPlaybackEnded` event — unmute, hide the source, schedule the next ad
+
+**Audio under ads (required).** OBS mixes every active audio source, so a scene's
+background audio (e.g. "Starting Soon" music) keeps playing under an ad unless it
+is silenced. The runner mutes a configured list of audio sources when an ad
+starts and unmutes on `MediaInputPlaybackEnded`. Config field `mute_during_ads`
+(array of OBS input names). Also unmute on any play failure, since no "ended"
+event fires if playback never starts — otherwise the music stays muted. The
+reference runner implements this in `src/obs.js` (`muteDuringAds`).
 
 **Commands.** Poll, execute (`play_now`, `set_auto`, `sync_now`), then ack.
 
@@ -285,6 +302,8 @@ control surface then lives inside OBS and on any browser on the network.
 - Delete the ad in the hub → it leaves the local folder (unless on air).
 - Panel shows green when files are local; **Play ad now** fires within ~5s.
 - Auto rotation plays a random, non-repeating local ad on the configured interval.
+- Background scene audio (Starting Soon music) is silent under an ad and returns
+  when the ad ends, including when playback fails to start.
 - Pulling the network cable mid-show does not interrupt playout.
 - No code path can play an ad from a remote URL.
 

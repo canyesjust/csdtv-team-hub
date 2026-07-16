@@ -1,0 +1,101 @@
+name: Build CSDtv Ad Controller
+
+# Builds the ad controller into a real double-click app for macOS (.dmg) and
+# Windows (.exe), using Electron + electron-builder. Runs automatically when the
+# app source changes on main. When it finishes it publishes/updates a single
+# Release ("ad-controller-latest") with the installers attached.
+#
+# Signing is optional and mirrors the blackmagic workflow: if the cert secrets
+# are set, builds are signed (and notarized on macOS); if not, they build
+# unsigned (they still run, with a first-launch warning).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/ad-controller/**'
+      - '.github/workflows/build-ad-controller.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  SRC_DIR: desktop/ad-controller
+
+jobs:
+  build-macos:
+    # Intel runner on purpose: an x64 build runs on Intel Macs natively and on
+    # Apple Silicon via Rosetta. Same reasoning as the blackmagic workflow.
+    runs-on: macos-13
+    env:
+      # Empty secrets => electron-builder skips signing and builds unsigned.
+      CSC_LINK: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: ${{ env.SRC_DIR }}
+        run: npm install
+      - name: Build macOS app
+        working-directory: ${{ env.SRC_DIR }}
+        run: npx electron-builder --mac --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            ${{ env.SRC_DIR }}/dist/*.dmg
+            ${{ env.SRC_DIR }}/dist/*.zip
+
+  build-windows:
+    runs-on: windows-latest
+    env:
+      WIN_CSC_LINK: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: ${{ env.SRC_DIR }}
+        run: npm install
+      - name: Build Windows app
+        working-directory: ${{ env.SRC_DIR }}
+        run: npx electron-builder --win --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            ${{ env.SRC_DIR }}/dist/*.exe
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish / update the latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ad-controller-latest
+          name: CSDtv Ad Controller (latest)
+          make_latest: true
+          body: |
+            Own-window builds of the CSDtv Ad Controller for macOS and Windows.
+            Rebuilt automatically on every update.
+
+            - macOS: download the .dmg, open it, drag the app to Applications.
+              First launch on an unsigned build: right-click the app and choose Open.
+            - Windows: download and run the .exe. If SmartScreen warns on an
+              unsigned build, click More info -> Run anyway.
+          files: |
+            artifacts/macos/*
+            artifacts/windows/*

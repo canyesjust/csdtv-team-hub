@@ -60,6 +60,14 @@
   #bugLogo{height:36px;display:none;}
   #clock{left:70px;top:60px;border-radius:40px;padding:12px 30px;}
   #clockTxt{color:#fff;font-weight:500;font-size:30px;letter-spacing:.06em;text-shadow:var(--tsh);}
+  /* Corner CTA (stays up over the parade) */
+  #cta{right:80px;bottom:180px;max-width:600px;border-radius:16px;padding:16px 32px 18px;}
+  #cta .content{display:flex;align-items:center;gap:20px;}
+  #ctaIcon{width:56px;height:56px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 16px rgba(0,0,0,.45);}
+  #ctaIcon svg{width:32px;height:32px;fill:#fff;}
+  #ctaKick{font-size:17px;}
+  #ctaTitle{font-size:36px;}
+  #ctaSub{color:#e8ecf5;font-size:21px;margin-top:2px;text-shadow:var(--tsh);white-space:nowrap;}
   @keyframes mar{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 </style>
 </head>
@@ -75,6 +83,9 @@
       <div class="og"><i></i><span id="lowerOg">Organization</span></div></div></div>
   <div id="coming" class="glass lyr slideR"><span class="glow"></span><span class="tri"></span>
     <div class="content"><div class="kick" style="font-size:17px;">Coming up</div><div class="nm" id="comingNm" style="margin-top:3px;"></div></div></div>
+  <div id="cta" class="glass lyr slideR"><span class="glow"></span><span class="tri"></span>
+    <div class="content"><div id="ctaIcon"></div>
+      <div><div class="kick" id="ctaKick"></div><div class="nm" id="ctaTitle"></div><div id="ctaSub"></div></div></div></div>
   <div id="panel" class="glass lyr slideL"><span class="glow"></span><span class="triV"></span>
     <div class="content"><div class="kick" style="font-size:20px;">Proud sponsor</div>
       <div class="nm" id="panelTitle"></div><div id="panelImg"></div><div id="panelText"></div></div></div>
@@ -112,7 +123,7 @@
   var last='';
   function apply(st){
     if(!st) return;
-    var lo=st.lower||{}, co=st.coming||{}, bu=st.bug||{}, ck=st.clock||{}, ti=st.ticker||{}, fu=st.full||{}, pa=st.panel||{};
+    var lo=st.lower||{}, co=st.coming||{}, bu=st.bug||{}, ck=st.clock||{}, ti=st.ticker||{}, fu=st.full||{}, pa=st.panel||{}, cta=st.cta||{};
     manage(E('lower'), !!lo.on, 'L|'+(lo.name||'')+'|'+(lo.org||''), true, function(){
       E('lowerNm').textContent=lo.name||''; E('lowerOg').textContent=lo.org||''; fit(E('lowerNm'),1650,56,30); });
     manage(E('coming'), !!co.on, 'C|'+(co.name||''), true, function(){ E('comingNm').textContent=co.name||''; });
@@ -124,6 +135,22 @@
     manage(E('panel'), !!pa.on, 'P|'+(pa.title||'')+'|'+(pa.text||'')+'|'+(pa.logo||''), true, function(){
       E('panelTitle').textContent=pa.title||''; E('panelText').textContent=pa.text||'';
       var pi=E('panelImg'); if(pa.logo){ pi.style.display='block'; pi.style.backgroundImage='url("'+String(pa.logo).replace(/"/g,'')+'")'; } else { pi.style.display='none'; pi.style.backgroundImage=''; } });
+    manage(E('cta'), !!cta.on, 'X|'+(cta.kind||''), true, function(){
+      var k=cta.kind||'watching';
+      if(k==='subscribe'){
+        E('ctaIcon').style.background='#c2283a';
+        E('ctaIcon').innerHTML='<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        E('ctaKick').textContent='Subscribe on YouTube';
+        E('ctaTitle').textContent='@CSDtv';
+        E('ctaSub').textContent='Hit subscribe & the bell';
+      } else {
+        E('ctaIcon').style.background='#e0434f';
+        E('ctaIcon').innerHTML='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>';
+        E('ctaKick').textContent='You are watching';
+        E('ctaTitle').textContent='CSDtv Live';
+        E('ctaSub').textContent='Canyons District TV';
+      }
+    });
     manage(E('full'), !!fu.on, 'F|'+JSON.stringify(fu), true, function(){
       var f=fu, kind=f.kind||'title';
       E('fullKick').style.display='none'; E('fullSub').textContent=''; E('fullBody').textContent=''; E('fullBody').style.display='none';

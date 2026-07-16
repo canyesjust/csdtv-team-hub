@@ -1,0 +1,47 @@
+{
+  "name": "csdtv-ad-controller",
+  "version": "0.2.0",
+  "description": "CSDtv Ad Controller — Starting Soon pre-show and random commercial rotation for OBS. Its own window on macOS and Windows.",
+  "type": "module",
+  "main": "main.js",
+  "author": "CSDtv",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "obs-websocket-js": "^5.0.6",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.6",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "org.csdtvstaff.adcontroller",
+    "productName": "CSDtv Ad Controller",
+    "files": [
+      "main.js",
+      "src/**/*",
+      "public/**/*"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.video",
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
+  }
+}

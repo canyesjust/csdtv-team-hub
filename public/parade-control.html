@@ -4,129 +4,205 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CSDtv Parade Control</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0a0f1e;--card:#0d1525;--card2:#111827;--text:#f0f4ff;--muted:#94a3b8;--border:rgba(255,255,255,.10);
-    --accent:#1e6cb5;--accenthi:#5ba3e0;--red:#c2283a;--gold:#e7c977;--on:#1d9e75;}
+  :root{--bg:#0a0f1e;--card:#0d1525;--card2:#131b2c;--text:#eef3ff;--muted:#8b97ac;--border:rgba(255,255,255,.10);
+    --accent:#1e6cb5;--accenthi:#5ba3e0;--go:#1e9e6a;--gohi:#28c489;--live:#e23744;--gold:#e7c977;}
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:13px;}
-  .wrap{padding:10px;max-width:100%;column-width:330px;column-gap:12px;}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--accenthi);margin:2px 0 6px;break-after:avoid;}
-  .sec{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;margin:0 0 12px;break-inside:avoid;}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
-  button{font-family:inherit;font-size:13px;color:var(--text);background:var(--card2);border:1px solid var(--border);
-    border-radius:8px;padding:7px 11px;min-height:34px;cursor:pointer;}
-  button:hover{border-color:var(--accenthi);}
-  button:active{transform:scale(.98);}
-  button.pri{background:var(--accent);border-color:var(--accent);}
-  button.live{background:var(--on);border-color:var(--on);}
-  button.warn{background:var(--red);border-color:var(--red);}
-  input,textarea{font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px;min-height:34px;width:100%;}
-  textarea{min-height:52px;resize:vertical;}
-  .lineup{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow:auto;}
-  .ent{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card2);border:1px solid var(--border);border-radius:8px;cursor:pointer;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:12px;}
+  .wrap{max-width:460px;margin:0 auto;padding:8px;}
+
+  /* ---- top bar / global tally ---- */
+  .bar{position:sticky;top:0;z-index:5;background:linear-gradient(100deg,#0a2c52,#1e6cb5);border-radius:10px;
+    padding:8px 10px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    border:1px solid rgba(255,255,255,.12);}
+  .bar.live{background:linear-gradient(100deg,#5a0e14,#c2283a);border-color:var(--live);
+    box-shadow:0 0 0 1px var(--live),0 0 18px rgba(226,55,68,.5);}
+  .bar .ttl{font-weight:800;font-size:13px;white-space:nowrap;letter-spacing:.01em;}
+  .bar .oa{font-weight:500;font-size:11px;opacity:.92;margin-left:7px;}
+  .bar .oa b{color:#ffe08a;font-weight:700;}
+  .tally{display:none;align-items:center;gap:6px;font-weight:800;font-size:11px;letter-spacing:.08em;
+    background:#fff;color:#c2283a;border-radius:999px;padding:3px 10px;text-transform:uppercase;}
+  .bar.live .tally{display:inline-flex;}
+  .tally .dot{width:8px;height:8px;border-radius:50%;background:#c2283a;animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+  /* ---- section card + per-type color identity ---- */
+  .card{position:relative;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--hue,var(--border));
+    border-radius:10px;padding:10px;margin:0 0 10px;}
+  .t-lower{--hue:#5ba3e0;} .t-over{--hue:#3fb9b0;} .t-preset{--hue:#e8963e;} .t-full{--hue:#a888f5;} .t-panel{--hue:#e7c977;}
+  .t-ticker{--hue:#3fb9b0;} .t-prev{--hue:#7c89a3;}
+  /* preset buttons carry their zone's amber accent */
+  .t-preset button{border-left:3px solid var(--hue);text-align:left;justify-content:flex-start;}
+  .t-preset button.on{background:var(--live);border-color:var(--live);border-left-color:var(--live);color:#fff;font-weight:700;}
+  .t-preset button.on::before{content:"\25CF  ";}
+  .sub{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:8px;font-weight:600;}
+
+  /* ---- LIVE overrides everything: red frame + glow ---- */
+  .card.live,details.card.live{border-color:var(--live);border-left-color:var(--live);
+    box-shadow:0 0 0 1px var(--live),0 0 16px rgba(226,55,68,.38);
+    background:linear-gradient(180deg,rgba(226,55,68,.14),rgba(226,55,68,.03) 60px),var(--card);}
+
+  .head{display:flex;align-items:center;gap:8px;}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--hue,var(--accenthi));font-weight:700;
+    display:flex;align-items:center;gap:7px;}
+  .lbl::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;flex:0 0 auto;
+    box-shadow:0 0 6px currentColor;}
+  .card.live .lbl,details.card.live .lbl{color:#ff8f98;}
+  .badge{font-size:10px;font-weight:700;color:var(--muted);border:1px solid var(--border);border-radius:999px;
+    padding:2px 9px;text-transform:uppercase;letter-spacing:.05em;}
+  .badge.on{color:#fff;background:var(--live);border-color:var(--live);}
+  .hint{font-size:11px;color:var(--muted);margin:6px 0 2px;} .hint a{color:var(--accenthi);}
+
+  .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
+
+  /* ---- buttons: green = GO, red = live/clear ---- */
+  button{font-family:inherit;font-size:12px;font-weight:600;color:var(--text);background:var(--card2);
+    border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-height:34px;cursor:pointer;flex:1;white-space:nowrap;}
+  button:hover{border-color:var(--accenthi);} button:active{transform:scale(.98);}
+  button.air{background:var(--go);border-color:var(--go);color:#022417;font-weight:700;}
+  button.air:hover{background:var(--gohi);border-color:var(--gohi);}
+  button.clear{background:transparent;border-color:var(--live);color:#ff9ba4;flex:0 0 auto;font-weight:700;}
+  button.clear:hover{background:var(--live);color:#fff;}
+  button.ghost{background:transparent;flex:0 0 auto;}
+  button.mini{flex:0 0 auto;min-height:28px;padding:4px 10px;font-size:11px;}
+  /* overlay toggles: red + pulsing when on air */
+  button.tog.on{background:var(--live);border-color:var(--live);color:#fff;font-weight:700;
+    box-shadow:0 0 12px rgba(226,55,68,.45);}
+  button.tog.on::before{content:"● ";}
+
+  input,textarea{font-family:inherit;font-size:12px;color:var(--text);background:var(--bg);border:1px solid var(--border);
+    border-radius:8px;padding:7px 9px;min-height:34px;width:100%;}
+  textarea{min-height:48px;resize:vertical;}
+  label{font-size:11px;color:var(--muted);display:block;margin:8px 0 2px;text-transform:uppercase;letter-spacing:.04em;}
+
+  .list{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow:auto;margin-top:8px;}
+  .ent{display:flex;align-items:center;gap:9px;padding:8px 11px;background:var(--card2);border:1px solid var(--border);
+    border-left:3px solid transparent;border-radius:8px;cursor:pointer;}
   .ent:hover{border-color:var(--accenthi);}
-  .ent.cur{border-color:var(--on);background:#0f2a20;}
-  .ent .num{min-width:26px;color:var(--muted);font-variant-numeric:tabular-nums;}
-  .ent .nm{font-weight:500;} .ent .og{color:var(--gold);font-size:12px;text-transform:uppercase;letter-spacing:.06em;}
-  .status{font-size:12px;color:var(--muted);margin-left:auto;}
-  .onair{color:#ff6b6a;font-weight:600;}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  label{font-size:12px;color:var(--muted);display:block;margin:6px 0 3px;}
-  iframe{width:100%;aspect-ratio:16/9;border:1px solid var(--border);border-radius:8px;background:#0c1322;}
-  .hintbar{font-size:12px;color:var(--muted);margin-top:4px;}
+  .ent.cur{border-color:var(--live);border-left-color:var(--live);background:rgba(226,55,68,.15);}
+  .ent.cur::after{content:"ON AIR";margin-left:auto;font-size:9px;font-weight:800;letter-spacing:.06em;color:#fff;
+    background:var(--live);border-radius:999px;padding:2px 8px;}
+  .ent .num{min-width:20px;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:600;}
+  .ent .nm{font-weight:600;} .ent .og{color:var(--gold);font-size:11px;text-transform:uppercase;letter-spacing:.04em;}
+  .empty{font-size:11px;color:var(--muted);padding:10px 4px;line-height:1.6;}
+  iframe{width:100%;aspect-ratio:16/9;border:1px solid var(--border);border-radius:8px;background:#0c1322;margin-top:8px;}
+
+  /* ---- collapsible sections ---- */
+  details.card{padding:0;}
+  details.card>summary{list-style:none;cursor:pointer;padding:10px;display:flex;align-items:center;gap:8px;}
+  details.card>summary::-webkit-details-marker{display:none;}
+  details.card>summary .lbl{flex:1;}
+  details.card>summary .caret{color:var(--muted);font-size:10px;margin-left:2px;}
+  details.card[open]>summary .caret{transform:rotate(90deg);display:inline-block;}
+  details.card>.body{padding:0 10px 10px;}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <div class="sec">
+  <div class="bar" id="topbar">
+    <div><span class="ttl">Parade Control</span><span class="oa" id="status">idle</span></div>
+    <span class="tally"><span class="dot"></span>On air</span>
+    <button class="clear mini" id="clearAll" style="min-width:78px">Clear all</button>
+  </div>
+
+  <!-- LOWER THIRD (primary — always visible) -->
+  <section class="card t-lower" id="secLower">
+    <div class="head"><span class="lbl" style="flex:1">Lower third</span><span class="badge" id="badgeLower">off</span></div>
+    <div class="list" id="lineup"></div>
     <div class="row">
-      <strong>Parade Control</strong>
-      <button class="warn" id="clearAll" style="margin-left:auto;">Clear all</button>
+      <button class="ghost" id="prev">‹ Prev</button>
+      <button class="air" id="next">Next name ›</button>
+      <button class="tog ghost" id="comingToggle">Coming up: off</button>
+      <button class="clear" id="clearLower">Clear</button>
     </div>
-    <div class="row" style="margin-top:6px;"><span class="status" id="status">On air: nothing</span></div>
-  </div>
+    <details>
+      <summary class="hint" style="cursor:pointer;">Manual entry &amp; load lineup ▸</summary>
+      <div class="grid2"><input id="mName" placeholder="Name"><input id="mOrg" placeholder="Title / org"></div>
+      <div class="row"><button class="air" id="airManual">Air manual lower</button></div>
+      <div class="row"><input id="sheetUrl" placeholder="Published lineup CSV URL" style="flex:1;min-width:150px;"><button class="ghost" id="loadSheet">Load</button></div>
+      <div class="hint">Columns: <b>num, name, org</b>. <a href="#" id="dlLineup">Download template</a></div>
+    </details>
+  </section>
 
-  <h2>Lineup — click an entry to air its lower third</h2>
-  <div class="sec">
-    <div class="row" style="margin-bottom:8px;">
-      <input id="sheetUrl" placeholder="(optional) published Google Sheet CSV URL" style="flex:1;min-width:220px;">
-      <button id="loadSheet">Load from sheet</button>
+  <!-- QUICK TOGGLES (always visible) -->
+  <section class="card t-over">
+    <div class="head"><span class="lbl">On-screen overlays</span></div>
+    <div class="row">
+      <button class="tog" id="bugBtn">Bug: off</button>
+      <button class="tog" id="clockBtn">Clock: off</button>
+      <button class="tog" id="tickerBtn">Ticker: off</button>
     </div>
-    <div class="hintbar" style="margin-bottom:8px;">CSV columns: <b>num, name, org</b>. <a href="#" id="dlLineup" style="color:var(--accenthi)">Download template CSV</a></div>
-    <div class="lineup" id="lineup"></div>
-    <div class="row" style="margin-top:8px;">
-      <button id="prev">‹ Prev</button>
-      <button class="pri" id="next">Next ›</button>
-      <button class="warn" id="clearLower">Clear lower third</button>
-      <button id="comingToggle">Coming-up: off</button>
+  </section>
+
+  <!-- QUICK GRAPHICS (one-click presets) -->
+  <section class="card t-preset">
+    <div class="head"><span class="lbl">Quick graphics</span></div>
+    <div class="sub">Corner — click to show, click to hide</div>
+    <div class="grid2" id="presetsCta" style="margin-top:6px">
+      <button data-preset="watching">You are watching</button>
+      <button data-preset="subscribe">Subscribe / Follow</button>
     </div>
-  </div>
-
-  <h2>Manual lower third (hosts, guests, one-offs)</h2>
-  <div class="sec">
-    <div class="grid2">
-      <div><label>Name</label><input id="mName" placeholder="Jane Doe"></div>
-      <div><label>Title / org</label><input id="mOrg" placeholder="Parade Host"></div>
+    <div class="sub">Full screen — one tap to air</div>
+    <div class="grid2" id="presetsFull" style="margin-top:6px">
+      <button data-preset="brb">We'll be right back</button>
+      <button data-preset="thanks">Thanks for watching</button>
+      <button data-preset="upnext">Up next</button>
+      <button data-preset="standby">Please stand by</button>
     </div>
-    <div class="row" style="margin-top:8px;"><button class="pri" id="airManual">Air manual lower</button></div>
-  </div>
+  </section>
 
-  <h2>Always-on</h2>
-  <div class="sec"><div class="row">
-    <button id="bugBtn">Bug: off</button>
-    <button id="clockBtn">Clock: off</button>
-    <button id="tickerBtn">Ticker: off</button>
-  </div>
-  <label>Ticker items (one per line)</label>
-  <textarea id="tickerItems" placeholder="One ticker line per line, e.g.&#10;Welcome to the parade&#10;Follow @CSDtv"></textarea>
-  <label>Bug logo URL (optional — blank = "CSDtv LIVE" text)</label>
-  <input id="bugLogo" placeholder="https://.../logo.png">
-  </div>
-
-  <h2>Sponsors — click one to load its fields, then Air slate / Air panel below</h2>
-  <div class="sec">
-    <div class="row" style="margin-bottom:8px;">
-      <input id="spSheetUrl" placeholder="(optional) published Sponsors CSV URL" style="flex:1;min-width:220px;">
-      <button id="loadSp">Load</button>
+  <!-- FULL SCREEN -->
+  <details class="card t-full" id="dFull">
+    <summary><span class="lbl">Full screen</span><span class="badge" id="badgeFull">off</span><button class="clear mini" id="clearFull">Clear</button><span class="caret">▸</span></summary>
+    <div class="body">
+      <label>Title card</label>
+      <div class="grid2" style="margin-top:0"><input id="ftTitle" placeholder="e.g. WELCOME"><input id="ftSub" placeholder="e.g. 2026 Parade"></div>
+      <div class="row"><button class="air" id="airTitle">Air title card</button></div>
+      <label>Bumper / message</label>
+      <input id="bmp" placeholder="e.g. We'll be right back">
+      <div class="row"><button class="air" id="airBumper">Air bumper</button></div>
+      <label>Sponsor slate</label>
+      <input id="spn" placeholder="Sponsor name">
+      <div class="row"><button class="air" id="airSlate">Air sponsor slate</button></div>
+      <label>Social</label>
+      <div class="grid2" style="margin-top:0"><input id="socHandle" placeholder="@handle"><input id="socPlat" placeholder="Platform"></div>
+      <div class="row"><button class="air" id="airSocial">Air social</button></div>
     </div>
-    <div class="hintbar" style="margin-bottom:8px;">CSV columns: <b>sponsor, tagline, logo_url</b>. <a href="#" id="dlSponsors" style="color:var(--accenthi)">Download template CSV</a></div>
-    <div class="lineup" id="sponsors"></div>
-  </div>
+  </details>
 
-  <h2>Full screen</h2>
-  <div class="sec">
-    <div class="grid2">
-      <div><label>Title</label><input id="ftTitle" placeholder="e.g. WELCOME"></div>
-      <div><label>Subtitle</label><input id="ftSub" placeholder="e.g. 2026 Parade"></div>
+  <!-- SPONSOR PANEL -->
+  <details class="card t-panel" id="dPanel">
+    <summary><span class="lbl">Sponsor panel</span><span class="badge" id="badgePanel">off</span><button class="clear mini" id="clearPanel">Clear</button><span class="caret">▸</span></summary>
+    <div class="body">
+      <label>Title</label><input id="pnTitle" placeholder="Sponsor name">
+      <label>Text</label><textarea id="pnText" placeholder="Sponsor text (line breaks ok)"></textarea>
+      <label>Image URL (optional)</label><input id="pnLogo" placeholder="https://.../logo.png">
+      <div class="row"><button class="air" id="airPanel">Air panel</button></div>
+      <div class="hint">Sponsors — click one to fill slate &amp; panel · <a href="#" id="dlSponsors">template</a></div>
+      <div class="row" style="margin-top:2px"><input id="spSheetUrl" placeholder="Published sponsors CSV URL" style="flex:1;min-width:150px;"><button class="ghost" id="loadSp">Load</button></div>
+      <div class="list" id="sponsors"></div>
     </div>
-    <div class="row" style="margin-top:8px;"><button class="pri" id="airTitle">Air title card</button></div>
-    <label style="margin-top:10px;">Bumper / message</label>
-    <input id="bmp" placeholder="e.g. We'll be right back">
-    <div class="row" style="margin-top:8px;"><button class="pri" id="airBumper">Air bumper</button></div>
-    <label style="margin-top:10px;">Sponsor slate (name)</label>
-    <input id="spn" placeholder="Sponsor name">
-    <div class="row" style="margin-top:8px;"><button class="pri" id="airSlate">Air sponsor slate</button></div>
-    <label style="margin-top:10px;">Social — handle & platform</label>
-    <div class="grid2"><input id="socHandle" placeholder="@handle"><input id="socPlat" placeholder="Platform"></div>
-    <div class="row" style="margin-top:8px;"><button class="pri" id="airSocial">Air social</button>
-      <button class="warn" id="clearFull">Clear full screen</button></div>
-  </div>
+  </details>
 
-  <h2>Sponsor panel (left popout)</h2>
-  <div class="sec">
-    <label>Title</label><input id="pnTitle" placeholder="Sponsor name">
-    <label>Text (line breaks ok)</label><textarea id="pnText" placeholder="Sponsor text (line breaks ok)"></textarea>
-    <label>Image URL (optional)</label><input id="pnLogo" placeholder="https://.../logo.png">
-    <div class="row" style="margin-top:8px;"><button class="pri" id="airPanel">Air panel</button>
-      <button class="warn" id="clearPanel">Clear panel</button></div>
-  </div>
+  <!-- TICKER / SETUP -->
+  <details class="card t-ticker" id="dSetup">
+    <summary><span class="lbl">Ticker text &amp; bug logo</span><span class="caret">▸</span></summary>
+    <div class="body">
+      <label>Ticker items (one per line)</label>
+      <textarea id="tickerItems" placeholder="One ticker line per line, e.g.&#10;Welcome to the parade&#10;Follow @CSDtv"></textarea>
+      <label>Bug logo URL (optional — blank = &quot;CSDtv LIVE&quot; text)</label>
+      <input id="bugLogo" placeholder="https://.../logo.png">
+    </div>
+  </details>
 
-  <h2>Preview (what's on air)</h2>
-  <div class="sec"><iframe id="prev" src="parade-output.html?demo=1"></iframe>
-    <div class="hintbar">This mirror is just for you; the real graphic is the Browser Source in OBS.</div>
-  </div>
+  <!-- PREVIEW -->
+  <details class="card t-prev">
+    <summary><span class="lbl">Preview (what's on air)</span><span class="caret">▸</span></summary>
+    <div class="body"><iframe id="prev" src="parade-output.html?demo=1"></iframe></div>
+  </details>
 
 </div>
 <script>
@@ -134,50 +210,62 @@
   var LINEUP=[];
   var SPONSORS=[];
   var idx=-1;
-  var state={lower:{on:false,name:'',org:''},coming:{on:false,name:''},full:{on:false},
+  var state={lower:{on:false,name:'',org:''},coming:{on:false,name:''},full:{on:false},cta:{on:false,kind:''},
     panel:{on:false,title:'',text:'',logo:''},
     ticker:{on:false,items:[]},bug:{on:false,text:'CSDtv LIVE'},clock:{on:false}};
 
   var bc; try{ bc=new BroadcastChannel('parade'); }catch(e){}
-  function push(){ state._t=Date.now(); try{localStorage.setItem('parade_state',JSON.stringify(state));}catch(e){}
-    try{ if(bc) bc.postMessage(state); }catch(e){}
-    // nudge the preview iframe too (separate context)
-    var pf=document.getElementById('prev'); try{ pf.contentWindow.postMessage(state,'*'); }catch(e){}
-    render(); }
-
   var E=function(id){return document.getElementById(id);};
   function esc(s){return String(s||'').replace(/</g,'&lt;');}
 
+  function push(){ state._t=Date.now(); try{localStorage.setItem('parade_state',JSON.stringify(state));}catch(e){}
+    try{ if(bc) bc.postMessage(state); }catch(e){}
+    var pf=E('prev'); try{ if(pf) pf.contentWindow.postMessage(state,'*'); }catch(e){}
+    render(); }
+
   function renderLineup(){
-    if(!LINEUP.length){ E('lineup').innerHTML='<div class="hintbar" style="padding:10px 6px">No lineup loaded. Paste a published CSV URL above and Load (columns: <b>num, name, org</b>), download the template below, or use Manual lower third for one-offs.</div>'; return; }
+    if(!LINEUP.length){ E('lineup').innerHTML='<div class="empty">No lineup loaded. Open "Manual entry &amp; load lineup" below to paste a CSV URL (columns: <b>num, name, org</b>) or download the template. Or use Manual for one-offs.</div>'; return; }
     E('lineup').innerHTML=LINEUP.map(function(e,i){
-      return '<div class="ent'+(i===idx?' cur':'')+'" data-i="'+i+'"><span class="num">'+e.num+'</span>'
+      return '<div class="ent'+(i===idx?' cur':'')+'" data-i="'+i+'"><span class="num">'+esc(e.num)+'</span>'
         +'<span class="nm">'+esc(e.name)+'</span> <span class="og">'+esc(e.org)+'</span></div>';
     }).join('');
     [].forEach.call(E('lineup').children,function(el){ el.onclick=function(){ air(parseInt(el.getAttribute('data-i'),10)); }; });
   }
   function scrollCur(){ var lp=E('lineup'),c=lp.querySelector('.cur'); if(c) lp.scrollTo({top:Math.max(0,c.offsetTop-lp.offsetTop),behavior:'smooth'}); }
+  function updateCur(){ [].forEach.call(E('lineup').children,function(el){ var di=el.getAttribute('data-i'); if(di!==null) el.classList.toggle('cur', parseInt(di,10)===idx); }); }
   function air(i){ if(i<0||i>=LINEUP.length) return; idx=i; var e=LINEUP[i];
     state.lower={on:true,name:e.name,org:e.org};
     if(state.coming.on){ var n=LINEUP[i+1]; state.coming.name=n?n.name:''; }
     push(); scrollCur(); }
 
+  function badge(el,on){ el.textContent=on?'ON AIR':'off'; el.classList.toggle('on',on); }
+  function tog(el,on){ el.classList.toggle('on',on); }
+
   function render(){
-    renderLineup();
+    updateCur();
     var s=[]; if(state.lower.on) s.push('Lower: '+state.lower.name);
     if(state.full.on) s.push('Full: '+(state.full.title||state.full.kind));
-    if(state.panel.on) s.push('Panel: '+(state.panel.title||''));
+    if(state.panel.on) s.push('Panel');
+    if(state.cta.on) s.push(state.cta.kind==='subscribe'?'Subscribe CTA':'Watching CTA');
     if(state.bug.on) s.push('Bug'); if(state.clock.on) s.push('Clock'); if(state.ticker.on) s.push('Ticker');
-    E('status').innerHTML = s.length? '<span class="onair">ON AIR:</span> '+esc(s.join('  ·  ')) : 'On air: nothing';
-    E('bugBtn').textContent='Bug: '+(state.bug.on?'on':'off'); E('bugBtn').className=state.bug.on?'live':'';
-    E('clockBtn').textContent='Clock: '+(state.clock.on?'on':'off'); E('clockBtn').className=state.clock.on?'live':'';
-    E('tickerBtn').textContent='Ticker: '+(state.ticker.on?'on':'off'); E('tickerBtn').className=state.ticker.on?'live':'';
-    E('comingToggle').textContent='Coming-up: '+(state.coming.on?'on':'off'); E('comingToggle').className=state.coming.on?'live':'';
+    E('status').innerHTML = s.length? '<b>ON AIR:</b> '+esc(s.join(' · ')) : 'idle';
+    E('topbar').classList.toggle('live', s.length>0);
+    [].forEach.call(document.querySelectorAll('#presetsCta button'),function(b){
+      b.classList.toggle('on', state.cta.on && state.cta.kind===b.getAttribute('data-preset')); });
+
+    badge(E('badgeLower'), state.lower.on); E('secLower').classList.toggle('live',state.lower.on);
+    badge(E('badgeFull'), !!state.full.on); E('dFull').classList.toggle('live',!!state.full.on);
+    badge(E('badgePanel'), state.panel.on); E('dPanel').classList.toggle('live',state.panel.on);
+
+    E('bugBtn').textContent='Bug: '+(state.bug.on?'on':'off'); tog(E('bugBtn'),state.bug.on);
+    E('clockBtn').textContent='Clock: '+(state.clock.on?'on':'off'); tog(E('clockBtn'),state.clock.on);
+    E('tickerBtn').textContent='Ticker: '+(state.ticker.on?'on':'off'); tog(E('tickerBtn'),state.ticker.on);
+    E('comingToggle').textContent='Coming up: '+(state.coming.on?'on':'off'); tog(E('comingToggle'),state.coming.on);
   }
 
   E('next').onclick=function(){ air(idx<0?0:idx+1); };
   E('prev').onclick=function(){ if(idx>0) air(idx-1); };
-  E('clearLower').onclick=function(){ state.lower.on=false; push(); };
+  E('clearLower').onclick=function(){ idx=-1; state.lower.on=false; push(); };
   E('comingToggle').onclick=function(){ state.coming.on=!state.coming.on; var n=LINEUP[idx+1]; state.coming.name=n?n.name:''; push(); };
   E('bugBtn').onclick=function(){ state.bug={on:!state.bug.on, text:'CSDtv LIVE', logo:E('bugLogo').value.trim()}; push(); };
   E('clockBtn').onclick=function(){ state.clock.on=!state.clock.on; push(); };
@@ -187,12 +275,13 @@
   E('airTitle').onclick=function(){ state.full={on:true,kind:'title',title:E('ftTitle').value,sub:E('ftSub').value}; push(); };
   E('airBumper').onclick=function(){ state.full={on:true,kind:'text',title:E('bmp').value,body:''}; push(); };
   E('airSlate').onclick=function(){ state.full={on:true,kind:'slate',title:E('spn').value}; push(); };
-  E('clearFull').onclick=function(){ state.full={on:false}; push(); };
-  E('airPanel').onclick=function(){ state.panel={on:true,title:E('pnTitle').value,text:E('pnText').value,logo:E('pnLogo').value.trim()}; push(); };
-  E('clearPanel').onclick=function(){ state.panel={on:false}; push(); };
-  E('airManual').onclick=function(){ idx=-1; state.lower={on:true,name:E('mName').value,org:E('mOrg').value}; push(); };
   E('airSocial').onclick=function(){ state.full={on:true,kind:'social',handle:E('socHandle').value,platform:E('socPlat').value}; push(); };
-  E('clearAll').onclick=function(){ state.lower.on=false; state.coming.on=false; state.full={on:false}; state.panel={on:false}; state.bug.on=false; state.clock.on=false; state.ticker.on=false; push(); };
+  E('clearFull').onclick=function(e){ if(e) e.stopPropagation(); state.full={on:false}; push(); };
+  E('airPanel').onclick=function(){ state.panel={on:true,title:E('pnTitle').value,text:E('pnText').value,logo:E('pnLogo').value.trim()}; push(); };
+  E('clearPanel').onclick=function(e){ if(e) e.stopPropagation(); state.panel={on:false}; push(); };
+  E('airManual').onclick=function(){ idx=-1; state.lower={on:true,name:E('mName').value,org:E('mOrg').value}; push(); };
+  E('clearAll').onclick=function(){ idx=-1; state.lower.on=false; state.coming.on=false; state.full={on:false}; state.cta={on:false,kind:''}; state.panel={on:false}; state.bug.on=false; state.clock.on=false; state.ticker.on=false; push(); };
+
   E('loadSp').onclick=function(){ var url=E('spSheetUrl').value.trim(); if(!url) return;
     fetch(url).then(function(r){return r.text();}).then(function(t){
       var rows=t.split(/\r?\n/).filter(Boolean).map(function(l){return l.split(',');});
@@ -201,20 +290,20 @@
       renderSponsors();
     }).catch(function(){ alert('Could not load that CSV. Make sure it is Published to web as CSV.'); }); };
 
-  // load lineup from a published Google Sheet CSV
   E('loadSheet').onclick=function(){ var url=E('sheetUrl').value.trim(); if(!url) return;
     fetch(url).then(function(r){return r.text();}).then(function(t){
       var rows=t.split(/\r?\n/).filter(Boolean).map(function(l){ return l.split(','); });
       var start=/num|name/i.test(rows[0].join(','))?1:0;
       LINEUP=rows.slice(start).map(function(c,i){ return {num:(c[0]||i+1),name:(c[1]||'').trim(),org:(c[2]||'').trim()}; });
-      idx=-1; render();
+      idx=-1; renderLineup(); render();
     }).catch(function(){ alert('Could not load that CSV URL. Make sure the sheet is Published to web as CSV.'); });
   };
 
   function renderSponsors(){
-    if(!SPONSORS.length){ E('sponsors').innerHTML='<div class="hintbar" style="padding:10px 6px">No sponsors loaded. Paste a published CSV URL above and Load (columns: <b>sponsor, tagline, logo_url</b>), or download the template below.</div>'; return; }
+    if(!SPONSORS.length){ E('sponsors').innerHTML='<div class="empty">No sponsors loaded. Paste a published CSV URL above and Load (columns: <b>sponsor, tagline, logo_url</b>), or download the template.</div>'; return; }
     E('sponsors').innerHTML=SPONSORS.map(function(s,i){return '<div class="ent" data-i="'+i+'"><span class="nm">'+esc(s.name)+'</span> <span class="og">'+esc(s.tagline||'')+'</span></div>';}).join('');
     [].forEach.call(E('sponsors').children,function(el){ el.onclick=function(){ var s=SPONSORS[parseInt(el.getAttribute('data-i'),10)]; E('spn').value=s.name; E('pnTitle').value=s.name; E('pnText').value=s.tagline||''; E('pnLogo').value=s.logo||''; }; }); }
+
   function downloadCSV(filename, content){
     var blob=new Blob([content],{type:'text/csv'});
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename;
@@ -226,7 +315,27 @@
   E('dlSponsors').onclick=function(ev){ ev.preventDefault();
     downloadCSV('parade-sponsors-template.csv','sponsor,tagline,logo_url\nSponsor Name,Optional tagline,https://example.com/logo.png\n'); };
 
-  renderSponsors();
+  // Corner CTAs stay up over the live parade (toggle). Full-screen presets take
+  // over the screen for a moment (one tap). Edit wording here to taste.
+  var PRESET_FULL={
+    brb:{kind:'text',title:"We'll be right back"},
+    thanks:{kind:'text',title:'Thanks for watching!'},
+    upnext:{kind:'title',title:'UP NEXT',sub:''},
+    standby:{kind:'text',title:'Please stand by'}
+  };
+  [].forEach.call(document.querySelectorAll('#presetsCta button'),function(b){
+    var kind=b.getAttribute('data-preset');
+    b.onclick=function(){
+      if(state.cta.on && state.cta.kind===kind){ state.cta={on:false,kind:''}; }
+      else { state.cta={on:true,kind:kind}; }
+      push(); };
+  });
+  [].forEach.call(document.querySelectorAll('#presetsFull button'),function(b){
+    b.onclick=function(){ var p=PRESET_FULL[b.getAttribute('data-preset')]; if(!p) return;
+      state.full=Object.assign({on:true},p); push(); };
+  });
+
+  renderLineup(); renderSponsors();
   render(); push();
 })();
 </script>
