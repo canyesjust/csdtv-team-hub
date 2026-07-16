@@ -25,9 +25,10 @@ env:
 
 jobs:
   build-macos:
-    # Intel runner on purpose: an x64 build runs on Intel Macs natively and on
-    # Apple Silicon via Rosetta. Same reasoning as the blackmagic workflow.
-    runs-on: macos-13
+    # macos-latest (Apple Silicon). The old macos-13 Intel runners now queue for
+    # hours and often never get picked up, which stalled this job. The build
+    # below is universal, so the app still runs on Intel Macs too.
+    runs-on: macos-latest
     env:
       # No signing certificate. Tell electron-builder not to hunt for a signing
       # identity in the CI keychain, so it builds the app unsigned and passes.
@@ -40,9 +41,9 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ env.SRC_DIR }}
         run: npm install
-      - name: Build macOS app
+      - name: Build macOS app (universal — Intel + Apple Silicon)
         working-directory: ${{ env.SRC_DIR }}
-        run: npx electron-builder --mac --publish never
+        run: npx electron-builder --mac --universal --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: macos
