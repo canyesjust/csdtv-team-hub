@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import sharp from 'sharp'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
 import { clampDisplaySeconds, sanitizeSignageHtml, websiteWidthFromMeta } from './content-display'
 import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
@@ -181,7 +182,12 @@ function upcomingClosures(limit = 5): { date: string; label: string }[] {
 // It's shown only where an editor targets a broadcast_board content row.
 let broadcastBoardCache: { at: number; html: string | null } | null = null
 const BROADCAST_BOARD_TTL_MS = 5 * 60 * 1000
-const BROADCAST_IMG_MAX_BYTES = 500 * 1024
+// Bound each thumbnail fetch so one slow asset can't stall the whole board build
+// (matches the 6s used by the HTML-slide inliner in build-screen-html.ts).
+const BROADCAST_IMG_FETCH_TIMEOUT_MS = 6_000
+// The board renders each thumb at 16/9, ~30vh tall — ~1000px wide is plenty even
+// on a 4K screen. Downscaling to this keeps the inlined data URI small.
+const BROADCAST_IMG_MAX_WIDTH = 1000
 
 function broadcastCountdownLabel(target: Date, now: Date): string {
   const day = 24 * 60 * 60 * 1000
@@ -196,22 +202,40 @@ function broadcastWatchLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') || 'csdtv.org' } catch { return 'csdtv.org' }
 }
 
-/** Fetch a thumbnail and inline it as a data URI (best-effort, offline-safe). */
+/**
+ * Fetch a thumbnail and inline it as a downscaled data URI (best-effort, offline-safe).
+ *
+ * Downscales with sharp instead of rejecting large files, so any thumbnail that shows
+ * in the hub also shows on the board. (The old version silently dropped anything over
+ * 500KB or slower than 2s, and rejected any non-image/* content-type — so a large or
+ * slow hub thumbnail fell back to the CSDtv watermark even though it was valid.)
+ * Returns null only on a genuine fetch/decode failure → CSDtv placeholder.
+ */
 async function inlineBroadcastImage(url: string | null | undefined): Promise<string | null> {
   const u = (url || '').trim()
   if (!u || !/^https?:\/\//i.test(u)) return null
+  const ctrl = new AbortController()
+  const to = setTimeout(() => ctrl.abort(), BROADCAST_IMG_FETCH_TIMEOUT_MS)
   try {
-    const ctrl = new AbortController()
-    const to = setTimeout(() => ctrl.abort(), 2000)
-    const res = await fetch(u, { signal: ctrl.signal })
-    clearTimeout(to)
+    const res = await fetch(u, { cache: 'no-store', signal: ctrl.signal })
     if (!res.ok) return null
-    const type = res.headers.get('content-type') || 'image/jpeg'
-    if (!type.startsWith('image/')) return null
-    const buf = await res.arrayBuffer()
-    if (buf.byteLength > BROADCAST_IMG_MAX_BYTES) return null
-    return `data:${type};base64,${Buffer.from(buf).toString('base64')}`
-  } catch { return null }
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (!buf.byteLength) return null
+    // sharp decodes from the actual bytes, so a generic/missing content-type header
+    // no longer matters. Resize down, then re-encode (PNG keeps alpha, else JPEG).
+    const meta = await sharp(buf).metadata()
+    const pipeline = sharp(buf).rotate().resize({ width: BROADCAST_IMG_MAX_WIDTH, withoutEnlargement: true })
+    if (meta.hasAlpha) {
+      const out = await pipeline.png({ compressionLevel: 9, palette: true }).toBuffer()
+      return `data:image/png;base64,${out.toString('base64')}`
+    }
+    const out = await pipeline.jpeg({ quality: 78, mozjpeg: true }).toBuffer()
+    return `data:image/jpeg;base64,${out.toString('base64')}`
+  } catch {
+    return null
+  } finally {
+    clearTimeout(to)
+  }
 }
 
 async function getBroadcastBoardHtml(service: SupabaseClient): Promise<string | null> {
