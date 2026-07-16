@@ -29,12 +29,9 @@ jobs:
     # Apple Silicon via Rosetta. Same reasoning as the blackmagic workflow.
     runs-on: macos-13
     env:
-      # Empty secrets => electron-builder skips signing and builds unsigned.
-      CSC_LINK: ${{ secrets.MACOS_CERT_P12_BASE64 }}
-      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # No signing certificate. Tell electron-builder not to hunt for a signing
+      # identity in the CI keychain, so it builds the app unsigned and passes.
+      CSC_IDENTITY_AUTO_DISCOVERY: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,9 +52,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-    env:
-      WIN_CSC_LINK: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
-      WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+    # No signing certificate — electron-builder builds an unsigned .exe by default.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
