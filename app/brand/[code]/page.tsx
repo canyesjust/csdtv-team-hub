@@ -593,7 +593,8 @@ export default function SchoolBrandPage() {
                       )}
                     </div>
                     {uploadMsg && <p style={{ margin: '10px 0 0', fontSize: 12.5, fontWeight: 600, color: colors.muted }}>{uploadMsg}</p>}
-                    <p style={{ margin: '8px 0 0', fontSize: 11.5, color: colors.muted }}>Uploads appear right away. Word documents (.docx) are only allowed in the Letterhead category. Max {formatBytes(MAX_BYTES)} per file.</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 11.5, color: colors.muted }}>Uploads appear right away. Word documents (.docx) are only allowed in the Letterhead category. Max {formatBytes(MAX_BYTES)} per file. Files only combine into one logo when the category and name match exactly (letter-for-letter).</p>
+                    <p style={{ margin: '6px 0 0', fontSize: 11.5, color: colors.muted }}>To add a missing format (like an SVG or EPS) to a logo that&rsquo;s already below, don&rsquo;t retype its name here — click that logo and use &ldquo;+ Add file&rdquo; in its details panel instead.</p>
                   </div>
                 )}
               </section>

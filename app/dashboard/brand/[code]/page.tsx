@@ -452,7 +452,10 @@ export default function ManageSchoolBrandPage() {
               )}
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
-              Drop one or more files. With a single file the name above is used; for multiple, each name comes from its filename. Re-uploading the same category, name, and format replaces the existing file.
+              Drop one or more files. With a single file the name above is used; for multiple, each name comes from its filename. Files only combine into one logo card when the category and name match exactly (letter-for-letter) — re-uploading the same category, name, and format replaces that file.
+            </p>
+            <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
+              To add a missing format (like an SVG or EPS) to a logo that&rsquo;s already here, don&rsquo;t retype its name — open that logo below and use &ldquo;+ Add file&rdquo; instead.
             </p>
             </div>
             )}
