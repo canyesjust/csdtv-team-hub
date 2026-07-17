@@ -105,14 +105,15 @@ export default function SignagePage() {
 
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
     const token = params.get('k') || ''
-    const boardRes = await fetch(
-      `/api/signage/board?start=${rangeStart}&end=${rangeEnd}`,
-      {
-        cache: 'no-store',
-        credentials: 'omit',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
-    )
+    // Send both Bearer and ?k= — some signage webviews strip Authorization;
+    // ?k= also avoids CDN cache poisoning when auth is header-only.
+    const qs = new URLSearchParams({ start: rangeStart, end: rangeEnd })
+    if (token) qs.set('k', token)
+    const boardRes = await fetch(`/api/signage/board?${qs}`, {
+      cache: 'no-store',
+      credentials: 'omit',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
     if (!boardRes.ok) {
       setUnauthorized(true)
       setLoading(false)

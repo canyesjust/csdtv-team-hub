@@ -8,19 +8,18 @@ export const dynamic = 'force-dynamic'
 function bearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) return null
-  return authHeader.slice(7).trim()
+  return authHeader.slice(7).trim() || null
 }
 
-// Token-gated data for the public /signage broadcast board. The board used to
-// read productions / team / schedules directly with the anon key, which exposed
-// that data to anyone. It now fetches here with a shared token as Bearer
-// Authorization (page URLs may still use ?k= for players). Anon RLS on those
-// tables is then closed.
+// Token-gated data for the public /signage broadcast board.
+// Prefer Authorization: Bearer; still accept legacy ?k= for players that strip
+// headers. Never public-CDN-cache — auth is not part of the URL cache key.
 export async function GET(request: NextRequest) {
   const service = getServiceSupabaseClient()
   if (!service) return NextResponse.json({ error: 'Server not configured' }, { status: 500 })
 
-  const token = bearerToken(request) || ''
+  const url = new URL(request.url)
+  const token = (bearerToken(request) ?? url.searchParams.get('k') ?? '').trim()
 
   const { data: row } = await service
     .from('app_settings')
@@ -29,7 +28,10 @@ export async function GET(request: NextRequest) {
     .maybeSingle()
   const expected = ((row?.value as string | undefined) || '').trim()
   if (!expected || !token || !timingSafeEqualStr(token, expected)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401, headers: { 'Cache-Control': 'private, no-store' } },
+    )
   }
 
   const rl = await checkRateLimit(request, {
@@ -40,12 +42,16 @@ export async function GET(request: NextRequest) {
   if (rl.limited) {
     return NextResponse.json(
       { error: 'Too many requests' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rl.retryAfterSec),
+          'Cache-Control': 'private, no-store',
+        },
+      },
     )
   }
 
-  // Date window for schedule rows (client passes its local range).
-  const url = new URL(request.url)
   const start = (url.searchParams.get('start') || '').trim()
   const end = (url.searchParams.get('end') || '').trim()
 
@@ -81,6 +87,6 @@ export async function GET(request: NextRequest) {
       goneDays: gone.data ?? [],
       officeClosedDays: closed.data ?? [],
     },
-    { headers: { 'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=40' } },
+    { headers: { 'Cache-Control': 'private, no-store' } },
   )
 }

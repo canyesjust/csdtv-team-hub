@@ -28,7 +28,7 @@ function absoluteIntakeUrl(stored: string | null): string | null {
 function bearerToken(request: Request): string | null {
   const authHeader = request.headers.get('authorization')
   if (!authHeader?.startsWith('Bearer ')) return null
-  return authHeader.slice(7)
+  return authHeader.slice(7).trim() || null
 }
 
 export async function GET(request: Request) {
@@ -37,11 +37,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'SIGNAGE_TASKS_KEY not configured' }, { status: 500 })
   }
 
-  // Bearer only — page URLs may still carry ?k= for players; the client must
-  // send that value as Authorization (keeps the secret out of API access logs).
-  const incomingKey = bearerToken(request)
+  // Prefer Authorization: Bearer (keeps the secret out of access logs). Still
+  // accept legacy ?k= so players / CDNs that strip Authorization keep working.
+  const url = new URL(request.url)
+  const incomingKey = bearerToken(request) ?? url.searchParams.get('k')
   if (!timingSafeEqualStr(incomingKey, expectedKey)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401, headers: { 'Cache-Control': 'private, no-store' } },
+    )
   }
 
   const rl = await checkRateLimit(request, {
@@ -52,17 +56,23 @@ export async function GET(request: Request) {
   if (rl.limited) {
     return NextResponse.json(
       { error: 'Too many requests' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(rl.retryAfterSec),
+          'Cache-Control': 'private, no-store',
+        },
+      },
     )
   }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
+  if (!supabaseUrl || !key) {
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
 
-  const supabase = createClient(url, key)
+  const supabase = createClient(supabaseUrl, key)
 
   const today = new Date()
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
