@@ -76,6 +76,9 @@ export default function ManageSchoolBrandPage() {
   const [fileSize, setFileSize] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [drawerUploadBusy, setDrawerUploadBusy] = useState(false)
+  const [drawerUploadMsg, setDrawerUploadMsg] = useState<string | null>(null)
+  const drawerUploadRef = useRef<HTMLInputElement | null>(null)
   const [fontHeading, setFontHeading] = useState('')
   const [fontBody, setFontBody] = useState('')
   const [fontNotes, setFontNotes] = useState('')
@@ -90,7 +93,7 @@ export default function ManageSchoolBrandPage() {
   const [paletteActionBusy, setPaletteActionBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
-  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
+  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null); setDrawerUploadMsg(null) }
 
   useEffect(() => {
     if (!selected) return
@@ -118,24 +121,29 @@ export default function ManageSchoolBrandPage() {
     return () => { cancelled = true }
   }, [router])
 
-  const loadDetail = useCallback(async () => {
-    if (!code) return
+  const loadDetail = useCallback(async (): Promise<Logo[]> => {
+    if (!code) return []
     // Cache-bust so a manager's edits (add/rename/delete/cover/colors) always show
     // immediately, even though public reads of this endpoint are briefly CDN-cached.
     const res = await fetch(`/api/brand/${encodeURIComponent(code)}?t=${Date.now()}`, { cache: 'no-store' })
     const d = await res.json().catch(() => ({}))
     if (d?.school) {
       const sc = d.school as School
+      const nextLogos = Array.isArray(d.logos) ? (d.logos as Logo[]) : []
       setSchool(sc)
-      setLogos(Array.isArray(d.logos) ? (d.logos as Logo[]) : [])
+      setLogos(nextLogos)
       setFontHeading(sc.fonts?.heading || '')
       setFontBody(sc.fonts?.body || '')
       setFontNotes(sc.fonts?.notes || '')
       const pals = sc.palettes || []
       setPalettes(pals)
       setPaletteDrafts(Object.fromEntries(pals.map((p) => [p.id, p.colors.slice()])))
-    } else setNotFound(true)
+      setLoading(false)
+      return nextLogos
+    }
+    setNotFound(true)
     setLoading(false)
+    return []
   }, [code])
 
   const saveFonts = async () => {
@@ -294,6 +302,40 @@ export default function ManageSchoolBrandPage() {
     if (fileRef.current) fileRef.current.value = ''
     if (ok > 0) { notify(`${ok} file${ok === 1 ? '' : 's'} uploaded`, 'success'); setName(''); await loadDetail() }
     if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (images must be PNG, JPG, SVG, or EPS; Word docs (.docx) must use the Letterhead category; max ${formatBytes(MAX_BYTES)})`, 'error')
+  }
+
+  // Attach another file format (e.g. an SVG or EPS) to the logo currently open in the
+  // drawer, using its exact category+name so it lands on the SAME logo entry instead of
+  // creating a new one. Uploading a format that already exists there replaces that file.
+  const uploadToSelected = async (list: FileList | File[] | null) => {
+    if (!selected) return
+    const files = list ? Array.from(list) : []
+    const file = files[0]
+    if (!file) return
+    setDrawerUploadBusy(true)
+    setDrawerUploadMsg(null)
+    const format = detectFormat(file)
+    if (!format || file.size > MAX_BYTES) {
+      setDrawerUploadBusy(false)
+      setDrawerUploadMsg(`Could not add that file. Use PNG, JPG, SVG, or EPS (max ${formatBytes(MAX_BYTES)}).`)
+      return
+    }
+    if (format === 'docx' && selected.category.toLowerCase() !== 'letterhead') {
+      setDrawerUploadBusy(false)
+      setDrawerUploadMsg('Word documents can only be added to the Letterhead category.')
+      return
+    }
+    const ok = await uploadOneFile(file, selected.category, selected.name, format)
+    if (ok) {
+      const nextLogos = await loadDetail()
+      const updated = nextLogos.find((x) => x.category === selected.category && x.name === selected.name)
+      if (updated) setSelected(updated)
+      setDrawerUploadMsg(`${format.toUpperCase()} added.`)
+    } else {
+      setDrawerUploadMsg('Upload failed.')
+    }
+    setDrawerUploadBusy(false)
+    if (drawerUploadRef.current) drawerUploadRef.current.value = ''
   }
 
   const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || ''); setEditCustom(false) }
@@ -665,6 +707,27 @@ export default function ManageSchoolBrandPage() {
                   <button key={fmt} type="button" onClick={async () => { await onDelete(selected, fmt); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: '#b42318', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Delete {fmt.toUpperCase()}</button>
                 ) : null))}
               </div>
+
+              <p style={{ margin: '20px 0 6px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Add a file type</p>
+              <p style={{ margin: '0 0 8px', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                Attach a PNG, JPG, SVG, or EPS to this same logo{selected.category.toLowerCase() === 'letterhead' ? ', or a Word doc,' : ''} so every format shows together here.
+              </p>
+              <input
+                ref={drawerUploadRef}
+                type="file"
+                accept={`.png,.jpg,.jpeg,.svg,.eps,image/png,image/jpeg,image/svg+xml,application/postscript${selected.category.toLowerCase() === 'letterhead' ? ',.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ''}`}
+                style={{ display: 'none' }}
+                onChange={(e) => uploadToSelected(e.target.files)}
+              />
+              <button
+                type="button"
+                disabled={drawerUploadBusy}
+                onClick={() => drawerUploadRef.current?.click()}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: '#185fa5', fontSize: 13, fontWeight: 700, cursor: drawerUploadBusy ? 'default' : 'pointer' }}
+              >
+                {drawerUploadBusy ? 'Uploading...' : '+ Add file'}
+              </button>
+              {drawerUploadMsg && <p style={{ margin: '8px 0 0', fontSize: 12.5, fontWeight: 600, color: 'var(--text-muted)' }}>{drawerUploadMsg}</p>}
             </div>
           </div>
         </div>

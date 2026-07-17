@@ -98,6 +98,9 @@ export default function SchoolBrandPage() {
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const uploadRef = useRef<HTMLInputElement | null>(null)
+  const [drawerUploadBusy, setDrawerUploadBusy] = useState(false)
+  const [drawerUploadMsg, setDrawerUploadMsg] = useState<string | null>(null)
+  const drawerUploadRef = useRef<HTMLInputElement | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [allCategories, setAllCategories] = useState<string[]>([])
@@ -113,15 +116,17 @@ export default function SchoolBrandPage() {
   const embed = useBrandEmbed()
   const linkQuery = brandQuery(reviewKey, embed)
 
-  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
+  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null); setDrawerUploadMsg(null) }
 
-  const reload = useCallback(async () => {
-    if (!code) return
+  const reload = useCallback(async (): Promise<Logo[]> => {
+    if (!code) return []
     // Cache-bust: after a reviewer edit/upload we need the fresh server state, not the
     // briefly-cached public copy.
     const r = await fetch(`/api/brand/${encodeURIComponent(code)}?t=${Date.now()}`, { cache: 'no-store' })
     const d = await r.json().catch(() => ({}))
-    if (d?.school) { setSchool(d.school as School); setLogos(Array.isArray(d.logos) ? (d.logos as Logo[]) : []) }
+    const nextLogos = Array.isArray(d?.logos) ? (d.logos as Logo[]) : []
+    if (d?.school) { setSchool(d.school as School); setLogos(nextLogos) }
+    return nextLogos
   }, [code])
 
   // Reviewer upload (key-gated). Uploads go live immediately, like a manager upload.
@@ -165,6 +170,55 @@ export default function SchoolBrandPage() {
         ? `${ok} file${ok === 1 ? '' : 's'} uploaded${fail ? `, ${fail} skipped` : ''}.`
         : `No files uploaded. Images must be PNG, JPG, SVG, or EPS; Word docs (.docx) must use the Letterhead category. Max ${formatBytes(MAX_BYTES)} each.`,
     )
+  }
+
+  // Attach another file format (e.g. an SVG or EPS) to the logo currently open in the
+  // drawer, using its exact category+name so it lands on the SAME logo entry instead of
+  // creating a new one. Uploading a format that already exists there replaces that file.
+  const uploadToSelected = async (list: FileList | File[] | null) => {
+    if (!reviewKey || !selected) return
+    const files = list ? Array.from(list) : []
+    const file = files[0]
+    if (!file) return
+    setDrawerUploadBusy(true)
+    setDrawerUploadMsg(null)
+    const format = detectFormat(file)
+    if (!format || file.size > MAX_BYTES) {
+      setDrawerUploadBusy(false)
+      setDrawerUploadMsg(`Could not add that file. Use PNG, JPG, SVG, or EPS (max ${formatBytes(MAX_BYTES)}).`)
+      return
+    }
+    if (format === 'docx' && selected.category.toLowerCase() !== 'letterhead') {
+      setDrawerUploadBusy(false)
+      setDrawerUploadMsg('Word documents can only be added to the Letterhead category.')
+      return
+    }
+    try {
+      const supabase = createClient()
+      const signRes = await fetch('/api/brand/upload/sign', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, category: selected.category, name: selected.name, format, key: reviewKey }),
+      })
+      const sign = await signRes.json().catch(() => ({}))
+      if (!signRes.ok) { setDrawerUploadMsg(typeof sign?.error === 'string' ? sign.error : 'Upload failed.'); setDrawerUploadBusy(false); return }
+      const { error: upErr } = await supabase.storage.from(sign.bucket).uploadToSignedUrl(sign.path, sign.token, file, { contentType: CONTENT_TYPE[format] })
+      if (upErr) { setDrawerUploadMsg(upErr.message || 'Upload failed.'); setDrawerUploadBusy(false); return }
+      const finRes = await fetch('/api/brand/upload/finalize', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, category: selected.category, name: selected.name, format, path: sign.path, key: reviewKey }),
+      })
+      const fin = await finRes.json().catch(() => ({}))
+      if (!finRes.ok) { setDrawerUploadMsg(typeof fin?.error === 'string' ? fin.error : 'Could not save the file.'); setDrawerUploadBusy(false); return }
+      const nextLogos = await reload()
+      const updated = nextLogos.find((x) => x.category === selected.category && x.name === selected.name)
+      if (updated) setSelected(updated)
+      setDrawerUploadMsg(`${format.toUpperCase()} added.`)
+    } catch {
+      setDrawerUploadMsg('Upload failed.')
+    } finally {
+      setDrawerUploadBusy(false)
+      if (drawerUploadRef.current) drawerUploadRef.current.value = ''
+    }
   }
 
   const toggleDept = (depCode: string) => {
@@ -865,6 +919,30 @@ export default function SchoolBrandPage() {
                 {selected.eps && <a href={selected.eps} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>EPS</a>}
                 {!selected.png && !selected.jpg && !selected.svg && !selected.docx && !selected.eps && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
               </div>
+              {reviewKey && (
+                <>
+                  <p style={{ margin: '20px 0 6px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Add a file type</p>
+                  <p style={{ margin: '0 0 8px', fontSize: 12.5, color: colors.muted }}>
+                    Attach a PNG, JPG, SVG, or EPS to this same logo{selected.category.toLowerCase() === 'letterhead' ? ', or a Word doc,' : ''} so every format shows together here.
+                  </p>
+                  <input
+                    ref={drawerUploadRef}
+                    type="file"
+                    accept={`.png,.jpg,.jpeg,.svg,.eps,image/png,image/jpeg,image/svg+xml,application/postscript${selected.category.toLowerCase() === 'letterhead' ? ',.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ''}`}
+                    style={{ display: 'none' }}
+                    onChange={(e) => uploadToSelected(e.target.files)}
+                  />
+                  <button
+                    type="button"
+                    disabled={drawerUploadBusy}
+                    onClick={() => drawerUploadRef.current?.click()}
+                    style={{ padding: '8px 16px', borderRadius: 8, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 13, fontWeight: 700, cursor: drawerUploadBusy ? 'default' : 'pointer' }}
+                  >
+                    {drawerUploadBusy ? 'Uploading...' : '+ Add file'}
+                  </button>
+                  {drawerUploadMsg && <p style={{ margin: '8px 0 0', fontSize: 12.5, fontWeight: 600, color: colors.muted }}>{drawerUploadMsg}</p>}
+                </>
+              )}
             </div>
           </div>
         </div>
