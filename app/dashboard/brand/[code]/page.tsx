@@ -424,6 +424,9 @@ export default function ManageSchoolBrandPage() {
               <span style={{ fontSize: 14, fontWeight: 800 }}>Add a logo</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#185fa5' }}>{addOpen ? 'Hide' : '+ Add logo'}</span>
             </button>
+            <p style={{ margin: '0 16px 12px', fontSize: 11.5, color: 'var(--text-muted)' }}>
+              To attach another format (like an SVG or EPS) to a logo that&rsquo;s already below, click that logo and use &ldquo;+ Add file&rdquo; in its details panel — don&rsquo;t re-upload it here, since files only combine when the category and name match exactly.
+            </p>
             {addOpen && (
             <div style={{ padding: '0 16px 16px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(200px, 2fr)', gap: 10, marginBottom: 12 }}>

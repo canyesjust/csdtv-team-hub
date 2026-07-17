@@ -551,7 +551,8 @@ export default function SchoolBrandPage() {
 
             {reviewKey && (
               <div style={{ marginBottom: flagError ? 10 : 18, padding: '10px 14px', borderRadius: 10, border: '1px solid #f0b429', background: '#fff8e6', color: '#7a5300', fontSize: 13.5, fontWeight: 600 }}>
-                Review mode: click any logo that is old and should be deleted (click it again to undo). Marks save automatically, and a manager confirms the deletions later.
+                <p style={{ margin: 0 }}>Review mode: click any logo that is old and should be deleted (click it again to undo). Marks save automatically, and a manager confirms the deletions later.</p>
+                <p style={{ margin: '6px 0 0', fontWeight: 500 }}>To attach another format (like an SVG or EPS) to a logo that&rsquo;s already here, click that logo below and use &ldquo;+ Add file&rdquo; in its details panel — don&rsquo;t re-upload it above, since files only combine when the category and name match exactly.</p>
               </div>
             )}
             {reviewKey && flagError && (
