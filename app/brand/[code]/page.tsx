@@ -10,7 +10,9 @@ import {
   CATEGORY_ORDER,
   CONTENT_TYPE,
   DocBadge,
+  EpsBadge,
   MAX_BRAND_UPLOAD_BYTES as MAX_BYTES,
+  PALETTE_COLOR_SLOTS,
   detectFormat,
   deriveLogoName,
   formatBytes,
@@ -30,8 +32,9 @@ function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | nu
 }
 
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; thumb?: string | null; flagged?: boolean; cover?: boolean; notes?: string | null }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; eps?: string | null; thumb?: string | null; flagged?: boolean; cover?: boolean; notes?: string | null }
 type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
+type Palette = { id: string; name: string; colors: (string | null)[] }
 type School = {
   code: string
   name: string
@@ -41,6 +44,7 @@ type School = {
   city: string | null
   level: BrandLevel
   colors: Colors
+  palettes: Palette[]
 }
 type DeptSummary = { code: string; name: string; colors: Colors; logoCount: number }
 
@@ -97,9 +101,15 @@ export default function SchoolBrandPage() {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [allCategories, setAllCategories] = useState<string[]>([])
-  const [editColors, setEditColors] = useState<{ primary: string; secondary: string; accent: string; text: string }>({ primary: '', secondary: '', accent: '', text: '' })
-  const [colorsBusy, setColorsBusy] = useState(false)
-  const [colorsMsg, setColorsMsg] = useState<string | null>(null)
+  const [paletteDrafts, setPaletteDrafts] = useState<Record<string, (string | null)[]>>({})
+  const [paletteBusy, setPaletteBusy] = useState<string | null>(null)
+  const [paletteMsg, setPaletteMsg] = useState<Record<string, string | null>>({})
+  const [renamingPaletteId, setRenamingPaletteId] = useState<string | null>(null)
+  const [renamePaletteName, setRenamePaletteName] = useState('')
+  const [addingPalette, setAddingPalette] = useState(false)
+  const [newPaletteName, setNewPaletteName] = useState('')
+  const [paletteActionBusy, setPaletteActionBusy] = useState(false)
+  const [paletteActionErr, setPaletteActionErr] = useState<string | null>(null)
   const embed = useBrandEmbed()
   const linkQuery = brandQuery(reviewKey, embed)
 
@@ -153,7 +163,7 @@ export default function SchoolBrandPage() {
     setUploadMsg(
       ok > 0
         ? `${ok} file${ok === 1 ? '' : 's'} uploaded${fail ? `, ${fail} skipped` : ''}.`
-        : 'No files uploaded. Images must be PNG, JPG, or SVG; Word docs (.docx) must use the Letterhead category. Max 20 MB each.',
+        : `No files uploaded. Images must be PNG, JPG, SVG, or EPS; Word docs (.docx) must use the Letterhead category. Max ${formatBytes(MAX_BYTES)} each.`,
     )
   }
 
@@ -171,7 +181,7 @@ export default function SchoolBrandPage() {
 
   useEffect(() => {
     if (!selected) return
-    const url = selected.png || selected.jpg || selected.svg || selected.docx
+    const url = selected.png || selected.jpg || selected.svg || selected.docx || selected.eps
     if (!url) return
     let cancelled = false
     fetch(url, { method: 'HEAD' })
@@ -209,16 +219,11 @@ export default function SchoolBrandPage() {
     return () => { cancelled = true }
   }, [reviewKey])
 
-  // Keep the color editor fields in sync with the loaded school colors.
+  // Keep the palette editor drafts in sync with the loaded school palettes.
   useEffect(() => {
     if (!school) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEditColors({
-      primary: school.colors.primary || '',
-      secondary: school.colors.secondary || '',
-      accent: school.colors.accent || '',
-      text: school.colors.text || '',
-    })
+    setPaletteDrafts(Object.fromEntries(school.palettes.map((p) => [p.id, p.colors.slice()])))
   }, [school])
 
   useEffect(() => {
@@ -317,28 +322,88 @@ export default function SchoolBrandPage() {
     }
   }
 
-  const saveColors = async () => {
+  const savePaletteColors = async (paletteId: string) => {
     if (!reviewKey || !school) return
-    setColorsBusy(true)
-    setColorsMsg(null)
+    setPaletteBusy(paletteId)
+    setPaletteMsg((m) => ({ ...m, [paletteId]: null }))
     try {
-      const res = await fetch('/api/brand/review-colors', {
-        method: 'POST',
+      const res = await fetch('/api/brand/palettes', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: reviewKey, code, primary: editColors.primary, secondary: editColors.secondary, accent: editColors.accent, text: editColors.text }),
+        body: JSON.stringify({ key: reviewKey, code, id: paletteId, colors: paletteDrafts[paletteId] || [] }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setColorsMsg(typeof d?.error === 'string' ? d.error : 'Could not save the colors.')
+        setPaletteMsg((m) => ({ ...m, [paletteId]: typeof d?.error === 'string' ? d.error : 'Could not save the colors.' }))
         return
       }
-      const c = (d?.colors || {}) as Partial<Colors>
-      setSchool((s) => (s ? { ...s, colors: { primary: c.primary ?? null, secondary: c.secondary ?? null, accent: c.accent ?? null, text: c.text ?? null } } : s))
-      setColorsMsg('Colors saved.')
+      setSchool((s) => (s ? { ...s, palettes: s.palettes.map((p) => (p.id === paletteId ? { ...p, colors: d.palette.colors } : p)) } : s))
+      setPaletteMsg((m) => ({ ...m, [paletteId]: 'Colors saved.' }))
     } catch {
-      setColorsMsg('Could not save the colors. Try again.')
+      setPaletteMsg((m) => ({ ...m, [paletteId]: 'Could not save the colors. Try again.' }))
     } finally {
-      setColorsBusy(false)
+      setPaletteBusy(null)
+    }
+  }
+
+  const createPalette = async () => {
+    if (!reviewKey || !newPaletteName.trim()) return
+    setPaletteActionBusy(true)
+    setPaletteActionErr(null)
+    try {
+      const res = await fetch('/api/brand/palettes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: reviewKey, code, name: newPaletteName.trim() }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setPaletteActionErr(typeof d?.error === 'string' ? d.error : 'Could not create the palette.'); return }
+      setSchool((s) => (s ? { ...s, palettes: [...s.palettes, d.palette] } : s))
+      setNewPaletteName('')
+      setAddingPalette(false)
+    } catch {
+      setPaletteActionErr('Could not create the palette. Try again.')
+    } finally {
+      setPaletteActionBusy(false)
+    }
+  }
+
+  const renamePalette = async (paletteId: string) => {
+    if (!reviewKey || !renamePaletteName.trim()) return
+    setPaletteActionBusy(true)
+    setPaletteActionErr(null)
+    try {
+      const res = await fetch('/api/brand/palettes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: reviewKey, code, id: paletteId, name: renamePaletteName.trim() }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setPaletteActionErr(typeof d?.error === 'string' ? d.error : 'Could not rename the palette.'); return }
+      setSchool((s) => (s ? { ...s, palettes: s.palettes.map((p) => (p.id === paletteId ? { ...p, name: d.palette.name } : p)) } : s))
+      setRenamingPaletteId(null)
+    } catch {
+      setPaletteActionErr('Could not rename the palette. Try again.')
+    } finally {
+      setPaletteActionBusy(false)
+    }
+  }
+
+  const deletePalette = async (paletteId: string, name: string) => {
+    if (!reviewKey) return
+    if (!window.confirm(`Remove the "${name}" palette?`)) return
+    setPaletteActionBusy(true)
+    setPaletteActionErr(null)
+    try {
+      const qs = new URLSearchParams({ code, id: paletteId, key: reviewKey })
+      const res = await fetch(`/api/brand/palettes?${qs.toString()}`, { method: 'DELETE' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setPaletteActionErr(typeof d?.error === 'string' ? d.error : 'Could not remove the palette.'); return }
+      setSchool((s) => (s ? { ...s, palettes: s.palettes.filter((p) => p.id !== paletteId) } : s))
+    } catch {
+      setPaletteActionErr('Could not remove the palette. Try again.')
+    } finally {
+      setPaletteActionBusy(false)
     }
   }
 
@@ -395,22 +460,13 @@ export default function SchoolBrandPage() {
 
   const dlBtn: CSSProperties = { padding: '5px 12px', borderRadius: 7, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 12, fontWeight: 700, textDecoration: 'none' }
 
-  const swatch = (slot: 'primary' | 'secondary' | 'accent' | 'text', label: string) => {
-    if (!school) return null
-    const hex = school.colors[slot]
-    if (!hex) return null
-    const key = slot
-    return (
-      <button key={slot} type="button" onClick={() => copyHex(key, hex)} title={`Copy ${hex}`}
-        style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 96, border: `1px solid ${colors.line}`, borderRadius: 8, padding: 0, background: colors.cardBg, cursor: 'pointer', overflow: 'hidden', textAlign: 'left' }}>
-        <span style={{ height: 32, background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: readableOn(hex) }}>{copied === key ? 'Copied' : ''}</span>
-        <span style={{ padding: '3px 8px 6px' }}>
-          <span style={{ display: 'block', fontSize: 9.5, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
-          <span style={{ display: 'block', fontSize: 12, fontWeight: 600, fontFamily: 'ui-monospace, monospace' }}>{hex}</span>
-        </span>
-      </button>
-    )
-  }
+  const swatch = (hex: string, key: string) => (
+    <button key={key} type="button" onClick={() => copyHex(key, hex)} title={`Copy ${hex}`}
+      style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 88, border: `1px solid ${colors.line}`, borderRadius: 8, padding: 0, background: colors.cardBg, cursor: 'pointer', overflow: 'hidden', textAlign: 'left' }}>
+      <span style={{ height: 32, background: hex, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: readableOn(hex) }}>{copied === key ? 'Copied' : ''}</span>
+      <span style={{ display: 'block', padding: '3px 8px 6px', fontSize: 12, fontWeight: 600, fontFamily: 'ui-monospace, monospace' }}>{hex}</span>
+    </button>
+  )
 
   return (
     <div style={{ background: embed ? 'transparent' : colors.bg, minHeight: embed ? undefined : '100vh', color: colors.text, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
@@ -470,7 +526,7 @@ export default function SchoolBrandPage() {
                         <input value={uploadName} onChange={(e) => setUploadName(e.target.value)} placeholder="e.g. Primary wordmark, white" style={{ height: 36, borderRadius: 8, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.text, fontSize: 13, padding: '0 10px', boxSizing: 'border-box' }} />
                       </label>
                     </div>
-                    <input ref={uploadRef} type="file" accept=".png,.jpg,.jpeg,.svg,.docx,image/png,image/jpeg,image/svg+xml,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style={{ display: 'none' }} onChange={(e) => uploadFiles(e.target.files)} />
+                    <input ref={uploadRef} type="file" accept=".png,.jpg,.jpeg,.svg,.docx,.eps,image/png,image/jpeg,image/svg+xml,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/postscript" multiple style={{ display: 'none' }} onChange={(e) => uploadFiles(e.target.files)} />
                     <div
                       onClick={() => { if (!uploadBusy) uploadRef.current?.click() }}
                       onDragOver={(e) => { e.preventDefault(); if (!uploadBusy) setDragOver(true) }}
@@ -479,11 +535,11 @@ export default function SchoolBrandPage() {
                       style={{ border: `2px dashed ${dragOver ? colors.info : colors.line}`, borderRadius: 10, background: dragOver ? 'rgba(24,95,165,0.08)' : 'transparent', padding: '20px 14px', textAlign: 'center', cursor: uploadBusy ? 'default' : 'pointer', color: colors.muted, fontSize: 13 }}
                     >
                       {uploadBusy ? 'Uploading...' : (
-                        <><span style={{ fontWeight: 700, color: colors.text }}>Drag files here</span><br />or click to choose (PNG, JPG, SVG, or .docx for Letterhead)</>
+                        <><span style={{ fontWeight: 700, color: colors.text }}>Drag files here</span><br />or click to choose (PNG, JPG, SVG, EPS, or .docx for Letterhead)</>
                       )}
                     </div>
                     {uploadMsg && <p style={{ margin: '10px 0 0', fontSize: 12.5, fontWeight: 600, color: colors.muted }}>{uploadMsg}</p>}
-                    <p style={{ margin: '8px 0 0', fontSize: 11.5, color: colors.muted }}>Uploads appear right away. Word documents (.docx) are only allowed in the Letterhead category. Max 20 MB per file.</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 11.5, color: colors.muted }}>Uploads appear right away. Word documents (.docx) are only allowed in the Letterhead category. Max {formatBytes(MAX_BYTES)} per file.</p>
                   </div>
                 )}
               </section>
@@ -524,6 +580,8 @@ export default function SchoolBrandPage() {
                                           <img src={preview} alt={l.name} loading="lazy" decoding="async" onError={(e) => onThumbError(e, rawPreview)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
                                         ) : l.docx ? (
                                           <DocBadge compact />
+                                        ) : l.eps ? (
+                                          <EpsBadge compact />
                                         ) : (
                                           <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                                         )}
@@ -549,24 +607,76 @@ export default function SchoolBrandPage() {
             <section style={{ marginBottom: 26 }}>
               <h2 style={{ margin: '0 0 10px', fontSize: 14, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: colors.muted }}>Brand colors</h2>
               {reviewKey ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 340 }}>
-                  {(([['primary', 'Primary'], ['secondary', 'Secondary'], ['accent', 'Accent'], ['text', 'Text']]) as ['primary' | 'secondary' | 'accent' | 'text', string][]).map(([slot, label]) => (
-                    <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 78, fontSize: 12, color: colors.muted, fontWeight: 600 }}>{label}</span>
-                      <input type="color" value={toColorInputValue(editColors[slot])} onChange={(e) => setEditColors((c) => ({ ...c, [slot]: e.target.value }))} aria-label={`${label} color picker`} style={{ width: 40, height: 32, border: `1px solid ${colors.line}`, borderRadius: 6, background: colors.cardBg, cursor: 'pointer', padding: 2 }} />
-                      <input value={editColors[slot]} onChange={(e) => setEditColors((c) => ({ ...c, [slot]: e.target.value }))} placeholder="#003087 or blank" style={{ width: 160, height: 32, border: `1px solid ${colors.line}`, borderRadius: 6, padding: '0 8px', fontSize: 13, fontFamily: 'ui-monospace, monospace', color: colors.text, background: colors.cardBg, boxSizing: 'border-box' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  {school.palettes.map((p) => {
+                    const draft = paletteDrafts[p.id] || new Array(PALETTE_COLOR_SLOTS).fill(null)
+                    const isPrimary = p.name.toLowerCase() === 'primary'
+                    return (
+                      <div key={p.id} style={{ border: `1px solid ${colors.border}`, borderRadius: 10, background: colors.cardBg, padding: 14, maxWidth: 420 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                          {renamingPaletteId === p.id ? (
+                            <>
+                              <input autoFocus value={renamePaletteName} onChange={(e) => setRenamePaletteName(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') renamePalette(p.id); if (e.key === 'Escape') setRenamingPaletteId(null) }}
+                                style={{ height: 30, borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.text, fontSize: 13, padding: '0 8px' }} />
+                              <button type="button" disabled={paletteActionBusy} onClick={() => renamePalette(p.id)} style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.info}`, background: colors.info, color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                              <button type="button" onClick={() => setRenamingPaletteId(null)} style={{ padding: '4px 10px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.muted, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ fontSize: 13.5, fontWeight: 800 }}>{p.name}</span>
+                              <button type="button" onClick={() => { setRenamingPaletteId(p.id); setRenamePaletteName(p.name) }} style={{ padding: '3px 8px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.info, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Rename</button>
+                              {!isPrimary && (
+                                <button type="button" onClick={() => deletePalette(p.id, p.name)} style={{ padding: '3px 8px', borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: '#a4161a', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {Array.from({ length: PALETTE_COLOR_SLOTS }).map((_, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ width: 20, fontSize: 11, color: colors.muted, fontWeight: 600 }}>{i + 1}</span>
+                              <input type="color" value={toColorInputValue(draft[i] || '')}
+                                onChange={(e) => setPaletteDrafts((d) => ({ ...d, [p.id]: draft.map((v, j) => (j === i ? e.target.value : v)) }))}
+                                aria-label={`Color ${i + 1} picker`} style={{ width: 36, height: 30, border: `1px solid ${colors.line}`, borderRadius: 6, background: colors.cardBg, cursor: 'pointer', padding: 2 }} />
+                              <input value={draft[i] || ''}
+                                onChange={(e) => setPaletteDrafts((d) => ({ ...d, [p.id]: draft.map((v, j) => (j === i ? e.target.value : v)) }))}
+                                placeholder="blank" style={{ width: 140, height: 30, border: `1px solid ${colors.line}`, borderRadius: 6, padding: '0 8px', fontSize: 12.5, fontFamily: 'ui-monospace, monospace', color: colors.text, background: colors.cardBg, boxSizing: 'border-box' }} />
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                          <button type="button" disabled={paletteBusy === p.id} onClick={() => savePaletteColors(p.id)} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.info}`, background: colors.info, color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: paletteBusy === p.id ? 'default' : 'pointer', opacity: paletteBusy === p.id ? 0.6 : 1 }}>{paletteBusy === p.id ? 'Saving...' : 'Save colors'}</button>
+                          {paletteMsg[p.id] && <span style={{ fontSize: 12, fontWeight: 600, color: colors.muted }}>{paletteMsg[p.id]}</span>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {addingPalette ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input autoFocus value={newPaletteName} onChange={(e) => setNewPaletteName(e.target.value)} placeholder="Palette name, e.g. Spirit colors"
+                        onKeyDown={(e) => { if (e.key === 'Enter') createPalette(); if (e.key === 'Escape') setAddingPalette(false) }}
+                        style={{ height: 32, borderRadius: 6, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.text, fontSize: 13, padding: '0 8px', width: 220 }} />
+                      <button type="button" disabled={paletteActionBusy || !newPaletteName.trim()} onClick={createPalette} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.info}`, background: colors.info, color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Create</button>
+                      <button type="button" onClick={() => { setAddingPalette(false); setNewPaletteName('') }} style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.line}`, background: colors.cardBg, color: colors.muted, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
                     </div>
-                  ))}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 }}>
-                    <button type="button" disabled={colorsBusy} onClick={saveColors} style={{ padding: '7px 16px', borderRadius: 8, border: `1px solid ${colors.info}`, background: colors.info, color: '#fff', fontSize: 13, fontWeight: 700, cursor: colorsBusy ? 'default' : 'pointer', opacity: colorsBusy ? 0.6 : 1 }}>{colorsBusy ? 'Saving...' : 'Save colors'}</button>
-                    {colorsMsg && <span style={{ fontSize: 12.5, fontWeight: 600, color: colors.muted }}>{colorsMsg}</span>}
-                  </div>
-                  <p style={{ margin: 0, fontSize: 11.5, color: colors.muted }}>Enter a hex value (e.g. #003087) or use the picker. Leave a field blank to remove that color.</p>
+                  ) : (
+                    <button type="button" onClick={() => setAddingPalette(true)} style={{ alignSelf: 'flex-start', padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.info}`, background: 'transparent', color: colors.info, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>+ Add palette</button>
+                  )}
+                  {paletteActionErr && <span style={{ fontSize: 12.5, fontWeight: 600, color: '#a4161a' }}>{paletteActionErr}</span>}
+                  <p style={{ margin: 0, fontSize: 11.5, color: colors.muted }}>Enter a hex value (e.g. #003087) or use the picker. Leave a slot blank to remove that color.</p>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {[swatch('primary', 'Primary'), swatch('secondary', 'Secondary'), swatch('accent', 'Accent'), swatch('text', 'Text')].filter(Boolean)}
-                  {!school.colors.primary && !school.colors.secondary && !school.colors.accent && !school.colors.text && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {school.palettes.filter((p) => p.colors.some(Boolean)).map((p) => (
+                    <div key={p.id}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{p.name}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {p.colors.map((hex, i) => (hex ? swatch(hex, `${p.id}-${i}`) : null))}
+                      </div>
+                    </div>
+                  ))}
+                  {school.palettes.every((p) => !p.colors.some(Boolean)) && (
                     <span style={{ fontSize: 13, color: colors.muted }}>No brand colors on file.</span>
                   )}
                 </div>
@@ -625,6 +735,8 @@ export default function SchoolBrandPage() {
                                 <img src={preview} alt={l.name} loading="lazy" decoding="async" onError={(e) => onThumbError(e, rawPreview)} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain', pointerEvents: 'none' }} />
                               ) : l.docx ? (
                                 <DocBadge />
+                              ) : l.eps ? (
+                                <EpsBadge />
                               ) : (
                                 <span style={{ fontSize: 12, color: colors.muted }}>No preview</span>
                               )}
@@ -684,6 +796,7 @@ export default function SchoolBrandPage() {
                                   {l.png && <a href={l.png} style={dlBtn}>PNG</a>}
                                   {l.jpg && <a href={l.jpg} style={dlBtn}>JPG</a>}
                                   {l.docx && <a href={l.docx} style={dlBtn}>DOCX</a>}
+                                  {l.eps && <a href={l.eps} style={dlBtn}>EPS</a>}
                                 </div>
                               )}
                             </div>
@@ -714,6 +827,8 @@ export default function SchoolBrandPage() {
                   <img src={selected.png || selected.jpg || selected.svg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 440, objectFit: 'contain' }} />
                 ) : selected.docx ? (
                   <DocBadge />
+                ) : selected.eps ? (
+                  <EpsBadge />
                 ) : (
                   <span style={{ fontSize: 13, color: colors.muted }}>No preview</span>
                 )}
@@ -724,7 +839,7 @@ export default function SchoolBrandPage() {
                 ))}
               </div>
               <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>File type</p>
-              <p style={{ margin: 0, fontSize: 14 }}>{[selected.svg && 'SVG', selected.png && 'PNG', selected.jpg && 'JPG', selected.docx && 'Word document (.docx)'].filter(Boolean).join(', ') || 'Unknown'}</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{[selected.svg && 'SVG', selected.png && 'PNG', selected.jpg && 'JPG', selected.docx && 'Word document (.docx)', selected.eps && 'Vector file (.eps)'].filter(Boolean).join(', ') || 'Unknown'}</p>
               {(selected.png || selected.jpg || selected.svg) && (
                 <>
                   <p style={{ margin: '16px 0 4px', fontSize: 12, color: colors.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Dimensions</p>
@@ -747,7 +862,8 @@ export default function SchoolBrandPage() {
                 {selected.png && <a href={selected.png} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>PNG</a>}
                 {selected.jpg && <a href={selected.jpg} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>JPG</a>}
                 {selected.docx && <a href={selected.docx} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>DOCX</a>}
-                {!selected.png && !selected.jpg && !selected.svg && !selected.docx && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
+                {selected.eps && <a href={selected.eps} style={{ ...dlBtn, padding: '8px 16px', fontSize: 13 }}>EPS</a>}
+                {!selected.png && !selected.jpg && !selected.svg && !selected.docx && !selected.eps && <span style={{ fontSize: 13, color: colors.muted }}>No downloadable files.</span>}
               </div>
             </div>
           </div>

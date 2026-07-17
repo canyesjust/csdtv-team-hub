@@ -12,16 +12,16 @@ function onThumbError(e: SyntheticEvent<HTMLImageElement>, fallback: string | nu
   img.src = fallback
 }
 
-type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
 type Fonts = { heading: string | null; body: string | null; notes: string | null }
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null }
+type Palette = { id: string; name: string; colors: (string | null)[] }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; eps?: string | null }
 type School = {
   code: string
   name: string
   type?: string
   mascot: string | null
   city: string | null
-  colors: Colors
+  palettes: Palette[]
   fonts?: Fonts
 }
 
@@ -80,10 +80,12 @@ export default function BrandGuidePage() {
   const official = useMemo(() => logos.filter((l) => l.category.trim().toLowerCase() === 'official'), [logos])
   const fonts = school?.fonts
   const hasFonts = Boolean(fonts && (fonts.heading || fonts.body || fonts.notes))
-  const colorList = useMemo<[string, string][]>(() => {
+  // Group each palette's set colors under its name. Unset slots are not shown.
+  const paletteGroups = useMemo<{ name: string; hexes: string[] }[]>(() => {
     if (!school) return []
-    return ([['Primary', school.colors.primary], ['Secondary', school.colors.secondary], ['Accent', school.colors.accent], ['Text', school.colors.text]] as [string, string | null][])
-      .filter((x): x is [string, string] => Boolean(x[1]))
+    return school.palettes
+      .map((p) => ({ name: p.name, hexes: p.colors.filter((h): h is string => Boolean(h)) }))
+      .filter((g) => g.hexes.length > 0)
   }, [school])
 
   return (
@@ -119,25 +121,31 @@ export default function BrandGuidePage() {
             </header>
 
             <section style={{ marginBottom: 28 }}>
-              <h2 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: c.muted }}>Official Colors</h2>
-              {colorList.length === 0 ? (
+              <h2 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: c.muted }}>Brand Colors</h2>
+              {paletteGroups.length === 0 ? (
                 <p style={{ fontSize: 14, color: c.muted, fontStyle: 'italic' }}>No brand colors on file.</p>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
-                  {colorList.map(([label, hex]) => {
-                    const rgb = hexToRgb(hex)
-                    return (
-                      <div key={label} className="bg-card" style={{ border: `1px solid ${c.border}`, borderRadius: 8, overflow: 'hidden' }}>
-                        <div className="print-color" style={{ height: 64, background: hex }} />
-                        <div style={{ padding: '8px 10px' }}>
-                          <div style={{ fontSize: 13, fontWeight: 700 }}>{label}</div>
-                          <div style={{ fontSize: 12, color: c.muted, fontFamily: 'ui-monospace, monospace', marginTop: 2 }}>{hex.toUpperCase()}</div>
-                          {rgb && <div style={{ fontSize: 12, color: c.muted, fontFamily: 'ui-monospace, monospace' }}>RGB {rgb}</div>}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                paletteGroups.map((group) => (
+                  <div key={group.name} style={{ marginBottom: 14 }}>
+                    {paletteGroups.length > 1 && (
+                      <div style={{ fontSize: 11, fontWeight: 700, color: c.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{group.name}</div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
+                      {group.hexes.map((hex, i) => {
+                        const rgb = hexToRgb(hex)
+                        return (
+                          <div key={`${group.name}-${i}`} className="bg-card" style={{ border: `1px solid ${c.border}`, borderRadius: 8, overflow: 'hidden' }}>
+                            <div className="print-color" style={{ height: 64, background: hex }} />
+                            <div style={{ padding: '8px 10px' }}>
+                              <div style={{ fontSize: 12, color: c.muted, fontFamily: 'ui-monospace, monospace' }}>{hex.toUpperCase()}</div>
+                              {rgb && <div style={{ fontSize: 12, color: c.muted, fontFamily: 'ui-monospace, monospace' }}>RGB {rgb}</div>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))
               )}
             </section>
 
@@ -186,7 +194,7 @@ export default function BrandGuidePage() {
                         </div>
                         <div style={{ padding: '8px 10px' }}>
                           <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.25 }}>{l.name}</div>
-                          <div style={{ fontSize: 11.5, color: c.muted, marginTop: 2 }}>{[l.svg ? 'SVG' : null, l.png ? 'PNG' : null, l.jpg ? 'JPG' : null].filter(Boolean).join(' · ')}</div>
+                          <div style={{ fontSize: 11.5, color: c.muted, marginTop: 2 }}>{[l.svg ? 'SVG' : null, l.png ? 'PNG' : null, l.jpg ? 'JPG' : null, l.eps ? 'EPS' : null].filter(Boolean).join(' · ')}</div>
                         </div>
                       </div>
                     )

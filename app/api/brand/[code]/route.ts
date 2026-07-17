@@ -3,6 +3,7 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pickHex } from '@/lib/thumbnail-school-brand'
 import { brandGateEnabled, hasBrandSiteAccess } from '@/lib/server/brand-access'
 import { signBrandUrl } from '@/lib/server/brand-storage'
+import { ensurePrimaryPalette, listPalettes } from '@/lib/server/brand-palettes'
 
 // Public per-school brand detail. Service role reads public brand data only.
 export const dynamic = 'force-dynamic'
@@ -16,7 +17,7 @@ type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type LogoRow = {
   category: string
   name: string
-  format: 'png' | 'jpg' | 'svg' | 'docx'
+  format: 'png' | 'jpg' | 'svg' | 'docx' | 'eps'
   storage_path: string
   sort_order: number
   flagged_for_deletion: boolean
@@ -24,7 +25,7 @@ type LogoRow = {
   notes: string | null
 }
 
-type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx'
+type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx' | 'eps'
 
 type LogoEntry = {
   category: string
@@ -41,6 +42,7 @@ type LogoEntry = {
   jpg: string | null
   svg: string | null
   docx: string | null
+  eps: string | null
   thumb: string | null
 }
 
@@ -89,7 +91,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
   for (const row of (logoData ?? []) as LogoRow[]) {
     const key = `${row.category}||${row.name}`
     if (!map.has(key)) {
-      map.set(key, { category: row.category, name: row.name, sort: row.sort_order, files: {}, thumbPath: null, thumbIsSvg: false, thumbRank: -1, flagged: false, cover: false, notes: null, png: null, jpg: null, svg: null, docx: null, thumb: null })
+      map.set(key, { category: row.category, name: row.name, sort: row.sort_order, files: {}, thumbPath: null, thumbIsSvg: false, thumbRank: -1, flagged: false, cover: false, notes: null, png: null, jpg: null, svg: null, docx: null, eps: null, thumb: null })
     }
     const entry = map.get(key)!
     if (row.flagged_for_deletion) entry.flagged = true
@@ -99,7 +101,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
     entry.files[row.format] = { path: row.storage_path, dl }
     // One thumbnail per logo for the grid. Prefer SVG (vector, tiny, scales crisply -
     // image transforms do not apply to it), then a CDN-resized PNG, then JPG. Word
-    // documents (docx) have no image preview and are never used as a thumbnail.
+    // documents (docx) and EPS files have no image preview and are never used as a thumbnail.
     const isSvg = row.format === 'svg'
     const rank = isSvg ? 3 : row.format === 'png' ? 2 : row.format === 'jpg' ? 1 : -1
     if (rank > entry.thumbRank) {
@@ -113,7 +115,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
   // school with many logos does not serialize dozens of round-trips.
   const signTasks: Promise<void>[] = []
   for (const entry of map.values()) {
-    for (const fmt of ['png', 'jpg', 'svg', 'docx'] as LogoFormat[]) {
+    for (const fmt of ['png', 'jpg', 'svg', 'docx', 'eps'] as LogoFormat[]) {
       const info = entry.files[fmt]
       if (!info) continue
       signTasks.push((async () => { entry[fmt] = await signBrandUrl(supabase, info.path, { download: info.dl }) })())
@@ -127,6 +129,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
   await Promise.all(signTasks)
 
   const logos = [...map.values()].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+
+  // Every school gets at least a "Primary" palette (seeded from the legacy 4 color
+  // columns the first time it's read) so the palette editor always has something to show.
+  await ensurePrimaryPalette(supabase, code)
+  const palettes = await listPalettes(supabase, code)
 
   return NextResponse.json(
     {
@@ -144,13 +151,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cod
           accent: pickHex(school.accent_color),
           text: pickHex(school.text_color),
         },
+        palettes: palettes.map((p) => ({ id: p.id, name: p.name, colors: p.colors })),
         fonts: {
           heading: school.heading_font || null,
           body: school.body_font || null,
           notes: school.font_notes || null,
         },
       },
-      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, svg: l.svg, docx: l.docx, thumb: l.thumb, flagged: l.flagged, cover: l.cover, notes: l.notes })),
+      logos: logos.map((l) => ({ category: l.category, name: l.name, png: l.png, jpg: l.jpg, svg: l.svg, docx: l.docx, eps: l.eps, thumb: l.thumb, flagged: l.flagged, cover: l.cover, notes: l.notes })),
     },
     // Cache public reads briefly (window << the 1-hour signed-URL lifetime, so cached
     // URLs never expire before the response). Managers/reviewers cache-bust their own

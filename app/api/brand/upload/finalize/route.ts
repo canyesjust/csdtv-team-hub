@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const code = String(body.code || '').trim()
   const category = String(body.category || '').trim().slice(0, 60)
   const name = String(body.name || '').trim().slice(0, 120)
-  const format = body.format === 'png' || body.format === 'jpg' || body.format === 'svg' || body.format === 'docx' ? body.format : null
+  const format = body.format === 'png' || body.format === 'jpg' || body.format === 'svg' || body.format === 'docx' || body.format === 'eps' ? body.format : null
   const path = String(body.path || '')
 
   const teamUser = await getAuthenticatedTeamUser()

@@ -6,6 +6,7 @@ import {
   validateTeamPassword,
 } from '@/lib/server/team-auth-provision'
 import { startOnboardingAfterInviteIfNeeded } from '@/lib/onboarding/start-after-invite'
+import { syncPrimaryPaletteFromSchoolColumns } from '@/lib/server/brand-palettes'
 
 function normalizeOptionalHex(v: unknown): string | null {
   if (v === null || v === undefined) return null
@@ -287,8 +288,26 @@ export async function POST(request: Request) {
         patch.mascot = m || null
       }
       if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
-      const { error } = await supabase.from('schools').update(patch).eq('id', id)
+      const { data: updated, error } = await supabase
+        .from('schools')
+        .update(patch)
+        .eq('id', id)
+        .select('code, primary_color, secondary_color, accent_color, text_color')
+        .single()
       if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      // Keep the brand library's Primary palette (first 4 slots) in sync with these
+      // columns, since the brand library reads/writes its own copy for its color editor.
+      // Use the row's current (post-update) values, not just the patch, so untouched
+      // color fields are not accidentally blanked out in the palette.
+      const touchedColors = ['primary_color', 'secondary_color', 'accent_color', 'text_color'].some((k) => k in patch)
+      if (touchedColors && updated?.code) {
+        await syncPrimaryPaletteFromSchoolColumns(supabase, updated.code, {
+          primary_color: updated.primary_color,
+          secondary_color: updated.secondary_color,
+          accent_color: updated.accent_color,
+          text_color: updated.text_color,
+        })
+      }
       return NextResponse.json({ success: true })
     }
 

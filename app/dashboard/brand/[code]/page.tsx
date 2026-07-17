@@ -8,7 +8,9 @@ import {
   CATEGORY_ORDER,
   CONTENT_TYPE,
   DocBadge as SharedDocBadge,
+  EpsBadge as SharedEpsBadge,
   MAX_BRAND_UPLOAD_BYTES as MAX_BYTES,
+  PALETTE_COLOR_SLOTS,
   detectFormat,
   deriveLogoName,
   formatBytes,
@@ -22,7 +24,8 @@ import {
 type BrandLevel = 'Elementary' | 'Middle' | 'High' | 'Specialty'
 type Fonts = { heading: string | null; body: string | null; notes: string | null }
 type Colors = { primary: string | null; secondary: string | null; accent: string | null; text: string | null }
-type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; cover?: boolean; notes?: string | null }
+type Palette = { id: string; name: string; colors: (string | null)[] }
+type Logo = { category: string; name: string; png: string | null; jpg: string | null; svg?: string | null; docx?: string | null; eps?: string | null; cover?: boolean; notes?: string | null }
 type School = {
   code: string
   name: string
@@ -31,6 +34,7 @@ type School = {
   level: BrandLevel
   fonts?: Fonts
   colors?: Colors
+  palettes?: Palette[]
 }
 
 const CATEGORY_PRESETS = CATEGORY_ORDER
@@ -38,6 +42,10 @@ const CATEGORY_PRESETS = CATEGORY_ORDER
 // Manager pages render on the dashboard theme, so the badge label uses the CSS var.
 function DocBadge() {
   return <SharedDocBadge compact muted="var(--text-muted)" />
+}
+
+function EpsBadge() {
+  return <SharedEpsBadge compact muted="var(--text-muted)" />
 }
 
 function notify(message: string, type: 'success' | 'error' | 'info' = 'info') {
@@ -72,15 +80,21 @@ export default function ManageSchoolBrandPage() {
   const [fontBody, setFontBody] = useState('')
   const [fontNotes, setFontNotes] = useState('')
   const [fontBusy, setFontBusy] = useState(false)
-  const [brandColors, setBrandColors] = useState<{ primary: string; secondary: string; accent: string; text: string }>({ primary: '', secondary: '', accent: '', text: '' })
-  const [colorsBusy, setColorsBusy] = useState(false)
+  const [palettes, setPalettes] = useState<Palette[]>([])
+  const [paletteDrafts, setPaletteDrafts] = useState<Record<string, (string | null)[]>>({})
+  const [paletteBusy, setPaletteBusy] = useState<string | null>(null)
+  const [renamingPaletteId, setRenamingPaletteId] = useState<string | null>(null)
+  const [renamePaletteName, setRenamePaletteName] = useState('')
+  const [addingPalette, setAddingPalette] = useState(false)
+  const [newPaletteName, setNewPaletteName] = useState('')
+  const [paletteActionBusy, setPaletteActionBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null) }
 
   useEffect(() => {
     if (!selected) return
-    const url = selected.png || selected.jpg || selected.svg || selected.docx
+    const url = selected.png || selected.jpg || selected.svg || selected.docx || selected.eps
     if (!url) return
     let cancelled = false
     fetch(url, { method: 'HEAD' })
@@ -117,12 +131,9 @@ export default function ManageSchoolBrandPage() {
       setFontHeading(sc.fonts?.heading || '')
       setFontBody(sc.fonts?.body || '')
       setFontNotes(sc.fonts?.notes || '')
-      setBrandColors({
-        primary: sc.colors?.primary || '',
-        secondary: sc.colors?.secondary || '',
-        accent: sc.colors?.accent || '',
-        text: sc.colors?.text || '',
-      })
+      const pals = sc.palettes || []
+      setPalettes(pals)
+      setPaletteDrafts(Object.fromEntries(pals.map((p) => [p.id, p.colors.slice()])))
     } else setNotFound(true)
     setLoading(false)
   }, [code])
@@ -145,13 +156,13 @@ export default function ManageSchoolBrandPage() {
     }
   }
 
-  const saveColors = async () => {
-    setColorsBusy(true)
+  const savePaletteColors = async (paletteId: string) => {
+    setPaletteBusy(paletteId)
     try {
-      const res = await fetch('/api/brand/school', {
+      const res = await fetch('/api/brand/palettes', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, primaryColor: brandColors.primary, secondaryColor: brandColors.secondary, accentColor: brandColors.accent, textColor: brandColors.text }),
+        body: JSON.stringify({ code, id: paletteId, colors: paletteDrafts[paletteId] || [] }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Could not save colors', 'error')
@@ -159,7 +170,61 @@ export default function ManageSchoolBrandPage() {
     } catch {
       notify('Could not save colors', 'error')
     } finally {
-      setColorsBusy(false)
+      setPaletteBusy(null)
+    }
+  }
+
+  const createPalette = async () => {
+    if (!newPaletteName.trim()) return
+    setPaletteActionBusy(true)
+    try {
+      const res = await fetch('/api/brand/palettes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name: newPaletteName.trim() }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Could not create the palette', 'error')
+      else { notify('Palette created', 'success'); setNewPaletteName(''); setAddingPalette(false); await loadDetail() }
+    } catch {
+      notify('Could not create the palette', 'error')
+    } finally {
+      setPaletteActionBusy(false)
+    }
+  }
+
+  const renamePalette = async (paletteId: string) => {
+    if (!renamePaletteName.trim()) return
+    setPaletteActionBusy(true)
+    try {
+      const res = await fetch('/api/brand/palettes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, id: paletteId, name: renamePaletteName.trim() }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Could not rename the palette', 'error')
+      else { notify('Palette renamed', 'success'); setRenamingPaletteId(null); await loadDetail() }
+    } catch {
+      notify('Could not rename the palette', 'error')
+    } finally {
+      setPaletteActionBusy(false)
+    }
+  }
+
+  const deletePalette = async (paletteId: string, paletteName: string) => {
+    if (!window.confirm(`Remove the "${paletteName}" palette?`)) return
+    setPaletteActionBusy(true)
+    try {
+      const qs = new URLSearchParams({ code, id: paletteId })
+      const res = await fetch(`/api/brand/palettes?${qs.toString()}`, { method: 'DELETE' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) notify(typeof d?.error === 'string' ? d.error : 'Could not remove the palette', 'error')
+      else { notify('Palette removed', 'success'); await loadDetail() }
+    } catch {
+      notify('Could not remove the palette', 'error')
+    } finally {
+      setPaletteActionBusy(false)
     }
   }
 
@@ -228,7 +293,7 @@ export default function ManageSchoolBrandPage() {
     setBusy(null)
     if (fileRef.current) fileRef.current.value = ''
     if (ok > 0) { notify(`${ok} file${ok === 1 ? '' : 's'} uploaded`, 'success'); setName(''); await loadDetail() }
-    if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (images must be PNG, JPG, or SVG; Word docs (.docx) must use the Letterhead category; max 20 MB)`, 'error')
+    if (fail > 0) notify(`${fail} file${fail === 1 ? '' : 's'} skipped (images must be PNG, JPG, SVG, or EPS; Word docs (.docx) must use the Letterhead category; max ${formatBytes(MAX_BYTES)})`, 'error')
   }
 
   const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || ''); setEditCustom(false) }
@@ -332,7 +397,7 @@ export default function ManageSchoolBrandPage() {
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Primary wordmark, white" style={input} />
               </label>
             </div>
-            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.svg,.docx,image/png,image/jpeg,image/svg+xml,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple style={{ display: 'none' }} onChange={(e) => onAddFiles(e.target.files)} />
+            <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.svg,.docx,.eps,image/png,image/jpeg,image/svg+xml,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/postscript" multiple style={{ display: 'none' }} onChange={(e) => onAddFiles(e.target.files)} />
             <div
               onClick={() => { if (!addBusy) triggerUpload() }}
               onDragOver={(e) => { e.preventDefault(); if (!addBusy) setDragOver(true) }}
@@ -341,7 +406,7 @@ export default function ManageSchoolBrandPage() {
               style={{ border: `2px dashed ${dragOver ? '#185fa5' : 'var(--border-subtle)'}`, borderRadius: 10, background: dragOver ? 'rgba(24,95,165,0.08)' : 'transparent', padding: '22px 14px', textAlign: 'center', cursor: addBusy ? 'default' : 'pointer', color: 'var(--text-muted)', fontSize: 13 }}
             >
               {addBusy ? 'Uploading...' : (
-                <><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Drag PNG, JPG, SVG, or .docx files here</span><br />or click to choose (Word docs go in the Letterhead category)</>
+                <><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Drag PNG, JPG, SVG, EPS, or .docx files here</span><br />or click to choose (Word docs go in the Letterhead category)</>
               )}
             </div>
             <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--text-muted)' }}>
@@ -353,18 +418,62 @@ export default function ManageSchoolBrandPage() {
 
           <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 12, background: 'var(--surface-2)', marginBottom: 24, padding: 16 }}>
             <h2 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800 }}>Brand colors</h2>
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>Shown as swatches on this school&rsquo;s public brand page and guide. Enter a hex value or use the picker; leave a field blank to remove that color.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 360 }}>
-              {(([['primary', 'Primary'], ['secondary', 'Secondary'], ['accent', 'Accent'], ['text', 'Text']]) as ['primary' | 'secondary' | 'accent' | 'text', string][]).map(([slot, label]) => (
-                <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 82, fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>
-                  <input type="color" value={toColorInputValue(brandColors[slot])} onChange={(e) => setBrandColors((c) => ({ ...c, [slot]: e.target.value }))} aria-label={`${label} color picker`} style={{ width: 40, height: 34, border: '1px solid var(--border-subtle)', borderRadius: 8, background: 'var(--surface-2)', cursor: 'pointer', padding: 2 }} />
-                  <input value={brandColors[slot]} onChange={(e) => setBrandColors((c) => ({ ...c, [slot]: e.target.value }))} placeholder="#003087 or blank" style={{ ...input, width: 170, fontFamily: 'ui-monospace, monospace' }} />
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>Shown as swatches on this school&rsquo;s public brand page and guide. Enter a hex value or use the picker; leave a slot blank to remove that color. Add more palettes for things like spirit colors or an athletics palette.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {palettes.map((p) => {
+                const draft = paletteDrafts[p.id] || new Array(PALETTE_COLOR_SLOTS).fill(null)
+                const isPrimary = p.name.toLowerCase() === 'primary'
+                return (
+                  <div key={p.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, padding: 14, maxWidth: 420 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      {renamingPaletteId === p.id ? (
+                        <>
+                          <input autoFocus value={renamePaletteName} onChange={(e) => setRenamePaletteName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') renamePalette(p.id); if (e.key === 'Escape') setRenamingPaletteId(null) }}
+                            style={{ height: 32, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: 'var(--text-primary)', fontSize: 13, padding: '0 8px' }} />
+                          <button type="button" disabled={paletteActionBusy} onClick={() => renamePalette(p.id)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+                          <button type="button" onClick={() => setRenamingPaletteId(null)} style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 13.5, fontWeight: 800 }}>{p.name}</span>
+                          <button type="button" onClick={() => { setRenamingPaletteId(p.id); setRenamePaletteName(p.name) }} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: '#185fa5', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Rename</button>
+                          {!isPrimary && (
+                            <button type="button" onClick={() => deletePalette(p.id, p.name)} style={{ padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: '#c0362c', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {Array.from({ length: PALETTE_COLOR_SLOTS }).map((_, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 20, fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{i + 1}</span>
+                          <input type="color" value={toColorInputValue(draft[i] || '')}
+                            onChange={(e) => setPaletteDrafts((d) => ({ ...d, [p.id]: draft.map((v, j) => (j === i ? e.target.value : v)) }))}
+                            aria-label={`Color ${i + 1} picker`} style={{ width: 36, height: 32, border: '1px solid var(--border-subtle)', borderRadius: 6, background: 'var(--surface-2)', cursor: 'pointer', padding: 2 }} />
+                          <input value={draft[i] || ''}
+                            onChange={(e) => setPaletteDrafts((d) => ({ ...d, [p.id]: draft.map((v, j) => (j === i ? e.target.value : v)) }))}
+                            placeholder="blank" style={{ ...input, width: 150, fontFamily: 'ui-monospace, monospace' }} />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <button type="button" disabled={paletteBusy === p.id} onClick={() => savePaletteColors(p.id)} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: paletteBusy === p.id ? 'default' : 'pointer', opacity: paletteBusy === p.id ? 0.6 : 1 }}>{paletteBusy === p.id ? 'Saving...' : 'Save colors'}</button>
+                    </div>
+                  </div>
+                )
+              })}
+              {addingPalette ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input autoFocus value={newPaletteName} onChange={(e) => setNewPaletteName(e.target.value)} placeholder="Palette name, e.g. Spirit colors"
+                    onKeyDown={(e) => { if (e.key === 'Enter') createPalette(); if (e.key === 'Escape') setAddingPalette(false) }}
+                    style={{ height: 34, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: 'var(--text-primary)', fontSize: 13, padding: '0 8px', width: 220 }} />
+                  <button type="button" disabled={paletteActionBusy || !newPaletteName.trim()} onClick={createPalette} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Create</button>
+                  <button type="button" onClick={() => { setAddingPalette(false); setNewPaletteName('') }} style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--surface-2)', color: 'var(--text-muted)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
                 </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <button type="button" disabled={colorsBusy} onClick={saveColors} style={{ padding: '7px 16px', borderRadius: 8, border: '1px solid #185fa5', background: '#185fa5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: colorsBusy ? 'default' : 'pointer', opacity: colorsBusy ? 0.6 : 1 }}>{colorsBusy ? 'Saving...' : 'Save colors'}</button>
+              ) : (
+                <button type="button" onClick={() => setAddingPalette(true)} style={{ alignSelf: 'flex-start', padding: '6px 14px', borderRadius: 8, border: '1px solid #185fa5', background: 'transparent', color: '#185fa5', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>+ Add palette</button>
+              )}
             </div>
           </section>
 
@@ -415,6 +524,8 @@ export default function ManageSchoolBrandPage() {
                             <img src={preview} alt={l.name} style={{ maxWidth: '88%', maxHeight: '88%', objectFit: 'contain' }} />
                           ) : l.docx ? (
                             <DocBadge />
+                          ) : l.eps ? (
+                            <EpsBadge />
                           ) : (
                             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>No preview</span>
                           )}
@@ -464,7 +575,7 @@ export default function ManageSchoolBrandPage() {
                                 <button type="button" onClick={() => setCover(l)} disabled={busy === `cover-${l.category}-${l.name}`} style={{ alignSelf: 'flex-start', padding: '3px 8px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: busy === `cover-${l.category}-${l.name}` ? 'default' : 'pointer' }}>Set as cover</button>
                               )}
                               <div style={{ display: 'flex', gap: 6, marginTop: 'auto', flexWrap: 'wrap' }}>
-                                {(['svg', 'png', 'jpg', 'docx'] as LogoFormat[]).map((fmt) => {
+                                {(['svg', 'png', 'jpg', 'docx', 'eps'] as LogoFormat[]).map((fmt) => {
                                   const url = l[fmt]
                                   if (!url) return null
                                   const delBusy = busy === `${l.category}-${l.name}-${fmt}`
@@ -503,6 +614,8 @@ export default function ManageSchoolBrandPage() {
                   <img src={selected.png || selected.jpg || selected.svg || ''} alt={selected.name} onLoad={(e) => setDims({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} style={{ maxWidth: '100%', maxHeight: 420, objectFit: 'contain' }} />
                 ) : selected.docx ? (
                   <DocBadge />
+                ) : selected.eps ? (
+                  <EpsBadge />
                 ) : (
                   <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>No preview</span>
                 )}
@@ -516,7 +629,7 @@ export default function ManageSchoolBrandPage() {
               {selected.cover && <p style={{ margin: '14px 0 0', fontSize: 12, fontWeight: 700, color: '#1f9254' }}>★ Cover image</p>}
 
               <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>File type</p>
-              <p style={{ margin: 0, fontSize: 14 }}>{[selected.svg && 'SVG', selected.png && 'PNG', selected.jpg && 'JPG', selected.docx && 'Word document (.docx)'].filter(Boolean).join(', ') || 'Unknown'}</p>
+              <p style={{ margin: 0, fontSize: 14 }}>{[selected.svg && 'SVG', selected.png && 'PNG', selected.jpg && 'JPG', selected.docx && 'Word document (.docx)', selected.eps && 'Vector file (.eps)'].filter(Boolean).join(', ') || 'Unknown'}</p>
               {(selected.png || selected.jpg || selected.svg) && (
                 <>
                   <p style={{ margin: '16px 0 4px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Dimensions</p>
@@ -548,7 +661,7 @@ export default function ManageSchoolBrandPage() {
                 {!selected.cover && (
                   <button type="button" onClick={async () => { await setCover(selected); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Set as cover</button>
                 )}
-                {(['svg', 'png', 'jpg', 'docx'] as LogoFormat[]).map((fmt) => (selected[fmt] ? (
+                {(['svg', 'png', 'jpg', 'docx', 'eps'] as LogoFormat[]).map((fmt) => (selected[fmt] ? (
                   <button key={fmt} type="button" onClick={async () => { await onDelete(selected, fmt); setSelected(null) }} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: '#b42318', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Delete {fmt.toUpperCase()}</button>
                 ) : null))}
               </div>

@@ -5,24 +5,29 @@ import type { CSSProperties } from 'react'
  * manager brand editor (app/dashboard/brand/[code]).
  */
 
-export const MAX_BRAND_UPLOAD_BYTES = 20 * 1024 * 1024 // 20 MB
+export const MAX_BRAND_UPLOAD_BYTES = 50 * 1024 * 1024 // 50 MB
 
-export type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx'
+export type LogoFormat = 'png' | 'jpg' | 'svg' | 'docx' | 'eps'
 
 export const CONTENT_TYPE: Record<LogoFormat, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
   svg: 'image/svg+xml',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  eps: 'application/postscript',
 }
 
 export function detectFormat(file: File): LogoFormat | null {
   const t = (file.type || '').toLowerCase()
+  // Browsers/OSes report EPS inconsistently (often blank, sometimes
+  // application/postscript or application/eps) -- check the extension first for it.
+  const n = file.name.toLowerCase()
+  if (n.endsWith('.eps')) return 'eps'
   if (t === 'image/png') return 'png'
   if (t === 'image/jpeg') return 'jpg'
   if (t === 'image/svg+xml') return 'svg'
   if (t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx'
-  const n = file.name.toLowerCase()
+  if (t === 'application/postscript' || t === 'application/eps' || t === 'application/x-eps') return 'eps'
   if (n.endsWith('.png')) return 'png'
   if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'jpg'
   if (n.endsWith('.svg')) return 'svg'
@@ -62,7 +67,7 @@ export function previewBg(mode: PreviewBg): CSSProperties {
   }
 }
 
-export const CATEGORY_ORDER = ['Official', 'Wordmark', 'Letterhead', 'Team/Sport', 'Specific', 'Other']
+export const CATEGORY_ORDER = ['Official', 'Wordmark', 'Letterhead', 'PTA', 'Team/Sport', 'Specific', 'Other']
 
 export function orderCategories(cats: string[]): string[] {
   const present = Array.from(new Set(cats))
@@ -71,12 +76,33 @@ export function orderCategories(cats: string[]): string[] {
   return [...known, ...extra]
 }
 
+// Number of color slots in a brand color palette (client-safe copy of the constant in
+// lib/server/brand-palettes.ts -- that file is server-only, so it cannot be imported
+// from client components).
+export const PALETTE_COLOR_SLOTS = 8
+
+function FileBadgeBox({ label, compact }: { label: string; compact: boolean }) {
+  return (
+    <div style={{ width: compact ? 40 : 52, height: compact ? 50 : 64, border: '1px solid #185fa5', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 10 : 12, fontWeight: 800, color: '#185fa5', background: '#ffffff' }}>{label}</div>
+  )
+}
+
 // Small placeholder shown for Word documents, which have no image preview.
 export function DocBadge({ compact = false, muted = '#6b7280' }: { compact?: boolean; muted?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 5 : 8 }}>
-      <div style={{ width: compact ? 40 : 52, height: compact ? 50 : 64, border: '1px solid #185fa5', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? 10 : 12, fontWeight: 800, color: '#185fa5', background: '#ffffff' }}>DOCX</div>
+      <FileBadgeBox label="DOCX" compact={compact} />
       <span style={{ fontSize: compact ? 10.5 : 12, fontWeight: 700, color: muted }}>Word document</span>
+    </div>
+  )
+}
+
+// Small placeholder shown for EPS (vector) files, which also have no browser preview.
+export function EpsBadge({ compact = false, muted = '#6b7280' }: { compact?: boolean; muted?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 5 : 8 }}>
+      <FileBadgeBox label="EPS" compact={compact} />
+      <span style={{ fontSize: compact ? 10.5 : 12, fontWeight: 700, color: muted }}>Vector file (EPS)</span>
     </div>
   )
 }
