@@ -15,14 +15,9 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      # Full-repo eslint currently has many pre-existing errors; keep it visible
-      # without blocking merges until those are cleaned up. Build is the hard gate.
-      - name: Lint (non-blocking)
-        continue-on-error: true
-        run: npm run lint
+      - run: npm run test:signage
       - run: npm run build
         env:
-          # Build-time public placeholders so `next build` can compile without real secrets.
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: build-placeholder-anon-key
           NEXT_PUBLIC_SITE_URL: https://example.com

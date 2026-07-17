@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sanitizeEmailSubject } from '@/lib/escape-html'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 
 const SIGNUP_WINDOW_MS = 60 * 1000
 const SIGNUP_MAX_PER_WINDOW = 8
-const signupAttempts = new Map<string, number[]>()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type SignupRpcResult = {
@@ -20,41 +20,6 @@ type SignupRpcResult = {
   role_name: string | null
   production_title: string | null
   production_start: string | null
-}
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0].trim()
-  return request.headers.get('x-real-ip') || 'unknown'
-}
-
-function isRateLimited(key: string): boolean {
-  const now = Date.now()
-  const prev = signupAttempts.get(key) || []
-  const recent = prev.filter(ts => now - ts < SIGNUP_WINDOW_MS)
-  recent.push(now)
-  signupAttempts.set(key, recent)
-  return recent.length > SIGNUP_MAX_PER_WINDOW
-}
-
-async function isRateLimitedPersistent(
-  supabase: any,
-  key: string
-): Promise<boolean> {
-  const windowStart = new Date(Date.now() - SIGNUP_WINDOW_MS).toISOString()
-  const { error: insertError } = await supabase
-    .from('api_rate_limits')
-    .insert({ scope: 'crew_signup', rate_key: key })
-  if (insertError) return false
-
-  const { count, error: countError } = await supabase
-    .from('api_rate_limits')
-    .select('id', { count: 'exact', head: true })
-    .eq('scope', 'crew_signup')
-    .eq('rate_key', key)
-    .gte('created_at', windowStart)
-  if (countError) return false
-  return (count || 0) > SIGNUP_MAX_PER_WINDOW
 }
 
 export async function POST(
@@ -87,11 +52,17 @@ export async function POST(
     }
     const supabase = createClient(url, key)
 
-    const ip = getClientIp(request)
-    const rateKey = `${num}:${ip}`
-    const persistentLimited = await isRateLimitedPersistent(supabase, rateKey)
-    if (persistentLimited || isRateLimited(rateKey)) {
-      return NextResponse.json({ error: 'Too many signup attempts. Please wait a minute and try again.' }, { status: 429 })
+    const rl = await checkRateLimit(request, {
+      scope: 'crew_signup',
+      max: SIGNUP_MAX_PER_WINDOW,
+      windowMs: SIGNUP_WINDOW_MS,
+      keySuffix: String(num),
+    })
+    if (rl.limited) {
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please wait a minute and try again.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+      )
     }
     const { data: rpcData, error: rpcError } = await supabase.rpc('signup_student_crew_atomic', {
       p_production_number: num,

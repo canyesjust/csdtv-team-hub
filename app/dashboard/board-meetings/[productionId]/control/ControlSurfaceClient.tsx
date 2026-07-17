@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Loader from '../../../components/Loader'
 import { toast } from '@/lib/toast'
-import ControlSurfaceView from './ControlSurfaceView'
 import ConsoleView from './ConsoleView'
 import { dispatchControlSurfaceAction } from '@/lib/board-meetings/control-surface-actions'
 import type { ControlLivePatch } from '@/lib/board-meetings/control-live-bundle'
@@ -85,9 +83,6 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(fn: T, delay
 
 export default function ControlSurfaceClient({ productionId, initialBundle = null }: Props) {
   const supabase = createClient()
-  const searchParams = useSearchParams()
-  // New console is the default; ?v=1 falls back to the classic control surface.
-  const useConsole = searchParams.get('v') !== '1'
   const [bundle, setBundle] = useState<ControlBundle | null>(initialBundle)
   const [resultOverlay, setResultOverlay] = useState<ResultOverlayState | null>(
     initialBundle?.result_overlay ?? null,
@@ -98,8 +93,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   const stableWhenLockedRef = useRef<{
     lower_third_people: ControlBundle['lower_third_people']
   } | null>(null)
-  const [agendaEditMode, setAgendaEditMode] = useState(false)
-  const [agendaEditBusy, setAgendaEditBusy] = useState(false)
   const suppressRealtimeUntilRef = useRef(0)
   // Set once the server confirms go-live committed; while true a stale background
   // read that reports 'prepared' can never knock the meeting off live.
@@ -812,31 +805,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
     }
   }
 
-  const loadAgendaForEdit = useCallback(async () => {
-    const res = await fetch(`/api/board-meetings/${productionId}`)
-    const body = await res.json().catch(() => ({}))
-    if (!res.ok || !Array.isArray(body.items)) {
-      toast((body as { error?: string }).error || 'Failed to load agenda for editing', 'error')
-      return
-    }
-    const agenda_items: ControlAgendaItem[] = body.items
-      .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
-      .map((it: ControlAgendaItem & { sort_order: number }) => ({
-        id: it.id,
-        sort_order: it.sort_order,
-        section_number: it.section_number,
-        section_title: it.section_title,
-        item_number: it.item_number,
-        title: it.title,
-        type: it.type,
-        action_requested: it.action_requested,
-        is_broadcastable: it.is_broadcastable,
-        consent_block: it.consent_block ?? null,
-        suggested_motion_text: it.suggested_motion_text ?? null,
-      }))
-    setBundle(prev => (prev ? { ...prev, agenda_items, items: agenda_items } : prev))
-  }, [productionId])
-
   const patchAgendaItem = useCallback(
     async (itemId: string, patch: Partial<ControlAgendaItem>): Promise<boolean> => {
       setBundle(prev => {
@@ -865,7 +833,6 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
         }
       })
 
-      setAgendaEditBusy(true)
       try {
         const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/${itemId}`, {
           method: 'PATCH',
@@ -879,68 +846,12 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
           return false
         }
         return true
-      } finally {
-        setAgendaEditBusy(false)
+      } catch {
+        void load()
+        return false
       }
     },
     [productionId, load],
-  )
-
-  const moveAgendaItem = useCallback(
-    async (itemId: string, direction: 'up' | 'down') => {
-      if (!bundle) return
-      const ordered = [...bundle.agenda_items].sort((a, b) => a.sort_order - b.sort_order)
-      const idx = ordered.findIndex(it => it.id === itemId)
-      if (idx < 0) return
-      const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-      if (swapIdx < 0 || swapIdx >= ordered.length) return
-
-      const broadcastable = ordered.filter(it => it.is_broadcastable)
-      const bIdx = broadcastable.findIndex(it => it.id === itemId)
-      if (bIdx < 0) return
-      const bSwapIdx = direction === 'up' ? bIdx - 1 : bIdx + 1
-      if (bSwapIdx < 0 || bSwapIdx >= broadcastable.length) return
-
-      const nextBroadcastable = [...broadcastable]
-      ;[nextBroadcastable[bIdx], nextBroadcastable[bSwapIdx]] = [
-        nextBroadcastable[bSwapIdx],
-        nextBroadcastable[bIdx],
-      ]
-
-      const broadcastableIdOrder = new Map(nextBroadcastable.map((it, i) => [it.id, i]))
-      const renumbered = [...ordered]
-        .sort((a, b) => {
-          const aB = broadcastableIdOrder.get(a.id)
-          const bB = broadcastableIdOrder.get(b.id)
-          if (aB != null && bB != null) return aB - bB
-          return a.sort_order - b.sort_order
-        })
-        .map((it, i) => ({ ...it, sort_order: i }))
-
-      setBundle(prev =>
-        prev ? { ...prev, agenda_items: renumbered, items: renumbered } : prev,
-      )
-
-      setAgendaEditBusy(true)
-      try {
-        const res = await fetch(`/api/board-meetings/${productionId}/agenda-items/reorder`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ordered_ids: nextBroadcastable.map(it => it.id),
-            broadcastable_only: true,
-          }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          toast((data as { error?: string }).error || 'Failed to reorder agenda', 'error')
-          void load()
-        }
-      } finally {
-        setAgendaEditBusy(false)
-      }
-    },
-    [bundle, productionId, load],
   )
 
   const onSetAttendance = useCallback(
@@ -1061,51 +972,20 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
   const status = viewBundle.broadcast_state?.status || viewBundle.board_meeting.broadcast_status
   const canControl = viewBundle.board_meeting.agenda_locked && status !== 'archived' && status !== 'cancelled'
 
-  if (useConsole) {
-    return (
-      <ConsoleView
-        productionId={productionId}
-        bundle={viewBundle}
-        busy={busy}
-        canControl={canControl}
-        onAction={onAction}
-        onSetAttendance={onSetAttendance}
-        onConfirmAttendance={onConfirmAttendance}
-        onMarkStreamStarted={onMarkStreamStarted}
-        onPatchAgendaItem={async (itemId, patch) => { await patchAgendaItem(itemId, patch) }}
-        onReorderAgenda={reorderAgendaByIds}
-        onListeningChange={onListeningChange}
-        onPullFromConsent={onPullFromConsent}
-      />
-    )
-  }
-
   return (
-    <ControlSurfaceView
+    <ConsoleView
       productionId={productionId}
       bundle={viewBundle}
       busy={busy}
       canControl={canControl}
       onAction={onAction}
-      agendaEditMode={agendaEditMode}
-      agendaEditBusy={agendaEditBusy}
-      onToggleAgendaEdit={() => {
-        setAgendaEditMode(v => {
-          const next = !v
-          if (next) void loadAgendaForEdit()
-          else void load()
-          return next
-        })
-      }}
-      onPatchAgendaItem={async (itemId, patch) => {
-        await patchAgendaItem(itemId, patch)
-      }}
-      onMoveAgendaItem={moveAgendaItem}
+      onSetAttendance={onSetAttendance}
+      onConfirmAttendance={onConfirmAttendance}
+      onMarkStreamStarted={onMarkStreamStarted}
+      onPatchAgendaItem={async (itemId, patch) => { await patchAgendaItem(itemId, patch) }}
+      onReorderAgenda={reorderAgendaByIds}
       onListeningChange={onListeningChange}
-      onSaveMotionTemplate={async (itemId, suggested_motion_text) => {
-        const ok = await patchAgendaItem(itemId, { suggested_motion_text })
-        if (!ok) throw new Error('save failed')
-      }}
+      onPullFromConsent={onPullFromConsent}
     />
   )
 }
