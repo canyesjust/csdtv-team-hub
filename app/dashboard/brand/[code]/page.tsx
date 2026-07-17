@@ -79,6 +79,9 @@ export default function ManageSchoolBrandPage() {
   const [drawerUploadBusy, setDrawerUploadBusy] = useState(false)
   const [drawerUploadMsg, setDrawerUploadMsg] = useState<string | null>(null)
   const drawerUploadRef = useRef<HTMLInputElement | null>(null)
+  const [mergeTarget, setMergeTarget] = useState('')
+  const [mergeBusy, setMergeBusy] = useState(false)
+  const [mergeMsg, setMergeMsg] = useState<string | null>(null)
   const [fontHeading, setFontHeading] = useState('')
   const [fontBody, setFontBody] = useState('')
   const [fontNotes, setFontNotes] = useState('')
@@ -93,7 +96,7 @@ export default function ManageSchoolBrandPage() {
   const [paletteActionBusy, setPaletteActionBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
-  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null); setDrawerUploadMsg(null) }
+  const openDrawer = (l: Logo) => { setSelected(l); setDims(null); setFileSize(null); setDrawerUploadMsg(null); setMergeTarget(''); setMergeMsg(null) }
 
   useEffect(() => {
     if (!selected) return
@@ -242,6 +245,14 @@ export default function ManageSchoolBrandPage() {
   }, [access, loadDetail])
 
   const existingCategories = useMemo(() => orderCategories([...CATEGORY_PRESETS, ...logos.map((l) => l.category)]), [logos])
+  // Other logos this one could be combined into, sorted for a stable picker order.
+  const mergeOptions = useMemo(
+    () => logos
+      .filter((l) => !selected || l.category !== selected.category || l.name !== selected.name)
+      .slice()
+      .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name)),
+    [logos, selected],
+  )
   const grouped = useMemo(() => {
     const map = new Map<string, Logo[]>()
     for (const l of logos) {
@@ -336,6 +347,33 @@ export default function ManageSchoolBrandPage() {
     }
     setDrawerUploadBusy(false)
     if (drawerUploadRef.current) drawerUploadRef.current.value = ''
+  }
+
+  // Combine the logo open in the drawer into an existing, different logo -- moves every
+  // format from this one onto the target (a rename/re-key; the stored files don't move).
+  const mergeSelected = async () => {
+    if (!selected || !mergeTarget) return
+    const sep = mergeTarget.indexOf('||')
+    if (sep < 0) return
+    const toCategory = mergeTarget.slice(0, sep)
+    const toName = mergeTarget.slice(sep + 2)
+    setMergeBusy(true)
+    setMergeMsg(null)
+    try {
+      const res = await fetch('/api/brand/merge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, fromCategory: selected.category, fromName: selected.name, toCategory, toName }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setMergeMsg(typeof d?.error === 'string' ? d.error : 'Could not combine those logos.'); setMergeBusy(false); return }
+      notify('Logos combined', 'success')
+      await loadDetail()
+      setSelected(null)
+    } catch {
+      setMergeMsg('Could not combine those logos.')
+    } finally {
+      setMergeBusy(false)
+    }
   }
 
   const startEdit = (l: Logo) => { setEditing(`${l.category}||${l.name}`); setEditCategory(l.category); setEditName(l.name); setEditNotes(l.notes || ''); setEditCustom(false) }
@@ -734,6 +772,38 @@ export default function ManageSchoolBrandPage() {
                 {drawerUploadBusy ? 'Uploading...' : '+ Add file'}
               </button>
               {drawerUploadMsg && <p style={{ margin: '8px 0 0', fontSize: 12.5, fontWeight: 600, color: 'var(--text-muted)' }}>{drawerUploadMsg}</p>}
+
+              <p style={{ margin: '20px 0 6px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700 }}>Combine with another logo</p>
+              <p style={{ margin: '0 0 8px', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                If this is really the same logo as one already listed (e.g. this PNG belongs with an existing SVG), pick it below to combine them into one.
+              </p>
+              {mergeOptions.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)' }}>No other logos to combine with.</p>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <select
+                      value={mergeTarget}
+                      onChange={(e) => setMergeTarget(e.target.value)}
+                      style={{ ...input, flex: '1 1 220px' }}
+                    >
+                      <option value="">Choose a logo...</option>
+                      {mergeOptions.map((l) => (
+                        <option key={`${l.category}||${l.name}`} value={`${l.category}||${l.name}`}>{l.category} — {l.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={mergeBusy || !mergeTarget}
+                      onClick={mergeSelected}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'transparent', color: mergeTarget ? '#185fa5' : 'var(--text-muted)', fontSize: 13, fontWeight: 700, cursor: mergeBusy || !mergeTarget ? 'default' : 'pointer' }}
+                    >
+                      {mergeBusy ? 'Combining...' : 'Combine'}
+                    </button>
+                  </div>
+                  {mergeMsg && <p style={{ margin: '8px 0 0', fontSize: 12.5, fontWeight: 600, color: 'var(--text-muted)' }}>{mergeMsg}</p>}
+                </>
+              )}
             </div>
           </div>
         </div>
