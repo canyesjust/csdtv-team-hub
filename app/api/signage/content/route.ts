@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import {
@@ -22,9 +22,13 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const form = await request.formData()
+  const siteId = String(form.get('site_id') ?? '') || null
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
+
   const title = String(form.get('title') ?? '').trim()
   const startDate = String(form.get('start_date') ?? '').trim()
   const endDate = String(form.get('end_date') ?? '').trim()
@@ -134,7 +138,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await service.from('signage_content').insert({
     type,
-    site_id: String(form.get('site_id') ?? '') || null,
+    site_id: siteId,
     title: title || null,
     media_path: mediaPath,
     thumb_path: thumbPath,

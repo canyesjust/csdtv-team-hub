@@ -5,6 +5,7 @@ import { isProductionInDateWindow, normalizeProductionDatetimeFields } from '@/l
 import { SUPABASE_NOT_INACTIVE_PRODUCTION_STATUSES } from '@/lib/productions/status-filters'
 import { fetchTaskAssignments } from '@/lib/task-assignments'
 import { timingSafeEqualStr } from '@/lib/server/security'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 import { SIGNAGE_TASKS_CACHE_HEADERS } from '@/lib/signage/public-api-cache'
 
 export const dynamic = 'force-dynamic'
@@ -24,19 +25,35 @@ function absoluteIntakeUrl(stored: string | null): string | null {
   return t
 }
 
+function bearerToken(request: Request): string | null {
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  return authHeader.slice(7)
+}
+
 export async function GET(request: Request) {
   const expectedKey = process.env.SIGNAGE_TASKS_KEY
   if (!expectedKey) {
     return NextResponse.json({ error: 'SIGNAGE_TASKS_KEY not configured' }, { status: 500 })
   }
 
-  // Prefer an Authorization: Bearer <key> header (keeps the secret out of URLs
-  // and access logs); fall back to the legacy ?k= query param for existing callers.
-  const authHeader = request.headers.get('authorization')
-  const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-  const incomingKey = bearer ?? new URL(request.url).searchParams.get('k')
+  // Bearer only — page URLs may still carry ?k= for players; the client must
+  // send that value as Authorization (keeps the secret out of API access logs).
+  const incomingKey = bearerToken(request)
   if (!timingSafeEqualStr(incomingKey, expectedKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const rl = await checkRateLimit(request, {
+    scope: 'signage_tasks_data',
+    max: 120,
+    windowMs: 60 * 1000,
+  })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

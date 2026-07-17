@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normalizeSignageLiveTargeting } from '@/lib/signage/live-targeting'
 import { isSignageStreamUrl, normalizeSignageStreamUrl } from '@/lib/signage/stream-url'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function PATCH(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const body = await request.json().catch(() => null)
   if (!body || typeof body !== 'object') {
@@ -19,6 +19,8 @@ export async function PATCH(request: NextRequest) {
   if (!siteId) {
     return NextResponse.json({ error: 'site_id is required' }, { status: 400 })
   }
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (typeof body.is_live === 'boolean') patch.is_live = body.is_live
@@ -73,10 +75,12 @@ export async function PATCH(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const siteId = new URL(request.url).searchParams.get('site_id')
   if (!siteId) return NextResponse.json({ error: 'site_id is required' }, { status: 400 })
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
 
   const { data, error } = await service.from('signage_live').select('*').eq('site_id', siteId).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

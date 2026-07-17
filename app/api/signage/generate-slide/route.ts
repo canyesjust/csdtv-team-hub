@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 import {
   buildSlidePrompt,
   validateSlideHtml,
@@ -44,7 +44,7 @@ async function callGenerator(system: string, user: string): Promise<{ html?: str
 export async function POST(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user: teamUser, service } = auth
 
   const body = await request.json().catch(() => ({}))
   const prompt = String(body.prompt ?? '').trim()
@@ -64,6 +64,8 @@ export async function POST(request: NextRequest) {
   if (!VALID_TYPES.has(type)) return NextResponse.json({ error: 'Invalid slide type.' }, { status: 400 })
   if (!VALID_MOTION.has(motion)) return NextResponse.json({ error: 'Invalid motion setting.' }, { status: 400 })
   if (!siteId) return NextResponse.json({ error: 'Missing site.' }, { status: 400 })
+  const siteCheck = await assertCanAccessSignageSite(service, teamUser, siteId)
+  if ('error' in siteCheck) return siteCheck.error
 
   // Brand: school primary_color (authoritative) → site bg_color → navy.
   const { data: site } = await service

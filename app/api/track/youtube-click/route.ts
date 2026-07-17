@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 
 function isAllowedYoutubeHost(host: string): boolean {
   const h = host.toLowerCase()
@@ -14,6 +15,18 @@ function isAllowedYoutubeHost(host: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  const rl = await checkRateLimit(request, {
+    scope: 'youtube_click',
+    max: 60,
+    windowMs: 60 * 1000,
+  })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceKey) {

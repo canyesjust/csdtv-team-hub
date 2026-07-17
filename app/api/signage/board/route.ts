@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { timingSafeEqualStr } from '@/lib/server/security'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
+function bearerToken(request: Request): string | null {
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  return authHeader.slice(7).trim()
+}
+
 // Token-gated data for the public /signage broadcast board. The board used to
 // read productions / team / schedules directly with the anon key, which exposed
-// that data to anyone. It now fetches here with a shared token (?k=), and the
-// server reads via the service role. Anon RLS on those tables is then closed.
+// that data to anyone. It now fetches here with a shared token as Bearer
+// Authorization (page URLs may still use ?k= for players). Anon RLS on those
+// tables is then closed.
 export async function GET(request: NextRequest) {
   const service = getServiceSupabaseClient()
   if (!service) return NextResponse.json({ error: 'Server not configured' }, { status: 500 })
 
-  const url = new URL(request.url)
-  const token = (url.searchParams.get('k') || '').trim()
+  const token = bearerToken(request) || ''
 
   const { data: row } = await service
     .from('app_settings')
@@ -25,7 +32,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const rl = await checkRateLimit(request, {
+    scope: 'signage_board_data',
+    max: 120,
+    windowMs: 60 * 1000,
+  })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
+  }
+
   // Date window for schedule rows (client passes its local range).
+  const url = new URL(request.url)
   const start = (url.searchParams.get('start') || '').trim()
   const end = (url.searchParams.get('end') || '').trim()
 

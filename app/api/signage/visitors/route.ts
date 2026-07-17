@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import {
+  assertCanAccessSignageSite,
+  loadSignageRowSiteId,
+  requireSignageEditorApi,
+} from '@/lib/signage/server-auth'
 import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 
 export const dynamic = 'force-dynamic'
@@ -7,8 +11,10 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
   const body = await request.json()
+  const siteCheck = await assertCanAccessSignageSite(service, user, body.site_id || null)
+  if ('error' in siteCheck) return siteCheck.error
   const { data, error } = await service.from('signage_visitors').insert({
     name: body.name,
     site_id: body.site_id || null,
@@ -24,9 +30,12 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
   const body = await request.json()
   if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const siteId = await loadSignageRowSiteId(service, 'signage_visitors', body.id)
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
   const { data, error } = await service.from('signage_visitors').update({
     name: body.name,
     note: body.note,
@@ -42,11 +51,14 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
   const id = new URL(request.url).searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const siteId = await loadSignageRowSiteId(service, 'signage_visitors', id)
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
   const { error } = await service.from('signage_visitors').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  await markScreensDirty(service, { all: true })
+  await markScreensDirty(service, siteId ? { siteId } : { all: true })
   return NextResponse.json({ success: true })
 }

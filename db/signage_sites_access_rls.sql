@@ -1,26 +1,10 @@
 -- ============================================================================
--- Per-site SELECT scoping for signage (the deferred "signage-only role" phase).
--- Idempotent. REVIEW, then run in Supabase. Test with a NON-manager account
--- before relying on it.
+-- Per-site SELECT scoping for signage.
+-- PROMOTED to supabase/migrations/20260717180000_signage_site_access_select_rls.sql
+-- Prefer applying via migrations going forward. This file remains for reference.
 --
--- What this does
---   * Managers (team.role = 'Manager') keep full visibility of every site.
---   * Everyone else sees only rows for sites they've been granted via
---     public.signage_site_access. A user with NO grants sees nothing in the
---     site-scoped tables (the app layer falls back to "all sites" for legacy
---     approvers, but the database is strict — grant sites explicitly).
---   * Rows with a NULL site_id stay visible to everyone (defensive; all seeded
---     rows were stamped with the CIC site in signage_sites_foundation.sql).
---
--- What this does NOT change
---   * Writes. The app performs all signage writes through the service-role key
---     (server API routes gated by requireManagerApi / requireSignageApproverApi),
---     which bypasses RLS. The permissive "_wr" policies from cic_signage.sql are
---     left untouched so nothing breaks.
---   * signage_live / signage_settings — these are not site-scoped.
---
--- Rollback: re-run cic_signage.sql (its DO block recreates the open "_sel"
--- policies), or see the commented block at the bottom.
+-- App writes: gated in lib/signage/server-auth.ts → assertCanAccessSignageSite
+-- (service-role API routes bypass RLS).
 -- ============================================================================
 
 -- 1. Helper: is the current auth user a Manager?

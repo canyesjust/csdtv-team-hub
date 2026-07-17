@@ -1,6 +1,48 @@
-import { getAuthenticatedTeamUser, isManagerRole } from '@/lib/server/auth'
+import { getAuthenticatedTeamUser, isManagerRole, type TeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+
+/**
+ * Mirror of SQL `signage_can_access_site` for service-role write routes.
+ * Managers: all sites. No grants: all sites (legacy). With grants: only those sites.
+ * Null site_id is allowed (legacy unscoped rows).
+ */
+export async function assertCanAccessSignageSite(
+  service: SupabaseClient,
+  user: TeamUser,
+  siteId: string | null | undefined,
+): Promise<{ ok: true } | { error: NextResponse }> {
+  if (!siteId) return { ok: true }
+  if (isManagerRole(user.role)) return { ok: true }
+
+  const { data: grants, error } = await service
+    .from('signage_site_access')
+    .select('site_id')
+    .eq('team_id', user.id)
+  if (error) {
+    return { error: NextResponse.json({ error: 'Failed to check site access' }, { status: 500 }) }
+  }
+  if (!grants || grants.length === 0) return { ok: true }
+  if (grants.some((g) => g.site_id === siteId)) return { ok: true }
+  return { error: NextResponse.json({ error: 'Forbidden for this site' }, { status: 403 }) }
+}
+
+/** Look up site_id on a row before mutate/delete. */
+export async function loadSignageRowSiteId(
+  service: SupabaseClient,
+  table:
+    | 'signage_areas'
+    | 'signage_screens'
+    | 'signage_content'
+    | 'signage_announcements'
+    | 'signage_wayfinding'
+    | 'signage_visitors',
+  id: string,
+): Promise<string | null | undefined> {
+  const { data } = await service.from(table).select('site_id').eq('id', id).maybeSingle()
+  return data?.site_id as string | null | undefined
+}
 
 export async function requireManagerApi() {
   const user = await getAuthenticatedTeamUser()

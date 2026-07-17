@@ -44,9 +44,12 @@ Deno.serve(async (req) => {
 
   const digestUrl = `${SITE_URL.replace(/\/$/, "")}/api/cron/daily-staff-digest`;
   const cronSecret = Deno.env.get("CRON_SECRET");
-  const digestHeaders: Record<string, string> = cronSecret
-    ? { Authorization: `Bearer ${cronSecret}` }
-    : { "x-vercel-cron": "1" };
+  if (!cronSecret) {
+    return json({ error: "CRON_SECRET not configured on edge function" }, 500);
+  }
+  const digestHeaders: Record<string, string> = {
+    Authorization: `Bearer ${cronSecret}`,
+  };
 
   const res = await fetch(digestUrl, { method: "GET", headers: digestHeaders });
   const text = await res.text();

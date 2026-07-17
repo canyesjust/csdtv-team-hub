@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AbleSignApiError } from '@/lib/server/ablesign'
 import { syncHubScreenToAbleSign, writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
 import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { requireSignageEditorApi, assertCanAccessSignageSite } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +12,7 @@ export async function POST(
 ) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const { id } = await context.params
   const { data: screen, error: loadError } = await service
@@ -24,6 +24,9 @@ export async function POST(
   if (loadError || !screen) {
     return NextResponse.json({ error: loadError?.message || 'Screen not found' }, { status: 404 })
   }
+
+  const siteCheck = await assertCanAccessSignageSite(service, user, screen.site_id)
+  if ('error' in siteCheck) return siteCheck.error
 
   if (!screen.ablesign_screen_id) {
     return NextResponse.json(

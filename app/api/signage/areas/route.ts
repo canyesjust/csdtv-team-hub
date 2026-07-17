@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import {
+  assertCanAccessSignageSite,
+  loadSignageRowSiteId,
+  requireSignageEditorApi,
+} from '@/lib/signage/server-auth'
 import { slugify } from '@/lib/signage/slug'
 
 export const dynamic = 'force-dynamic'
@@ -29,11 +33,14 @@ async function uniqueAreaSlug(service: SupabaseClient, base: string, excludeId?:
 export async function POST(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
   const body = await request.json()
   if (!body.name || !String(body.name).trim()) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
   }
+
+  const siteCheck = await assertCanAccessSignageSite(service, user, body.site_id || null)
+  if ('error' in siteCheck) return siteCheck.error
 
   // Base slug from whatever the form sent (name-derived), then location-prefixed.
   let base = slugify(body.slug || body.name)
@@ -59,9 +66,12 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
   const body = await request.json()
   if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const siteId = await loadSignageRowSiteId(service, 'signage_areas', body.id)
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
   const slug = body.slug !== undefined
     ? await uniqueAreaSlug(service, slugify(body.slug || body.name || ''), body.id)
     : undefined
@@ -79,10 +89,13 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const siteId = await loadSignageRowSiteId(service, 'signage_areas', id)
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
   const { error } = await service.from('signage_areas').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ success: true })

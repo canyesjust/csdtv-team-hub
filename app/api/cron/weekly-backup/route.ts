@@ -1,24 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { runWeeklyBackup } from '@/lib/weekly-backup/run-backup'
-import { timingSafeEqualStr } from '@/lib/server/security'
+import { verifyCronBearer } from '@/lib/server/cron-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
-
-function verifyCron(request: Request): boolean {
-  const vercelCron = request.headers.get('x-vercel-cron')
-  if (vercelCron === '1') return true
-
-  const auth = request.headers.get('authorization')
-  if (!auth?.startsWith('Bearer ')) return false
-
-  const token = auth.slice('Bearer '.length)
-  if (timingSafeEqualStr(token, process.env.CRON_SECRET)) return true
-  if (timingSafeEqualStr(token, process.env.SUPABASE_SERVICE_ROLE_KEY)) return true
-
-  return false
-}
 
 /**
  * Weekly compressed JSON backup to Supabase Storage (team-hub-backups).
@@ -30,7 +16,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, skipped: true, reason: 'WEEKLY_BACKUP_DISABLED' })
   }
 
-  if (!verifyCron(request)) {
+  if (!verifyCronBearer(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

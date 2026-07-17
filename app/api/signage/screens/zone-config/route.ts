@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import {
+  assertCanAccessSignageSite,
+  loadSignageRowSiteId,
+  requireSignageEditorApi,
+} from '@/lib/signage/server-auth'
 import { resolveZoneConfig, isDefaultZoneConfig } from '@/lib/signage/zones'
 
 export const dynamic = 'force-dynamic'
@@ -14,6 +18,10 @@ export async function PATCH(request: NextRequest) {
   if (!body || typeof body.id !== 'string' || !body.id) {
     return NextResponse.json({ error: 'id required' }, { status: 400 })
   }
+
+  const siteId = await loadSignageRowSiteId(auth.service, 'signage_screens', body.id)
+  const siteCheck = await assertCanAccessSignageSite(auth.service, auth.user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
 
   // Validate through the shared resolver. Store NULL when the arrangement equals
   // the default, so a reset leaves no row-level override.

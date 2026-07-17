@@ -1,10 +1,5 @@
-/**
- * Manual "Regenerate & Push" for one screen (admin button). Renders the screen's
- * self-contained HTML and pushes it to AbleSign as an HTML web app, bypassing the
- * content-hash skip (force) so staff always get an immediate, fresh push.
- */
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { renderAndPushScreen } from '@/lib/signage/push-screen'
 import { buildScreenHtml } from '@/lib/signage/build-screen-html'
 
@@ -18,9 +13,17 @@ export async function POST(
 ) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const { code } = await context.params
+  const { data: screen } = await service
+    .from('signage_screens')
+    .select('site_id')
+    .eq('code', code)
+    .maybeSingle()
+  const siteCheck = await assertCanAccessSignageSite(service, user, screen?.site_id)
+  if ('error' in siteCheck) return siteCheck.error
+
   const result = await renderAndPushScreen(service, code, { trigger: 'manual', force: true })
 
   if (!result.ok) {
@@ -39,9 +42,16 @@ export async function GET(
 ) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const { code } = await context.params
+  const { data: screen } = await service
+    .from('signage_screens')
+    .select('site_id')
+    .eq('code', code)
+    .maybeSingle()
+  const siteCheck = await assertCanAccessSignageSite(service, user, screen?.site_id)
+  if ('error' in siteCheck) return siteCheck.error
   const built = await buildScreenHtml(service, code)
   if ('error' in built) {
     return NextResponse.json({ error: built.error }, { status: built.error === 'not_found' ? 404 : 500 })

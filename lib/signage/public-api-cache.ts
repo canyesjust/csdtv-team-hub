@@ -18,7 +18,7 @@ export const SIGNAGE_TAKEOVER_CACHE_HEADERS = {
   'Cache-Control': 'public, s-maxage=3, stale-while-revalidate=10',
 } as const
 
-/** Task board polls every 60s and is identical for every screen (keyed by ?k=) —
+/** Task board polls every 60s and is identical for every screen (Bearer token) —
  * a 30s edge cache dedupes concurrent displays and cuts the ~7 DB queries per call. */
 export const SIGNAGE_TASKS_CACHE_HEADERS = {
   'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',

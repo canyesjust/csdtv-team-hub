@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi, requireSignageApproverApi } from '@/lib/signage/server-auth'
+import {
+  assertCanAccessSignageSite,
+  requireSignageEditorApi,
+  requireSignageApproverApi,
+} from '@/lib/signage/server-auth'
 import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { emailSignageSubmitterDecision } from '@/lib/signage/email'
@@ -30,6 +34,9 @@ export async function PATCH(
 
   const { data: existing } = await service.from('signage_content').select('*').eq('id', id).maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const siteCheck = await assertCanAccessSignageSite(service, user, existing.site_id)
+  if ('error' in siteCheck) return siteCheck.error
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
@@ -115,10 +122,14 @@ export async function DELETE(
 ) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
   const { id } = await params
 
   const { data: row } = await service.from('signage_content').select('media_path, thumb_path, site_id').eq('id', id).maybeSingle()
+  if (row) {
+    const siteCheck = await assertCanAccessSignageSite(service, user, row.site_id)
+    if ('error' in siteCheck) return siteCheck.error
+  }
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const paths = [row.media_path, row.thumb_path].filter((p): p is string => Boolean(p && !p.startsWith('html/')))

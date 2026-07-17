@@ -43,9 +43,12 @@ Deno.serve(async req => {
 
   const backupUrl = `${SITE_URL.replace(/\/$/, '')}/api/cron/weekly-backup`
   const cronSecret = Deno.env.get('CRON_SECRET')
-  const headers: Record<string, string> = cronSecret
-    ? { Authorization: `Bearer ${cronSecret}` }
-    : { 'x-vercel-cron': '1' }
+  if (!cronSecret) {
+    return json({ error: 'CRON_SECRET not configured on edge function' }, 500)
+  }
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${cronSecret}`,
+  }
 
   const res = await fetch(backupUrl, { method: 'GET', headers })
   const text = await res.text()

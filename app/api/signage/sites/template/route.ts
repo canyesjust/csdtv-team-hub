@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
   const siteId = body.site_id ? String(body.site_id) : ''
   if (!siteId) return NextResponse.json({ error: 'site_id required' }, { status: 400 })
+  const siteCheck = await assertCanAccessSignageSite(auth.service, auth.user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
 
   const update: Record<string, unknown> = {}
   if (body.default_layout !== undefined) {

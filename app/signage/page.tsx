@@ -106,8 +106,12 @@ export default function SignagePage() {
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
     const token = params.get('k') || ''
     const boardRes = await fetch(
-      `/api/signage/board?k=${encodeURIComponent(token)}&start=${rangeStart}&end=${rangeEnd}`,
-      { cache: 'no-store', credentials: 'omit' },
+      `/api/signage/board?start=${rangeStart}&end=${rangeEnd}`,
+      {
+        cache: 'no-store',
+        credentials: 'omit',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
     )
     if (!boardRes.ok) {
       setUnauthorized(true)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { clampDisplaySeconds } from '@/lib/signage/content-display'
 
@@ -17,9 +17,13 @@ const SAFE_THUMB = /^[a-f0-9-]+-thumb\.jpg$/i
 export async function POST(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
+  const siteId = body.site_id ? String(body.site_id) : null
+  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
+
 
   const mediaPath = String(body.media_path || '')
   if (!SAFE_VIDEO.test(mediaPath)) {
@@ -49,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await service.from('signage_content').insert({
     type: 'video',
-    site_id: body.site_id ? String(body.site_id) : null,
+    site_id: siteId,
     title: body.title ? String(body.title) : null,
     media_path: mediaPath,
     thumb_path: thumbPath,

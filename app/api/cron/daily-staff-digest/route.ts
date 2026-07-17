@@ -8,26 +8,9 @@ import {
   todayKeyInTz,
 } from '@/lib/daily-staff-digest'
 import { loadDailyDigestContext } from '@/lib/load-daily-digest-context'
-import { timingSafeEqualStr } from '@/lib/server/security'
+import { verifyCronBearer } from '@/lib/server/cron-auth'
 
 export const dynamic = 'force-dynamic'
-
-function verifyCron(request: Request): boolean {
-  // Vercel Cron requests include this header; accept it for platform-scheduled runs.
-  const vercelCron = request.headers.get('x-vercel-cron')
-  if (vercelCron === '1') return true
-
-  const auth = request.headers.get('authorization')
-  if (!auth?.startsWith('Bearer ')) return false
-
-  const token = auth.slice('Bearer '.length)
-  if (timingSafeEqualStr(token, process.env.CRON_SECRET)) return true
-
-  // Supabase pg_cron can call this route with the service role key (stored only in DB cron job).
-  if (timingSafeEqualStr(token, process.env.SUPABASE_SERVICE_ROLE_KEY)) return true
-
-  return false
-}
 
 function parseSendHour(): number {
   const raw = parseInt(process.env.DAILY_DIGEST_LOCAL_HOUR ?? '8', 10)
@@ -41,8 +24,8 @@ function shouldEnforceLocalHour(): boolean {
 
 /**
  * Scheduled daily email to active staff (personalized).
- * Protect with CRON_SECRET: Authorization: Bearer <CRON_SECRET>
- * Also accepts Vercel's x-vercel-cron header for platform cron invocations.
+ * Protect with Authorization: Bearer <CRON_SECRET> (or service-role key).
+ * Does not trust x-vercel-cron (spoofable).
  *
  * Sends once per **weekday** (Mon–Fri). Scheduled via Supabase pg_cron → `daily-digest-cron` edge
  * function (see db/daily_digest_cron.sql). Vercel Cron is not used (Hobby plan allows one run/day only).
@@ -50,7 +33,7 @@ function shouldEnforceLocalHour(): boolean {
  * Optional: set DAILY_DIGEST_ENFORCE_LOCAL_HOUR=1 to require local hour >= DAILY_DIGEST_LOCAL_HOUR.
  *
  * Env:
- * - CRON_SECRET (optional if only using Vercel cron header verification)
+ * - CRON_SECRET — required on the edge function that calls this route
  * - DAILY_DIGEST_TIMEZONE (default America/Denver) — send time + "today" in the email
  * - DAILY_DIGEST_LOCAL_HOUR (default 8) — 0–23 local wall-clock hour (only used when DAILY_DIGEST_ENFORCE_LOCAL_HOUR=1)
  * - DAILY_DIGEST_ENFORCE_LOCAL_HOUR=1 — enable local-hour gating
@@ -63,7 +46,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, skipped: true, reason: 'DAILY_DIGEST_DISABLED' })
   }
 
-  if (!verifyCron(request)) {
+  if (!verifyCronBearer(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
