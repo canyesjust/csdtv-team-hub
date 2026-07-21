@@ -115,7 +115,7 @@ export default function SignageLayoutBuilderPage() {
           {selected && (
             <div style={{ ...s.card, display: 'grid', gap: 12 }}>
               <h3 style={s.h3}>Right rail (top to bottom)</h3>
-              <p style={{ fontSize: 11.5, color: s.muted, margin: 0 }}>The big media cell on the left is fixed. Choose what fills each of the three rail cells and the bottom band.</p>
+              <p style={{ fontSize: 11.5, color: s.muted, margin: 0 }}>The big media cell on the left is fixed. Choose what fills each of the three rail cells and the bottom band. Set a rail cell to &ldquo;None&rdquo; to leave it empty — the remaining rail cell(s) expand to fill the freed space.</p>
               {railSelect('railTop', 'Rail — top')}
               {railSelect('railMid', 'Rail — middle')}
               {railSelect('railBottom', 'Rail — bottom')}

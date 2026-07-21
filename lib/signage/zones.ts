@@ -7,8 +7,11 @@
 // Both renderers (ScreenClient + build-screen-html) and the builder UI import it,
 // so the catalog can't drift.
 
-// Widgets that fit a narrow/tall rail cell.
-export const RAIL_WIDGETS = ['brand', 'weather', 'directions', 'announcements', 'board', 'spotlight'] as const
+// Widgets that fit a narrow/tall rail cell. 'none' leaves the slot empty so the
+// rail's other flex:1 cell(s) — see .cic-z2-spot in signage-screen.css — expand
+// to fill the freed space; the fixed-height cells (brand, weather) just shrink
+// the column's used height instead of growing.
+export const RAIL_WIDGETS = ['none', 'brand', 'weather', 'directions', 'announcements', 'board', 'spotlight'] as const
 export type RailWidget = (typeof RAIL_WIDGETS)[number]
 
 // Widgets that fit the wide/short bottom band.
@@ -32,6 +35,7 @@ export const DEFAULT_ZONE_CONFIG: ZoneConfig = {
 }
 
 export const RAIL_WIDGET_LABELS: Record<RailWidget, string> = {
+  none: 'None (leave empty, let others expand)',
   brand: 'Brand & clock',
   weather: 'Weather',
   directions: 'Directions',

@@ -868,6 +868,7 @@ function RailWidgetView({ widget, feed, logoUrl, clock, dateStr }: {
   dateStr: string
 }) {
   switch (widget) {
+    case 'none': return null
     case 'brand': return <Zoned2BrandBox logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
     case 'weather': return <Zoned2Weather weather={feed.weather} />
     case 'board': return <Zoned2Rotator board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />

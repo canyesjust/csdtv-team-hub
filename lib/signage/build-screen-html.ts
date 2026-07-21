@@ -468,6 +468,7 @@ function railSpotlightHtml(feed: Feed): string {
 
 function railWidgetHtml(key: RailWidget, feed: Feed, ctx: { dateStr: string }): string {
   switch (key) {
+    case 'none': return ''
     case 'brand': return zoned2BrandBox({ logoUrl: feed.screen.logo_url, dateStr: ctx.dateStr })
     case 'weather': return zoned2Weather(feed.weather)
     case 'board': return zoned2Rail(feed)
