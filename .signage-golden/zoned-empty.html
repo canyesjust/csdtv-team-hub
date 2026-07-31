@@ -2022,7 +2022,7 @@
 .cic-screen.layout-zoned2 .z2wx-rain { opacity: 0.55; }
 </style></head><body><div class="cic-screen layout-zoned cic-theme-primary" style="--navy:#162844;--panel:#1e3649;--accent:#96b7c8"><div class="sig-glow" aria-hidden="true"><div class="sig-glow__blob sig-glow__b1"></div><div class="sig-glow__blob sig-glow__b2"></div><div class="sig-glow__blob sig-glow__b3"></div></div><div class="cic-screen-content"><div class="cic-zoned-stage"><div class="cic-tvhead cic-zhead"><div class="cic-zhead-id"><div class="cic-logo"><img src="https://example.org/logo.png" alt=""></div><span class="cic-zhead-area">West Front</span></div><div class="cic-zhead-welcome"><span class="cic-confetti-icon" aria-hidden>✦</span><span>Welcome to <b>Canyons Innovation Center</b></span></div><div class="cic-head-right"><div class="cic-wx"><span aria-hidden>🌤</span></div><div class="cic-clk" data-clock></div></div></div><div class="cic-body"><div class="cic-media16" data-carousel style="--crossfade-ms:700ms"><div class="cic-media-overlay"><div class="cic-msub">No media scheduled</div></div></div><div class="cic-railcol"><div class="cic-rail cic-rail-ann"><div class="cic-railhd">Announcements</div><div class="cic-empty-muted">No announcements</div></div></div></div><div class="cic-ticker"><span class="cic-ticker-pill" aria-hidden>C</span><div class="cic-ticker-scroll"><div class="cic-tickin">Canyons Innovation Center</div></div></div></div></div></div><script>
 (function(){
-  var DATA = JSON.parse("{\"media\":[],\"layout\":\"zoned\",\"headings\":[\"Find your way around Canyons Innovation Center\"],\"crossfadeMs\":700,\"headingRotateMs\":3500,\"defaultSeconds\":10,\"takeoverUrl\":\"https://www.csdtvstaff.org/api/signage/screen/westfront/takeover\"}");
+  var DATA = JSON.parse("{\"media\":[],\"layout\":\"zoned\",\"headings\":[\"Find your way around Canyons Innovation Center\"],\"crossfadeMs\":700,\"headingRotateMs\":3500,\"defaultSeconds\":10,\"takeoverUrl\":\"https://www.csdtvstaff.org/api/signage/screen/westfront/takeover\",\"takeoverPollMs\":600000}");
 
   // ---- Clock (always Mountain Time, never the device timezone) ----
   var clockEls = document.querySelectorAll('[data-clock]');
@@ -2221,12 +2221,21 @@
   }
 
   // ---- Live / board takeover poller (best-effort, online-only enhancement) ----
-  // Every 5s ask the Hub whether this screen should show a live stream or the
-  // board meeting. On ANY network error we do nothing and keep playing the baked
-  // content, so the offline guarantee holds. The overlay only rebuilds when the
-  // takeover actually changes (keyed by its JSON), never on every poll.
+  // Ask the Hub whether this screen should show a live stream or the board
+  // meeting. A real start/stop is pushed to this screen as fresh HTML the
+  // moment an operator flips it, so this poll is a safety net for a missed
+  // push, not the primary delivery path — it can run slow (TAKEOVER_IDLE_MS)
+  // most of the time. Once a takeover is actually seen, it switches itself to
+  // TAKEOVER_ACTIVE_MS so a missed "stop" push still gets caught in seconds,
+  // then drops back to slow once it sees things are clear again. On ANY
+  // network error we do nothing and keep playing the baked content, so the
+  // offline guarantee holds. The overlay only rebuilds when the takeover
+  // actually changes (keyed by its JSON), never on every poll.
   if(DATA.takeoverUrl){
+    var TAKEOVER_ACTIVE_MS = 5000;
+    var TAKEOVER_IDLE_MS = 600000;
     var takeoverKey = null;
+    var takeoverTimer = null;
     var overlayEl = null;
     var hlsInstance = null;
     var hlsScript = null;
@@ -2301,6 +2310,11 @@
       }
     }
 
+    function armTakeoverPoll(ms){
+      if(takeoverTimer) clearInterval(takeoverTimer);
+      takeoverTimer = setInterval(pollTakeover, ms);
+    }
+
     function pollTakeover(){
       fetch(DATA.takeoverUrl, { cache: 'no-store' }).then(function(res){
         if(!res.ok) return;
@@ -2309,14 +2323,19 @@
         if(!payload) return;
         var tk = payload.takeover || null;
         var key = tk ? JSON.stringify(tk) : null;
-        if(key === takeoverKey) return;
-        takeoverKey = key;
-        buildOverlay(tk);
-      }).catch(function(){ /* offline: keep playing baked content */ });
+        if(key !== takeoverKey){
+          takeoverKey = key;
+          buildOverlay(tk);
+        }
+        // Re-derive the cadence from ground truth on every response, so a
+        // screen that missed the "start" or "stop" push still lands on the
+        // right interval as soon as its next poll goes through.
+        armTakeoverPoll(tk ? TAKEOVER_ACTIVE_MS : TAKEOVER_IDLE_MS);
+      }).catch(function(){ /* offline: keep playing baked content, keep current cadence */ });
     }
 
     pollTakeover();
-    setInterval(pollTakeover, 5000);
+    armTakeoverPoll(DATA.takeoverPollMs || TAKEOVER_IDLE_MS);
   }
 })();
 </script></body></html>

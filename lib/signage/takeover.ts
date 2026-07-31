@@ -9,6 +9,16 @@ import { normalizeSignageStreamUrl } from './stream-url'
 // own (instead of staying stuck on the pre-roll all day).
 export const TAKEOVER_STALE_MS = 10 * 60 * 1000
 
+// Poll cadence for the baked HTML's `/takeover` check (see build-screen-html.ts
+// and app/api/signage/screen/[code]/takeover/route.ts). A real start/stop is
+// delivered near-instantly by pushing fresh HTML the moment an operator flips
+// board-takeover or CSDtv-live (see lib/signage/takeover-push.ts) — polling is
+// only the safety net for a missed push, so it can afford to be slow while
+// idle and only needs to be fast while a takeover is actually live, so a
+// missed "stop" push still gets caught quickly instead of staying stuck.
+export const TAKEOVER_POLL_ACTIVE_MS = 5000
+export const TAKEOVER_POLL_IDLE_MS = 10 * 60 * 1000
+
 // Minimal shape of a signage_live row for takeover resolution. It extends the
 // targeting fields so signageLiveMatchesScreen can scope it to a screen.
 type LiveRow = TargetableRow & {

@@ -4,7 +4,7 @@ import { buildScreenHtml } from './build-screen-html'
 import { pushScreenHtmlWebApp, syncScreenToUrl, writeAbleSignLog } from './ablesign-helpers'
 import { getSiteAbleSignCreds } from './ablesign-creds'
 
-export type PushTrigger = 'manual' | 'content' | 'cron-dirty' | 'cron-due'
+export type PushTrigger = 'manual' | 'content' | 'cron-dirty' | 'cron-due' | 'takeover'
 
 export type PushScreenResult =
   | { ok: true; skipped: true; reason: 'unchanged' | 'not_linked'; bytes?: number }

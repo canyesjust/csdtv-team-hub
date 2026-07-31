@@ -12,6 +12,7 @@ import {
   screenColorVarPairs,
 } from './screen-view'
 import { resolveZoneConfig, type RailWidget, type BandWidget } from './zones'
+import { TAKEOVER_POLL_ACTIVE_MS, TAKEOVER_POLL_IDLE_MS } from './takeover'
 
 /**
  * Self-contained HTML render pipeline for the AbleSign HTML web app changeover.
@@ -693,6 +694,13 @@ function runtimeScript(feed: Feed): string {
     // Absolute Hub URL the baked doc polls for live/board takeovers. Best-effort:
     // if the poll fails (offline), the screen keeps playing its baked content.
     takeoverUrl: signageTakeoverPublicUrl(feed.screen.code),
+    // Starting cadence for the poller below. A start/stop is normally delivered
+    // by pushing fresh HTML the instant an operator flips it (see
+    // lib/signage/takeover-push.ts), so this is baked from whatever this build
+    // already knows: fast if this screen is going out already-live, slow
+    // otherwise. The client re-derives the correct cadence from every poll
+    // response after that, so a missed push still self-corrects.
+    takeoverPollMs: feed.live.live || feed.board_takeover ? TAKEOVER_POLL_ACTIVE_MS : TAKEOVER_POLL_IDLE_MS,
   }
 
   // The JSON is embedded inside a <script> tag — neutralize "</" so a value can
@@ -900,12 +908,21 @@ function runtimeScript(feed: Feed): string {
   }
 
   // ---- Live / board takeover poller (best-effort, online-only enhancement) ----
-  // Every 5s ask the Hub whether this screen should show a live stream or the
-  // board meeting. On ANY network error we do nothing and keep playing the baked
-  // content, so the offline guarantee holds. The overlay only rebuilds when the
-  // takeover actually changes (keyed by its JSON), never on every poll.
+  // Ask the Hub whether this screen should show a live stream or the board
+  // meeting. A real start/stop is pushed to this screen as fresh HTML the
+  // moment an operator flips it, so this poll is a safety net for a missed
+  // push, not the primary delivery path — it can run slow (TAKEOVER_IDLE_MS)
+  // most of the time. Once a takeover is actually seen, it switches itself to
+  // TAKEOVER_ACTIVE_MS so a missed "stop" push still gets caught in seconds,
+  // then drops back to slow once it sees things are clear again. On ANY
+  // network error we do nothing and keep playing the baked content, so the
+  // offline guarantee holds. The overlay only rebuilds when the takeover
+  // actually changes (keyed by its JSON), never on every poll.
   if(DATA.takeoverUrl){
+    var TAKEOVER_ACTIVE_MS = ${TAKEOVER_POLL_ACTIVE_MS};
+    var TAKEOVER_IDLE_MS = ${TAKEOVER_POLL_IDLE_MS};
     var takeoverKey = null;
+    var takeoverTimer = null;
     var overlayEl = null;
     var hlsInstance = null;
     var hlsScript = null;
@@ -980,6 +997,11 @@ function runtimeScript(feed: Feed): string {
       }
     }
 
+    function armTakeoverPoll(ms){
+      if(takeoverTimer) clearInterval(takeoverTimer);
+      takeoverTimer = setInterval(pollTakeover, ms);
+    }
+
     function pollTakeover(){
       fetch(DATA.takeoverUrl, { cache: 'no-store' }).then(function(res){
         if(!res.ok) return;
@@ -988,14 +1010,19 @@ function runtimeScript(feed: Feed): string {
         if(!payload) return;
         var tk = payload.takeover || null;
         var key = tk ? JSON.stringify(tk) : null;
-        if(key === takeoverKey) return;
-        takeoverKey = key;
-        buildOverlay(tk);
-      }).catch(function(){ /* offline: keep playing baked content */ });
+        if(key !== takeoverKey){
+          takeoverKey = key;
+          buildOverlay(tk);
+        }
+        // Re-derive the cadence from ground truth on every response, so a
+        // screen that missed the "start" or "stop" push still lands on the
+        // right interval as soon as its next poll goes through.
+        armTakeoverPoll(tk ? TAKEOVER_ACTIVE_MS : TAKEOVER_IDLE_MS);
+      }).catch(function(){ /* offline: keep playing baked content, keep current cadence */ });
     }
 
     pollTakeover();
-    setInterval(pollTakeover, 5000);
+    armTakeoverPoll(DATA.takeoverPollMs || TAKEOVER_IDLE_MS);
   }
 })();
 </script>`

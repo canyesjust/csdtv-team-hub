@@ -1,9 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { normalizeSignageLiveTargeting } from '@/lib/signage/live-targeting'
+import { normalizeSignageLiveTargeting, signageLiveMatchesScreen } from '@/lib/signage/live-targeting'
 import { isSignageStreamUrl, normalizeSignageStreamUrl } from '@/lib/signage/stream-url'
 import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { pushTakeoverScreens } from '@/lib/signage/takeover-push'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+// See app/api/signage/board-takeover/route.ts — same reasoning, same ceiling.
+export const maxDuration = 60
+
+type LiveRow = {
+  all_screens: boolean
+  target_area_ids: string[] | null
+  target_screen_ids: string[] | null
+}
+
+/**
+ * Screens this live row actually reaches, opted-in (accepts_takeover) and on
+ * the same site. Used for both going live and going off: going off normally
+ * resets targeting to all_screens (see the `row` defaults below), so this
+ * naturally reverts every opted-in screen on the site, not just whichever
+ * ones were targeted while it was live.
+ */
+async function pushToLiveTargetedScreens(service: SupabaseClient, siteId: string, liveRow: LiveRow) {
+  const { data: screens } = await service
+    .from('signage_screens')
+    .select('id, code, area_id, building')
+    .eq('active', true)
+    .eq('accepts_takeover', true)
+    .eq('site_id', siteId)
+  const codes = (screens ?? [])
+    .filter(s => signageLiveMatchesScreen(liveRow, { id: s.id, area_id: s.area_id, building: s.building }))
+    .map(s => s.code)
+  if (codes.length === 0) return
+  await pushTakeoverScreens(service, codes)
+}
 
 export async function PATCH(request: NextRequest) {
   const auth = await requireSignageEditorApi()
@@ -69,6 +101,7 @@ export async function PATCH(request: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await pushToLiveTargetedScreens(service, siteId, data)
   return NextResponse.json({ live: data })
 }
 
