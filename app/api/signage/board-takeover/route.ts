@@ -1,11 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { pushTakeoverScreens } from '@/lib/signage/takeover-push'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+// Generous ceiling for pushing to every board-takeover-enabled screen in one
+// request (paced ~400ms apart, see lib/signage/takeover-push.ts). Mirrors
+// app/api/signage/push-all/route.ts, which paces the same way over a larger set.
+export const maxDuration = 60
 
 const now = () => new Date().toISOString()
+
+/** Screens opted into board-meeting takeover — the ones a start/stop push reaches. */
+async function pushToBoardTakeoverScreens(service: SupabaseClient) {
+  const { data: screens } = await service
+    .from('signage_screens')
+    .select('code')
+    .eq('active', true)
+    .eq('board_takeover_enabled', true)
+  const codes = (screens ?? []).map(s => s.code)
+  if (codes.length === 0) return
+  // Best-effort: pushTakeoverScreens never throws, and a failed push here
+  // still self-heals via the screen's own poll, so it's fine to await inline
+  // and just let the response go out a couple seconds later.
+  await pushTakeoverScreens(service, codes)
+}
 
 export async function GET() {
   const auth = await requireSignageEditorApi()
@@ -40,6 +62,7 @@ export async function POST(request: NextRequest) {
   if (action === 'off') {
     const { error } = await service.from('signage_board_takeover').update({ active: false, updated_at: now() }).eq('id', 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await pushToBoardTakeoverScreens(service)
     return NextResponse.json({ success: true })
   }
 
@@ -54,6 +77,7 @@ export async function POST(request: NextRequest) {
       active: true, mode: 'preroll', board_channel_number: channel, label, updated_at: now(), heartbeat_at: now(),
     }).eq('id', 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await pushToBoardTakeoverScreens(service)
     return NextResponse.json({ success: true })
   }
 
@@ -76,6 +100,7 @@ export async function POST(request: NextRequest) {
       label: label || prodRes.data?.title || null, updated_at: now(), heartbeat_at: now(),
     }).eq('id', 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    await pushToBoardTakeoverScreens(service)
     return NextResponse.json({ success: true, youtube_url: youtube })
   }
 
