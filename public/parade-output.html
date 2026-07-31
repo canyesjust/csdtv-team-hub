@@ -9,14 +9,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{ --red:#c2283a; --reddot:#e0434f; --blue:#234fb0; --white:#fff; --gold:#f0cd7a;
-    --glass:rgba(10,16,32,0.94); --tsh:0 2px 6px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.55); }
+    --glass:rgba(10,16,32,0.94); --glowR:rgba(220,54,74,.8); --glowB:rgba(58,112,232,.9);
+    --tsh:0 2px 6px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.55); }
   html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden;font-family:'Inter','Helvetica Neue',Arial,sans-serif;}
   body.demo{background:radial-gradient(120% 120% at 50% 0%,#2c4474,#0c1322);}
   #stage{position:absolute;top:0;left:0;width:1920px;height:1080px;transform-origin:top left;}
   .glass{position:absolute;overflow:hidden;background:var(--glass);border:1px solid rgba(255,255,255,.26);
     box-shadow:inset 0 2px 0 rgba(255,255,255,.45),0 16px 38px rgba(0,0,0,.55);}
   .glow{position:absolute;inset:0;z-index:1;mix-blend-mode:screen;opacity:.45;pointer-events:none;
-    background:radial-gradient(46% 92% at 3% 60%,rgba(220,54,74,.8),transparent 72%),radial-gradient(48% 96% at 99% 48%,rgba(58,112,232,.9),transparent 72%);}
+    background:radial-gradient(46% 92% at 3% 60%,var(--glowR),transparent 72%),radial-gradient(48% 96% at 99% 48%,var(--glowB),transparent 72%);}
   .tri{position:absolute;left:0;right:0;bottom:0;z-index:4;height:5px;background:linear-gradient(90deg,var(--red) 0 33.3%,#eef1f6 33.3% 66.6%,var(--blue) 66.6% 100%);}
   .content{position:relative;z-index:5;}
   .nm{color:var(--white);font-weight:600;line-height:1.05;text-shadow:var(--tsh);white-space:nowrap;overflow:hidden;}
@@ -120,9 +121,19 @@
     } else { if(wasOn) node.classList.remove('on'); node.dataset.sig=''; clearTimeout(node._swap); }
   }
 
+  function hexToRgba(h,a){ h=String(h||'').replace('#',''); if(h.length===3){h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];}
+    var n=parseInt(h,16); if(isNaN(n)) return 'rgba(10,16,32,'+a+')';
+    return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+  function applyTheme(t){ if(!t) return; var r=document.documentElement.style;
+    if(t.red){ r.setProperty('--red',t.red); r.setProperty('--reddot',t.red); r.setProperty('--glowR',hexToRgba(t.red,.8)); }
+    if(t.blue){ r.setProperty('--blue',t.blue); r.setProperty('--glowB',hexToRgba(t.blue,.9)); }
+    if(t.gold){ r.setProperty('--gold',t.gold); }
+    if(t.panel){ r.setProperty('--glass',hexToRgba(t.panel,.94)); } }
+
   var last='';
   function apply(st){
     if(!st) return;
+    applyTheme(st.theme);
     var lo=st.lower||{}, co=st.coming||{}, bu=st.bug||{}, ck=st.clock||{}, ti=st.ticker||{}, fu=st.full||{}, pa=st.panel||{}, cta=st.cta||{};
     manage(E('lower'), !!lo.on, 'L|'+(lo.name||'')+'|'+(lo.org||''), true, function(){
       E('lowerNm').textContent=lo.name||''; E('lowerOg').textContent=lo.org||''; fit(E('lowerNm'),1650,56,30); });
@@ -138,13 +149,13 @@
     manage(E('cta'), !!cta.on, 'X|'+(cta.kind||''), true, function(){
       var k=cta.kind||'watching';
       if(k==='subscribe'){
-        E('ctaIcon').style.background='#c2283a';
+        E('ctaIcon').style.background='var(--red)';
         E('ctaIcon').innerHTML='<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
         E('ctaKick').textContent='Subscribe on YouTube';
         E('ctaTitle').textContent='@CSDtv';
         E('ctaSub').textContent='Hit subscribe & the bell';
       } else {
-        E('ctaIcon').style.background='#e0434f';
+        E('ctaIcon').style.background='var(--reddot)';
         E('ctaIcon').innerHTML='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>';
         E('ctaKick').textContent='You are watching';
         E('ctaTitle').textContent='CSDtv Live';

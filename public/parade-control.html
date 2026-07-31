@@ -31,7 +31,8 @@
   .card{position:relative;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--hue,var(--border));
     border-radius:10px;padding:10px;margin:0 0 10px;}
   .t-lower{--hue:#5ba3e0;} .t-over{--hue:#3fb9b0;} .t-preset{--hue:#e8963e;} .t-full{--hue:#a888f5;} .t-panel{--hue:#e7c977;}
-  .t-ticker{--hue:#3fb9b0;} .t-prev{--hue:#7c89a3;}
+  .t-ticker{--hue:#3fb9b0;} .t-theme{--hue:#cf7ad6;} .t-prev{--hue:#7c89a3;}
+  input[type=color]{padding:2px;min-height:34px;cursor:pointer;}
   /* preset buttons carry their zone's amber accent */
   .t-preset button{border-left:3px solid var(--hue);text-align:left;justify-content:flex-start;}
   .t-preset button.on{background:var(--live);border-color:var(--live);border-left-color:var(--live);color:#fff;font-weight:700;}
@@ -198,6 +199,21 @@
     </div>
   </details>
 
+  <!-- COLORS / THEME -->
+  <details class="card t-theme" id="dTheme">
+    <summary><span class="lbl">Colors / theme</span><span class="caret">▸</span></summary>
+    <div class="body">
+      <div class="grid2">
+        <div><label>Red</label><input type="color" id="cRed" value="#c2283a"></div>
+        <div><label>Blue</label><input type="color" id="cBlue" value="#234fb0"></div>
+        <div><label>Gold / accent</label><input type="color" id="cGold" value="#f0cd7a"></div>
+        <div><label>Panel base</label><input type="color" id="cPanel" value="#0a1020"></div>
+      </div>
+      <div class="row"><button class="ghost" id="cReset" style="flex:1">Reset to patriotic</button></div>
+      <div class="hint">Changes the on-air graphics live &mdash; applies to every overlay.</div>
+    </div>
+  </details>
+
   <!-- PREVIEW -->
   <details class="card t-prev">
     <summary><span class="lbl">Preview (what's on air)</span><span class="caret">▸</span></summary>
@@ -222,7 +238,8 @@
   var idx=-1;
   var state={lower:{on:false,name:'',org:''},coming:{on:false,name:''},full:{on:false},cta:{on:false,kind:''},
     panel:{on:false,title:'',text:'',logo:''},
-    ticker:{on:false,items:[]},bug:{on:false,text:'CSDtv LIVE'},clock:{on:false}};
+    ticker:{on:false,items:[]},bug:{on:false,text:'CSDtv LIVE'},clock:{on:false},
+    theme:{red:'#c2283a',blue:'#234fb0',gold:'#f0cd7a',panel:'#0a1020'}};
 
   var bc; try{ bc=new BroadcastChannel('parade'); }catch(e){}
   var E=function(id){return document.getElementById(id);};
@@ -359,6 +376,12 @@
     if(E('reloadLineup')) E('reloadLineup').style.display=''; }
   if(SHEETS.sponsors){ E('spSheetUrl').value=SHEETS.sponsors;
     if(E('reloadSp')) E('reloadSp').style.display=''; }
+
+  // ---- colors / theme ----
+  function pushTheme(){ state.theme={red:E('cRed').value,blue:E('cBlue').value,gold:E('cGold').value,panel:E('cPanel').value}; push(); }
+  ['cRed','cBlue','cGold','cPanel'].forEach(function(id){ if(E(id)) E(id).oninput=pushTheme; });
+  if(E('cReset')) E('cReset').onclick=function(){ E('cRed').value='#c2283a'; E('cBlue').value='#234fb0'; E('cGold').value='#f0cd7a'; E('cPanel').value='#0a1020'; pushTheme(); };
+  E('cRed').value=state.theme.red; E('cBlue').value=state.theme.blue; E('cGold').value=state.theme.gold; E('cPanel').value=state.theme.panel;
 
   renderLineup(); renderSponsors();
   render(); push();
