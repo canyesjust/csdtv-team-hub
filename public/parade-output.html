@@ -15,8 +15,8 @@
   #stage{position:absolute;top:0;left:0;width:1920px;height:1080px;transform-origin:top left;}
   .glass{position:absolute;overflow:hidden;background:var(--glass);border:1px solid rgba(255,255,255,.26);
     box-shadow:inset 0 2px 0 rgba(255,255,255,.45),0 16px 38px rgba(0,0,0,.55);}
-  .glow{position:absolute;inset:0;z-index:1;mix-blend-mode:screen;opacity:.5;pointer-events:none;
-    background:radial-gradient(46% 92% at 3% 60%,var(--red),transparent 72%),radial-gradient(48% 96% at 99% 48%,var(--blue),transparent 72%);}
+  .glow{position:absolute;inset:0;z-index:1;mix-blend-mode:screen;opacity:.45;pointer-events:none;
+    background:radial-gradient(46% 92% at 3% 60%,rgba(220,54,74,.8),transparent 72%),radial-gradient(48% 96% at 99% 48%,rgba(58,112,232,.9),transparent 72%);}
   .tri{position:absolute;left:0;right:0;bottom:0;z-index:4;height:5px;background:linear-gradient(90deg,var(--red) 0 33.3%,#eef1f6 33.3% 66.6%,var(--blue) 66.6% 100%);}
   .content{position:relative;z-index:5;}
   .nm{color:var(--white);font-weight:600;line-height:1.05;text-shadow:var(--tsh);white-space:nowrap;overflow:hidden;}
@@ -25,12 +25,13 @@
   .og span{color:var(--gold);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;text-shadow:var(--tsh);}
   .kick{color:var(--gold);letter-spacing:.16em;text-transform:uppercase;text-shadow:var(--tsh);}
 
-  /* layers hidden by default; .on shows with snappy motion */
-  .lyr{opacity:0;pointer-events:none;transition:opacity .45s ease,transform .55s cubic-bezier(.2,.8,.2,1);}
+  /* layers hidden by default. Base timing governs the EXIT (a touch slower so
+     graphics linger as they leave); .lyr.on governs the ENTRANCE. */
+  .lyr{opacity:0;pointer-events:none;transition:opacity .75s ease,transform .9s cubic-bezier(.2,.8,.2,1);}
   .slideL{transform:translateX(-70px);}
   .slideR{transform:translateX(70px);}
   .fade{transform:scale(.985);}
-  .lyr.on{opacity:1;transform:none;}
+  .lyr.on{opacity:1;transform:none;transition:opacity .6s ease,transform .8s cubic-bezier(.2,.8,.2,1);}
 
   /* Lower third */
   #lower{left:80px;bottom:80px;width:max-content;max-width:1740px;border-radius:16px;padding:22px 44px 26px;}
@@ -59,6 +60,14 @@
   #bugLogo{height:36px;display:none;}
   #clock{left:70px;top:60px;border-radius:40px;padding:12px 30px;}
   #clockTxt{color:#fff;font-weight:500;font-size:30px;letter-spacing:.06em;text-shadow:var(--tsh);}
+  /* Corner CTA (stays up over the parade) */
+  #cta{right:80px;bottom:180px;max-width:600px;border-radius:16px;padding:16px 32px 18px;}
+  #cta .content{display:flex;align-items:center;gap:20px;}
+  #ctaIcon{width:56px;height:56px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:none;box-shadow:0 4px 16px rgba(0,0,0,.45);}
+  #ctaIcon svg{width:32px;height:32px;fill:#fff;}
+  #ctaKick{font-size:17px;}
+  #ctaTitle{font-size:36px;}
+  #ctaSub{color:#e8ecf5;font-size:21px;margin-top:2px;text-shadow:var(--tsh);white-space:nowrap;}
   @keyframes mar{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 </style>
 </head>
@@ -74,6 +83,9 @@
       <div class="og"><i></i><span id="lowerOg">Organization</span></div></div></div>
   <div id="coming" class="glass lyr slideR"><span class="glow"></span><span class="tri"></span>
     <div class="content"><div class="kick" style="font-size:17px;">Coming up</div><div class="nm" id="comingNm" style="margin-top:3px;"></div></div></div>
+  <div id="cta" class="glass lyr slideR"><span class="glow"></span><span class="tri"></span>
+    <div class="content"><div id="ctaIcon"></div>
+      <div><div class="kick" id="ctaKick"></div><div class="nm" id="ctaTitle"></div><div id="ctaSub"></div></div></div></div>
   <div id="panel" class="glass lyr slideL"><span class="glow"></span><span class="triV"></span>
     <div class="content"><div class="kick" style="font-size:20px;">Proud sponsor</div>
       <div class="nm" id="panelTitle"></div><div id="panelImg"></div><div id="panelText"></div></div></div>
@@ -92,12 +104,6 @@
   addEventListener('resize',resize); resize();
 
   var E=function(id){return document.getElementById(id);};
-  function hexToRgba(hex,a){ hex=(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(function(c){return c+c;}).join(''); var n=parseInt(hex,16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
-  function applyTheme(t){ if(!t) return; var r=document.documentElement.style;
-    if(t.red){ r.setProperty('--red',t.red); r.setProperty('--reddot',t.red); }
-    if(t.blue) r.setProperty('--blue',t.blue);
-    if(t.gold) r.setProperty('--gold',t.gold);
-    if(t.panel) r.setProperty('--glass', hexToRgba(t.panel,0.94)); }
   function fit(node,max,start,min){node.style.fontSize=start+'px';var s=start;while(node.scrollWidth>max&&s>min){s--;node.style.fontSize=s+'px';}}
   function play(node){ node.classList.remove('on'); void node.offsetWidth; node.classList.add('on'); }
   // only animates on off->on, or on content change when animate=true; leaves unchanged layers alone
@@ -108,7 +114,7 @@
       else if(sig!==was){
         node.dataset.sig=sig;
         if(animate){ node.classList.remove('on'); clearTimeout(node._swap);   // animate OUT, then swap content and animate back IN
-          node._swap=setTimeout(function(){ if(update)update(); play(node); }, 400); }
+          node._swap=setTimeout(function(){ if(update)update(); play(node); }, 650); }
         else { if(update)update(); }
       }
     } else { if(wasOn) node.classList.remove('on'); node.dataset.sig=''; clearTimeout(node._swap); }
@@ -117,8 +123,7 @@
   var last='';
   function apply(st){
     if(!st) return;
-    if(st.theme) applyTheme(st.theme);
-    var lo=st.lower||{}, co=st.coming||{}, bu=st.bug||{}, ck=st.clock||{}, ti=st.ticker||{}, fu=st.full||{}, pa=st.panel||{};
+    var lo=st.lower||{}, co=st.coming||{}, bu=st.bug||{}, ck=st.clock||{}, ti=st.ticker||{}, fu=st.full||{}, pa=st.panel||{}, cta=st.cta||{};
     manage(E('lower'), !!lo.on, 'L|'+(lo.name||'')+'|'+(lo.org||''), true, function(){
       E('lowerNm').textContent=lo.name||''; E('lowerOg').textContent=lo.org||''; fit(E('lowerNm'),1650,56,30); });
     manage(E('coming'), !!co.on, 'C|'+(co.name||''), true, function(){ E('comingNm').textContent=co.name||''; });
@@ -130,6 +135,22 @@
     manage(E('panel'), !!pa.on, 'P|'+(pa.title||'')+'|'+(pa.text||'')+'|'+(pa.logo||''), true, function(){
       E('panelTitle').textContent=pa.title||''; E('panelText').textContent=pa.text||'';
       var pi=E('panelImg'); if(pa.logo){ pi.style.display='block'; pi.style.backgroundImage='url("'+String(pa.logo).replace(/"/g,'')+'")'; } else { pi.style.display='none'; pi.style.backgroundImage=''; } });
+    manage(E('cta'), !!cta.on, 'X|'+(cta.kind||''), true, function(){
+      var k=cta.kind||'watching';
+      if(k==='subscribe'){
+        E('ctaIcon').style.background='#c2283a';
+        E('ctaIcon').innerHTML='<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        E('ctaKick').textContent='Subscribe on YouTube';
+        E('ctaTitle').textContent='@CSDtv';
+        E('ctaSub').textContent='Hit subscribe & the bell';
+      } else {
+        E('ctaIcon').style.background='#e0434f';
+        E('ctaIcon').innerHTML='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/></svg>';
+        E('ctaKick').textContent='You are watching';
+        E('ctaTitle').textContent='CSDtv Live';
+        E('ctaSub').textContent='Canyons District TV';
+      }
+    });
     manage(E('full'), !!fu.on, 'F|'+JSON.stringify(fu), true, function(){
       var f=fu, kind=f.kind||'title';
       E('fullKick').style.display='none'; E('fullSub').textContent=''; E('fullBody').textContent=''; E('fullBody').style.display='none';
