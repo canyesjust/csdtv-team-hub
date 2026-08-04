@@ -7,9 +7,11 @@ export const SIGNAGE_CONFIG_CACHE_HEADERS = {
   'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
 } as const
 
-/** Screen feed polls every 5s — short edge cache dedupes concurrent displays. */
+/** Screen feed polls every 30s. s-maxage below the poll interval with a wide
+ *  stale-while-revalidate window means each poll is served instantly from the
+ *  edge and revalidated in the background, rather than blocking on a full rebuild. */
 export const SIGNAGE_FEED_CACHE_HEADERS = {
-  'Cache-Control': 'public, s-maxage=4, stale-while-revalidate=10',
+  'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=60',
 } as const
 
 /** Baked-HTML takeover poll (every 5s) — a tiny edge cache dedupes many TVs

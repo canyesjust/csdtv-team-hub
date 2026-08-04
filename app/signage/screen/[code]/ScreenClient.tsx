@@ -34,13 +34,19 @@ type FeedVisitor = ScreenFeedVisitor
 
 export type { ScreenFeed }
 
-const REFRESH_MS = 5_000
+// Screens poll the feed on this cadence. 30s keeps a whole site's request volume
+// manageable at scale (a site behind one NAT IP can have 200+ screens): at 30s
+// each screen makes 2 feed calls/min instead of 12. The tradeoff is a live/board
+// takeover can take up to ~30s to appear on a browser screen.
+const REFRESH_MS = 30_000
 const CROSSFADE_MS = SCREEN_CROSSFADE_MS
 const HEADING_ROTATE_MS = SCREEN_HEADING_ROTATE_MS
 
-// Feed watchdog thresholds (counted in consecutive failed 5s polls).
-const OFFLINE_AFTER_FAILURES = 12 // ~60s of failures → show the stale/offline UI
-const RELOAD_AFTER_FAILURES = 60 // ~5min of failures → attempt a full-page recovery
+// Feed watchdog thresholds (counted in consecutive failed polls). Sized in real
+// time so they don't balloon when REFRESH_MS changes: at 30s/poll these are
+// ~90s and ~5min.
+const OFFLINE_AFTER_FAILURES = 3 // ~90s of failures → show the stale/offline UI
+const RELOAD_AFTER_FAILURES = 10 // ~5min of failures → attempt a full-page recovery
 // Hard cap for a video slide that never fires `onEnded` (bad URL, blocked
 // autoplay, corrupt file) and has no configured display_seconds.
 const VIDEO_HARD_CAP_SECONDS = 60
@@ -1075,7 +1081,7 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
   const loadFeed = useCallback(async () => {
     try {
       // credentials:'omit' — public service-role endpoint; drop the same-origin session
-      // cookie so 5s display polls don't carry ~1KB+ of cookies each.
+      // cookie so display polls don't carry ~1KB+ of cookies each.
       const res = await fetch(`/api/signage/screen/${encodeURIComponent(code)}/feed`, {
         credentials: 'omit',
       })
