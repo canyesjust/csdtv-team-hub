@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import sharp from 'sharp'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
 import { clampDisplaySeconds, sanitizeSignageHtml, websiteWidthFromMeta } from './content-display'
-import { signageMediaPublicUrl, normalizeSignageTheme } from './constants'
+import { signageMediaPublicUrl, normalizeSignageTheme, SIGNAGE_TIMEZONE } from './constants'
 import { resolveScreenLive, resolveBoardTakeover } from './takeover'
 import { resolveZoneConfig } from './zones'
 import { isInDateRange, signageTargetMatches, todayDateString } from './targeting'
@@ -191,7 +191,17 @@ const BROADCAST_IMG_MAX_WIDTH = 1000
 
 function broadcastCountdownLabel(target: Date, now: Date): string {
   const day = 24 * 60 * 60 * 1000
-  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  // Compare calendar days in the district's timezone (America/Denver), not the
+  // server's local timezone. The old startOf() used target/now's raw
+  // getFullYear/Month/Date, which reflects the server clock (UTC in
+  // production) — since Denver is 6-7 hours behind UTC, any event at or after
+  // ~6pm Denver time already falls on "tomorrow" in UTC, so evening board
+  // meetings and livestreams happening later THIS day showed "Tomorrow" on
+  // the board's countdown chip well before midnight actually arrived.
+  const startOf = (d: Date) => {
+    const ymd = d.toLocaleDateString('en-CA', { timeZone: SIGNAGE_TIMEZONE })
+    return new Date(`${ymd}T00:00:00Z`).getTime()
+  }
   const diff = Math.round((startOf(target) - startOf(now)) / day)
   if (diff <= 0) return 'Today'
   if (diff === 1) return 'Tomorrow'
