@@ -21,3 +21,15 @@ export const SIGNAGE_EDITOR_ROLE = 'editor' as const
 export function isSignageEditorRole(signageRole: string | null | undefined): boolean {
   return (signageRole || '') === SIGNAGE_EDITOR_ROLE
 }
+
+/**
+ * ParentSquare tools: an add-on grant stacked on top of whatever role the person
+ * already has (`team.parentsquare_access`). Managers always have access; everyone
+ * else needs the explicit grant.
+ */
+export function hasParentSquareAccess(
+  role: string | null | undefined,
+  parentsquareAccess: boolean | null | undefined,
+): boolean {
+  return (role || '') === 'Manager' || !!parentsquareAccess
+}

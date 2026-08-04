@@ -108,13 +108,17 @@ export async function assertActorNotImpersonating(): Promise<{ ok: true } | { ok
 export async function getTeamRowForAuthUser(
   supabase: SupabaseClient,
   user: { id: string; email?: string | null },
-): Promise<{ id: string; role: string; dashboard_profile: string; signage_role: string | null } | 'pending-link' | null> {
+): Promise<
+  | { id: string; role: string; dashboard_profile: string; signage_role: string | null; parentsquare_access: boolean }
+  | 'pending-link'
+  | null
+> {
   // Service role avoids RLS gaps during the access gate (middleware).
   const db = getServiceSupabaseClient() ?? supabase
 
   const { data: byUid } = await db
     .from('team')
-    .select('id, role, dashboard_profile, signage_role')
+    .select('id, role, dashboard_profile, signage_role, parentsquare_access')
     .eq('supabase_user_id', user.id)
     .maybeSingle()
   if (byUid) {
@@ -123,6 +127,7 @@ export async function getTeamRowForAuthUser(
       role: byUid.role,
       dashboard_profile: byUid.dashboard_profile ?? 'default',
       signage_role: byUid.signage_role ?? null,
+      parentsquare_access: byUid.parentsquare_access ?? false,
     }
   }
 

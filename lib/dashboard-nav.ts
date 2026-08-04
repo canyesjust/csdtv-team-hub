@@ -41,6 +41,12 @@ const OFFICE_SIGNAGE: DashboardNavItem = {
   icon: 'image',
 }
 
+const PARENTSQUARE: DashboardNavItem = {
+  label: 'ParentSquare',
+  href: '/dashboard/parentsquare',
+  icon: 'mail',
+}
+
 // Everyone can view the public brand library; managers go to the manage workspace.
 const BRAND_LIBRARY_PUBLIC: DashboardNavItem = {
   label: 'Brand library',
@@ -58,13 +64,18 @@ export function isManagerRole(role: string | null | undefined): boolean {
 }
 
 /** Primary sidebar + mobile more menu for staff (Manager, Staff, Intern). */
-export function buildStaffDashboardNav(role: string | null | undefined): {
+export function buildStaffDashboardNav(
+  role: string | null | undefined,
+  parentsquareAccess?: boolean | null,
+): {
   navItems: DashboardNavSection[]
   bottomNav: DashboardNavItem[]
   moreItems: DashboardNavItem[]
 } {
   const manager = isManagerRole(role)
   const brandLibrary = manager ? BRAND_LIBRARY_MANAGE : BRAND_LIBRARY_PUBLIC
+  // ParentSquare is an add-on grant — Managers always have it, others need the explicit flag.
+  const parentSquareVisible = manager || !!parentsquareAccess
 
   const workItems: DashboardNavItem[] = [
     ...WORK_BASE.slice(0, 2),
@@ -83,6 +94,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
+    ...(parentSquareVisible ? [PARENTSQUARE] : []),
     brandLibrary,
     OBS_ASSETS,
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
@@ -95,6 +107,7 @@ export function buildStaffDashboardNav(role: string | null | undefined): {
     ...(!manager ? [BOARD_MEETINGS] : []),
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
+    ...(parentSquareVisible ? [PARENTSQUARE] : []),
   ]
 
   return {

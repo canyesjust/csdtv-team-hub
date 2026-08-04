@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE, isSignageEditorRole } from './lib/roles'
+import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE, isSignageEditorRole, hasParentSquareAccess } from './lib/roles'
 import { isDashboardPathAllowed } from './lib/dashboard-access'
 import { getActorTeamRow, getEffectiveTeamRow } from './lib/server/effective-team'
 
@@ -90,6 +90,8 @@ export async function middleware(request: NextRequest) {
       teamAccess === 'pending-link' ? null : teamAccess.dashboard_profile
     const signageRole =
       teamAccess === 'pending-link' ? null : teamAccess.signage_role
+    const parentsquareAccess =
+      teamAccess === 'pending-link' ? false : teamAccess.parentsquare_access
 
     if (teamAccess !== 'pending-link') {
       const actorRow = await getActorTeamRow(supabase, user)
@@ -123,6 +125,17 @@ export async function middleware(request: NextRequest) {
         url.pathname = '/dashboard/signage/overview'
         return NextResponse.redirect(url)
       }
+    }
+
+    // ParentSquare tools are an add-on grant, locked to people with parentsquare_access
+    // (Managers always pass). The access-management page stays reachable regardless, so a
+    // Manager can grant it to someone without needing the grant themselves first.
+    const inParentSquare = pathname === '/dashboard/parentsquare' || pathname.startsWith('/dashboard/parentsquare/')
+    const inParentSquareAccessAdmin = pathname.startsWith('/dashboard/parentsquare/access')
+    if (inParentSquare && !inParentSquareAccessAdmin && !hasParentSquareAccess(role, parentsquareAccess)) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
     }
 
     if (

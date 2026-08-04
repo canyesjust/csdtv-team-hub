@@ -65,6 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState('')
   const [userDashboardProfile, setUserDashboardProfile] = useState('default')
   const [userSignageRole, setUserSignageRole] = useState<string | null>(null)
+  const [userParentsquareAccess, setUserParentsquareAccess] = useState(false)
   const [userColor, setUserColor] = useState('#e8a020')
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
@@ -99,7 +100,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       ? buildStudentInternDashboardNav()
       : isProductionFocus
         ? buildProductionFocusDashboardNav()
-        : buildStaffDashboardNav(userRole)
+        : buildStaffDashboardNav(userRole, userParentsquareAccess)
     if (!isViewAs) return base
     const stripSettings = (items: DashboardNavItem[]) =>
       items.filter(item => item.href !== '/dashboard/settings')
@@ -111,7 +112,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       bottomNav: base.bottomNav,
       moreItems: stripSettings(base.moreItems),
     }
-  }, [isStudentIntern, isProductionFocus, userRole, isViewAs])
+  }, [isStudentIntern, isProductionFocus, userRole, userParentsquareAccess, isViewAs])
 
   useEffect(() => {
     if (accessState !== 'ready') return
@@ -165,11 +166,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         avatar_color: string | null
         dashboard_profile?: string | null
         signage_role?: string | null
+        parentsquare_access?: boolean | null
       }) => {
         setUserName(row.name)
         setUserRole(row.role)
         setUserDashboardProfile(row.dashboard_profile ?? 'default')
         setUserSignageRole(row.signage_role ?? null)
+        setUserParentsquareAccess(row.parentsquare_access ?? false)
         setUserColor(row.avatar_color || '#e8a020')
         setUserId(row.id)
         setAccessState('ready')
@@ -214,7 +217,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       const emailNorm = email.trim().toLowerCase()
       const { data: teamByEmail, error: emailLookupErr } = await supabase
         .from('team')
-        .select('id, name, role, avatar_color, dashboard_profile, signage_role, supabase_user_id')
+        .select('id, name, role, avatar_color, dashboard_profile, signage_role, parentsquare_access, supabase_user_id')
         .eq('email', emailNorm)
         .maybeSingle()
 
@@ -241,7 +244,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       const { data: byUid, error: uidErr } = await supabase
         .from('team')
-        .select('id, name, role, avatar_color, dashboard_profile, signage_role')
+        .select('id, name, role, avatar_color, dashboard_profile, signage_role, parentsquare_access')
         .eq('supabase_user_id', user.id)
         .maybeSingle()
 

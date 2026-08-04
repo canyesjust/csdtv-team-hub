@@ -56,6 +56,15 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
   const [isNarrow, setIsNarrow] = useState(false)
   const [reorderingId, setReorderingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Manual "add agenda item" — for sections/items an import missed. New items
+  // are always appended to the end of the chosen section (or the end of the
+  // agenda for a brand-new section); use the existing ↑ / ↓ controls to
+  // reposition afterward.
+  const [addingItem, setAddingItem] = useState(false)
+  const [savingNewItem, setSavingNewItem] = useState(false)
+  const NEW_ITEM_DEFAULTS = { section: '', newSectionNumber: '', newSectionTitle: '', itemNumber: '', title: '', type: 'information' }
+  const [newItem, setNewItem] = useState(NEW_ITEM_DEFAULTS)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   const toggleExpand = (id: string) =>
     setExpandedIds(prev => {
@@ -176,6 +185,83 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
       hidden: orderedReviewItems.length - shown.length,
     }
   }, [orderedReviewItems])
+
+  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const suggestItemNumber = (sectionNumber: number) => {
+    const count = orderedReviewItems.filter(it => it.section_number === sectionNumber).length
+    return LETTERS[count] || String(count + 1)
+  }
+
+  // Opens the "add item" form. Pass a section number to add into that section
+  // (item number is pre-filled with the next letter); omit it to start a new
+  // section (appended after the last one).
+  const openAddItem = (sectionNumber?: number) => {
+    // Default (no section passed, e.g. the header button): add into the last
+    // existing section — the common case of "the import missed the last item."
+    const target = sectionNumber ?? reviewSections[reviewSections.length - 1]?.number
+    if (target != null) {
+      setNewItem({ ...NEW_ITEM_DEFAULTS, section: String(target), itemNumber: suggestItemNumber(target) })
+    } else {
+      setNewItem({ ...NEW_ITEM_DEFAULTS, section: 'new', newSectionNumber: '1', itemNumber: 'A' })
+    }
+    setAddingItem(true)
+  }
+
+  const handleSectionPick = (value: string) => {
+    if (value === 'new') {
+      const nextNumber = reviewSections.length > 0 ? Math.max(...reviewSections.map(s => s.number)) + 1 : 1
+      setNewItem(n => ({ ...n, section: 'new', newSectionNumber: String(nextNumber), newSectionTitle: '', itemNumber: 'A' }))
+    } else {
+      const sectionNumber = Number(value)
+      setNewItem(n => ({ ...n, section: value, itemNumber: suggestItemNumber(sectionNumber) }))
+    }
+  }
+
+  const addItem = async () => {
+    const title = newItem.title.trim()
+    if (!title) { toast('Title is required', 'error'); return }
+    const isNew = newItem.section === 'new'
+    const sectionNumber = Number(isNew ? newItem.newSectionNumber : newItem.section)
+    if (!Number.isFinite(sectionNumber) || sectionNumber < 1) { toast('Enter a valid section number', 'error'); return }
+    const sectionTitle = (isNew ? newItem.newSectionTitle : (reviewSections.find(s => s.number === sectionNumber)?.title || '')).trim()
+    if (!sectionTitle) { toast('Section title is required', 'error'); return }
+    const itemNumber = newItem.itemNumber.trim()
+    if (!itemNumber) { toast('Item number is required', 'error'); return }
+
+    // Always append: to the end of the chosen section, or to the end of the
+    // agenda for a brand-new section. Reorder with the existing ↑ / ↓ buttons.
+    const inSection = orderedReviewItems.filter(it => it.section_number === sectionNumber)
+    const insertAfterId =
+      inSection.length > 0
+        ? inSection[inSection.length - 1].id
+        : orderedReviewItems.length > 0
+        ? orderedReviewItems[orderedReviewItems.length - 1].id
+        : null
+
+    setSavingNewItem(true)
+    const res = await fetch(`/api/board-meetings/${productionId}/agenda-items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        section_number: sectionNumber,
+        section_title: sectionTitle,
+        item_number: itemNumber,
+        title,
+        type: newItem.type,
+        insert_after_item_id: insertAfterId,
+      }),
+    })
+    setSavingNewItem(false)
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast((body as { error?: string }).error || 'Failed to add item', 'error')
+      return
+    }
+    toast('Item added', 'success')
+    setAddingItem(false)
+    setNewItem(NEW_ITEM_DEFAULTS)
+    await load()
+  }
 
   const uploadPdf = async (file: File, reupload = false) => {
     if (file.type && file.type !== 'application/pdf') {
@@ -614,6 +700,14 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
               </button>
               <button
                 type="button"
+                onClick={() => openAddItem()}
+                disabled={locking}
+                style={{ fontSize: '14px', padding: '10px 16px', minHeight: '44px', borderRadius: '10px', background: 'transparent', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                + Add agenda item
+              </button>
+              <button
+                type="button"
                 onClick={lockAgenda}
                 disabled={locking || items.length === 0}
                 style={{ fontSize: '14px', padding: '10px 20px', minHeight: '44px', borderRadius: '10px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
@@ -622,6 +716,74 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
               </button>
             </div>
           </div>
+          {addingItem && (
+            <div style={{ padding: '14px 16px', marginBottom: '16px', background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px' }}>
+              <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 600, color: text }}>Add agenda item</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px', marginBottom: '8px' }}>
+                <select value={newItem.section} onChange={e => handleSectionPick(e.target.value)} style={inputStyle}>
+                  {reviewSections.map(sec => (
+                    <option key={sec.number} value={sec.number}>{sec.number} · {sec.title}</option>
+                  ))}
+                  <option value="new">+ New section…</option>
+                </select>
+                {newItem.section === 'new' && (
+                  <>
+                    <input
+                      type="number"
+                      min={1}
+                      value={newItem.newSectionNumber}
+                      onChange={e => setNewItem(n => ({ ...n, newSectionNumber: e.target.value }))}
+                      placeholder="Section #"
+                      style={inputStyle}
+                    />
+                    <input
+                      value={newItem.newSectionTitle}
+                      onChange={e => setNewItem(n => ({ ...n, newSectionTitle: e.target.value }))}
+                      placeholder="Section title (e.g. Closed Session)"
+                      style={inputStyle}
+                    />
+                  </>
+                )}
+                <input
+                  value={newItem.itemNumber}
+                  onChange={e => setNewItem(n => ({ ...n, itemNumber: e.target.value }))}
+                  placeholder="Item # (e.g. A)"
+                  style={inputStyle}
+                />
+                <select value={newItem.type} onChange={e => setNewItem(n => ({ ...n, type: e.target.value }))} style={inputStyle}>
+                  <option value="procedural">Procedural</option>
+                  <option value="information">Information</option>
+                  <option value="action">Action</option>
+                  <option value="recognition">Recognition</option>
+                </select>
+              </div>
+              <input
+                value={newItem.title}
+                onChange={e => setNewItem(n => ({ ...n, title: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') void addItem() }}
+                placeholder="Item title"
+                style={{ ...inputStyle, marginBottom: '10px' }}
+              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => void addItem()}
+                  disabled={savingNewItem}
+                  style={{ fontSize: '13px', padding: '8px 14px', minHeight: '38px', borderRadius: '8px', background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: savingNewItem ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                >
+                  {savingNewItem ? 'Adding…' : 'Add item'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAddingItem(false); setNewItem(NEW_ITEM_DEFAULTS) }}
+                  disabled={savingNewItem}
+                  style={{ fontSize: '13px', padding: '8px 14px', minHeight: '38px', borderRadius: '8px', background: 'transparent', color: text, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 380px', gap: '20px', alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
             {needsReviewCount > 0 && (
@@ -726,6 +888,13 @@ export default function BoardMeetingTab({ productionId }: { productionId: string
                       </div>
                     )
                   })}
+                  <button
+                    type="button"
+                    onClick={() => openAddItem(sec.number)}
+                    style={{ alignSelf: 'flex-start', fontSize: '12px', padding: '6px 9px', background: 'transparent', color: 'var(--brand-primary)', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                  >
+                    + Add item to this section
+                  </button>
                 </div>
               </div>
             ))}
