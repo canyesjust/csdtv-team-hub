@@ -23,7 +23,11 @@ interface TeamMember {
   avatar_color: string
   supabase_user_id: string | null
   dashboard_profile?: string | null
+  active?: boolean
 }
+
+/** Same options offered at invite time — kept in one place so Edit and Invite can't drift. */
+const TEAM_ROLE_OPTIONS = ['Staff', 'Manager', 'Intern', PRODUCTION_FOCUS_ROLE, 'Student Intern']
 interface SchoolListRow {
   id: string
   code: string
@@ -90,6 +94,9 @@ export default function SettingsPage() {
 
   const [currentUser, setCurrentUser] = useState<TeamMember | null>(null)
   const [team, setTeam] = useState<TeamMember[]>([])
+  const [inactiveTeam, setInactiveTeam] = useState<TeamMember[]>([])
+  const [showInactive, setShowInactive] = useState(false)
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null)
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({
     notify_assigned_email: true, notify_assigned_inapp: true,
     notify_completed_email: true, notify_completed_inapp: true,
@@ -108,7 +115,7 @@ export default function SettingsPage() {
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string } | null>(null)
   const [savedMsg, setSavedMsg] = useState('')
   const [editingTeamMember, setEditingTeamMember] = useState<string | null>(null)
-  const [memberEditForm, setMemberEditForm] = useState({ name: '', email: '' })
+  const [memberEditForm, setMemberEditForm] = useState({ name: '', email: '', role: '' })
   const [memberPassword, setMemberPassword] = useState('')
   const [memberPasswordConfirm, setMemberPasswordConfirm] = useState('')
   const [settingPasswordMemberId, setSettingPasswordMemberId] = useState<string | null>(null)
@@ -170,9 +177,10 @@ export default function SettingsPage() {
   const loadData = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-    const [userRes, teamRes, schoolsRes, settingsRes, tplRes, tiersRes] = await Promise.all([
+    const [userRes, teamRes, inactiveTeamRes, schoolsRes, settingsRes, tplRes, tiersRes] = await Promise.all([
       supabase.from('team').select('*').eq('supabase_user_id', session.user.id).single(),
       supabase.from('team').select('*').eq('active', true).order('name'),
+      supabase.from('team').select('*').eq('active', false).order('name'),
       supabase.from('schools').select('*').order('name'),
       supabase.from('app_settings').select('*'),
       supabase.from('email_templates').select('*').order('sort_order'),
@@ -180,6 +188,7 @@ export default function SettingsPage() {
     ])
     setCurrentUser(userRes.data)
     setTeam(teamRes.data || [])
+    setInactiveTeam(inactiveTeamRes.data || [])
     setSchools((schoolsRes.data as SchoolListRow[]) || [])
     setTemplates(tplRes.data || [])
     setTiers(tiersRes.data || [])
@@ -428,14 +437,14 @@ export default function SettingsPage() {
 
   const startEditMember = (member: TeamMember) => {
     setEditingTeamMember(member.id)
-    setMemberEditForm({ name: member.name, email: member.email })
+    setMemberEditForm({ name: member.name, email: member.email, role: member.role })
     setMemberPassword('')
     setMemberPasswordConfirm('')
   }
 
   const cancelEditMember = () => {
     setEditingTeamMember(null)
-    setMemberEditForm({ name: '', email: '' })
+    setMemberEditForm({ name: '', email: '', role: '' })
     setMemberPassword('')
     setMemberPasswordConfirm('')
     setSettingPasswordMemberId(null)
@@ -479,8 +488,8 @@ export default function SettingsPage() {
   }
 
   const saveMemberEdit = async (memberId: string) => {
-    if (!memberEditForm.name.trim() || !memberEditForm.email.trim()) {
-      toast('Name and email are required', 'error')
+    if (!memberEditForm.name.trim() || !memberEditForm.email.trim() || !memberEditForm.role.trim()) {
+      toast('Name, email, and role are required', 'error')
       return
     }
     setSavingTeamMemberId(memberId)
@@ -489,11 +498,17 @@ export default function SettingsPage() {
         memberId,
         name: memberEditForm.name.trim(),
         email: memberEditForm.email.trim(),
+        role: memberEditForm.role.trim(),
       })
       setTeam(prev =>
         prev.map(m =>
           m.id === memberId
-            ? { ...m, name: memberEditForm.name.trim(), email: memberEditForm.email.trim().toLowerCase() }
+            ? {
+                ...m,
+                name: memberEditForm.name.trim(),
+                email: memberEditForm.email.trim().toLowerCase(),
+                role: memberEditForm.role.trim(),
+              }
             : m,
         ),
       )
@@ -511,7 +526,14 @@ export default function SettingsPage() {
   }
 
   const deactivateMember = async (memberId: string, memberName: string) => {
-    if (!(await confirmDialog({ message: `Remove ${memberName} from the team?`, tone: 'danger', confirmLabel: 'Remove' }))) return
+    if (
+      !(await confirmDialog({
+        message: `Remove ${memberName} from the team? This deactivates their account — they can't sign in, but nothing is deleted. Reactivate any time from "Show inactive" below.`,
+        tone: 'danger',
+        confirmLabel: 'Remove',
+      }))
+    )
+      return
     try {
       await callAdminSettings('deactivate_member', { memberId })
     } catch (e: any) {
@@ -519,9 +541,38 @@ export default function SettingsPage() {
       return
     }
     setTeam(prev => prev.filter(m => m.id !== memberId))
+    setInactiveTeam(prev => {
+      const member = team.find(m => m.id === memberId)
+      return member ? [...prev, { ...member, active: false }].sort((a, b) => a.name.localeCompare(b.name)) : prev
+    })
     if (editingTeamMember === memberId) cancelEditMember()
     setSavedMsg(`${memberName} removed`)
     setTimeout(() => setSavedMsg(''), 2000)
+  }
+
+  const reactivateMember = async (memberId: string, memberName: string) => {
+    if (
+      !(await confirmDialog({
+        message: `Reactivate ${memberName}? They'll be able to sign in and show up on the team again.`,
+        confirmLabel: 'Reactivate',
+      }))
+    )
+      return
+    setReactivatingId(memberId)
+    try {
+      await callAdminSettings('reactivate_member', { memberId })
+    } catch (e: unknown) {
+      toast(e instanceof Error ? e.message : 'Failed to reactivate member', 'error')
+      setReactivatingId(null)
+      return
+    }
+    setReactivatingId(null)
+    setInactiveTeam(prev => prev.filter(m => m.id !== memberId))
+    setTeam(prev => {
+      const member = inactiveTeam.find(m => m.id === memberId)
+      return member ? [...prev, { ...member, active: true }].sort((a, b) => a.name.localeCompare(b.name)) : prev
+    })
+    toast(`${memberName} reactivated`, 'success')
   }
 
   const startViewAs = async (member: TeamMember) => {
@@ -1220,7 +1271,7 @@ export default function SettingsPage() {
         <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '20px', marginBottom: '12px', display: activeTab === 'team' ? 'block' : 'none' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 500, color: text, margin: '0 0 8px' }}>Team</h2>
           <p style={{ fontSize: '13px', color: muted, margin: '0 0 16px', lineHeight: 1.5 }}>
-            Use <strong style={{ fontWeight: 600, color: text }}>View as</strong> to see the dashboard with their role and data. Use <strong style={{ fontWeight: 600, color: text }}>Edit</strong> to change name or email, or set a login password when invite emails are not working.
+            Use <strong style={{ fontWeight: 600, color: text }}>View as</strong> to see the dashboard with their role and data. Use <strong style={{ fontWeight: 600, color: text }}>Edit</strong> to change name, email, or role (e.g. promote an Intern to Staff), or set a login password when invite emails are not working. <strong style={{ fontWeight: 600, color: text }}>Remove</strong> deactivates someone rather than deleting them — bring them back any time from &quot;Show inactive&quot; below.
           </p>
 
           {team.map(member => (
@@ -1328,7 +1379,13 @@ export default function SettingsPage() {
                   >
                     View as
                   </button>
-                  <button onClick={() => deactivateMember(member.id, member.name)} style={{ fontSize: '14px', padding: '5px 10px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}>Remove</button>
+                  <button
+                    onClick={() => deactivateMember(member.id, member.name)}
+                    title="Deactivates their account — nothing is deleted, and you can reactivate them any time from &quot;Show inactive&quot; below."
+                    style={{ fontSize: '14px', padding: '5px 10px', borderRadius: '8px', background: 'transparent', border: `0.5px solid ${border}`, color: muted, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}
+                  >
+                    Remove
+                  </button>
                 </>
               )}
               </div>
@@ -1361,6 +1418,21 @@ export default function SettingsPage() {
                       onChange={e => setMemberEditForm(f => ({ ...f, email: e.target.value }))}
                       style={inputStyle}
                     />
+                  </label>
+                  <label style={{ display: 'grid', gap: '4px' }}>
+                    <span style={{ fontSize: '12px', color: muted, fontWeight: 500 }}>Role</span>
+                    <select
+                      value={memberEditForm.role}
+                      onChange={e => setMemberEditForm(f => ({ ...f, role: e.target.value }))}
+                      style={inputStyle}
+                    >
+                      {!TEAM_ROLE_OPTIONS.includes(memberEditForm.role) && memberEditForm.role && (
+                        <option value={memberEditForm.role}>{memberEditForm.role}</option>
+                      )}
+                      {TEAM_ROLE_OPTIONS.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
                   </label>
                   <p style={{ fontSize: '12px', color: muted, margin: 0, lineHeight: 1.45 }}>
                     {member.supabase_user_id
@@ -1478,6 +1550,73 @@ export default function SettingsPage() {
               )}
             </div>
           ))}
+
+          <div style={{ marginTop: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setShowInactive(v => !v)}
+              style={{
+                fontSize: '13px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                background: 'transparent',
+                border: `0.5px solid ${border}`,
+                color: muted,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {showInactive ? 'Hide inactive' : `Show inactive (${inactiveTeam.length})`}
+            </button>
+            {showInactive && (
+              <div style={{ marginTop: '10px' }}>
+                {inactiveTeam.length === 0 && (
+                  <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No inactive team members.</p>
+                )}
+                {inactiveTeam.map(member => (
+                  <div
+                    key={member.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '10px 0',
+                      borderBottom: `0.5px solid ${border}`,
+                      flexWrap: 'wrap' as const,
+                      opacity: 0.7,
+                    }}
+                  >
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: member.avatar_color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#0a0f1e', flexShrink: 0 }}>
+                      {member.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '14px', fontWeight: 500, color: text, margin: 0 }}>{member.name}</p>
+                      <p style={{ fontSize: '14px', color: muted, margin: 0 }}>{member.email}</p>
+                    </div>
+                    <span style={{ fontSize: '14px', padding: '3px 10px', borderRadius: '6px', background: 'var(--surface-2)', color: muted }}>{member.role}</span>
+                    <button
+                      type="button"
+                      disabled={reactivatingId === member.id}
+                      onClick={() => void reactivateMember(member.id, member.name)}
+                      style={{
+                        fontSize: '14px',
+                        padding: '5px 10px',
+                        borderRadius: '8px',
+                        background: 'rgba(34,197,94,0.1)',
+                        border: '0.5px solid rgba(34,197,94,0.35)',
+                        color: '#22c55e',
+                        cursor: reactivatingId === member.id ? 'wait' : 'pointer',
+                        fontFamily: 'inherit',
+                        minHeight: '36px',
+                      }}
+                    >
+                      {reactivatingId === member.id ? 'Reactivating…' : 'Reactivate'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface-2)', borderRadius: '12px', border: `0.5px solid ${border}` }}>
             <h3 style={{ fontSize: '14px', fontWeight: 500, color: text, margin: '0 0 4px' }}>Invite team member</h3>

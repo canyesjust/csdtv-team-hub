@@ -189,8 +189,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true })
     }
 
+    // Counterpart to deactivate_member. "Remove" on the Team tab is a soft
+    // deactivate (active: false), never a delete — this brings someone back
+    // (e.g. a returning student intern next semester) without recreating them.
+    if (action === 'reactivate_member') {
+      const { memberId } = payload || {}
+      if (!memberId) return NextResponse.json({ error: 'Missing team member id' }, { status: 400 })
+      const { error } = await supabase.from('team').update({ active: true }).eq('id', memberId)
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ success: true })
+    }
+
     if (action === 'update_team_member') {
-      const { memberId, name: rawName, email: rawEmail } = payload || {}
+      const { memberId, name: rawName, email: rawEmail, role: rawRole } = payload || {}
       if (!memberId) return NextResponse.json({ error: 'Missing team member id' }, { status: 400 })
 
       let name: string
@@ -203,6 +214,13 @@ export async function POST(request: Request) {
           { error: err instanceof Error ? err.message : 'Invalid name or email' },
           { status: 400 },
         )
+      }
+
+      // role is optional — omit it (or send undefined) to leave it unchanged.
+      let role: string | undefined
+      if (rawRole !== undefined) {
+        role = typeof rawRole === 'string' ? rawRole.trim() : ''
+        if (!role) return NextResponse.json({ error: 'Role is required' }, { status: 400 })
       }
 
       const { data: member, error: memberErr } = await supabase
@@ -243,9 +261,18 @@ export async function POST(request: Request) {
         }
       }
 
+      const patch: Record<string, string> = { name, email }
+      if (role !== undefined) {
+        patch.role = role
+        // Mirror provision_team_member: Production Focus always carries the
+        // simplified hub profile, so promoting someone OUT of that role here
+        // doesn't leave them silently stuck on the restricted interface.
+        if (role === 'Production Focus') patch.dashboard_profile = 'production_focus'
+      }
+
       const { error: teamErr } = await supabase
         .from('team')
-        .update({ name, email })
+        .update(patch)
         .eq('id', memberId)
       if (teamErr) return NextResponse.json({ error: teamErr.message }, { status: 400 })
 
