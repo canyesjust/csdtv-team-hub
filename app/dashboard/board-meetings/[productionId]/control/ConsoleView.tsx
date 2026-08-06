@@ -96,6 +96,10 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
   const elapsedStartedAt = bs?.elapsed_started_at ?? null
   const [attOpen, setAttOpen] = useState(false)
   const [editAgenda, setEditAgenda] = useState(false)
+  // Inline title editing inside the agenda Edit panel — local draft so the
+  // live-polled bundle refreshing underneath never clobbers an in-progress edit.
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
+  const [titleDraft, setTitleDraft] = useState('')
   const [showPreviews, setShowPreviews] = useState(false)
   const [showBackupChannels, setShowBackupChannels] = useState(false)
   const dragId = useRef<string | null>(null)
@@ -555,15 +559,38 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
             <div style={{ ...h3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Agenda</span>
               {canControl && (onPatchAgendaItem || onReorderAgenda) && (
-                <button style={{ ...btn, fontSize: 11, padding: '4px 9px', ...(editAgenda ? { background: C.accentbg, color: '#bcdcff', borderColor: 'transparent' } : {}) }} onClick={() => setEditAgenda(v => !v)}>{editAgenda ? 'Done' : 'Edit'}</button>
+                <button
+                  style={{ ...btn, fontSize: 11, padding: '4px 9px', ...(editAgenda ? { background: C.accentbg, color: '#bcdcff', borderColor: 'transparent' } : {}) }}
+                  onClick={() => {
+                    setEditAgenda(v => !v)
+                    setEditingTitleId(null)
+                  }}
+                >
+                  {editAgenda ? 'Done' : 'Edit'}
+                </button>
               )}
             </div>
-            {editAgenda && <div style={{ fontSize: 11, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>Drag on-air items to reorder. Skip removes from the broadcast; table/postpone marks an item.</div>}
+            {editAgenda && <div style={{ fontSize: 11, color: C.dim, marginBottom: 8, lineHeight: 1.4 }}>Drag on-air items to reorder. Edit text changes the wording live. Skip clears an item off the broadcast (can&apos;t be undone from here); table/postpone marks an item.</div>}
             <div ref={agendaScrollRef} style={{ position: 'relative', maxHeight: 'calc(100vh - 170px)', overflowY: 'auto' }}>
             {isLive && (
               <div style={{ position: 'sticky', top: 0, zIndex: 3, background: C.panel, borderRadius: 8, borderLeft: `3px solid ${C.accent}`, border: `1px solid ${C.line2}`, borderLeftWidth: 3, borderLeftColor: C.accent, padding: '7px 10px', marginBottom: 6 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#bcdcff', textTransform: 'uppercase' }}>On air now</div>
-                <div style={{ fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{onAirLabel ?? 'Nothing on air'}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', color: '#bcdcff', textTransform: 'uppercase' }}>On air now</div>
+                    <div style={{ fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {bs?.agenda_branding_hold ? `${onAirLabel ?? 'Item'} — hidden behind branding slide` : (onAirLabel ?? 'Nothing on air')}
+                    </div>
+                  </div>
+                  {canControl && currentItem && (
+                    <button
+                      style={{ ...editChip(!!bs?.agenda_branding_hold), flexShrink: 0 }}
+                      title="Takes this item's title off the broadcast overlay (shows a branding slide instead) without skipping it from the agenda or the public site. Toggle back any time."
+                      onClick={() => onAction('show-agenda-branding', { hold: !bs?.agenda_branding_hold })}
+                    >
+                      {bs?.agenda_branding_hold ? 'Show on overlay' : 'Remove from overlay'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
             {sections.map(sec => (
@@ -573,7 +600,13 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                   const live = it.id === bs?.current_agenda_item_id
                   const done = currentSort >= 0 && it.sort_order < currentSort
                   if (editAgenda) {
-                    const draggable = it.is_broadcastable && !!onReorderAgenda
+                    const isEditingTitle = editingTitleId === it.id
+                    const draggable = it.is_broadcastable && !!onReorderAgenda && !isEditingTitle
+                    const commitTitle = () => {
+                      const next = titleDraft.trim()
+                      setEditingTitleId(null)
+                      if (next && next !== it.title) void onPatchAgendaItem?.(it.id, { title: next })
+                    }
                     return (
                       <div key={it.id} draggable={draggable}
                         onDragStart={() => { dragId.current = it.id }}
@@ -583,9 +616,24 @@ export default function ConsoleView({ productionId, bundle, canControl, busy, on
                         <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
                           {draggable && <span style={{ color: C.dim, cursor: 'grab', fontSize: 13 }}>⠿</span>}
                           <span style={{ fontSize: 12, color: C.dim, fontWeight: 600, minWidth: 26, fontVariantNumeric: 'tabular-nums' }}>{it.item_number}</span>
-                          <span style={{ fontSize: 13, flex: 1, opacity: it.is_broadcastable ? 1 : 0.5 }}>{it.title}</span>
+                          {isEditingTitle ? (
+                            <input
+                              autoFocus
+                              value={titleDraft}
+                              onChange={e => setTitleDraft(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') { e.preventDefault(); commitTitle() }
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingTitleId(null) }
+                              }}
+                              onBlur={commitTitle}
+                              style={{ flex: 1, font: 'inherit', fontSize: 13, padding: '3px 6px', borderRadius: 6, border: `1px solid ${C.accent}`, background: C.panel2, color: C.text }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: 13, flex: 1, opacity: it.is_broadcastable ? 1 : 0.5 }}>{it.title}</span>
+                          )}
                         </div>
                         <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}>
+                          <button style={editChip(isEditingTitle)} onClick={() => { setEditingTitleId(it.id); setTitleDraft(it.title) }}>Edit text</button>
                           <button style={editChip(!it.is_broadcastable)} onClick={() => onPatchAgendaItem?.(it.id, { is_broadcastable: !it.is_broadcastable })}>{it.is_broadcastable ? 'Skip' : 'On air'}</button>
                           <button style={editChip(it.live_status === 'tabled')} onClick={() => onPatchAgendaItem?.(it.id, { live_status: it.live_status === 'tabled' ? null : 'tabled' })}>Table</button>
                           <button style={editChip(it.live_status === 'postponed')} onClick={() => onPatchAgendaItem?.(it.id, { live_status: it.live_status === 'postponed' ? null : 'postponed' })}>Postpone</button>

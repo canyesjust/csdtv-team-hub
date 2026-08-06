@@ -435,11 +435,10 @@ export default function ControlSurfaceClient({ productionId, initialBundle = nul
       }
 
       if (action === 'show-agenda-branding') {
-        const hold = typeof payload?.hold === 'boolean' ? payload.hold : true
         return {
           ...prev,
           broadcast_state: patchBroadcastState(prev.broadcast_state, {
-            agenda_branding_hold: hold,
+            agenda_branding_hold: true,
           }),
         }
       }
