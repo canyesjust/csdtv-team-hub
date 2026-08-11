@@ -613,6 +613,14 @@ export async function buildScreenFeed(
   const media = activeBuildingTakeover
     ? [toMediaItem(activeBuildingTakeover)]
     : filteredContent
+        // A takeover row only ever appears as the sole item above, when its
+        // window is active. start_date/end_date are day-level (derived from
+        // takeover_starts_at/ends_at for the day-range filter above), so an
+        // is_takeover row stays in filteredContent for the whole scheduled
+        // day even outside its precise window — without this filter it would
+        // wrongly rejoin the normal rotation (full_screen and all) any time
+        // it isn't the active takeover.
+        .filter(row => !row.is_takeover)
         // Drop a system block when it has nothing to show (e.g. no upcoming items, no URL).
         .filter(row => {
           if (!row.system_kind) return true

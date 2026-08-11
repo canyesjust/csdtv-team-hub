@@ -19,7 +19,7 @@ import { signageMediaPublicUrl, CIC_SUBMIT_URL, SIGNAGE_INDEFINITE_END_DATE, isI
 import { prepareSignageImageFile, captureVideoPoster, SIGNAGE_MAX_VIDEO_BYTES } from '@/lib/signage/client-image-upload'
 import FilePickButton from '@/components/FilePickButton'
 import SignageDateInput from '@/components/SignageDateInput'
-import { dateRangeLifecycle as contentLifecycle, LIFECYCLE_META } from '@/lib/signage/lifecycle'
+import { dateRangeLifecycle as contentLifecycle, LIFECYCLE_META, type Lifecycle } from '@/lib/signage/lifecycle'
 
 type ContentRow = {
   id: string
@@ -56,6 +56,28 @@ type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
   'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, gen_meta, created_at, reviewed_at, reviewed_by, is_takeover, takeover_starts_at, takeover_ends_at'
+
+// A takeover row's start_date/end_date are day-level (derived from its precise
+// timestamps, used only for the shared day-range filter), but the actual on/off
+// window is takeover_starts_at/takeover_ends_at. The generic dateRangeLifecycle
+// would call a takeover "Showing now" for its whole scheduled day, even hours
+// before it actually starts — use the real timestamps for takeover rows instead.
+function rowLifecycle(
+  row: Pick<ContentRow, 'is_takeover' | 'takeover_starts_at' | 'takeover_ends_at' | 'start_date' | 'end_date'>,
+  today: string,
+): Lifecycle {
+  if (row.is_takeover && row.takeover_starts_at && row.takeover_ends_at) {
+    const now = Date.now()
+    const starts = new Date(row.takeover_starts_at).getTime()
+    const ends = new Date(row.takeover_ends_at).getTime()
+    if (Number.isFinite(starts) && Number.isFinite(ends)) {
+      if (now < starts) return 'upcoming'
+      if (now > ends) return 'expired'
+      return 'active'
+    }
+  }
+  return contentLifecycle(row.start_date, row.end_date, today)
+}
 
 // A template assigned to this location (from the admin library).
 type StockTemplate = { id: string; name: string; description: string | null; kind: string; singleton: boolean; requires_url: boolean; config?: { html?: string } | null }
@@ -237,7 +259,7 @@ export default function SignageContentPage() {
   // items last), and hide items whose end date has passed unless "Show past" is on.
   const displayRows = useMemo(() => {
     if (tab !== 'approved') return rows
-    const withLc = rows.map(r => ({ r, lc: contentLifecycle(r.start_date, r.end_date, today) }))
+    const withLc = rows.map(r => ({ r, lc: rowLifecycle(r, today) }))
     const visible = showPast ? withLc : withLc.filter(x => x.lc !== 'expired')
     visible.sort((a, b) => {
       const grp = (lc: typeof a.lc) => (lc === 'expired' ? 3 : lc === 'none' ? 2 : 0)
@@ -755,7 +777,7 @@ export default function SignageContentPage() {
           <div className="sig-content-tiles">
             {displayRows.map(row => {
               const e = getEdit(row)
-              const lc = contentLifecycle(row.start_date, row.end_date, today)
+              const lc = rowLifecycle(row, today)
               const showStatus = tab === 'approved' && lc !== 'none'
               const selected = expandedId === row.id
               const fileName = row.media_path ? mediaFileName(row.media_path) : 'HTML slide'
@@ -815,7 +837,7 @@ export default function SignageContentPage() {
                 )
               }
               const e = getEdit(row)
-              const lc = contentLifecycle(row.start_date, row.end_date, today)
+              const lc = rowLifecycle(row, today)
               const showStatus = tab === 'approved' && lc !== 'none'
               const isHtml = row.type === 'html' && !row.system_kind
               const isVideoRow = row.type === 'video'
