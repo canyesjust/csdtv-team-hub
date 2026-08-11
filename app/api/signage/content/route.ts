@@ -13,7 +13,7 @@ import {
   resolveVideoMime,
   validateVideoBuffer,
 } from '@/lib/signage/media-process'
-import { clampDisplaySeconds, sanitizeSignageHtml } from '@/lib/signage/content-display'
+import { clampDisplaySeconds } from '@/lib/signage/content-display'
 import { formatSignageUploadError } from '@/lib/signage/upload-errors'
 
 export const dynamic = 'force-dynamic'
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
   let thumbPath: string | null = null
   let storedHtml: string | null = null
   if ((systemKind === 'website' || systemKind === 'calendar') && websiteUrl) storedHtml = websiteUrl
-  if (systemKind === 'designed_slide' && htmlBody) storedHtml = sanitizeSignageHtml(htmlBody)
+  if (systemKind === 'designed_slide' && htmlBody) storedHtml = htmlBody
 
   if (
     !isTakeover &&
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
 
   try {
     if (isHtml) {
-      storedHtml = sanitizeSignageHtml(htmlBody)
+      storedHtml = htmlBody
     } else if (hasImage && image instanceof File) {
       if (isHeicFile(image)) {
         return NextResponse.json({ error: 'HEIC photos are not supported. Save as JPG or PNG first.' }, { status: 400 })

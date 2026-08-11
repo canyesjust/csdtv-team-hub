@@ -7,7 +7,7 @@ import {
 import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { emailSignageSubmitterDecision } from '@/lib/signage/email'
-import { clampDisplaySeconds, sanitizeSignageHtml } from '@/lib/signage/content-display'
+import { clampDisplaySeconds } from '@/lib/signage/content-display'
 import {
   isAllowedImageMime,
   isAllowedVideoMime,
@@ -93,7 +93,7 @@ export async function PATCH(
   if (typeof body.full_screen === 'boolean') patch.full_screen = body.full_screen
   if (typeof body.title === 'string') patch.title = body.title
   if (body.display_seconds !== undefined) patch.display_seconds = clampDisplaySeconds(body.display_seconds)
-  if (typeof body.html_body === 'string') patch.html_body = sanitizeSignageHtml(body.html_body)
+  if (typeof body.html_body === 'string') patch.html_body = body.html_body
   // Website "page zoom": logical render width merged into gen_meta. 0/null clears
   // it (back to native fill). Other gen_meta keys (AI provenance, etc.) are kept.
   if (body.website_width !== undefined) {

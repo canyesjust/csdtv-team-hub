@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import sharp from 'sharp'
 import { announcementScopeLabel, normalizeSignageAnnouncementIcon } from './announcement-icons'
-import { clampDisplaySeconds, sanitizeSignageHtml, websiteWidthFromMeta } from './content-display'
+import { clampDisplaySeconds, websiteWidthFromMeta } from './content-display'
 import { signageMediaPublicUrl, normalizeSignageTheme, SIGNAGE_TIMEZONE } from './constants'
 import { resolveScreenLive, resolveBoardTakeover } from './takeover'
 import { resolveZoneConfig } from './zones'
@@ -458,7 +458,7 @@ export async function renderSystemBlockHtml(
       ? await service.from('signage_sites').select(SITE_BRAND_COLUMNS).eq('id', row.site_id).maybeSingle()
       : { data: null }
     if (row.system_kind === 'designed_slide') {
-      return row.html_body ? fillDesignedSlide(sanitizeSignageHtml(String(row.html_body)), await resolveSiteBrand(service, site as SiteBrand)) : null
+      return row.html_body ? fillDesignedSlide(String(row.html_body), await resolveSiteBrand(service, site as SiteBrand)) : null
     }
     return getNationalDayHtml(service, site as SiteBrand)
   }
@@ -576,7 +576,7 @@ export async function buildScreenFeed(
   if (designedRows.length) {
     const brand = await resolveSiteBrand(service, siteRes.data as SiteBrand)
     for (const r of designedRows) {
-      designedByRow.set(r.id, r.html_body ? fillDesignedSlide(sanitizeSignageHtml(String(r.html_body)), brand) : null)
+      designedByRow.set(r.id, r.html_body ? fillDesignedSlide(String(r.html_body), brand) : null)
     }
   }
   const systemHtml = (row: { id?: string; system_kind?: string | null; html_body?: string | null }): string | null => {
@@ -600,7 +600,7 @@ export async function buildScreenFeed(
       url: isWebsite
         ? String(row.html_body ?? '')
         : (isSystem || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path)),
-      html: isWebsite ? null : (isSystem ? systemHtml(row) : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null)),
+      html: isWebsite ? null : (isSystem ? systemHtml(row) : (type === 'html' && row.html_body ? String(row.html_body) : null)),
       // A building takeover is always exclusive/full-screen, regardless of its
       // own full_screen flag (there's nothing else in `media` for it to share
       // the rotation with anyway).

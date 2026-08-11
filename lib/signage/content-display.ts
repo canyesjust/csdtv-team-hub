@@ -10,10 +10,19 @@ export function clampDisplaySeconds(value: unknown): number {
   return Math.min(SIGNAGE_MAX_DISPLAY_SECONDS, Math.max(SIGNAGE_MIN_DISPLAY_SECONDS, n))
 }
 
-/** Strip script tags from manager-authored HTML slides. */
-export function sanitizeSignageHtml(html: string): string {
-  return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-}
+// Manager-authored HTML slides (type 'html' and the 'designed_slide' system
+// kind) are intentionally NOT script-stripped. They only ever render inside a
+// maximally-restrictive sandboxed iframe (`sandbox="allow-scripts"`, no
+// `allow-same-origin` — see ScreenClient.tsx and build-screen-html.ts), which
+// is stricter than the "website" content type gets. A script in that iframe
+// runs in a unique opaque origin: no cookies/localStorage, no access to the
+// parent page, other screens, or any app API with credentials, and no
+// popups or top-level navigation (those permissions aren't granted). That
+// isolation is what makes logic-based slides (countdowns, live clocks, etc.)
+// safe without needing to block <script> at write time. Creating and
+// approving this content already requires editor/approver auth — the public
+// unauthenticated request form (app/api/signage/submit/route.ts) never
+// accepts HTML content at all.
 
 /** Allowed logical render widths (px) for a website slide's "page zoom". */
 export const WEBSITE_WIDTH_PRESETS = [1920, 2560, 3200] as const
