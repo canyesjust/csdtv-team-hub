@@ -210,12 +210,32 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
   }, [screens])
   const areaCount = (id: string) => (byArea.get(id) ?? []).length
 
+  // Grouped case-insensitively: screens sometimes get entered with inconsistent
+  // building casing (e.g. "cdo" vs "CDO") for what's really one building. Show a
+  // single chip per building, using whichever casing is most common as the
+  // display label, so the picker never shows the same building twice.
+  const buildingKey = (b: string) => b.trim().toLowerCase()
   const buildingNames = useMemo(() => {
-    const set = new Set<string>()
-    screens.forEach(sc => { const b = (sc.building || '').trim(); if (b) set.add(b) })
-    return Array.from(set).sort((a, b) => a.localeCompare(b))
+    const displayCounts = new Map<string, Map<string, number>>()
+    screens.forEach(sc => {
+      const b = (sc.building || '').trim()
+      if (!b) return
+      const key = buildingKey(b)
+      const counts = displayCounts.get(key) ?? new Map<string, number>()
+      counts.set(b, (counts.get(b) ?? 0) + 1)
+      displayCounts.set(key, counts)
+    })
+    const names = Array.from(displayCounts.values()).map(counts => {
+      let best = '', bestCount = -1
+      for (const [display, count] of counts) {
+        if (count > bestCount) { best = display; bestCount = count }
+      }
+      return best
+    })
+    return names.sort((a, b) => a.localeCompare(b))
   }, [screens])
-  const buildingCount = (b: string) => screens.filter(sc => (sc.building || '').trim() === b).length
+  const buildingCount = (b: string) => screens.filter(sc => buildingKey(sc.building || '') === buildingKey(b)).length
+  const isBuildingSelected = (b: string) => buildings.some(x => buildingKey(x) === buildingKey(b))
 
   const emit = (patch: Partial<TargetingValue>) => onChange({
     all_screens: false,
@@ -235,9 +255,9 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
     emit({ target_area_ids: [...set] })
   }
   const toggleBuilding = (b: string) => {
-    const set = new Set(buildings)
-    if (set.has(b)) set.delete(b); else set.add(b)
-    emit({ target_buildings: [...set] })
+    const already = isBuildingSelected(b)
+    const next = already ? buildings.filter(x => buildingKey(x) !== buildingKey(b)) : [...buildings, b]
+    emit({ target_buildings: next })
   }
   const toggleScreen = (id: string) => {
     const set = new Set(value.target_screen_ids)
@@ -273,8 +293,8 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
             <div style={{ marginTop: buildingsOnly ? 0 : 8 }}>
               {!buildingsOnly && <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Buildings</p>}
               {buildingNames.map(b => (
-                <button key={b} type="button" onClick={() => toggleBuilding(b)} style={s.chip(buildings.includes(b))}>
-                  {buildings.includes(b) ? '✓ ' : ''}{b} <span style={{ opacity: 0.6 }}>({buildingCount(b)})</span>
+                <button key={b} type="button" onClick={() => toggleBuilding(b)} style={s.chip(isBuildingSelected(b))}>
+                  {isBuildingSelected(b) ? '✓ ' : ''}{b} <span style={{ opacity: 0.6 }}>({buildingCount(b)})</span>
                 </button>
               ))}
             </div>

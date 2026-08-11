@@ -86,17 +86,30 @@ async function markTakeoverEdgesDirty(service: SupabaseClient): Promise<void> {
     .eq('status', 'approved')
     .or(`and(takeover_starts_at.gte.${lookbackIso},takeover_starts_at.lte.${nowIso}),and(takeover_ends_at.gte.${lookbackIso},takeover_ends_at.lte.${nowIso})`)
 
-  const buildings = new Set<string>()
+  // Case-insensitive, matching how signageTargetMatches resolves a screen's
+  // building for the live feed — screens have occasionally been entered with
+  // inconsistent building casing (e.g. "cdo" vs "CDO"), and an exact .in()
+  // match here would silently skip the differently-cased screens.
+  const buildingKeys = new Set<string>()
   for (const row of rows ?? []) {
-    for (const b of (row.target_buildings as string[] | null) ?? []) buildings.add(b)
+    for (const b of (row.target_buildings as string[] | null) ?? []) buildingKeys.add(b.trim().toLowerCase())
   }
-  if (!buildings.size) return
+  if (!buildingKeys.size) return
+
+  const { data: screens } = await service
+    .from('signage_screens')
+    .select('id, building')
+    .eq('active', true)
+    .not('building', 'is', null)
+  const matchIds = (screens ?? [])
+    .filter(sc => sc.building && buildingKeys.has(String(sc.building).trim().toLowerCase()))
+    .map(sc => sc.id)
+  if (!matchIds.length) return
 
   await service
     .from('signage_screens')
     .update({ ablesign_html_dirty_at: nowIso })
-    .eq('active', true)
-    .in('building', [...buildings])
+    .in('id', matchIds)
 }
 
 async function pushBatch(mode: 'dirty' | 'due') {
