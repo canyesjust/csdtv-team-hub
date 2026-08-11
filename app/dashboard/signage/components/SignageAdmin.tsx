@@ -191,9 +191,12 @@ type TargetingProps = {
   value: TargetingValue
   onChange: (value: TargetingValue) => void
   lbl?: React.CSSProperties
+  /** Building takeovers are building-only by design — hides "All screens",
+   *  Areas, and "Specific screens", leaving just the Buildings chip group. */
+  buildingsOnly?: boolean
 }
 
-export default function SignageTargetingPicker({ areas, screens, value, onChange, lbl }: TargetingProps) {
+export default function SignageTargetingPicker({ areas, screens, value, onChange, lbl, buildingsOnly }: TargetingProps) {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const [showScreens, setShowScreens] = useState(value.target_screen_ids.length > 0)
@@ -244,16 +247,18 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
 
   return (
     <div>
-      {lbl && <p style={lbl}>Show on</p>}
-      <div>
-        <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
-          {value.all_screens ? '✓ ' : ''}All screens
-        </button>
-      </div>
+      {lbl && <p style={lbl}>{buildingsOnly ? 'Building(s)' : 'Show on'}</p>}
+      {!buildingsOnly && (
+        <div>
+          <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
+            {value.all_screens ? '✓ ' : ''}All screens
+          </button>
+        </div>
+      )}
 
-      {!value.all_screens && (
+      {(buildingsOnly || !value.all_screens) && (
         <>
-          {areas.length > 0 && (
+          {!buildingsOnly && areas.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Areas</p>
               {areas.map(a => (
@@ -265,8 +270,8 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
           )}
 
           {buildingNames.length > 0 && (
-            <div style={{ marginTop: 8 }}>
-              <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Buildings</p>
+            <div style={{ marginTop: buildingsOnly ? 0 : 8 }}>
+              {!buildingsOnly && <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Buildings</p>}
               {buildingNames.map(b => (
                 <button key={b} type="button" onClick={() => toggleBuilding(b)} style={s.chip(buildings.includes(b))}>
                   {buildings.includes(b) ? '✓ ' : ''}{b} <span style={{ opacity: 0.6 }}>({buildingCount(b)})</span>
@@ -275,13 +280,15 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
             </div>
           )}
 
-          <div style={{ marginTop: 8 }}>
-            <button type="button" onClick={() => setShowScreens(v => !v)} style={s.chip(showScreens || value.target_screen_ids.length > 0)}>
-              {showScreens ? '− ' : '+ '}Specific screens
-            </button>
-          </div>
+          {!buildingsOnly && (
+            <div style={{ marginTop: 8 }}>
+              <button type="button" onClick={() => setShowScreens(v => !v)} style={s.chip(showScreens || value.target_screen_ids.length > 0)}>
+                {showScreens ? '− ' : '+ '}Specific screens
+              </button>
+            </div>
+          )}
 
-          {showScreens && (
+          {!buildingsOnly && showScreens && (
             <div style={{ marginTop: 6, maxHeight: 220, overflowY: 'auto' }}>
               {[...areas, null].map(area => {
                 const list = byArea.get(area ? area.id : null) ?? []

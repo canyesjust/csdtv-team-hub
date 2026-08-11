@@ -31,17 +31,35 @@ export async function POST(request: NextRequest) {
   }
   const thumbPath = body.thumb_path && SAFE_THUMB.test(String(body.thumb_path)) ? String(body.thumb_path) : null
 
-  const startDate = String(body.start_date || '').trim()
-  const endDate = String(body.end_date || '').trim()
-  if (!startDate || !endDate) {
-    return NextResponse.json({ error: 'Dates are required.' }, { status: 400 })
-  }
-
   const allScreens = body.all_screens === true
   const targetAreaIds = Array.isArray(body.target_area_ids) ? (body.target_area_ids as unknown[]).map(String) : []
   const targetScreenIds = Array.isArray(body.target_screen_ids) ? (body.target_screen_ids as unknown[]).map(String) : []
   const targetBuildings = Array.isArray(body.target_buildings) ? (body.target_buildings as unknown[]).map(String) : []
-  if (!allScreens && targetAreaIds.length === 0 && targetScreenIds.length === 0 && targetBuildings.length === 0) {
+
+  // Building takeover: same rules as the image/HTML creation route
+  // (app/api/signage/content/route.ts) — building-only targeting, a valid
+  // window, and it always lands in the approval queue.
+  const isTakeover = body.is_takeover === true
+  const takeoverStartsAt = body.takeover_starts_at ? String(body.takeover_starts_at) : ''
+  const takeoverEndsAt = body.takeover_ends_at ? String(body.takeover_ends_at) : ''
+  if (isTakeover) {
+    if (allScreens || targetAreaIds.length > 0 || targetScreenIds.length > 0 || targetBuildings.length === 0) {
+      return NextResponse.json({ error: 'A building takeover must target one or more buildings only (not all screens, areas, or individual screens).' }, { status: 400 })
+    }
+    const startsMs = Date.parse(takeoverStartsAt)
+    const endsMs = Date.parse(takeoverEndsAt)
+    if (!takeoverStartsAt || !takeoverEndsAt || Number.isNaN(startsMs) || Number.isNaN(endsMs) || startsMs >= endsMs) {
+      return NextResponse.json({ error: 'Set a valid takeover start and end time, with start before end.' }, { status: 400 })
+    }
+  }
+
+  const startDate = isTakeover ? takeoverStartsAt.slice(0, 10) : String(body.start_date || '').trim()
+  const endDate = isTakeover ? takeoverEndsAt.slice(0, 10) : String(body.end_date || '').trim()
+  if (!startDate || !endDate) {
+    return NextResponse.json({ error: 'Dates are required.' }, { status: 400 })
+  }
+
+  if (!isTakeover && !allScreens && targetAreaIds.length === 0 && targetScreenIds.length === 0 && targetBuildings.length === 0) {
     return NextResponse.json({ error: 'Select "All screens" or at least one area/building/screen.' }, { status: 400 })
   }
 
@@ -59,7 +77,7 @@ export async function POST(request: NextRequest) {
     thumb_path: thumbPath,
     html_body: null,
     display_seconds: clampDisplaySeconds(body.display_seconds),
-    status: 'approved',
+    status: isTakeover ? 'pending' : 'approved',
     start_date: startDate,
     end_date: endDate,
     all_screens: allScreens,
@@ -67,7 +85,10 @@ export async function POST(request: NextRequest) {
     target_screen_ids: targetScreenIds,
     target_buildings: targetBuildings,
     priority: typeof body.priority === 'number' ? body.priority : parseInt(String(body.priority ?? '0'), 10) || 0,
-    full_screen: body.full_screen === true,
+    full_screen: isTakeover ? true : body.full_screen === true,
+    is_takeover: isTakeover,
+    takeover_starts_at: isTakeover ? new Date(takeoverStartsAt).toISOString() : null,
+    takeover_ends_at: isTakeover ? new Date(takeoverEndsAt).toISOString() : null,
   }).select('*').single()
 
   if (error) {

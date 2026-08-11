@@ -524,10 +524,37 @@ export async function buildScreenFeed(
     service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle(),
   ])
 
+  // Live (HLS/CSDtv) + board-meeting takeover resolution. Shared with the public
+  // takeover endpoint (lib/signage/takeover.ts) so the React feed and the baked
+  // HTML poll agree on exactly when a screen goes live or follows the board.
+  // Resolved up front (rather than down by the return statement) because the
+  // building-takeover check below needs to know live/board already won.
+  const live = resolveScreenLive(liveRes.data, screen, target)
+  const board_takeover = resolveBoardTakeover(takeoverRes.data, screen)
+
   const filteredContent = (contentRes.data ?? [])
     .filter(row => isInDateRange(row.start_date, row.end_date, today))
     .filter(row => signageTargetMatches(row, target))
     .sort((a, b) => b.priority - a.priority || String(b.created_at).localeCompare(String(a.created_at)))
+
+  // Building takeover: an approved is_takeover row whose precise window contains
+  // `now`, already scoped to this screen's building by signageTargetMatches
+  // above. It replaces the entire rotation below — the only item in `media`,
+  // forced full_screen — the same way a full_screen item already blacks out
+  // everything else on the live screen and, since the offline/baked HTML path
+  // (build-screen-html.ts) renders straight from this `media` array, on AbleSign
+  // sticks too, with no changes needed there. A live board meeting or CSDtv live
+  // stream still wins if either is already active.
+  const now = Date.now()
+  const activeBuildingTakeover = (!live.live && !board_takeover)
+    ? filteredContent.find(row =>
+        row.is_takeover
+        && row.takeover_starts_at
+        && row.takeover_ends_at
+        && new Date(row.takeover_starts_at).getTime() <= now
+        && now <= new Date(row.takeover_ends_at).getTime(),
+      )
+    : undefined
 
   // System "stock" blocks (broadcast board, calendar, website) are content rows
   // rendered dynamically by the feed, but scheduled + targeted exactly like
@@ -561,31 +588,38 @@ export async function buildScreenFeed(
     return null
   }
 
-  const media = filteredContent
-    // Drop a system block when it has nothing to show (e.g. no upcoming items, no URL).
-    .filter(row => {
-      if (!row.system_kind) return true
-      if (row.system_kind === 'website') return !!row.html_body // needs a URL
-      return !!systemHtml(row)
-    })
-    .map(row => {
-      const isWebsite = row.system_kind === 'website'
-      const isSystem = !!row.system_kind
-      // Website = a live external page in a direct iframe (its URL is in html_body).
-      const type = (isWebsite ? 'website' : (isSystem ? 'html' : row.type)) as 'image' | 'video' | 'html' | 'website'
-      return {
-        id: row.id,
-        type,
-        title: row.title,
-        url: isWebsite
-          ? String(row.html_body ?? '')
-          : (isSystem || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path)),
-        html: isWebsite ? null : (isSystem ? systemHtml(row) : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null)),
-        full_screen: row.full_screen,
-        display_seconds: clampDisplaySeconds(row.display_seconds),
-        website_width: isWebsite ? websiteWidthFromMeta(row.gen_meta) : null,
-      }
-    })
+  const toMediaItem = (row: (typeof filteredContent)[number]) => {
+    const isWebsite = row.system_kind === 'website'
+    const isSystem = !!row.system_kind
+    // Website = a live external page in a direct iframe (its URL is in html_body).
+    const type = (isWebsite ? 'website' : (isSystem ? 'html' : row.type)) as 'image' | 'video' | 'html' | 'website'
+    return {
+      id: row.id,
+      type,
+      title: row.title,
+      url: isWebsite
+        ? String(row.html_body ?? '')
+        : (isSystem || type === 'html' || !row.media_path ? '' : signageMediaPublicUrl(row.media_path)),
+      html: isWebsite ? null : (isSystem ? systemHtml(row) : (type === 'html' && row.html_body ? sanitizeSignageHtml(String(row.html_body)) : null)),
+      // A building takeover is always exclusive/full-screen, regardless of its
+      // own full_screen flag (there's nothing else in `media` for it to share
+      // the rotation with anyway).
+      full_screen: row.is_takeover ? true : row.full_screen,
+      display_seconds: clampDisplaySeconds(row.display_seconds),
+      website_width: isWebsite ? websiteWidthFromMeta(row.gen_meta) : null,
+    }
+  }
+
+  const media = activeBuildingTakeover
+    ? [toMediaItem(activeBuildingTakeover)]
+    : filteredContent
+        // Drop a system block when it has nothing to show (e.g. no upcoming items, no URL).
+        .filter(row => {
+          if (!row.system_kind) return true
+          if (row.system_kind === 'website') return !!row.html_body // needs a URL
+          return !!systemHtml(row)
+        })
+        .map(toMediaItem)
 
   let areaRowsQuery = service.from('signage_areas').select('id, name')
   let screenRowsQuery = service.from('signage_screens').select('id, name')
@@ -657,12 +691,6 @@ export async function buildScreenFeed(
     destination: w.destination,
     direction: w.direction,
   }))
-
-  // Live (HLS/CSDtv) + board-meeting takeover resolution. Shared with the public
-  // takeover endpoint (lib/signage/takeover.ts) so the React feed and the baked
-  // HTML poll agree on exactly when a screen goes live or follows the board.
-  const live = resolveScreenLive(liveRes.data, screen, target)
-  const board_takeover = resolveBoardTakeover(takeoverRes.data, screen)
 
   // Zoned 2 extras — only fetched for screens using the district-branded layout.
   const resolvedLayout = resolveScreenLayout(screen.layout, site?.default_layout)
@@ -777,6 +805,9 @@ export async function buildScreenFeed(
       visitors,
       live,
       board_takeover,
+      building_takeover: activeBuildingTakeover
+        ? { id: activeBuildingTakeover.id, title: activeBuildingTakeover.title, ends_at: activeBuildingTakeover.takeover_ends_at }
+        : undefined,
       weather,
       spotlight,
       csdtv_live,

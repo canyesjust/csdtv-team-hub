@@ -30,8 +30,6 @@ export async function POST(request: NextRequest) {
   if ('error' in siteCheck) return siteCheck.error
 
   const title = String(form.get('title') ?? '').trim()
-  const startDate = String(form.get('start_date') ?? '').trim()
-  const endDate = String(form.get('end_date') ?? '').trim()
   const allScreens = String(form.get('all_screens') ?? 'false') === 'true'
   const targetAreaIds = JSON.parse(String(form.get('target_area_ids') ?? '[]')) as string[]
   const targetScreenIds = JSON.parse(String(form.get('target_screen_ids') ?? '[]')) as string[]
@@ -49,11 +47,36 @@ export async function POST(request: NextRequest) {
   const websiteUrl = String(form.get('website_url') ?? '').trim()
   const source = String(form.get('source') ?? '').trim() || null
   const statusInput = String(form.get('status') ?? 'approved').trim()
-  const status = statusInput === 'pending' ? 'pending' : 'approved'
   let genMeta: unknown = null
   try { const g = form.get('gen_meta'); if (g) genMeta = JSON.parse(String(g)) } catch { genMeta = null }
   const image = form.get('image')
   const video = form.get('video')
+
+  // Building takeover: a scheduled, building-only, exclusive override. Its own
+  // start/end timestamps are the source of truth — derive the day-level
+  // start_date/end_date from them server-side rather than trusting the client
+  // to keep the two in sync.
+  const isTakeover = String(form.get('is_takeover') ?? 'false') === 'true'
+  const takeoverStartsAt = String(form.get('takeover_starts_at') ?? '').trim()
+  const takeoverEndsAt = String(form.get('takeover_ends_at') ?? '').trim()
+
+  if (isTakeover) {
+    if (allScreens || targetAreaIds.length > 0 || targetScreenIds.length > 0 || targetBuildings.length === 0) {
+      return NextResponse.json({ error: 'A building takeover must target one or more buildings only (not all screens, areas, or individual screens).' }, { status: 400 })
+    }
+    const startsMs = Date.parse(takeoverStartsAt)
+    const endsMs = Date.parse(takeoverEndsAt)
+    if (!takeoverStartsAt || !takeoverEndsAt || Number.isNaN(startsMs) || Number.isNaN(endsMs) || startsMs >= endsMs) {
+      return NextResponse.json({ error: 'Set a valid takeover start and end time, with start before end.' }, { status: 400 })
+    }
+  }
+  // A building takeover always goes to the approval queue, regardless of which
+  // creation path (direct upload vs. Create with AI) sent it — it overrides
+  // every screen in a building, so it never skips review.
+  const status = isTakeover ? 'pending' : (statusInput === 'pending' ? 'pending' : 'approved')
+
+  const startDate = isTakeover ? takeoverStartsAt.slice(0, 10) : String(form.get('start_date') ?? '').trim()
+  const endDate = isTakeover ? takeoverEndsAt.slice(0, 10) : String(form.get('end_date') ?? '').trim()
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: 'Dates are required.' }, { status: 400 })
@@ -78,12 +101,14 @@ export async function POST(request: NextRequest) {
   if (systemKind === 'designed_slide' && htmlBody) storedHtml = sanitizeSignageHtml(htmlBody)
 
   if (
+    !isTakeover &&
     !isSystem &&
     !allScreens &&
     targetAreaIds.length === 0 &&
-    targetScreenIds.length === 0
+    targetScreenIds.length === 0 &&
+    targetBuildings.length === 0
   ) {
-    return NextResponse.json({ error: 'Select "All screens" or at least one area/screen.' }, { status: 400 })
+    return NextResponse.json({ error: 'Select "All screens" or at least one area, building, or screen.' }, { status: 400 })
   }
 
   try {
@@ -155,7 +180,10 @@ export async function POST(request: NextRequest) {
     target_screen_ids: targetScreenIds,
     target_buildings: targetBuildings,
     priority,
-    full_screen: fullScreen,
+    full_screen: isTakeover ? true : fullScreen,
+    is_takeover: isTakeover,
+    takeover_starts_at: isTakeover ? new Date(takeoverStartsAt).toISOString() : null,
+    takeover_ends_at: isTakeover ? new Date(takeoverEndsAt).toISOString() : null,
   }).select('*').single()
 
   if (error) {

@@ -47,12 +47,15 @@ type ContentRow = {
   created_at?: string
   reviewed_at?: string | null
   reviewed_by?: string | null
+  is_takeover: boolean
+  takeover_starts_at: string | null
+  takeover_ends_at: string | null
 }
 
 type Tab = 'pending' | 'approved' | 'rejected'
 
 const CONTENT_COLUMNS =
-  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, gen_meta, created_at, reviewed_at, reviewed_by'
+  'id, type, title, media_path, thumb_path, html_body, display_seconds, status, submitter_name, submitter_email, requested_note, start_date, end_date, priority, all_screens, target_area_ids, target_screen_ids, target_buildings, full_screen, reject_reason, system_kind, gen_meta, created_at, reviewed_at, reviewed_by, is_takeover, takeover_starts_at, takeover_ends_at'
 
 // A template assigned to this location (from the admin library).
 type StockTemplate = { id: string; name: string; description: string | null; kind: string; singleton: boolean; requires_url: boolean; config?: { html?: string } | null }
@@ -72,6 +75,24 @@ const TAB_LABELS: Record<Tab, string> = { pending: 'Pending', approved: 'Approve
 function mediaFileName(path: string): string {
   const parts = path.split('/')
   return parts[parts.length - 1] || 'Media'
+}
+
+// <input type="datetime-local"> works in local wall-clock time with no
+// timezone, so takeover windows convert to/from that on the way in/out of the
+// form. Building takeover screens all live in one timezone (SIGNAGE_TIMEZONE,
+// Mountain Time — see lib/signage/constants.ts), same as the rest of signage.
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function fromDatetimeLocal(local: string): string {
+  if (!local) return ''
+  const d = new Date(local)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString()
 }
 
 export default function SignageContentPage() {
@@ -102,6 +123,9 @@ export default function SignageContentPage() {
     display_seconds: number
     html_body: string
     website_width: number
+    is_takeover: boolean
+    takeover_starts_at: string
+    takeover_ends_at: string
   }>>({})
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -121,6 +145,12 @@ export default function SignageContentPage() {
   const [addContentType, setAddContentType] = useState<'image' | 'video' | 'html'>('image')
   const [addHtmlBody, setAddHtmlBody] = useState('')
   const [addTargeting, setAddTargeting] = useState<TargetingValue>({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
+  // Building takeover: a scheduled, building-only, exclusive override — a
+  // different targeting/scheduling shape from regular content, so it gets its
+  // own toggle and its own start/end (datetime, not just date) fields rather
+  // than overloading addTargeting/addDates.
+  const [addTakeover, setAddTakeover] = useState(false)
+  const [addTakeoverWindow, setAddTakeoverWindow] = useState({ starts_at: '', ends_at: '' })
   const [addDates, setAddDates] = useState({
     title: '',
     start_date: '',
@@ -194,6 +224,9 @@ export default function SignageContentPage() {
     display_seconds: row.display_seconds ?? SIGNAGE_DEFAULT_DISPLAY_SECONDS,
     html_body: row.html_body ?? '',
     website_width: row.gen_meta?.website_width ?? 0,
+    is_takeover: row.is_takeover ?? false,
+    takeover_starts_at: toDatetimeLocal(row.takeover_starts_at),
+    takeover_ends_at: toDatetimeLocal(row.takeover_ends_at),
   }
 
   const today = useMemo(() => {
@@ -232,6 +265,11 @@ export default function SignageContentPage() {
       display_seconds: e.display_seconds,
       ...(row.type === 'html' ? { html_body: e.html_body } : {}),
       ...(row.system_kind === 'website' ? { website_width: e.website_width || null } : {}),
+      ...(row.is_takeover ? {
+        is_takeover: e.is_takeover,
+        takeover_starts_at: fromDatetimeLocal(e.takeover_starts_at),
+        takeover_ends_at: fromDatetimeLocal(e.takeover_ends_at),
+      } : {}),
       ...extra,
     })
   }
@@ -260,6 +298,16 @@ export default function SignageContentPage() {
       toast('Select at least one target (area, screen, or building) or choose all screens before approving.', 'error')
       return
     }
+    if (e.is_takeover) {
+      if (e.all_screens || e.target_area_ids.length > 0 || e.target_screen_ids.length > 0 || (e.target_buildings ?? []).length === 0) {
+        toast('A building takeover must target one or more buildings only.', 'error')
+        return
+      }
+      if (!e.takeover_starts_at || !e.takeover_ends_at || new Date(e.takeover_starts_at) >= new Date(e.takeover_ends_at)) {
+        toast('Set a takeover start and end time, with start before end.', 'error')
+        return
+      }
+    }
     await patchContent(row.id, {
       status: 'approved',
       title: e.title,
@@ -273,6 +321,11 @@ export default function SignageContentPage() {
       priority: e.priority,
       display_seconds: e.display_seconds,
       ...(row.type === 'html' ? { html_body: e.html_body } : {}),
+      ...(e.is_takeover ? {
+        is_takeover: true,
+        takeover_starts_at: fromDatetimeLocal(e.takeover_starts_at),
+        takeover_ends_at: fromDatetimeLocal(e.takeover_ends_at),
+      } : {}),
     }, 'Approved — screens update within a few minutes')
   }
 
@@ -284,36 +337,56 @@ export default function SignageContentPage() {
 
   const addDirect = async () => {
     const needsFile = addContentType !== 'html'
-    if ((needsFile && !addFile) || !addDates.start_date || !addDates.end_date) {
-      toast(needsFile ? 'File and dates required' : 'Dates and HTML required', 'error')
+    if (needsFile && !addFile) {
+      toast('File required', 'error')
       return
     }
     if (addContentType === 'html' && !addHtmlBody.trim()) {
       toast('Enter HTML content', 'error')
       return
     }
-    if (
-      !addTargeting.all_screens &&
-      addTargeting.target_area_ids.length === 0 &&
-      addTargeting.target_screen_ids.length === 0 &&
-      (addTargeting.target_buildings ?? []).length === 0
-    ) {
-      toast('Select "All screens" or at least one area, building, or screen', 'error')
-      return
+    if (addTakeover) {
+      if ((addTargeting.target_buildings ?? []).length === 0) {
+        toast('Select at least one building for the takeover', 'error')
+        return
+      }
+      if (!addTakeoverWindow.starts_at || !addTakeoverWindow.ends_at || new Date(addTakeoverWindow.starts_at) >= new Date(addTakeoverWindow.ends_at)) {
+        toast('Set a takeover start and end time, with start before end', 'error')
+        return
+      }
+    } else {
+      if (!addDates.start_date || !addDates.end_date) {
+        toast('Dates required', 'error')
+        return
+      }
+      if (
+        !addTargeting.all_screens &&
+        addTargeting.target_area_ids.length === 0 &&
+        addTargeting.target_screen_ids.length === 0 &&
+        (addTargeting.target_buildings ?? []).length === 0
+      ) {
+        toast('Select "All screens" or at least one area, building, or screen', 'error')
+        return
+      }
     }
 
     const fd = new FormData()
     fd.set('title', addDates.title)
-    fd.set('start_date', addDates.start_date)
-    fd.set('end_date', addDates.end_date)
+    fd.set('start_date', addTakeover ? '' : addDates.start_date)
+    fd.set('end_date', addTakeover ? '' : addDates.end_date)
     fd.set('priority', String(addDates.priority))
     fd.set('display_seconds', String(addDates.display_seconds))
     fd.set('content_type', addContentType)
     fd.set('site_id', activeSiteId)
-    fd.set('all_screens', String(addTargeting.all_screens))
-    fd.set('target_area_ids', JSON.stringify(addTargeting.target_area_ids))
-    fd.set('target_screen_ids', JSON.stringify(addTargeting.target_screen_ids))
+    fd.set('all_screens', String(addTakeover ? false : addTargeting.all_screens))
+    fd.set('target_area_ids', JSON.stringify(addTakeover ? [] : addTargeting.target_area_ids))
+    fd.set('target_screen_ids', JSON.stringify(addTakeover ? [] : addTargeting.target_screen_ids))
     fd.set('target_buildings', JSON.stringify(addTargeting.target_buildings ?? []))
+    fd.set('is_takeover', String(addTakeover))
+    if (addTakeover) {
+      fd.set('takeover_starts_at', fromDatetimeLocal(addTakeoverWindow.starts_at))
+      fd.set('takeover_ends_at', fromDatetimeLocal(addTakeoverWindow.ends_at))
+    }
 
     if (addContentType === 'html') {
       fd.set('html_body', addHtmlBody)
@@ -368,15 +441,18 @@ export default function SignageContentPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: addDates.title,
-            start_date: addDates.start_date,
-            end_date: addDates.end_date,
+            start_date: addTakeover ? undefined : addDates.start_date,
+            end_date: addTakeover ? undefined : addDates.end_date,
             priority: addDates.priority,
             display_seconds: addDates.display_seconds,
             site_id: activeSiteId,
-            all_screens: addTargeting.all_screens,
-            target_area_ids: addTargeting.target_area_ids,
-            target_screen_ids: addTargeting.target_screen_ids,
+            all_screens: addTakeover ? false : addTargeting.all_screens,
+            target_area_ids: addTakeover ? [] : addTargeting.target_area_ids,
+            target_screen_ids: addTakeover ? [] : addTargeting.target_screen_ids,
             target_buildings: addTargeting.target_buildings ?? [],
+            is_takeover: addTakeover,
+            takeover_starts_at: addTakeover ? fromDatetimeLocal(addTakeoverWindow.starts_at) : undefined,
+            takeover_ends_at: addTakeover ? fromDatetimeLocal(addTakeoverWindow.ends_at) : undefined,
             media_path: sign.video.path,
             thumb_path: thumbPath,
           }),
@@ -399,13 +475,15 @@ export default function SignageContentPage() {
       }
     }
 
-    toast('Content added', 'success')
+    toast(addTakeover ? 'Building takeover sent to the approval queue' : 'Content added', 'success')
     setShowAdd(false)
     setAddFile(null)
     setAddContentType('image')
     setAddHtmlBody('')
     setAddTargeting({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
     setAddDates({ title: '', start_date: '', end_date: '', priority: 0, display_seconds: SIGNAGE_DEFAULT_DISPLAY_SECONDS })
+    setAddTakeover(false)
+    setAddTakeoverWindow({ starts_at: '', ends_at: '' })
     void refreshAll()
   }
 
@@ -549,39 +627,41 @@ export default function SignageContentPage() {
               <p style={s.lbl}>Title</p>
               <input value={addDates.title} onChange={e => setAddDates(d => ({ ...d, title: e.target.value }))} style={s.input} />
             </div>
-            <div style={s.row}>
-              <div style={{ flex: 1, minWidth: 130 }}>
-                <p style={s.lbl}>Start date</p>
-                <SignageDateInput value={addDates.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, start_date: v }))} style={s.input} />
+            {!addTakeover && (
+              <div style={s.row}>
+                <div style={{ flex: 1, minWidth: 130 }}>
+                  <p style={s.lbl}>Start date</p>
+                  <SignageDateInput value={addDates.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, start_date: v }))} style={s.input} />
+                </div>
+                <div style={{ flex: 1, minWidth: 130 }}>
+                  <p style={s.lbl}>End date</p>
+                  {isIndefiniteEndDate(addDates.end_date) ? (
+                    <div style={{ ...s.input, display: 'flex', alignItems: 'center', color: s.muted }}>No end date</div>
+                  ) : (
+                    <SignageDateInput value={addDates.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, end_date: v }))} style={s.input} min={addDates.start_date || undefined} />
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted, marginTop: 5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={isIndefiniteEndDate(addDates.end_date)} onChange={e => setAddDates(d => ({ ...d, end_date: e.target.checked ? SIGNAGE_INDEFINITE_END_DATE : '' }))} />
+                    No end date (runs indefinitely)
+                  </label>
+                </div>
+                <div style={{ width: 90 }}>
+                  <p style={s.lbl}>Priority</p>
+                  <input type="number" value={addDates.priority} onChange={e => setAddDates(d => ({ ...d, priority: parseInt(e.target.value, 10) || 0 }))} style={s.input} />
+                </div>
+                <div style={{ width: 110 }}>
+                  <p style={s.lbl}>Show for (sec)</p>
+                  <input
+                    type="number"
+                    min={SIGNAGE_MIN_DISPLAY_SECONDS}
+                    max={SIGNAGE_MAX_DISPLAY_SECONDS}
+                    value={addDates.display_seconds}
+                    onChange={e => setAddDates(d => ({ ...d, display_seconds: parseInt(e.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS }))}
+                    style={s.input}
+                  />
+                </div>
               </div>
-              <div style={{ flex: 1, minWidth: 130 }}>
-                <p style={s.lbl}>End date</p>
-                {isIndefiniteEndDate(addDates.end_date) ? (
-                  <div style={{ ...s.input, display: 'flex', alignItems: 'center', color: s.muted }}>No end date</div>
-                ) : (
-                  <SignageDateInput value={addDates.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setAddDates(d => ({ ...d, end_date: v }))} style={s.input} min={addDates.start_date || undefined} />
-                )}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted, marginTop: 5, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={isIndefiniteEndDate(addDates.end_date)} onChange={e => setAddDates(d => ({ ...d, end_date: e.target.checked ? SIGNAGE_INDEFINITE_END_DATE : '' }))} />
-                  No end date (runs indefinitely)
-                </label>
-              </div>
-              <div style={{ width: 90 }}>
-                <p style={s.lbl}>Priority</p>
-                <input type="number" value={addDates.priority} onChange={e => setAddDates(d => ({ ...d, priority: parseInt(e.target.value, 10) || 0 }))} style={s.input} />
-              </div>
-              <div style={{ width: 110 }}>
-                <p style={s.lbl}>Show for (sec)</p>
-                <input
-                  type="number"
-                  min={SIGNAGE_MIN_DISPLAY_SECONDS}
-                  max={SIGNAGE_MAX_DISPLAY_SECONDS}
-                  value={addDates.display_seconds}
-                  onChange={e => setAddDates(d => ({ ...d, display_seconds: parseInt(e.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS }))}
-                  style={s.input}
-                />
-              </div>
-            </div>
+            )}
             <div>
               <p style={s.lbl}>Content type</p>
               <select value={addContentType} onChange={e => setAddContentType(e.target.value as 'image' | 'video' | 'html')} style={s.input}>
@@ -590,7 +670,51 @@ export default function SignageContentPage() {
                 <option value="html">HTML</option>
               </select>
             </div>
-            <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} lbl={s.lbl} />
+
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 10, border: `1px solid ${addTakeover ? '#ef4444' : s.border}`, background: addTakeover ? 'rgba(239,68,68,0.08)' : 'transparent', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={addTakeover}
+                style={{ marginTop: 2 }}
+                onChange={e => {
+                  const on = e.target.checked
+                  setAddTakeover(on)
+                  if (on) setAddTargeting(t => ({ ...t, all_screens: false, target_area_ids: [], target_screen_ids: [] }))
+                }}
+              />
+              <span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: s.text, display: 'block' }}>Building takeover</span>
+                <span style={{ fontSize: 12, color: s.muted, lineHeight: 1.45 }}>
+                  Replaces the normal rotation on every screen in the building(s) below for a set window, then reverts automatically. Goes to the approval queue — it never skips review.
+                </span>
+              </span>
+            </label>
+
+            {addTakeover && (
+              <div style={s.row}>
+                <div style={{ flex: 1, minWidth: 190 }}>
+                  <p style={s.lbl}>Takeover starts</p>
+                  <input
+                    type="datetime-local"
+                    value={addTakeoverWindow.starts_at}
+                    onChange={e => setAddTakeoverWindow(w => ({ ...w, starts_at: e.target.value }))}
+                    style={s.input}
+                  />
+                </div>
+                <div style={{ flex: 1, minWidth: 190 }}>
+                  <p style={s.lbl}>Takeover ends</p>
+                  <input
+                    type="datetime-local"
+                    value={addTakeoverWindow.ends_at}
+                    min={addTakeoverWindow.starts_at || undefined}
+                    onChange={e => setAddTakeoverWindow(w => ({ ...w, ends_at: e.target.value }))}
+                    style={s.input}
+                  />
+                </div>
+              </div>
+            )}
+
+            <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} lbl={s.lbl} buildingsOnly={addTakeover} />
             {addContentType === 'html' ? (
               <>
                 <p style={s.lbl}>HTML</p>
@@ -615,7 +739,9 @@ export default function SignageContentPage() {
                 </p>
               </>
             )}
-            <button type="button" disabled={busy === 'add'} onClick={() => void addDirect()} style={s.btnPrimary}>Upload & publish</button>
+            <button type="button" disabled={busy === 'add'} onClick={() => void addDirect()} style={addTakeover ? { ...s.btnPrimary, background: '#ef4444', border: '1px solid #ef4444' } : s.btnPrimary}>
+              {addTakeover ? 'Send takeover to approval queue' : 'Upload & publish'}
+            </button>
           </div>
         </div>
       )}
@@ -665,10 +791,13 @@ export default function SignageContentPage() {
                       <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 20, color: '#fff', background: LIFECYCLE_META[lc].color }}>{LIFECYCLE_META[lc].label}</span>
                     )}
                     <span style={{ position: 'absolute', top: 6, right: 6, fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 5, color: '#fff', background: 'rgba(0,0,0,0.55)' }}>{typeChip}</span>
+                    {row.is_takeover && (
+                      <span style={{ position: 'absolute', bottom: 6, left: 6, right: 6, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.03em', textAlign: 'center', padding: '2px 6px', borderRadius: 5, color: '#fff', background: '#ef4444' }}>⚠ BUILDING TAKEOVER</span>
+                    )}
                   </div>
                   <div style={{ padding: '8px 10px' }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: s.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.title || fileName}</div>
-                    <div style={{ fontSize: 11.5, color: s.muted, marginTop: 2 }}>{dateLine}</div>
+                    <div style={{ fontSize: 11.5, color: s.muted, marginTop: 2 }}>{row.is_takeover ? (row.target_buildings ?? []).join(', ') || dateLine : dateLine}</div>
                   </div>
                 </div>
               )
@@ -712,6 +841,9 @@ export default function SignageContentPage() {
                     {showStatus && (
                       <span style={{ fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 20, color: LIFECYCLE_META[lc].color, background: LIFECYCLE_META[lc].bg }}>{LIFECYCLE_META[lc].label}</span>
                     )}
+                    {row.is_takeover && (
+                      <span style={{ fontSize: 10.5, fontWeight: 700, padding: '1px 8px', borderRadius: 20, color: '#fff', background: '#ef4444' }}>⚠ Building takeover</span>
+                    )}
                   </div>
                   <input
                     value={e.title}
@@ -736,40 +868,65 @@ export default function SignageContentPage() {
                       value={e}
                       onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, ...v } }))}
                       lbl={s.lbl}
+                      buildingsOnly={row.is_takeover}
                     />
-                    <div style={{ ...s.row, marginTop: 12 }}>
-                      <div style={{ flex: 1, minWidth: 130 }}>
-                        <p style={s.lbl}>Start date</p>
-                        <SignageDateInput value={e.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, start_date: v } }))} style={s.input} />
+                    {row.is_takeover ? (
+                      <div style={{ ...s.row, marginTop: 12 }}>
+                        <div style={{ flex: 1, minWidth: 190 }}>
+                          <p style={s.lbl}>Takeover starts</p>
+                          <input
+                            type="datetime-local"
+                            value={e.takeover_starts_at}
+                            onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, takeover_starts_at: ev.target.value } }))}
+                            style={s.input}
+                          />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 190 }}>
+                          <p style={s.lbl}>Takeover ends</p>
+                          <input
+                            type="datetime-local"
+                            value={e.takeover_ends_at}
+                            min={e.takeover_starts_at || undefined}
+                            onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, takeover_ends_at: ev.target.value } }))}
+                            style={s.input}
+                          />
+                        </div>
                       </div>
-                      <div style={{ flex: 1, minWidth: 130 }}>
-                        <p style={s.lbl}>End date</p>
-                        {isIndefiniteEndDate(e.end_date) ? (
-                          <div style={{ ...s.input, display: 'flex', alignItems: 'center', color: s.muted }}>No end date</div>
-                        ) : (
-                          <SignageDateInput value={e.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={s.input} min={e.start_date || undefined} />
-                        )}
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted, marginTop: 5, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={isIndefiniteEndDate(e.end_date)} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: ev.target.checked ? SIGNAGE_INDEFINITE_END_DATE : '' } }))} />
-                          No end date (runs indefinitely)
-                        </label>
+                    ) : (
+                      <div style={{ ...s.row, marginTop: 12 }}>
+                        <div style={{ flex: 1, minWidth: 130 }}>
+                          <p style={s.lbl}>Start date</p>
+                          <SignageDateInput value={e.start_date} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, start_date: v } }))} style={s.input} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 130 }}>
+                          <p style={s.lbl}>End date</p>
+                          {isIndefiniteEndDate(e.end_date) ? (
+                            <div style={{ ...s.input, display: 'flex', alignItems: 'center', color: s.muted }}>No end date</div>
+                          ) : (
+                            <SignageDateInput value={e.end_date} colorScheme={s.dark ? 'dark' : 'light'} onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: v } }))} style={s.input} min={e.start_date || undefined} />
+                          )}
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: s.muted, marginTop: 5, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={isIndefiniteEndDate(e.end_date)} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, end_date: ev.target.checked ? SIGNAGE_INDEFINITE_END_DATE : '' } }))} />
+                            No end date (runs indefinitely)
+                          </label>
+                        </div>
+                        <div style={{ width: 90 }}>
+                          <p style={s.lbl}>Priority</p>
+                          <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={s.input} />
+                        </div>
+                        <div style={{ width: 110 }}>
+                          <p style={s.lbl}>Show for (sec)</p>
+                          <input
+                            type="number"
+                            min={SIGNAGE_MIN_DISPLAY_SECONDS}
+                            max={SIGNAGE_MAX_DISPLAY_SECONDS}
+                            value={e.display_seconds}
+                            onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, display_seconds: parseInt(ev.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS } }))}
+                            style={s.input}
+                          />
+                        </div>
                       </div>
-                      <div style={{ width: 90 }}>
-                        <p style={s.lbl}>Priority</p>
-                        <input type="number" value={e.priority} onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, priority: parseInt(ev.target.value, 10) || 0 } }))} style={s.input} />
-                      </div>
-                      <div style={{ width: 110 }}>
-                        <p style={s.lbl}>Show for (sec)</p>
-                        <input
-                          type="number"
-                          min={SIGNAGE_MIN_DISPLAY_SECONDS}
-                          max={SIGNAGE_MAX_DISPLAY_SECONDS}
-                          value={e.display_seconds}
-                          onChange={ev => setEdits(prev => ({ ...prev, [row.id]: { ...e, display_seconds: parseInt(ev.target.value, 10) || SIGNAGE_DEFAULT_DISPLAY_SECONDS } }))}
-                          style={s.input}
-                        />
-                      </div>
-                    </div>
+                    )}
                     {isHtml && (
                       <div style={{ marginTop: 12 }}>
                         <p style={s.lbl}>HTML</p>
@@ -809,18 +966,20 @@ export default function SignageContentPage() {
                         <p style={{ ...s.lbl, margin: '5px 0 0', lineHeight: 1.4 }}>Native fits a page built for a screen. For a normal website that runs off the bottom, zoom out to fit more of the page (text gets smaller).</p>
                       </div>
                     )}
-                    <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={e.full_screen}
-                        onChange={async ev => {
-                          const on = ev.target.checked
-                          if (on && !(await confirmDialog({ title: 'Turn on full-screen takeover?', message: 'This slide will black out the entire screen while it shows, hiding all other content and the ticker. Save changes to apply it.', confirmLabel: 'Enable takeover', tone: 'danger' }))) return
-                          setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: on } }))
-                        }}
-                      />
-                      Full-screen takeover
-                    </label>
+                    {!row.is_takeover && (
+                      <label style={{ display: 'flex', gap: 7, marginTop: 12, fontSize: 13, color: s.text, alignItems: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={e.full_screen}
+                          onChange={async ev => {
+                            const on = ev.target.checked
+                            if (on && !(await confirmDialog({ title: 'Turn on full-screen takeover?', message: 'This slide will black out the entire screen while it shows, hiding all other content and the ticker. Save changes to apply it.', confirmLabel: 'Enable takeover', tone: 'danger' }))) return
+                            setEdits(prev => ({ ...prev, [row.id]: { ...e, full_screen: on } }))
+                          }}
+                        />
+                        Full-screen takeover
+                      </label>
+                    )}
 
                     {tab === 'pending' && (
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>

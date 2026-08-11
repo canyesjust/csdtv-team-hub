@@ -79,6 +79,12 @@ export type ScreenFeed = {
   live: { live: true; hls_url: string; label: string | null } | { live: false }
   /** Board meeting takeover (opt-in screens only): preroll graphics or live stream. */
   board_takeover?: { mode: 'preroll' | 'live'; url: string; audio: boolean; label: string | null }
+  /** Building takeover: an approved is_takeover signage_content row currently in
+   *  its scheduled window for this screen's building. When set, `media` already
+   *  contains only that one (forced full_screen) item — this field is metadata
+   *  for anything that wants to know a takeover is active without inspecting
+   *  `media`, not something renderers need to branch on themselves. */
+  building_takeover?: { id: string; title: string | null; ends_at: string | null }
   weather: SignageWeather
   /** Zoned 2 only: latest published CSDtv videos for the Spotlight rail. */
   spotlight?: { id: string; title: string; thumb: string; kind: string | null; views: number | null; duration: string | null }[]

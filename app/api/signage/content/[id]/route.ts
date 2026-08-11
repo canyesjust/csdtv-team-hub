@@ -61,6 +61,22 @@ export async function PATCH(
           { status: 400 },
         )
       }
+      // Building takeovers can't be approved half-configured — building-only
+      // targeting and a valid window, checked against whatever the request
+      // changed plus whatever the row already had.
+      const isTakeover = typeof body.is_takeover === 'boolean' ? body.is_takeover : existing.is_takeover
+      if (isTakeover) {
+        if (allScreens || areaIds.length > 0 || screenIds.length > 0 || buildings.length === 0) {
+          return NextResponse.json({ error: 'A building takeover must target one or more buildings only (not all screens, areas, or individual screens).' }, { status: 400 })
+        }
+        const startsAt = typeof body.takeover_starts_at === 'string' ? body.takeover_starts_at : existing.takeover_starts_at
+        const endsAt = typeof body.takeover_ends_at === 'string' ? body.takeover_ends_at : existing.takeover_ends_at
+        const startsMs = startsAt ? Date.parse(startsAt) : NaN
+        const endsMs = endsAt ? Date.parse(endsAt) : NaN
+        if (Number.isNaN(startsMs) || Number.isNaN(endsMs) || startsMs >= endsMs) {
+          return NextResponse.json({ error: 'Set a valid takeover start and end time, with start before end, before approving.' }, { status: 400 })
+        }
+      }
     }
   }
   if (typeof body.all_screens === 'boolean') patch.all_screens = body.all_screens
@@ -69,6 +85,9 @@ export async function PATCH(
   if (Array.isArray(body.target_buildings)) patch.target_buildings = body.target_buildings
   if (typeof body.start_date === 'string') patch.start_date = body.start_date
   if (typeof body.end_date === 'string') patch.end_date = body.end_date
+  if (typeof body.is_takeover === 'boolean') patch.is_takeover = body.is_takeover
+  if (body.takeover_starts_at === null || typeof body.takeover_starts_at === 'string') patch.takeover_starts_at = body.takeover_starts_at
+  if (body.takeover_ends_at === null || typeof body.takeover_ends_at === 'string') patch.takeover_ends_at = body.takeover_ends_at
   if (typeof body.priority === 'number') patch.priority = body.priority
   else if (typeof body.priority === 'string' && body.priority.trim()) patch.priority = parseInt(body.priority, 10) || 0
   if (typeof body.full_screen === 'boolean') patch.full_screen = body.full_screen

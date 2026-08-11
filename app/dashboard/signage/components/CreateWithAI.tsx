@@ -3,10 +3,18 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from '@/lib/theme'
 import { useSignage } from './SignageProvider'
-import { useSignageAdminStyles } from './SignageAdmin'
+import SignageTargetingPicker, { useSignageAdminStyles, type TargetingValue } from './SignageAdmin'
 import { toast } from '@/lib/toast'
 import SignageDateInput from '@/components/SignageDateInput'
 import { SLIDE_TYPES, validateSlideHtml, wordCapForType, type SlideType } from '@/lib/signage/slide-guardrails'
+
+// <input type="datetime-local"> works in local wall-clock time with no
+// timezone — the takeover window converts to ISO on the way to the server.
+function fromDatetimeLocal(local: string): string {
+  if (!local) return ''
+  const d = new Date(local)
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString()
+}
 
 const MOTIONS: [string, string][] = [['subtle', 'Subtle'], ['none', 'None (static)'], ['lively', 'Lively']]
 const DWELLS = [10, 15, 20]
@@ -36,7 +44,7 @@ const GUARDRAILS = [
 export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
-  const { activeSiteId, sites } = useSignage()
+  const { activeSiteId, sites, areas, screens } = useSignage()
   const activeSite = sites.find(x => x.id === activeSiteId)
 
   const [prompt, setPrompt] = useState('')
@@ -47,6 +55,13 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
   const [headline, setHeadline] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  // Building takeover: same scheduled, building-only, exclusive override as the
+  // direct-upload flow (app/dashboard/signage/content/page.tsx) — reuses the
+  // same targeting picker and takeover fields rather than the normal
+  // all-screens/date scheduling below.
+  const [takeover, setTakeover] = useState(false)
+  const [takeoverTargeting, setTakeoverTargeting] = useState<TargetingValue>({ all_screens: false, target_area_ids: [], target_screen_ids: [], target_buildings: [] })
+  const [takeoverWindow, setTakeoverWindow] = useState({ starts_at: '', ends_at: '' })
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [html, setHtml] = useState<string | null>(null)
@@ -167,15 +182,30 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
   const save = async () => {
     if (!html) return
     if (qa && !qa.ok) { toast('Fix the flagged QA issues before sending.', 'error'); return }
-    if (!startDate || !endDate) { toast('Set start and end dates.', 'error'); return }
+    if (takeover) {
+      if ((takeoverTargeting.target_buildings ?? []).length === 0) { toast('Select at least one building for the takeover.', 'error'); return }
+      if (!takeoverWindow.starts_at || !takeoverWindow.ends_at || new Date(takeoverWindow.starts_at) >= new Date(takeoverWindow.ends_at)) {
+        toast('Set a takeover start and end time, with start before end.', 'error')
+        return
+      }
+    } else if (!startDate || !endDate) {
+      toast('Set start and end dates.', 'error')
+      return
+    }
     setSaving(true)
     const fd = new FormData()
     fd.set('content_type', 'html')
     fd.set('html_body', finalHtml || html)
     fd.set('title', (headline || prompt).slice(0, 60))
-    fd.set('start_date', startDate)
-    fd.set('end_date', endDate)
-    fd.set('all_screens', 'true')
+    fd.set('start_date', takeover ? '' : startDate)
+    fd.set('end_date', takeover ? '' : endDate)
+    fd.set('all_screens', String(!takeover))
+    fd.set('target_buildings', JSON.stringify(takeover ? (takeoverTargeting.target_buildings ?? []) : []))
+    fd.set('is_takeover', String(takeover))
+    if (takeover) {
+      fd.set('takeover_starts_at', fromDatetimeLocal(takeoverWindow.starts_at))
+      fd.set('takeover_ends_at', fromDatetimeLocal(takeoverWindow.ends_at))
+    }
     fd.set('display_seconds', String(dwell))
     fd.set('site_id', activeSiteId)
     fd.set('source', 'ai')
@@ -350,17 +380,45 @@ export default function CreateWithAI({ onClose, onSaved }: { onClose: () => void
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
-              <div>
-                <p style={labelStyle}>Start date</p>
-                <SignageDateInput value={startDate} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={setStartDate} style={s.input} />
-              </div>
-              <div>
-                <p style={labelStyle}>End date</p>
-                <SignageDateInput value={endDate} colorScheme={s.dark ? 'dark' : 'light'} onChange={setEndDate} style={s.input} min={startDate || undefined} />
-              </div>
-            </div>
-            <p style={{ fontSize: 11.5, color: s.muted, margin: '6px 0 0' }}>Shows from the start date and drops off automatically after the end date.</p>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 14, padding: '10px 12px', borderRadius: 10, border: `1px solid ${takeover ? '#ef4444' : s.border}`, background: takeover ? 'rgba(239,68,68,0.08)' : 'transparent', cursor: 'pointer' }}>
+              <input type="checkbox" checked={takeover} style={{ marginTop: 2 }} onChange={e => setTakeover(e.target.checked)} />
+              <span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: s.text, display: 'block' }}>Building takeover</span>
+                <span style={{ fontSize: 12, color: s.muted, lineHeight: 1.45 }}>Replaces the normal rotation on every screen in the building(s) below for a set window, then reverts automatically. Still goes to the approval queue.</span>
+              </span>
+            </label>
+
+            {takeover ? (
+              <>
+                <div style={{ marginTop: 12 }}>
+                  <SignageTargetingPicker areas={areas} screens={screens} value={takeoverTargeting} onChange={setTakeoverTargeting} lbl={labelStyle} buildingsOnly />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+                  <div>
+                    <p style={labelStyle}>Takeover starts</p>
+                    <input type="datetime-local" value={takeoverWindow.starts_at} onChange={e => setTakeoverWindow(w => ({ ...w, starts_at: e.target.value }))} style={s.input} />
+                  </div>
+                  <div>
+                    <p style={labelStyle}>Takeover ends</p>
+                    <input type="datetime-local" value={takeoverWindow.ends_at} min={takeoverWindow.starts_at || undefined} onChange={e => setTakeoverWindow(w => ({ ...w, ends_at: e.target.value }))} style={s.input} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+                  <div>
+                    <p style={labelStyle}>Start date</p>
+                    <SignageDateInput value={startDate} defaultToToday colorScheme={s.dark ? 'dark' : 'light'} onChange={setStartDate} style={s.input} />
+                  </div>
+                  <div>
+                    <p style={labelStyle}>End date</p>
+                    <SignageDateInput value={endDate} colorScheme={s.dark ? 'dark' : 'light'} onChange={setEndDate} style={s.input} min={startDate || undefined} />
+                  </div>
+                </div>
+                <p style={{ fontSize: 11.5, color: s.muted, margin: '6px 0 0' }}>Shows from the start date and drops off automatically after the end date.</p>
+              </>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
               <button type="button" onClick={onClose} style={s.btn}>Cancel</button>

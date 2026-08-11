@@ -68,9 +68,44 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Building takeovers are schedule-driven (no operator clicking start/stop like
+// the board takeover), so nothing else marks a screen dirty at the exact
+// moment a takeover's window opens or closes. Piggyback on the existing
+// dirty-mode cadence (~2 min, see db/ablesign_html_push_cron.sql's -dirty
+// companion) to catch that edge: any screen in a building with a takeover
+// whose start or end just occurred gets flagged dirty here, then picked up by
+// the normal dirty push right below. The 4-minute lookback is wider than the
+// 2-minute cron cadence so a slow run never lets an edge slip between cycles.
+async function markTakeoverEdgesDirty(service: SupabaseClient): Promise<void> {
+  const nowIso = new Date().toISOString()
+  const lookbackIso = new Date(Date.now() - 4 * 60 * 1000).toISOString()
+  const { data: rows } = await service
+    .from('signage_content')
+    .select('target_buildings, takeover_starts_at, takeover_ends_at')
+    .eq('is_takeover', true)
+    .eq('status', 'approved')
+    .or(`and(takeover_starts_at.gte.${lookbackIso},takeover_starts_at.lte.${nowIso}),and(takeover_ends_at.gte.${lookbackIso},takeover_ends_at.lte.${nowIso})`)
+
+  const buildings = new Set<string>()
+  for (const row of rows ?? []) {
+    for (const b of (row.target_buildings as string[] | null) ?? []) buildings.add(b)
+  }
+  if (!buildings.size) return
+
+  await service
+    .from('signage_screens')
+    .update({ ablesign_html_dirty_at: nowIso })
+    .eq('active', true)
+    .in('building', [...buildings])
+}
+
 async function pushBatch(mode: 'dirty' | 'due') {
   const service = getServiceSupabaseClient()
   if (!service) return { error: 'Server configuration error', status: 500 as const }
+
+  if (mode === 'dirty') {
+    await markTakeoverEdgesDirty(service)
+  }
 
   let query = service
     .from('signage_screens')
