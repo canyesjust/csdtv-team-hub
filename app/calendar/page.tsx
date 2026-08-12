@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState, useCallback, type ChangeEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
 type CalCategory = 'athletics' | 'arts' | 'academics' | 'closures'
@@ -293,6 +294,9 @@ function PublicCalendarInner() {
           <span style={{ width: 26, height: 26, borderRadius: 7, background: '#065687', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>C</span>
           CSDtv <span style={{ color: '#71717a', fontWeight: 500 }}>&nbsp;/ District Calendar</span>
         </div>
+        <Link href="/calendar/submit" style={{ background: '#065687', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>
+          + Submit an event
+        </Link>
       </div>
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '30px 32px 8px' }}>
@@ -439,6 +443,7 @@ function PublicCalendarInner() {
 
         <footer style={{ textAlign: 'center' as const, fontSize: 12, color: '#a1a1aa', padding: '28px 20px 50px' }}>
           Canyons School District TV · This calendar is curated by CSDtv from schools across the district.
+          {' '}Don&apos;t see your event? <Link href="/calendar/submit" style={{ color: '#065687', fontWeight: 600 }}>Submit it here</Link>.
         </footer>
       </div>
 

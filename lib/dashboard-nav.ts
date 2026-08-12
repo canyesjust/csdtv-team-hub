@@ -53,6 +53,12 @@ const CALENDAR_OVERVIEW: DashboardNavItem = {
   icon: 'calview',
 }
 
+const CALENDAR_REVIEW: DashboardNavItem = {
+  label: 'Review queue',
+  href: '/dashboard/calendar/review',
+  icon: 'check',
+}
+
 const CALENDAR_CONTENT: DashboardNavItem = {
   label: 'Content calendar',
   href: '/dashboard/calendar/content',
@@ -105,9 +111,10 @@ export function buildStaffDashboardNav(
   const calendarVisible = manager || !!calendarApprover
   // Overview, Content, and Capture are open to any staff member (matches RLS on
   // calendar_campaigns / calendar_capture_plans / calendar_school_events read access).
-  // Feeds is restricted to calendar approvers only.
+  // Review queue and Feeds are restricted to calendar approvers only.
   const calendarSectionItems: DashboardNavItem[] = [
     CALENDAR_OVERVIEW,
+    ...(calendarVisible ? [CALENDAR_REVIEW] : []),
     CALENDAR_CONTENT,
     CALENDAR_CAPTURE,
     ...(calendarVisible ? [CALENDAR_FEEDS] : []),
