@@ -45,6 +45,33 @@ function monthLabel(d: Date): string {
   return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(d)
 }
 
+function LayerToggle({
+  kind, label, active, muted, border, onClick,
+}: {
+  kind: LayerKind
+  label: string
+  active: boolean
+  muted: string
+  border: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px',
+        border: `0.5px solid ${active ? LAYER_COLOR[kind] : border}`,
+        background: active ? `${LAYER_COLOR[kind]}1a` : 'transparent',
+        color: active ? LAYER_COLOR[kind] : muted,
+        cursor: 'pointer', fontFamily: 'inherit', fontSize: '13.5px', fontWeight: 500, minHeight: '38px',
+      }}
+    >
+      <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: LAYER_COLOR[kind], flexShrink: 0, opacity: active ? 1 : 0.35 }} />
+      {label}
+    </button>
+  )
+}
+
 export default function CalendarOverviewPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
@@ -123,7 +150,9 @@ export default function CalendarOverviewPage() {
     setLoading(false)
   }, [supabase])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
 
   function toggleLayer(kind: LayerKind) {
     setLayers(prev => ({ ...prev, [kind]: !prev[kind] }))
@@ -153,22 +182,6 @@ export default function CalendarOverviewPage() {
     group.items.push(item)
   }
 
-  const LayerToggle = ({ kind, label }: { kind: LayerKind; label: string }) => (
-    <button
-      onClick={() => toggleLayer(kind)}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px',
-        border: `0.5px solid ${layers[kind] ? LAYER_COLOR[kind] : border}`,
-        background: layers[kind] ? `${LAYER_COLOR[kind]}1a` : 'transparent',
-        color: layers[kind] ? LAYER_COLOR[kind] : muted,
-        cursor: 'pointer', fontFamily: 'inherit', fontSize: '13.5px', fontWeight: 500, minHeight: '38px',
-      }}
-    >
-      <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: LAYER_COLOR[kind], flexShrink: 0, opacity: layers[kind] ? 1 : 0.35 }} />
-      {label}
-    </button>
-  )
-
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' as const, marginBottom: '6px' }}>
@@ -191,9 +204,9 @@ export default function CalendarOverviewPage() {
       </div>
 
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' as const, margin: '20px 0 16px' }}>
-        <LayerToggle kind="district" label={LAYER_LABEL.district} />
-        <LayerToggle kind="content" label={LAYER_LABEL.content} />
-        <LayerToggle kind="capture" label={LAYER_LABEL.capture} />
+        <LayerToggle kind="district" label={LAYER_LABEL.district} active={layers.district} muted={muted} border={border} onClick={() => toggleLayer('district')} />
+        <LayerToggle kind="content" label={LAYER_LABEL.content} active={layers.content} muted={muted} border={border} onClick={() => toggleLayer('content')} />
+        <LayerToggle kind="capture" label={LAYER_LABEL.capture} active={layers.capture} muted={muted} border={border} onClick={() => toggleLayer('capture')} />
 
         {layers.district && (
           <select

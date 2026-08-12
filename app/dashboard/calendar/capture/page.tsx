@@ -29,6 +29,14 @@ type PlanForm = {
   notes: string
 }
 
+type Palette = {
+  text: string
+  muted: string
+  border: string
+  cardBg: string
+  inputBg: string
+}
+
 const EMPTY_FORM: PlanForm = {
   id: null,
   title: '',
@@ -37,14 +45,52 @@ const EMPTY_FORM: PlanForm = {
   notes: '',
 }
 
+function PlanCard({
+  p, palette, accent, responsibleName, onEdit, onDelete,
+}: {
+  p: CapturePlan
+  palette: Palette
+  accent: string
+  responsibleName: string
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const { text, muted, border, cardBg } = palette
+  return (
+    <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '16px', display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' as const }}>
+      <div style={{ minWidth: '90px', flexShrink: 0 }}>
+        <p style={{ fontSize: '13.5px', fontWeight: 600, color: accent, margin: 0 }}>{formatWeekday(p.plan_date)}</p>
+      </div>
+      <div style={{ flex: 1, minWidth: '200px' }}>
+        <p style={{ fontSize: '15.5px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{p.title}</p>
+        <p style={{ fontSize: '13px', color: muted, margin: '0 0 6px' }}>{responsibleName}</p>
+        {p.notes && <p style={{ fontSize: '13.5px', color: muted, margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{p.notes}</p>}
+      </div>
+      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+        <button onClick={onEdit} style={{
+          fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
+          color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
+        }}>Edit</button>
+        <button onClick={onDelete} style={{
+          fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
+          color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
+        }}>Delete</button>
+      </div>
+    </div>
+  )
+}
+
 export default function CaptureCalendarPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#94a3b8' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const palette: Palette = {
+    text: dark ? '#f0f4ff' : '#1a1f36',
+    muted: dark ? '#94a3b8' : '#6b7280',
+    border: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+    cardBg: dark ? '#0d1525' : '#ffffff',
+    inputBg: dark ? '#0a0f1e' : '#f8f9fc',
+  }
+  const { text, muted, border, cardBg, inputBg } = palette
   const accent = '#1e6cb5'
 
   const supabase = createClient()
@@ -75,7 +121,9 @@ export default function CaptureCalendarPage() {
     setLoading(false)
   }, [supabase])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
 
   function teamName(id: string | null): string {
     if (!id) return 'Unassigned'
@@ -138,28 +186,17 @@ export default function CaptureCalendarPage() {
   const upcoming = plans.filter(p => p.plan_date >= todayStr)
   const past = plans.filter(p => p.plan_date < todayStr).sort((a, b) => b.plan_date.localeCompare(a.plan_date))
 
-  function PlanCard({ p }: { p: CapturePlan }) {
+  function renderCard(p: CapturePlan) {
     return (
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '16px', display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' as const }}>
-        <div style={{ minWidth: '90px', flexShrink: 0 }}>
-          <p style={{ fontSize: '13.5px', fontWeight: 600, color: accent, margin: 0 }}>{formatWeekday(p.plan_date)}</p>
-        </div>
-        <div style={{ flex: 1, minWidth: '200px' }}>
-          <p style={{ fontSize: '15.5px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{p.title}</p>
-          <p style={{ fontSize: '13px', color: muted, margin: '0 0 6px' }}>{teamName(p.responsible_team_id)}</p>
-          {p.notes && <p style={{ fontSize: '13.5px', color: muted, margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{p.notes}</p>}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <button onClick={() => openEditForm(p)} style={{
-            fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
-            color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
-          }}>Edit</button>
-          <button onClick={() => deletePlan(p)} style={{
-            fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
-            color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
-          }}>Delete</button>
-        </div>
-      </div>
+      <PlanCard
+        key={p.id}
+        p={p}
+        palette={palette}
+        accent={accent}
+        responsibleName={teamName(p.responsible_team_id)}
+        onEdit={() => openEditForm(p)}
+        onDelete={() => deletePlan(p)}
+      />
     )
   }
 
@@ -223,14 +260,14 @@ export default function CaptureCalendarPage() {
       {loading ? (
         <p style={{ color: muted, fontSize: '15px' }}>Loading…</p>
       ) : plans.length === 0 ? (
-        <p style={{ color: muted, fontSize: '14px', padding: '20px' }}>No capture plans yet. Click "+ New plan" to add one.</p>
+        <p style={{ color: muted, fontSize: '14px', padding: '20px' }}>No capture plans yet. Click &quot;+ New plan&quot; to add one.</p>
       ) : (
         <>
           {upcoming.length > 0 && (
             <div style={{ marginBottom: '24px' }}>
               <p style={{ fontSize: '13px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Upcoming</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {upcoming.map(p => <PlanCard key={p.id} p={p} />)}
+                {upcoming.map(renderCard)}
               </div>
             </div>
           )}
@@ -238,7 +275,7 @@ export default function CaptureCalendarPage() {
             <div>
               <p style={{ fontSize: '13px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Past</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {past.map(p => <PlanCard key={p.id} p={p} />)}
+                {past.map(renderCard)}
               </div>
             </div>
           )}

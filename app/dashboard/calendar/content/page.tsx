@@ -38,6 +38,14 @@ type CampaignForm = {
   notes: string
 }
 
+type Palette = {
+  text: string
+  muted: string
+  border: string
+  cardBg: string
+  inputBg: string
+}
+
 const EMPTY_FORM: CampaignForm = {
   id: null,
   name: '',
@@ -54,14 +62,99 @@ function normalizeNeeds(raw: unknown): CampaignNeed[] {
     .map(n => ({ id: n.id || crypto.randomUUID(), label: n.label, done: !!n.done }))
 }
 
+function CampaignCard({
+  c, palette, responsibleName, needDraft, onDraftChange, onToggleNeed, onRemoveNeed, onAddNeed, onEdit, onDelete,
+}: {
+  c: Campaign
+  palette: Palette
+  responsibleName: string
+  needDraft: string
+  onDraftChange: (value: string) => void
+  onToggleNeed: (needId: string) => void
+  onRemoveNeed: (needId: string) => void
+  onAddNeed: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const { text, muted, border, cardBg, inputBg } = palette
+  const doneCount = c.needs.filter(n => n.done).length
+  return (
+    <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: '16px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{c.name}</p>
+          <p style={{ fontSize: '13px', color: muted, margin: 0 }}>
+            {formatDate(c.start_date)} – {formatDate(c.end_date)} · {responsibleName}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+          <button onClick={onEdit} style={{
+            fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
+            color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
+          }}>Edit</button>
+          <button onClick={onDelete} style={{
+            fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
+            color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
+          }}>Delete</button>
+        </div>
+      </div>
+
+      {c.notes && (
+        <p style={{ fontSize: '13.5px', color: muted, margin: '10px 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{c.notes}</p>
+      )}
+
+      <div style={{ marginTop: '14px', borderTop: `0.5px solid ${border}`, paddingTop: '12px' }}>
+        <p style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px', margin: '0 0 8px' }}>
+          Needs {c.needs.length > 0 && `· ${doneCount}/${c.needs.length}`}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {c.needs.map(n => (
+            <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="checkbox"
+                checked={n.done}
+                onChange={() => onToggleNeed(n.id)}
+                style={{ width: '16px', height: '16px', flexShrink: 0, cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '13.5px', color: n.done ? muted : text, textDecoration: n.done ? 'line-through' : 'none', flex: 1 }}>{n.label}</span>
+              <button onClick={() => onRemoveNeed(n.id)} style={{
+                background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '13px', padding: '2px 6px', fontFamily: 'inherit',
+              }} aria-label={`Remove ${n.label}`}>×</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <input
+            value={needDraft}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => onDraftChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') onAddNeed() }}
+            placeholder="Add a need..."
+            style={{
+              flex: 1, height: '32px', borderRadius: '8px', border: `0.5px solid ${border}`,
+              background: inputBg, color: text, padding: '0 10px', fontSize: '13px', fontFamily: 'inherit',
+            }}
+          />
+          <button onClick={onAddNeed} style={{
+            fontSize: '13px', padding: '0 12px', borderRadius: '8px', background: border, color: muted,
+            border: 'none', cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px',
+          }}>Add</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ContentCalendarPage() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
-  const text = dark ? '#f0f4ff' : '#1a1f36'
-  const muted = dark ? '#94a3b8' : '#6b7280'
-  const border = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'
-  const cardBg = dark ? '#0d1525' : '#ffffff'
-  const inputBg = dark ? '#0a0f1e' : '#f8f9fc'
+  const palette: Palette = {
+    text: dark ? '#f0f4ff' : '#1a1f36',
+    muted: dark ? '#94a3b8' : '#6b7280',
+    border: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+    cardBg: dark ? '#0d1525' : '#ffffff',
+    inputBg: dark ? '#0a0f1e' : '#f8f9fc',
+  }
+  const { text, muted, border, cardBg, inputBg } = palette
   const accent = '#1e6cb5'
 
   const supabase = createClient()
@@ -101,7 +194,9 @@ export default function ContentCalendarPage() {
     setLoading(false)
   }, [supabase])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
 
   function teamName(id: string | null): string {
     if (!id) return 'Unassigned'
@@ -172,17 +267,17 @@ export default function ContentCalendarPage() {
     if (error) toast(error.message, 'error')
   }
 
-  function toggleNeed(campaign: Campaign, needId: string) {
+  function handleToggleNeed(campaign: Campaign, needId: string) {
     const needs = campaign.needs.map(n => n.id === needId ? { ...n, done: !n.done } : n)
     saveNeeds(campaign.id, needs)
   }
 
-  function removeNeed(campaign: Campaign, needId: string) {
+  function handleRemoveNeed(campaign: Campaign, needId: string) {
     const needs = campaign.needs.filter(n => n.id !== needId)
     saveNeeds(campaign.id, needs)
   }
 
-  function addNeed(campaign: Campaign) {
+  function handleAddNeed(campaign: Campaign) {
     const label = (newNeedDraft[campaign.id] || '').trim()
     if (!label) return
     const needs = [...campaign.needs, { id: crypto.randomUUID(), label, done: false }]
@@ -194,71 +289,21 @@ export default function ContentCalendarPage() {
   const upcoming = campaigns.filter(c => c.end_date >= todayStr)
   const past = campaigns.filter(c => c.end_date < todayStr).sort((a, b) => b.start_date.localeCompare(a.start_date))
 
-  function CampaignCard({ c }: { c: Campaign }) {
-    const doneCount = c.needs.filter(n => n.done).length
+  function renderCard(c: Campaign) {
     return (
-      <div style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' as const }}>
-          <div style={{ minWidth: 0 }}>
-            <p style={{ fontSize: '16px', fontWeight: 600, color: text, margin: '0 0 4px' }}>{c.name}</p>
-            <p style={{ fontSize: '13px', color: muted, margin: 0 }}>
-              {formatDate(c.start_date)} – {formatDate(c.end_date)} · {teamName(c.responsible_team_id)}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-            <button onClick={() => openEditForm(c)} style={{
-              fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
-              color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
-            }}>Edit</button>
-            <button onClick={() => deleteCampaign(c)} style={{
-              fontSize: '13px', padding: '7px 12px', borderRadius: '8px', background: 'transparent',
-              color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontFamily: 'inherit', minHeight: '34px',
-            }}>Delete</button>
-          </div>
-        </div>
-
-        {c.notes && (
-          <p style={{ fontSize: '13.5px', color: muted, margin: '10px 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' as const }}>{c.notes}</p>
-        )}
-
-        <div style={{ marginTop: '14px', borderTop: `0.5px solid ${border}`, paddingTop: '12px' }}>
-          <p style={{ fontSize: '12px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.6px', margin: '0 0 8px' }}>
-            Needs {c.needs.length > 0 && `· ${doneCount}/${c.needs.length}`}
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {c.needs.map(n => (
-              <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="checkbox"
-                  checked={n.done}
-                  onChange={() => toggleNeed(c, n.id)}
-                  style={{ width: '16px', height: '16px', flexShrink: 0, cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: '13.5px', color: n.done ? muted : text, textDecoration: n.done ? 'line-through' : 'none', flex: 1 }}>{n.label}</span>
-                <button onClick={() => removeNeed(c, n.id)} style={{
-                  background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: '13px', padding: '2px 6px', fontFamily: 'inherit',
-                }} aria-label={`Remove ${n.label}`}>×</button>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-            <input
-              value={newNeedDraft[c.id] || ''}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setNewNeedDraft(prev => ({ ...prev, [c.id]: e.target.value }))}
-              onKeyDown={(e) => { if (e.key === 'Enter') addNeed(c) }}
-              placeholder="Add a need..."
-              style={{
-                flex: 1, height: '32px', borderRadius: '8px', border: `0.5px solid ${border}`,
-                background: inputBg, color: text, padding: '0 10px', fontSize: '13px', fontFamily: 'inherit',
-              }}
-            />
-            <button onClick={() => addNeed(c)} style={{
-              fontSize: '13px', padding: '0 12px', borderRadius: '8px', background: border, color: muted,
-              border: 'none', cursor: 'pointer', fontFamily: 'inherit', minHeight: '32px',
-            }}>Add</button>
-          </div>
-        </div>
-      </div>
+      <CampaignCard
+        key={c.id}
+        c={c}
+        palette={palette}
+        responsibleName={teamName(c.responsible_team_id)}
+        needDraft={newNeedDraft[c.id] || ''}
+        onDraftChange={(value) => setNewNeedDraft(prev => ({ ...prev, [c.id]: value }))}
+        onToggleNeed={(needId) => handleToggleNeed(c, needId)}
+        onRemoveNeed={(needId) => handleRemoveNeed(c, needId)}
+        onAddNeed={() => handleAddNeed(c)}
+        onEdit={() => openEditForm(c)}
+        onDelete={() => deleteCampaign(c)}
+      />
     )
   }
 
@@ -325,14 +370,14 @@ export default function ContentCalendarPage() {
       {loading ? (
         <p style={{ color: muted, fontSize: '15px' }}>Loading…</p>
       ) : campaigns.length === 0 ? (
-        <p style={{ color: muted, fontSize: '14px', padding: '20px' }}>No campaigns yet. Click "+ New campaign" to add one.</p>
+        <p style={{ color: muted, fontSize: '14px', padding: '20px' }}>No campaigns yet. Click &quot;+ New campaign&quot; to add one.</p>
       ) : (
         <>
           {upcoming.length > 0 && (
             <div style={{ marginBottom: '24px' }}>
               <p style={{ fontSize: '13px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Upcoming</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {upcoming.map(c => <CampaignCard key={c.id} c={c} />)}
+                {upcoming.map(renderCard)}
               </div>
             </div>
           )}
@@ -340,7 +385,7 @@ export default function ContentCalendarPage() {
             <div>
               <p style={{ fontSize: '13px', fontWeight: 600, color: muted, textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 10px' }}>Past</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {past.map(c => <CampaignCard key={c.id} c={c} />)}
+                {past.map(renderCard)}
               </div>
             </div>
           )}
