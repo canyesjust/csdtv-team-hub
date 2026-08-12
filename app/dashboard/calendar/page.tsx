@@ -191,7 +191,11 @@ export default function CalendarOverviewPage() {
             District events, content campaigns, and capture plans in one view. Toggle layers below.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' as const }}>
+          <Link href="/calendar" target="_blank" style={{
+            fontSize: '13.5px', padding: '9px 16px', borderRadius: '10px', background: 'transparent', color: muted,
+            border: `0.5px solid ${border}`, textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', minHeight: '38px',
+          }}>View public calendar ↗</Link>
           <Link href="/dashboard/calendar/content" style={{
             fontSize: '13.5px', padding: '9px 16px', borderRadius: '10px', background: 'transparent', color: muted,
             border: `0.5px solid ${border}`, textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', minHeight: '38px',

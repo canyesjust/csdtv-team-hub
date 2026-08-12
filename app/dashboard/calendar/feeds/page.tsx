@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useCallback, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { canManageCalendarQueue } from '@/lib/calendar-access'
+import { toast } from '@/lib/toast'
+import { AsyncButton } from '../../components/AsyncButton'
 
 type School = {
   id: string
@@ -23,6 +26,15 @@ type Feed = {
   last_sync_error: string | null
 }
 
+type SyncSummary = {
+  ok: boolean
+  feedsProcessed: number
+  added: number
+  updated: number
+  removed: number
+  failures: { feedId: string; schoolId: string; error?: string }[]
+}
+
 function relativeTime(iso: string | null): string {
   if (!iso) return 'Never synced'
   const diffMs = Date.now() - new Date(iso).getTime()
@@ -33,6 +45,30 @@ function relativeTime(iso: string | null): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.round(hours / 24)
   return `${days}d ago`
+}
+
+async function callSyncNow(body?: { feedId: string }): Promise<SyncSummary> {
+  const res = await fetch('/api/calendar/sync-now', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || 'Sync failed')
+  return data as SyncSummary
+}
+
+function summaryToast(summary: SyncSummary) {
+  const parts: string[] = []
+  if (summary.added) parts.push(`${summary.added} new`)
+  if (summary.updated) parts.push(`${summary.updated} changed`)
+  if (summary.removed) parts.push(`${summary.removed} removed`)
+  const body = parts.length ? parts.join(', ') : 'no changes'
+  if (summary.failures.length > 0) {
+    toast(`Synced with ${summary.failures.length} feed failure${summary.failures.length === 1 ? '' : 's'} (${body})`, 'error')
+  } else {
+    toast(`Sync complete — ${body}`, 'success')
+  }
 }
 
 export default function CalendarFeedsPage() {
@@ -53,6 +89,7 @@ export default function CalendarFeedsPage() {
   const [feeds, setFeeds] = useState<Record<string, Feed>>({})
   const [urlDrafts, setUrlDrafts] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [syncingId, setSyncingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -146,6 +183,31 @@ export default function CalendarFeedsPage() {
     setUrlDrafts((prev: Record<string, string>) => ({ ...prev, [schoolId]: '' }))
   }
 
+  async function syncAll() {
+    try {
+      const summary = await callSyncNow()
+      summaryToast(summary)
+      await loadData()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Sync failed', 'error')
+    }
+  }
+
+  async function syncOne(schoolId: string) {
+    const feed = feeds[schoolId]
+    if (!feed) return
+    setSyncingId(schoolId)
+    try {
+      const summary = await callSyncNow({ feedId: feed.id })
+      summaryToast(summary)
+      await loadData()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Sync failed', 'error')
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
   if (!ready) {
     return (
       <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '40px 20px', color: muted, fontSize: '15px' }}>
@@ -161,14 +223,32 @@ export default function CalendarFeedsPage() {
 
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Calendar feeds</h1>
-      <p style={{ fontSize: '15px', color: muted, margin: '0 0 20px', lineHeight: 1.5 }}>
-        Paste each school&apos;s public ICS calendar link here. Synced events land in the review queue,
-        nothing shows on the district calendar until a staff member approves it there.
-      </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' as const, marginBottom: '6px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Calendar feeds</h1>
+          <p style={{ fontSize: '15px', color: muted, margin: 0, lineHeight: 1.5, maxWidth: '640px' }}>
+            Paste each school&apos;s public ICS calendar link here. Synced events land in the review queue,
+            nothing shows on the district calendar until a staff member approves it there.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' as const }}>
+          <Link href="/dashboard/calendar/review" style={{
+            fontSize: '13.5px', padding: '9px 16px', borderRadius: '10px', background: 'transparent', color: muted,
+            border: `0.5px solid ${border}`, textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', minHeight: '38px',
+          }}>Review queue</Link>
+          <Link href="/calendar" target="_blank" style={{
+            fontSize: '13.5px', padding: '9px 16px', borderRadius: '10px', background: 'transparent', color: muted,
+            border: `0.5px solid ${border}`, textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', minHeight: '38px',
+          }}>View public calendar ↗</Link>
+          <AsyncButton onClick={syncAll} pendingLabel="Syncing all…" style={{
+            fontSize: '13.5px', padding: '0 18px', borderRadius: '10px', background: '#1e6cb5', color: '#fff',
+            border: 'none', fontWeight: 500, minHeight: '38px',
+          }}>Sync all now</AsyncButton>
+        </div>
+      </div>
 
       {error && (
-        <div style={{ background: 'rgba(239,68,68,0.12)', border: '0.5px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '10px 14px', color: '#ef4444', fontSize: '14px', marginBottom: '16px' }}>
+        <div style={{ background: 'rgba(239,68,68,0.12)', border: '0.5px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '10px 14px', color: '#ef4444', fontSize: '14px', marginTop: '16px', marginBottom: '16px' }}>
           {error}
         </div>
       )}
@@ -180,7 +260,7 @@ export default function CalendarFeedsPage() {
         style={{
           width: '100%', maxWidth: '360px', height: '40px', borderRadius: '10px',
           border: `0.5px solid ${border}`, background: inputBg, color: text,
-          padding: '0 12px', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px',
+          padding: '0 12px', fontSize: '14px', fontFamily: 'inherit', margin: '20px 0 16px',
         }}
       />
 
@@ -190,6 +270,7 @@ export default function CalendarFeedsPage() {
           const draft = urlDrafts[school.id] ?? ''
           const dirty = draft.trim() !== (feed?.ics_url || '')
           const saving = savingId === school.id
+          const syncing = syncingId === school.id
           return (
             <div
               key={school.id}
@@ -224,6 +305,19 @@ export default function CalendarFeedsPage() {
               />
 
               <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                {feed && (
+                  <button
+                    onClick={() => syncOne(school.id)}
+                    disabled={syncing}
+                    style={{
+                      fontSize: '13.5px', padding: '9px 14px', borderRadius: '9px',
+                      background: 'transparent', color: muted, border: `0.5px solid ${border}`,
+                      cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit', minHeight: '38px',
+                    }}
+                  >
+                    {syncing ? 'Syncing…' : 'Sync now'}
+                  </button>
+                )}
                 <button
                   onClick={() => saveFeed(school.id)}
                   disabled={!dirty || saving || !draft.trim()}

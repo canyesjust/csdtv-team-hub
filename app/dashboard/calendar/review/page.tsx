@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { canManageCalendarQueue } from '@/lib/calendar-access'
@@ -484,11 +485,26 @@ export default function CalendarReviewPage() {
 
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Review queue</h1>
-      <p style={{ fontSize: '15px', color: muted, margin: '0 0 20px', lineHeight: 1.5 }}>
-        New, changed, and removed events from synced feeds and public submissions. Nothing shows on the district
-        calendar until it&apos;s approved here.
-      </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' as const, marginBottom: '6px' }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Review queue</h1>
+          <p style={{ fontSize: '15px', color: muted, margin: 0, lineHeight: 1.5, maxWidth: '640px' }}>
+            New, changed, and removed events from synced feeds and public submissions. Nothing shows on the district
+            calendar until it&apos;s approved here.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' as const }}>
+          <Link href="/dashboard/calendar/feeds" style={{
+            fontSize: '13.5px', padding: '9px 16px', borderRadius: '10px', background: 'transparent', color: muted,
+            border: `0.5px solid ${border}`, textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', minHeight: '38px',
+          }}>Calendar feeds</Link>
+          <Link href="/calendar" target="_blank" style={{
+            fontSize: '13.5px', padding: '9px 16px', borderRadius: '10px', background: 'transparent', color: muted,
+            border: `0.5px solid ${border}`, textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center', minHeight: '38px',
+          }}>View public calendar ↗</Link>
+        </div>
+      </div>
+      <div style={{ marginBottom: '20px' }} />
 
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' as const, marginBottom: '16px', alignItems: 'center' }}>
         <input
