@@ -47,6 +47,12 @@ const PARENTSQUARE: DashboardNavItem = {
   icon: 'mail',
 }
 
+const CALENDAR_FEEDS: DashboardNavItem = {
+  label: 'Calendar feeds',
+  href: '/dashboard/calendar/feeds',
+  icon: 'calview',
+}
+
 // Everyone can view the public brand library; managers go to the manage workspace.
 const BRAND_LIBRARY_PUBLIC: DashboardNavItem = {
   label: 'Brand library',
@@ -67,6 +73,7 @@ export function isManagerRole(role: string | null | undefined): boolean {
 export function buildStaffDashboardNav(
   role: string | null | undefined,
   parentsquareAccess?: boolean | null,
+  calendarApprover?: boolean | null,
 ): {
   navItems: DashboardNavSection[]
   bottomNav: DashboardNavItem[]
@@ -76,6 +83,8 @@ export function buildStaffDashboardNav(
   const brandLibrary = manager ? BRAND_LIBRARY_MANAGE : BRAND_LIBRARY_PUBLIC
   // ParentSquare is an add-on grant — Managers always have it, others need the explicit flag.
   const parentSquareVisible = manager || !!parentsquareAccess
+  // Calendar approver is an add-on grant — same pattern as ParentSquare.
+  const calendarVisible = manager || !!calendarApprover
 
   const workItems: DashboardNavItem[] = [
     ...WORK_BASE.slice(0, 2),
@@ -95,6 +104,7 @@ export function buildStaffDashboardNav(
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
     ...(parentSquareVisible ? [PARENTSQUARE] : []),
+    ...(calendarVisible ? [CALENDAR_FEEDS] : []),
     brandLibrary,
     OBS_ASSETS,
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
@@ -108,6 +118,7 @@ export function buildStaffDashboardNav(
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
     ...(parentSquareVisible ? [PARENTSQUARE] : []),
+    ...(calendarVisible ? [CALENDAR_FEEDS] : []),
   ]
 
   return {
