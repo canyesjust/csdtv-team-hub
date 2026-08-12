@@ -47,10 +47,28 @@ const PARENTSQUARE: DashboardNavItem = {
   icon: 'mail',
 }
 
+const CALENDAR_OVERVIEW: DashboardNavItem = {
+  label: 'Calendar',
+  href: '/dashboard/calendar',
+  icon: 'calview',
+}
+
+const CALENDAR_CONTENT: DashboardNavItem = {
+  label: 'Content calendar',
+  href: '/dashboard/calendar/content',
+  icon: 'calendar',
+}
+
+const CALENDAR_CAPTURE: DashboardNavItem = {
+  label: 'Capture planning',
+  href: '/dashboard/calendar/capture',
+  icon: 'notes',
+}
+
 const CALENDAR_FEEDS: DashboardNavItem = {
   label: 'Calendar feeds',
   href: '/dashboard/calendar/feeds',
-  icon: 'calview',
+  icon: 'link',
 }
 
 // Everyone can view the public brand library; managers go to the manage workspace.
@@ -85,6 +103,15 @@ export function buildStaffDashboardNav(
   const parentSquareVisible = manager || !!parentsquareAccess
   // Calendar approver is an add-on grant — same pattern as ParentSquare.
   const calendarVisible = manager || !!calendarApprover
+  // Overview, Content, and Capture are open to any staff member (matches RLS on
+  // calendar_campaigns / calendar_capture_plans / calendar_school_events read access).
+  // Feeds is restricted to calendar approvers only.
+  const calendarSectionItems: DashboardNavItem[] = [
+    CALENDAR_OVERVIEW,
+    CALENDAR_CONTENT,
+    CALENDAR_CAPTURE,
+    ...(calendarVisible ? [CALENDAR_FEEDS] : []),
+  ]
 
   const workItems: DashboardNavItem[] = [
     ...WORK_BASE.slice(0, 2),
@@ -104,7 +131,7 @@ export function buildStaffDashboardNav(
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
     ...(parentSquareVisible ? [PARENTSQUARE] : []),
-    ...(calendarVisible ? [CALENDAR_FEEDS] : []),
+    ...calendarSectionItems,
     brandLibrary,
     OBS_ASSETS,
     { label: 'Equipment', href: '/dashboard/equipment', icon: 'equipment' },
@@ -118,13 +145,13 @@ export function buildStaffDashboardNav(
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
     ...(parentSquareVisible ? [PARENTSQUARE] : []),
-    ...(calendarVisible ? [CALENDAR_FEEDS] : []),
   ]
 
   return {
     navItems: [
       { section: 'Main', items: [{ label: 'Home', href: '/dashboard', icon: 'home' }] },
       { section: 'Work', items: workItems },
+      { section: 'Calendar', items: calendarSectionItems },
       { section: 'Resources', items: resourcesItems },
       { section: 'Team', items: sidebarMoreItems },
       { section: 'Account', items: [{ label: 'Settings', href: '/dashboard/settings', icon: 'settings' }] },
