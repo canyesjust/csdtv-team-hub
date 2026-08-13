@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState, useCallback, type ChangeEvent } from 'react'
+import { Suspense, useEffect, useMemo, useState, useCallback, useRef, type ChangeEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -193,15 +193,44 @@ function StreamTag({ state }: { state: 'live' | 'upcoming' | null }) {
   return <span style={{ color: '#9a6208', fontWeight: 800, fontSize: '0.85em', letterSpacing: '0.02em', whiteSpace: 'nowrap' as const }}>STREAMING </span>
 }
 
+// Every "add to calendar" destination (ics download, Google, Outlook) pulls
+// from these two builders so the title/description are consistent and none
+// of them silently drop the school name or the stream link the way the old
+// bare-bones ics export did.
+function calendarEventTitle(e: CalEvent): string {
+  return `${e.schoolName} — ${e.title}`
+}
+
+function calendarEventDescription(e: CalEvent): string {
+  const parts: string[] = []
+  if (e.description) parts.push(e.description)
+  if (e.isStreaming && e.streamUrl) parts.push(`Watch live: ${e.streamUrl}`)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  parts.push(`Added from the Canyons School District events calendar — ${origin}/calendar?event=${e.id}`)
+  return parts.join('\n\n')
+}
+
+// RFC 5545 TEXT escaping: backslash, semicolon, comma, then newline -> \n.
+// Order matters -- backslash must be escaped first or it double-escapes the
+// backslashes we just inserted for the other characters.
+function escapeIcsText(s: string): string {
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n')
+}
+
 function downloadIcs(e: CalEvent) {
   const end = e.end || new Date(e.start.getTime() + 2 * 3600 * 1000)
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Canyons School District//Events Calendar//EN', 'BEGIN:VEVENT',
-    `UID:${e.id}@csdtv-team-hub`, `DTSTART:${fmt(e.start)}`, `DTEND:${fmt(end)}`,
-    `SUMMARY:${e.title.replace(/\r?\n/g, ' ')}`,
-    e.location ? `LOCATION:${e.location.replace(/\r?\n/g, ' ')}` : '',
-    e.description ? `DESCRIPTION:${e.description.replace(/\r?\n/g, ' ')}` : '',
+    `UID:${e.id}@csdtv-team-hub`, `DTSTAMP:${fmt(new Date())}`, `DTSTART:${fmt(e.start)}`, `DTEND:${fmt(end)}`,
+    `SUMMARY:${escapeIcsText(calendarEventTitle(e))}`,
+    e.location ? `LOCATION:${escapeIcsText(e.location)}` : '',
+    `DESCRIPTION:${escapeIcsText(calendarEventDescription(e))}`,
+    `CATEGORIES:${escapeIcsText(CAT_LABEL[e.category])}`,
     'END:VEVENT', 'END:VCALENDAR',
   ].filter(Boolean).join('\r\n')
   const blob = new Blob([lines], { type: 'text/calendar' })
@@ -213,6 +242,33 @@ function downloadIcs(e: CalEvent) {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+function googleCalendarUrl(e: CalEvent): string {
+  const end = e.end || new Date(e.start.getTime() + 2 * 3600 * 1000)
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: calendarEventTitle(e),
+    dates: `${fmt(e.start)}/${fmt(end)}`,
+    details: calendarEventDescription(e),
+  })
+  if (e.location) params.set('location', e.location)
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
+function outlookCalendarUrl(e: CalEvent): string {
+  const end = e.end || new Date(e.start.getTime() + 2 * 3600 * 1000)
+  const params = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    startdt: e.start.toISOString(),
+    enddt: end.toISOString(),
+    subject: calendarEventTitle(e),
+    body: calendarEventDescription(e),
+  })
+  if (e.location) params.set('location', e.location)
+  return `https://outlook.live.com/calendar/deeplink/compose?${params.toString()}`
 }
 
 function EventRow({ e, now, dense, hideSchool, onClick }: { e: CalEvent; now: Date; dense?: boolean; hideSchool?: boolean; onClick: () => void }) {
@@ -347,6 +403,8 @@ function PublicCalendarInner() {
   const [dayModal, setDayModal] = useState<{ y: number; m: number; d: number } | null>(null)
   const [eventModalId, setEventModalId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [addCalendarOpen, setAddCalendarOpen] = useState(false)
+  const addCalendarRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -403,13 +461,27 @@ function PublicCalendarInner() {
   function openEvent(e: CalEvent) {
     setEventModalId(e.id)
     setDayModal(null)
+    setAddCalendarOpen(false)
     router.replace(`/calendar?event=${e.id}`, { scroll: false })
   }
   function closeEventModal() {
     setEventModalId(null)
     setCopied(false)
+    setAddCalendarOpen(false)
     router.replace('/calendar', { scroll: false })
   }
+
+  // Close the "add to calendar" menu on outside click.
+  useEffect(() => {
+    if (!addCalendarOpen) return
+    function onDocClick(ev: MouseEvent) {
+      if (addCalendarRef.current && !addCalendarRef.current.contains(ev.target as Node)) {
+        setAddCalendarOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [addCalendarOpen])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -671,7 +743,16 @@ function PublicCalendarInner() {
               {eventState === 'upcoming' && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fafafa', color: '#a1a1aa', border: '1px solid #e4e4e7', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px' }}>Watch link available day-of</span>
               )}
-              <button onClick={() => downloadIcs(eventModal)} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add to my calendar</button>
+              <div ref={addCalendarRef} style={{ position: 'relative' as const }}>
+                <button onClick={() => setAddCalendarOpen(o => !o)} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add to my calendar</button>
+                {addCalendarOpen && (
+                  <div style={{ position: 'absolute' as const, top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #e4e4e7', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.14)', zIndex: 70, minWidth: 200, overflow: 'hidden' }}>
+                    <a href={googleCalendarUrl(eventModal)} target="_blank" rel="noreferrer" onClick={() => setAddCalendarOpen(false)} style={{ display: 'block', padding: '9px 14px', fontSize: 13, color: '#18181b', textDecoration: 'none' }}>Google Calendar</a>
+                    <a href={outlookCalendarUrl(eventModal)} target="_blank" rel="noreferrer" onClick={() => setAddCalendarOpen(false)} style={{ display: 'block', padding: '9px 14px', fontSize: 13, color: '#18181b', textDecoration: 'none', borderTop: '1px solid #f4f4f5' }}>Outlook.com</a>
+                    <button onClick={() => { downloadIcs(eventModal); setAddCalendarOpen(false) }} style={{ display: 'block', width: '100%', textAlign: 'left' as const, padding: '9px 14px', fontSize: 13, color: '#18181b', background: 'none', border: 'none', borderTop: '1px solid #f4f4f5', cursor: 'pointer', fontFamily: 'inherit' }}>Apple Calendar / other (.ics)</button>
+                  </div>
+                )}
+              </div>
               <button onClick={() => {
                 navigator.clipboard.writeText(`${window.location.origin}/calendar?event=${eventModal.id}`)
                 setCopied(true)
