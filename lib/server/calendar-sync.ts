@@ -2,7 +2,14 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { parseIcsEvents, stableUuidFromString, type ParsedIcsEvent } from '@/lib/calendar-ics-parse'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-type FeedRow = { id: string; school_id: string; ics_url: string; label: string }
+type FeedRow = {
+  id: string
+  school_id: string
+  ics_url: string
+  label: string
+  last_etag: string | null
+  last_modified_header: string | null
+}
 
 /**
  * Feeds labeled as an athletics/sports calendar (e.g. a school's dedicated
@@ -50,22 +57,48 @@ function looksLikeCompleteIcs(text: string): boolean {
 const FETCH_ATTEMPTS = 3
 const RETRY_DELAY_MS = 1500
 
+type FetchIcsResult =
+  | { text: string; etag: string | null; lastModified: string | null }
+  | { notModified: true; etag: string | null; lastModified: string | null }
+  | { error: string }
+
 /** Fetches a feed's ICS text, retrying a couple of times (with a short
  * pause) on a network error, a non-2xx response, or a response that
  * doesn't look like a complete calendar file -- a single transient hiccup
  * (dropped connection, a momentary block, a slow truncated read) shouldn't
  * be enough to mark a whole feed as failing or, worse, feed a partial
- * calendar into the diff against what's already synced. */
-async function fetchIcsWithRetry(url: string): Promise<{ text: string } | { error: string }> {
+ * calendar into the diff against what's already synced.
+ *
+ * If the feed's last known ETag/Last-Modified are passed in, sends them as
+ * If-None-Match / If-Modified-Since. A source that supports conditional
+ * requests can then reply "304 Not Modified" instead of resending the whole
+ * calendar -- lighter on the school's server, and a clean, explicit signal
+ * that nothing changed rather than us re-parsing and re-diffing an
+ * identical file every run. Most small school calendar tools don't support
+ * this at all; when a source never sends an ETag/Last-Modified back, we
+ * simply never have anything to send next time and every fetch behaves
+ * exactly as a full fetch always has. */
+async function fetchIcsWithRetry(
+  url: string,
+  conditional?: { etag: string | null; lastModified: string | null }
+): Promise<FetchIcsResult> {
   let lastError = 'Fetch failed'
   for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(url, { headers: { 'User-Agent': 'CSDtv-Calendar-Sync/1.0' }, cache: 'no-store' })
+      const headers: Record<string, string> = { 'User-Agent': 'CSDtv-Calendar-Sync/1.0' }
+      if (conditional?.etag) headers['If-None-Match'] = conditional.etag
+      if (conditional?.lastModified) headers['If-Modified-Since'] = conditional.lastModified
+      const res = await fetch(url, { headers, cache: 'no-store' })
+      if (res.status === 304) {
+        return { notModified: true, etag: res.headers.get('etag'), lastModified: res.headers.get('last-modified') }
+      }
       if (!res.ok) {
         lastError = `Feed returned HTTP ${res.status}`
       } else {
         const text = await res.text()
-        if (looksLikeCompleteIcs(text)) return { text }
+        if (looksLikeCompleteIcs(text)) {
+          return { text, etag: res.headers.get('etag'), lastModified: res.headers.get('last-modified') }
+        }
         lastError = text.includes('BEGIN:VCALENDAR')
           ? "Response looked cut off partway through (no END:VCALENDAR at the end) -- the download may have been interrupted"
           : "Response wasn't a valid ICS calendar (no BEGIN:VCALENDAR) -- the source may be blocking automated requests or returned an error page instead of the calendar"
@@ -104,6 +137,10 @@ export type CalendarSyncFeedResult = {
   updated: number
   removed: number
   unchanged: number
+  /** True when the source replied "304 Not Modified" to a conditional
+   * request -- the feed wasn't reprocessed at all this run because nothing
+   * changed since the last fetch. */
+  notModified?: boolean
   error?: string
 }
 
@@ -145,8 +182,24 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
     return result
   }
 
-  const fetchResult = await fetchIcsWithRetry(feed.ics_url)
+  const fetchResult = await fetchIcsWithRetry(feed.ics_url, {
+    etag: feed.last_etag, lastModified: feed.last_modified_header,
+  })
   if ('error' in fetchResult) return fail(fetchResult.error)
+
+  if ('notModified' in fetchResult) {
+    // The source confirmed nothing changed since our last fetch -- skip
+    // parsing and diffing entirely rather than reprocessing an identical
+    // file. Nothing here counts as a "change" to the feed, so last_changed_at
+    // (used for the staleness check) is deliberately left untouched.
+    result.ok = true
+    result.notModified = true
+    await service.from('calendar_school_feeds').update({
+      last_synced_at: nowIso, last_sync_ok: true, last_sync_error: null,
+    }).eq('id', feed.id)
+    return result
+  }
+
   const icsText = fetchResult.text
 
   let parsed: ParsedIcsEvent[]
@@ -155,6 +208,19 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
   } catch (e) {
     return fail(e instanceof Error ? e.message : 'Parse failed')
   }
+
+  // This parser tracks recurring events the way most school calendar tools
+  // actually publish them: one full VEVENT per occurrence, sharing a UID
+  // (see recurrenceGroupId above). It does NOT expand an RRULE -- a single
+  // VEVENT that says "every Tuesday until June" instead of listing each
+  // Tuesday out. If a feed ever starts using that style, only its first
+  // occurrence would come through, and nothing about that failure mode looks
+  // any different from a normal sync (no error, no zero-event red flag --
+  // just quietly incomplete, the same way Albion Middle's feed was). Counting
+  // RRULE-bearing VEVENTs here, across the whole feed rather than just the
+  // events that survive the school-year filter, means we always know which
+  // feeds would need real expansion before it becomes a support mystery.
+  const rruleEventCount = parsed.filter(ev => ev.rrule).length
 
   // Synthetic no-uid keys aren't stable across syncs, so events without a real
   // UID can't be tracked for updates/removal -- skip them rather than risk
@@ -369,10 +435,22 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
   result.unchanged = byUid.size - newRows.length - updates.length
   result.ok = !result.error
 
+  // last_changed_at only moves when something real actually changed --
+  // added, updated, or removed. A run that's all "unchanged" (or that had to
+  // skip the removal step) leaves it alone. This is what the Feeds page uses
+  // to flag a feed that's reporting success but has gone quiet: the same
+  // failure mode that hid the Albion Middle problem, where "sync OK" and
+  // "sync OK and actually finding anything" looked identical.
+  const hadRealChange = result.added > 0 || result.updated > 0 || result.removed > 0
+
   await service.from('calendar_school_feeds').update({
     last_synced_at: nowIso,
     last_sync_ok: result.ok,
     last_sync_error: result.error || null,
+    rrule_event_count: rruleEventCount,
+    last_etag: fetchResult.etag,
+    last_modified_header: fetchResult.lastModified,
+    ...(hadRealChange ? { last_changed_at: nowIso } : {}),
   }).eq('id', feed.id)
 
   return result
@@ -391,7 +469,7 @@ export async function runCalendarSync(options?: { feedId?: string }): Promise<Ca
   const service = getServiceSupabaseClient()
   if (!service) return { error: 'Server configuration error' }
 
-  let query = service.from('calendar_school_feeds').select('id, school_id, ics_url, label')
+  let query = service.from('calendar_school_feeds').select('id, school_id, ics_url, label, last_etag, last_modified_header')
   if (options?.feedId) query = query.eq('id', options.feedId)
   const { data: feeds, error: feedsError } = await query
 

@@ -24,9 +24,48 @@ type Feed = {
   school_id: string
   label: string
   ics_url: string
+  created_at: string
   last_synced_at: string | null
   last_sync_ok: boolean | null
   last_sync_error: string | null
+  last_changed_at: string | null
+  rrule_event_count: number
+}
+
+const FEED_SELECT = 'id, school_id, label, ics_url, created_at, last_synced_at, last_sync_ok, last_sync_error, last_changed_at, rrule_event_count'
+
+/** A feed can report "sync OK" every single run while quietly finding
+ * nothing new for weeks -- this is exactly what hid the Albion Middle
+ * problem (a feed that "succeeded" while adding zero events after its URL
+ * silently switched calendar tools). last_synced_at moves on every run;
+ * last_changed_at only moves when a sync actually added, updated, or
+ * removed something. A feed that's gone quiet on the second one for a long
+ * stretch is worth a human glancing at, even though nothing is "failing." */
+const STALE_DAYS = 21
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null
+  return (Date.now() - new Date(iso).getTime()) / 86400000
+}
+
+function staleReason(feed: Feed): string | null {
+  if (feed.last_sync_ok === false) return null // already called out as failing -- don't double-warn
+  if (!feed.last_synced_at) return null // never synced yet
+  if (feed.last_changed_at) {
+    const days = daysSince(feed.last_changed_at)
+    if (days !== null && days >= STALE_DAYS) {
+      return `No new or changed events picked up in ${Math.floor(days)} days`
+    }
+    return null
+  }
+  // Never once recorded a change -- could just be a brand-new feed (fine),
+  // or it could be quietly adding nothing since the day it was created,
+  // exactly like Albion Middle was before anyone noticed by hand.
+  const daysSinceCreated = daysSince(feed.created_at)
+  if (daysSinceCreated !== null && daysSinceCreated >= STALE_DAYS) {
+    return `Syncing OK but has never picked up a single event in ${Math.floor(daysSinceCreated)} days -- worth checking the feed URL`
+  }
+  return null
 }
 
 type FeedCounts = Record<string, number>
@@ -170,7 +209,7 @@ export default function CalendarFeedsPage() {
         .eq('active', true)
         .order('name'),
       supabase.from('calendar_school_feeds')
-        .select('id, school_id, label, ics_url, last_synced_at, last_sync_ok, last_sync_error')
+        .select(FEED_SELECT)
         .order('label'),
       fetchAllEventStatusRows(supabase),
     ])
@@ -242,7 +281,7 @@ export default function CalendarFeedsPage() {
       .from('calendar_school_feeds')
       .update({ ics_url: url })
       .eq('id', feedId)
-      .select('id, school_id, label, ics_url, last_synced_at, last_sync_ok, last_sync_error')
+      .select(FEED_SELECT)
       .single()
     setSavingId(null)
     if (updateError) {
@@ -331,7 +370,7 @@ export default function CalendarFeedsPage() {
     const { data, error: insertError } = await supabase
       .from('calendar_school_feeds')
       .insert({ school_id: schoolId, label, ics_url: url })
-      .select('id, school_id, label, ics_url, last_synced_at, last_sync_ok, last_sync_error')
+      .select(FEED_SELECT)
       .single()
     setAddingSchoolId(null)
     if (insertError) {
@@ -375,6 +414,10 @@ export default function CalendarFeedsPage() {
 
   const allFeeds = useMemo(() => Object.values(feedsBySchool).flat(), [feedsBySchool])
   const failingFeeds = useMemo(() => allFeeds.filter(f => f.last_sync_ok === false), [allFeeds])
+  const staleFeeds = useMemo(
+    () => allFeeds.map(f => ({ feed: f, reason: staleReason(f) })).filter((x): x is { feed: Feed; reason: string } => !!x.reason),
+    [allFeeds]
+  )
   const totalActiveEvents = useMemo(() => allFeeds.reduce((sum, f) => sum + activeCount(countsByFeed[f.id]), 0), [allFeeds, countsByFeed])
   const schoolMap = useMemo(() => new Map(schools.map(s => [s.id, s])), [schools])
 
@@ -433,6 +476,10 @@ export default function CalendarFeedsPage() {
           <p style={{ fontSize: '20px', fontWeight: 700, color: text, margin: 0 }}>{totalActiveEvents.toLocaleString()}</p>
           <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Events tracked</p>
         </div>
+        <div style={statCardStyle}>
+          <p style={{ fontSize: '20px', fontWeight: 700, color: staleFeeds.length > 0 ? '#d97706' : text, margin: 0 }}>{staleFeeds.length}</p>
+          <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Needs a look</p>
+        </div>
       </div>
 
       {error && (
@@ -463,6 +510,36 @@ export default function CalendarFeedsPage() {
                     }}
                   >
                     {syncing ? 'Syncing…' : 'Retry sync'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {staleFeeds.length > 0 && (
+        <div style={{ background: 'rgba(217,119,6,0.08)', border: '0.5px solid rgba(217,119,6,0.3)', borderRadius: '12px', padding: '14px 16px', marginBottom: '20px' }}>
+          <p style={{ fontSize: '13.5px', fontWeight: 600, color: '#d97706', margin: '0 0 10px' }}>
+            {staleFeeds.length} feed{staleFeeds.length === 1 ? '' : 's'} syncing OK but worth a look
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {staleFeeds.map(({ feed, reason }) => {
+              const school = schoolMap.get(feed.school_id)
+              const syncing = syncingId === feed.id
+              return (
+                <div key={feed.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, fontSize: '13px' }}>
+                  <span style={{ color: text, fontWeight: 500 }}>{school?.name || 'Unknown school'} · {feed.label}</span>
+                  <span style={{ color: muted }}>{reason}</span>
+                  <button
+                    onClick={() => syncOne(feed.id)}
+                    disabled={syncing}
+                    style={{
+                      fontSize: '12.5px', padding: '5px 10px', borderRadius: '7px', background: 'transparent',
+                      color: '#d97706', border: '0.5px solid rgba(217,119,6,0.35)', cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {syncing ? 'Syncing…' : 'Sync now'}
                   </button>
                 </div>
               )
@@ -528,6 +605,12 @@ export default function CalendarFeedsPage() {
                           )}
                         </div>
                         <p style={{ fontSize: '12px', color: muted, margin: 0 }}>{countsSummary(counts)}</p>
+                        {feed.rrule_event_count > 0 && (
+                          <p style={{ fontSize: '11.5px', color: '#d97706', margin: 0 }}>
+                            {feed.rrule_event_count} event{feed.rrule_event_count === 1 ? '' : 's'} in this feed use a recurrence rule (RRULE) we don&apos;t expand -- only
+                            the first occurrence of each syncs. Let me know if this feed&apos;s events start looking incomplete.
+                          </p>
+                        )}
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' as const }}>
                           <input
                             value={draft}
