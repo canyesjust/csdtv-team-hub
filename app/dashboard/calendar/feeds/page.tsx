@@ -68,13 +68,16 @@ function activeCount(counts: FeedCounts | undefined): number {
   return Object.entries(counts).filter(([status]) => status !== 'removed').reduce((sum, [, n]) => sum + n, 0)
 }
 
+// This is a cumulative snapshot -- everything currently tracked for the
+// feed, across every sync ever run -- not what changed in the most recent
+// sync. The "Sync complete" toast is the per-run delta; this is the total.
 function countsSummary(counts: FeedCounts | undefined): string {
   if (!counts) return 'No events synced yet'
   const parts = Object.keys(STATUS_LABELS)
     .map(key => (counts[key] ? `${counts[key]} ${STATUS_LABELS[key]}` : null))
     .filter(Boolean) as string[]
   if (parts.length === 0) return counts.removed ? 'No active events from this feed right now' : 'No events synced yet'
-  return parts.join(' · ')
+  return `Total tracked: ${parts.join(' · ')}`
 }
 
 async function callSyncNow(body?: { feedId: string }): Promise<SyncSummary> {
@@ -88,12 +91,14 @@ async function callSyncNow(body?: { feedId: string }): Promise<SyncSummary> {
   return data as SyncSummary
 }
 
+// This describes what changed in THIS sync run only (a delta), not the
+// total number of events tracked for the feed -- see countsSummary for that.
 function summaryToast(summary: SyncSummary) {
   const parts: string[] = []
   if (summary.added) parts.push(`${summary.added} new`)
   if (summary.updated) parts.push(`${summary.updated} changed`)
   if (summary.removed) parts.push(`${summary.removed} removed`)
-  const body = parts.length ? parts.join(', ') : 'no changes'
+  const body = parts.length ? `${parts.join(', ')} this run` : 'no changes this run'
   if (summary.failures.length > 0) {
     toast(`Synced with ${summary.failures.length} feed failure${summary.failures.length === 1 ? '' : 's'} (${body})`, 'error')
   } else {

@@ -1,12 +1,15 @@
 /**
  * Minimal RFC 5545 ICS parser for the calendar suite's sync job.
- * Scope: standard VEVENT fields (UID, SUMMARY, DTSTART, DTEND, LOCATION,
- * DESCRIPTION, STATUS) plus RRULE *presence* (for series grouping). Does not
- * expand recurrence rules — most published school-calendar feeds already
- * emit one VEVENT per occurrence sharing a UID, which this handles via
- * recurrenceGroupId. If a feed instead relies on raw RRULE expansion, only
- * the first/master occurrence will come through; revisit if that turns out
- * to matter for real feeds.
+ * Extracts every VEVENT field this app has a use for today (UID, SUMMARY,
+ * DTSTART/DTEND, LOCATION, DESCRIPTION, STATUS, ORGANIZER, TRANSP, SEQUENCE,
+ * URL, RRULE, CATEGORIES, CLASS, CREATED/LAST-MODIFIED, and whether it's an
+ * all-day entry) plus the complete raw VEVENT block verbatim as a fallback,
+ * so nothing is silently dropped even for properties not listed above.
+ * Does not expand recurrence rules — most published school-calendar feeds
+ * already emit one VEVENT per occurrence sharing a UID, which this handles
+ * via recurrenceGroupId. If a feed instead relies on raw RRULE expansion,
+ * only the first/master occurrence will come through; revisit if that turns
+ * out to matter for real feeds (the raw RRULE text is captured either way).
  */
 
 export type ParsedIcsEvent = {
@@ -18,6 +21,33 @@ export type ParsedIcsEvent = {
   description: string | null
   cancelled: boolean
   isRecurring: boolean
+  isAllDay: boolean
+  organizerName: string | null
+  organizerEmail: string | null
+  /** OPAQUE (busy) / TRANSPARENT (free) per RFC 5545 TRANSP -- most school
+   * feeds don't set this, in which case it's null (unknown), not a guess. */
+  busyStatus: 'busy' | 'free' | null
+  /** Bumped by the source calendar tool on every edit -- a more reliable
+   * "did this change" signal than diffing individual fields, for sources
+   * that set it consistently. */
+  sequence: number | null
+  url: string | null
+  /** Raw RRULE value, if present (recurrence rules aren't expanded by this
+   * parser -- see the module doc comment -- but the raw rule is kept so
+   * nothing is silently discarded). */
+  rrule: string | null
+  /** The source's own CATEGORIES value, kept separate from whatever
+   * category this app assigns the event. */
+  sourceCategories: string | null
+  sourceClass: string | null
+  createdAt: Date | null
+  lastModifiedAt: Date | null
+  /** The complete raw VEVENT block exactly as received, BEGIN:VEVENT through
+   * END:VEVENT. Archival -- covers every property this parser doesn't
+   * explicitly extract (ATTACH, CONTACT, GEO, X-* extensions, etc.) so no
+   * source data is ever silently thrown away, even if today's UI has no use
+   * for it yet. */
+  rawText: string
 }
 
 function unescapeIcalText(value: string): string {
@@ -79,10 +109,22 @@ function parseLine(line: string): PropLine | null {
 /** Default timezone for floating (no TZID, no Z) date-times in district feeds. */
 const DEFAULT_TZ = 'America/Denver'
 
+function isDateOnlyValue(prop: PropLine): boolean {
+  const v = prop.value.trim()
+  return prop.params.VALUE === 'DATE' || (v.length === 8 && !v.includes('T'))
+}
+
+function parseOrganizer(prop: PropLine | undefined): { name: string | null; email: string | null } {
+  if (!prop) return { name: null, email: null }
+  const name = prop.params.CN ? unescapeIcalText(prop.params.CN) : null
+  const raw = prop.value.trim()
+  const email = raw.toLowerCase().startsWith('mailto:') ? raw.slice(7) : raw
+  return { name, email: email || null }
+}
+
 function parseDateTimeValue(prop: PropLine): Date | null {
   const v = prop.value.trim()
-  const isDateOnly = prop.params.VALUE === 'DATE' || (v.length === 8 && !v.includes('T'))
-  if (isDateOnly) {
+  if (isDateOnlyValue(prop)) {
     const y = Number(v.slice(0, 4)), mo = Number(v.slice(4, 6)), d = Number(v.slice(6, 8))
     if (!y || !mo || !d) return null
     return zonedTimeToUtc(y, mo, d, 0, 0, 0, DEFAULT_TZ)
@@ -106,13 +148,16 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
   const lines = unfoldLines(icsText)
   const events: ParsedIcsEvent[] = []
   let cur: Record<string, PropLine[]> | null = null
+  let curRawLines: string[] = []
 
   for (const line of lines) {
     if (line.startsWith('BEGIN:VEVENT')) {
       cur = {}
+      curRawLines = [line]
       continue
     }
     if (line.startsWith('END:VEVENT')) {
+      curRawLines.push(line)
       if (cur) {
         const get = (name: string) => cur![name]?.[0]
         const uidProp = get('UID')
@@ -123,6 +168,17 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
         if (start && (uidProp || summaryProp)) {
           const end = dtendProp ? parseDateTimeValue(dtendProp) : null
           const statusProp = get('STATUS')
+          const organizer = parseOrganizer(get('ORGANIZER'))
+          const transpProp = get('TRANSP')
+          const transpValue = transpProp ? transpProp.value.trim().toUpperCase() : null
+          const sequenceProp = get('SEQUENCE')
+          const parsedSequence = sequenceProp ? Number.parseInt(sequenceProp.value.trim(), 10) : NaN
+          const urlProp = get('URL')
+          const rruleProp = get('RRULE')
+          const categoriesProp = get('CATEGORIES')
+          const classProp = get('CLASS')
+          const createdProp = get('CREATED')
+          const modifiedProp = get('LAST-MODIFIED')
           events.push({
             uid: uidProp ? uidProp.value.trim() : `no-uid-${summaryProp!.value}-${dtstartProp!.value}`,
             title: summaryProp ? unescapeIcalText(summaryProp.value) : 'Untitled event',
@@ -132,13 +188,30 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
             description: get('DESCRIPTION') ? unescapeIcalText(get('DESCRIPTION')!.value) || null : null,
             cancelled: !!statusProp && statusProp.value.trim().toUpperCase() === 'CANCELLED',
             isRecurring: !!cur['RRULE'],
+            isAllDay: isDateOnlyValue(dtstartProp!),
+            organizerName: organizer.name,
+            organizerEmail: organizer.email,
+            busyStatus: transpValue === 'OPAQUE' ? 'busy' : transpValue === 'TRANSPARENT' ? 'free' : null,
+            sequence: Number.isNaN(parsedSequence) ? null : parsedSequence,
+            url: urlProp ? urlProp.value.trim() || null : null,
+            rrule: rruleProp ? rruleProp.value.trim() || null : null,
+            sourceCategories: categoriesProp ? unescapeIcalText(categoriesProp.value) || null : null,
+            sourceClass: classProp ? classProp.value.trim() || null : null,
+            createdAt: createdProp ? parseDateTimeValue(createdProp) : null,
+            lastModifiedAt: modifiedProp ? parseDateTimeValue(modifiedProp) : null,
+            // Reconstructed from unfolded lines, not the original folded
+            // bytes -- same content, one property per line instead of
+            // possibly wrapped across 75-char continuation lines.
+            rawText: curRawLines.join('\n'),
           })
         }
       }
       cur = null
+      curRawLines = []
       continue
     }
     if (!cur) continue
+    curRawLines.push(line)
     const prop = parseLine(line)
     if (!prop) continue
     if (!cur[prop.name]) cur[prop.name] = []

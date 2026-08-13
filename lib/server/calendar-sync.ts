@@ -32,6 +32,52 @@ function getSchoolYearWindow(now: Date): { start: Date; end: Date } {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/** A real, fully-downloaded ICS file always opens with BEGIN:VCALENDAR and
+ * closes with END:VCALENDAR as its last line. A connection that drops
+ * mid-download, or a source that serves an HTML error/bot-challenge page
+ * instead of the calendar, fails one or both of those -- which otherwise
+ * looks identical to "an empty calendar" to the rest of the sync and
+ * silently produces a hollow (or destructively incomplete) result. */
+function looksLikeCompleteIcs(text: string): boolean {
+  const trimmed = text.trim()
+  return trimmed.includes('BEGIN:VCALENDAR') && trimmed.endsWith('END:VCALENDAR')
+}
+
+const FETCH_ATTEMPTS = 3
+const RETRY_DELAY_MS = 1500
+
+/** Fetches a feed's ICS text, retrying a couple of times (with a short
+ * pause) on a network error, a non-2xx response, or a response that
+ * doesn't look like a complete calendar file -- a single transient hiccup
+ * (dropped connection, a momentary block, a slow truncated read) shouldn't
+ * be enough to mark a whole feed as failing or, worse, feed a partial
+ * calendar into the diff against what's already synced. */
+async function fetchIcsWithRetry(url: string): Promise<{ text: string } | { error: string }> {
+  let lastError = 'Fetch failed'
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'CSDtv-Calendar-Sync/1.0' }, cache: 'no-store' })
+      if (!res.ok) {
+        lastError = `Feed returned HTTP ${res.status}`
+      } else {
+        const text = await res.text()
+        if (looksLikeCompleteIcs(text)) return { text }
+        lastError = text.includes('BEGIN:VCALENDAR')
+          ? "Response looked cut off partway through (no END:VCALENDAR at the end) -- the download may have been interrupted"
+          : "Response wasn't a valid ICS calendar (no BEGIN:VCALENDAR) -- the source may be blocking automated requests or returned an error page instead of the calendar"
+      }
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : 'Fetch failed'
+    }
+    if (attempt < FETCH_ATTEMPTS) await sleep(RETRY_DELAY_MS)
+  }
+  return { error: `${lastError} (tried ${FETCH_ATTEMPTS} times)` }
+}
+
 type ExistingEventRow = {
   id: string
   source_uid: string | null
@@ -41,6 +87,13 @@ type ExistingEventRow = {
   source_end: string | null
   source_location: string | null
   source_description: string | null
+  source_sequence: number | null
+  source_url: string | null
+  source_categories: string | null
+  source_class: string | null
+  organizer_email: string | null
+  busy_status: string | null
+  is_all_day: boolean
 }
 
 export type CalendarSyncFeedResult = {
@@ -92,14 +145,9 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
     return result
   }
 
-  let icsText: string
-  try {
-    const res = await fetch(feed.ics_url, { headers: { 'User-Agent': 'CSDtv-Calendar-Sync/1.0' }, cache: 'no-store' })
-    if (!res.ok) throw new Error(`Feed returned HTTP ${res.status}`)
-    icsText = await res.text()
-  } catch (e) {
-    return fail(e instanceof Error ? e.message : 'Fetch failed')
-  }
+  const fetchResult = await fetchIcsWithRetry(feed.ics_url)
+  if ('error' in fetchResult) return fail(fetchResult.error)
+  const icsText = fetchResult.text
 
   let parsed: ParsedIcsEvent[]
   try {
@@ -125,7 +173,10 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
 
   const { data: existingRows, error: existingError } = await service
     .from('calendar_school_events')
-    .select('id, source_uid, status, source_title, source_start, source_end, source_location, source_description')
+    .select(`
+      id, source_uid, status, source_title, source_start, source_end, source_location, source_description,
+      source_sequence, source_url, source_categories, source_class, organizer_email, busy_status, is_all_day
+    `)
     .eq('feed_id', feed.id)
 
   if (existingError) return fail(existingError.message)
@@ -145,6 +196,23 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
     const sourceEnd = ev.end ? ev.end.toISOString() : null
     const sourceLocation = ev.location
     const sourceDescription = ev.description
+    // Metadata captured alongside the display fields -- see
+    // lib/calendar-ics-parse.ts's ParsedIcsEvent doc comment for what each
+    // one is. Never staff-editable, always mirrors the source as-is.
+    const metadata = {
+      is_all_day: ev.isAllDay,
+      organizer_name: ev.organizerName,
+      organizer_email: ev.organizerEmail,
+      busy_status: ev.busyStatus,
+      source_sequence: ev.sequence,
+      source_url: ev.url,
+      rrule: ev.rrule,
+      source_categories: ev.sourceCategories,
+      source_class: ev.sourceClass,
+      source_created_at: ev.createdAt ? ev.createdAt.toISOString() : null,
+      source_modified_at: ev.lastModifiedAt ? ev.lastModifiedAt.toISOString() : null,
+      raw_ics: ev.rawText,
+    }
 
     if (!existing) {
       newRows.push({
@@ -167,6 +235,7 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
         description: sourceDescription,
         status: ev.cancelled ? 'removed' : 'needs_review',
         updated_at: nowIso,
+        ...metadata,
       })
       continue
     }
@@ -183,7 +252,14 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
       existing.source_start !== sourceStart ||
       existing.source_end !== sourceEnd ||
       existing.source_location !== sourceLocation ||
-      existing.source_description !== sourceDescription
+      existing.source_description !== sourceDescription ||
+      existing.source_sequence !== metadata.source_sequence ||
+      existing.source_url !== metadata.source_url ||
+      existing.source_categories !== metadata.source_categories ||
+      existing.source_class !== metadata.source_class ||
+      existing.organizer_email !== metadata.organizer_email ||
+      existing.busy_status !== metadata.busy_status ||
+      existing.is_all_day !== metadata.is_all_day
 
     if (!changed) continue
 
@@ -194,12 +270,15 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
       source_location: sourceLocation,
       source_description: sourceDescription,
       updated_at: nowIso,
+      ...metadata,
     }
 
     if (existing.status === 'visible') {
       // Already approved and public -- don't silently overwrite what staff
       // published. Flip to 'updated' so a human reviews the incoming change;
-      // the display fields (title/start_time/etc) are left untouched.
+      // the display fields (title/start_time/etc) are left untouched. The
+      // metadata mirrors above still refresh either way -- they're
+      // reference data, not something staff approve/publish.
       patch.status = 'updated'
     } else {
       // Nothing has been reviewed yet (or it was hidden/removed and just came
@@ -223,6 +302,18 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
   const goneIds = (existingRows || [])
     .filter((row: ExistingEventRow) => row.source_uid && !seenUids.has(row.source_uid) && row.status !== 'removed')
     .map((row: ExistingEventRow) => row.id)
+
+  // A single flaky or partial fetch (network hiccup, the source truncating
+  // its response, a timeout mid-download) looks identical to "most of these
+  // events disappeared" -- the diff has no way to tell "the source really
+  // deleted these" from "we only got half the calendar this time." If a
+  // sync would mark more than half of what was already tracked as removed,
+  // that's far more likely a bad fetch than a real mass cancellation --
+  // skip the removal step and fail the sync instead, so nothing gets
+  // silently wiped and the next retry (with a hopefully-complete fetch)
+  // fixes it.
+  const previouslyActiveCount = (existingRows || []).filter((row: ExistingEventRow) => row.status !== 'removed').length
+  const suspiciousMassRemoval = goneIds.length >= 5 && previouslyActiveCount > 0 && goneIds.length / previouslyActiveCount > 0.5
 
   if (newRows.length > 0) {
     // Upsert instead of a plain insert: if two syncs for this feed overlap
@@ -251,7 +342,11 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
     result.updated = updates.length - failed.length
   }
 
-  if (goneIds.length > 0) {
+  if (suspiciousMassRemoval) {
+    if (!result.error) {
+      result.error = `This sync would have marked ${goneIds.length} of ${previouslyActiveCount} previously tracked events as removed -- skipped that step since it usually means the feed returned incomplete data rather than that many events actually disappearing. Retry the sync; if this keeps happening, double-check the feed URL.`
+    }
+  } else if (goneIds.length > 0) {
     const { error: removeError } = await service
       .from('calendar_school_events')
       .update({ status: 'removed', updated_at: nowIso })
