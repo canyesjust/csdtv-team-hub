@@ -479,6 +479,18 @@ export default function CalendarReviewPage() {
     }
   }
 
+  async function runBatchAcknowledge() {
+    const rows = filtered.filter(e => selected.has(e.id))
+    if (rows.length === 0) return
+    if (!(await confirmDialog({
+      message: `Acknowledge ${rows.length} selected event${rows.length === 1 ? '' : 's'}? This clears them out (removed-from-source events, or anything else selected) without deleting the record.`,
+      confirmLabel: 'Acknowledge',
+    }))) return
+    for (const row of rows) {
+      await runAction(row, 'acknowledge', undefined)
+    }
+  }
+
   async function runBulkCategory() {
     const rows = filtered.filter(e => selected.has(e.id))
     if (rows.length === 0) return
@@ -506,7 +518,7 @@ export default function CalendarReviewPage() {
   }
   if (!allowed) return null
 
-  const selectableCount = filtered.filter(e => e.status !== 'removed').length
+  const selectableCount = filtered.length
 
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
@@ -570,6 +582,7 @@ export default function CalendarReviewPage() {
           <span style={{ fontSize: '13.5px', color: text, fontWeight: 500 }}>{selected.size} selected</span>
           <AsyncButton onClick={() => runBatch('approve')} pendingLabel="Approving…" style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: '#16a34a', color: '#fff', border: 'none', fontWeight: 500, minHeight: '34px' }}>Approve selected</AsyncButton>
           <AsyncButton onClick={() => runBatch('reject')} pendingLabel="…" style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.3)', fontWeight: 500, minHeight: '34px' }}>Reject selected</AsyncButton>
+          <AsyncButton onClick={runBatchAcknowledge} pendingLabel="…" style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', color: text, border: `0.5px solid ${border}`, fontWeight: 500, minHeight: '34px' }}>Acknowledge selected</AsyncButton>
           <span style={{ width: '1px', height: '20px', background: border }} />
           <select value={bulkCategory} onChange={(e: ChangeEvent<HTMLSelectElement>) => setBulkCategory(e.target.value as CalCategory)} style={{ height: '34px', borderRadius: '8px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 8px', fontSize: '13px', fontFamily: 'inherit' }}>
             {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -585,7 +598,7 @@ export default function CalendarReviewPage() {
             type="checkbox"
             checked={selected.size === selectableCount && selectableCount > 0}
             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-              if (e.target.checked) setSelected(new Set(filtered.filter(x => x.status !== 'removed').map(x => x.id)))
+              if (e.target.checked) setSelected(new Set(filtered.map(x => x.id)))
               else setSelected(new Set())
             }}
             style={{ width: '16px', height: '16px' }}
@@ -610,7 +623,7 @@ export default function CalendarReviewPage() {
               selected={selected.has(row.id)}
               expanded={expandedId === row.id}
               draft={drafts[row.id]}
-              canSelect={row.status !== 'removed'}
+              canSelect
               onToggleSelect={toggleSelect}
               onToggleExpand={toggleExpand}
               onDraftChange={updateDraft}

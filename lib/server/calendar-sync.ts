@@ -225,9 +225,20 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
     .map((row: ExistingEventRow) => row.id)
 
   if (newRows.length > 0) {
-    const { error: insertError } = await service.from('calendar_school_events').insert(newRows)
+    // Upsert instead of a plain insert: if two syncs for this feed overlap
+    // (e.g. a cron run and a manual "Sync now" landing seconds apart), both
+    // can read the same "this uid doesn't exist yet" snapshot and both try
+    // to insert it. A plain insert makes the whole batch fail on that one
+    // collision -- including every other genuinely new event in the same
+    // batch -- and the feed shows as failing even though nothing was
+    // actually wrong with the source calendar. ignoreDuplicates just skips
+    // the row that's already there instead of erroring the batch.
+    const { data: insertedRows, error: insertError } = await service
+      .from('calendar_school_events')
+      .upsert(newRows, { onConflict: 'feed_id,source_uid', ignoreDuplicates: true })
+      .select('id')
     if (insertError) result.error = insertError.message
-    else result.added = newRows.length
+    else result.added = (insertedRows || []).length
   }
 
   if (updates.length > 0) {
