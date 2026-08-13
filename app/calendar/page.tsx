@@ -17,6 +17,7 @@ type CalEvent = {
   id: string
   schoolId: string
   schoolName: string
+  schoolColor: string | null
   title: string
   start: Date
   end: Date | null
@@ -38,7 +39,29 @@ const CAT_LABEL: Record<CalCategory, string> = Object.fromEntries(CATEGORIES.map
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const MAX_VISIBLE_PER_CELL = 3
-const WEEK_MAX_VISIBLE = 6
+const WEEK_MAX_VISIBLE = 10
+
+type SchoolGroup = { schoolId: string; schoolName: string; schoolColor: string | null; events: CalEvent[] }
+
+/** Groups a day's events by school so one school's games/events read together
+ * instead of interleaving with every other school by pure time. Groups are
+ * ordered by their earliest event so the day still reads roughly
+ * chronologically at a glance. */
+function groupBySchool(dayEvents: CalEvent[]): SchoolGroup[] {
+  const order: string[] = []
+  const map = new Map<string, SchoolGroup>()
+  for (const e of dayEvents) {
+    if (!map.has(e.schoolId)) {
+      map.set(e.schoolId, { schoolId: e.schoolId, schoolName: e.schoolName, schoolColor: e.schoolColor, events: [] })
+      order.push(e.schoolId)
+    }
+    map.get(e.schoolId)!.events.push(e)
+  }
+  const groups = order.map(id => map.get(id)!)
+  for (const g of groups) g.events.sort((a, b) => a.start.getTime() - b.start.getTime())
+  groups.sort((a, b) => a.events[0].start.getTime() - b.events[0].start.getTime())
+  return groups
+}
 
 function sameDay(a: Date, y: number, m: number, d: number): boolean {
   return a.getFullYear() === y && a.getMonth() === m && a.getDate() === d
@@ -102,19 +125,30 @@ function downloadIcs(e: CalEvent) {
   URL.revokeObjectURL(url)
 }
 
-function EventRow({ e, now, dense, onClick }: { e: CalEvent; now: Date; dense?: boolean; onClick: () => void }) {
+function EventRow({ e, now, dense, hideSchool, onClick }: { e: CalEvent; now: Date; dense?: boolean; hideSchool?: boolean; onClick: () => void }) {
   const state = streamState(e, now)
   return (
-    <div onClick={onClick} style={{ padding: dense ? '1.5px 3px' : '6px 3px', borderRadius: dense ? 4 : 0, cursor: 'pointer' }}>
-      <span style={{ display: 'block', fontSize: dense ? '10.5px' : '12px', fontWeight: dense ? 400 : 700, color: '#18181b', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-        {!dense && <span style={{ display: 'block' }}>{e.schoolName}</span>}
+    <div onClick={onClick} style={{ padding: dense ? '1.5px 3px' : '5px 4px', borderRadius: dense ? 4 : 6, cursor: 'pointer', minWidth: 0 }}>
+      <span style={{ display: 'block', fontSize: dense ? '10.5px' : '12.5px', fontWeight: dense ? 400 : 700, color: '#18181b', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+        {!dense && !hideSchool && <span style={{ display: 'block' }}>{e.schoolName}</span>}
         <StreamTag state={state} />{e.title}
       </span>
       {!dense && (
-        <>
-          <span style={{ display: 'block', fontSize: '10px', color: '#a1a1aa', marginTop: 1 }}>{fmtTime(e.start)}{e.location ? ` · ${e.location}` : ''}</span>
-        </>
+        <span style={{ display: 'block', fontSize: 10.5, color: '#a1a1aa', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+          {fmtTime(e.start)}{e.location ? ` · ${e.location}` : ''}
+        </span>
       )}
+    </div>
+  )
+}
+
+function SchoolGroupHeader({ group, first }: { group: SchoolGroup; first: boolean }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, margin: first ? '0 0 2px' : '10px 0 2px', minWidth: 0 }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: group.schoolColor || '#a1a1aa', flexShrink: 0 }} />
+      <span style={{ fontSize: 10.5, fontWeight: 800, color: '#3f3f46', textTransform: 'uppercase' as const, letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+        {group.schoolName}
+      </span>
     </div>
   )
 }
@@ -221,6 +255,7 @@ function PublicCalendarInner() {
       id: e.id as string,
       schoolId: e.school_id as string,
       schoolName: schoolMap.get(e.school_id as string)?.name || 'Canyons School District',
+      schoolColor: schoolMap.get(e.school_id as string)?.primary_color || null,
       title: e.title as string,
       start: new Date(e.start_time as string),
       end: e.end_time ? new Date(e.end_time as string) : null,
@@ -235,13 +270,19 @@ function PublicCalendarInner() {
   }, [supabase])
 
   useEffect(() => {
-    void loadData()
+    async function run() {
+      await loadData()
+    }
+    run()
   }, [loadData])
 
   // Deep link: ?event=<id> opens that event's modal once data has loaded.
   useEffect(() => {
-    const id = searchParams.get('event')
-    if (id && events.some(e => e.id === id)) setEventModalId(id)
+    function run() {
+      const id = searchParams.get('event')
+      if (id && events.some(e => e.id === id)) setEventModalId(id)
+    }
+    run()
   }, [searchParams, events])
 
   function openEvent(e: CalEvent) {
@@ -299,7 +340,7 @@ function PublicCalendarInner() {
         </Link>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '30px 32px 8px' }}>
+      <div style={{ maxWidth: 1680, margin: '0 auto', padding: '30px 40px 8px' }}>
         <h1 style={{ fontSize: 23, fontWeight: 700, letterSpacing: '-0.015em', margin: '0 0 8px' }}>Canyons School District Events Calendar</h1>
         <p style={{ fontSize: '14.5px', color: '#71717a', margin: '0 0 4px', maxWidth: 700, lineHeight: 1.6 }}>
           A collection of events happening across Canyons School District — games, concerts, meetings, assemblies, and more — gathered from schools throughout the district. Look for{' '}
@@ -311,7 +352,7 @@ function PublicCalendarInner() {
         </p>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 32px 90px' }}>
+      <div style={{ maxWidth: 1680, margin: '0 auto', padding: '20px 40px 90px' }}>
         <div className="pc-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const, marginBottom: 20 }}>
           <input
             value={search}
@@ -350,23 +391,34 @@ function PublicCalendarInner() {
         <div style={{ marginBottom: 22 }}>
           <h2 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#71717a', margin: '0 0 12px' }}>This week</h2>
 
-          <div className="pc-week-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 10, overflow: 'hidden' }}>
+          <div className="pc-week-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 10, overflow: 'hidden' }}>
             {weekDays.map(({ d, dayEvents }, i) => {
               const isToday = sameDay(now, d.getFullYear(), d.getMonth(), d.getDate())
-              const visible = dayEvents.slice(0, WEEK_MAX_VISIBLE)
-              const extra = dayEvents.length - visible.length
+              const groups = groupBySchool(dayEvents)
+              let shown = 0
               return (
-                <div key={i} style={{ background: isToday ? '#eff6ff' : '#fff', minHeight: 230, padding: '10px 9px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: '#a1a1aa' }}>{DOW[i]}</span>
+                <div key={i} style={{ background: isToday ? '#eff6ff' : '#fff', minHeight: 340, minWidth: 0, padding: '14px 12px', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: '#a1a1aa' }}>{DOW[i]}</span>
                     <span style={isToday
-                      ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 21, height: 21, borderRadius: '50%', background: '#2791D0', color: '#fff', fontSize: 14, fontWeight: 700 }
+                      ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#2791D0', color: '#fff', fontSize: 14, fontWeight: 700 }
                       : { fontSize: 14, fontWeight: 700, color: '#18181b' }
                     }>{d.getDate()}</span>
                   </div>
-                  {visible.map(e => <EventRow key={e.id} e={e} now={now} onClick={() => openEvent(e)} />)}
-                  {extra > 0 && (
-                    <div onClick={() => setDayModal({ y: d.getFullYear(), m: d.getMonth(), d: d.getDate() })} style={{ fontSize: 11, fontWeight: 700, color: '#065687', padding: '5px 3px 2px', cursor: 'pointer' }}>+{extra} more</div>
+                  {groups.map(g => {
+                    const remaining = WEEK_MAX_VISIBLE - shown
+                    if (remaining <= 0) return null
+                    const eventsToShow = g.events.slice(0, remaining)
+                    shown += eventsToShow.length
+                    return (
+                      <div key={g.schoolId} style={{ minWidth: 0 }}>
+                        <SchoolGroupHeader group={g} first={shown === eventsToShow.length} />
+                        {eventsToShow.map(e => <EventRow key={e.id} e={e} now={now} hideSchool onClick={() => openEvent(e)} />)}
+                      </div>
+                    )
+                  })}
+                  {dayEvents.length - shown > 0 && (
+                    <div onClick={() => setDayModal({ y: d.getFullYear(), m: d.getMonth(), d: d.getDate() })} style={{ fontSize: 11, fontWeight: 700, color: '#065687', padding: '6px 3px 2px', cursor: 'pointer' }}>+{dayEvents.length - shown} more</div>
                   )}
                   {dayEvents.length === 0 && <div style={{ fontSize: 11, color: '#a1a1aa', padding: '4px 3px' }}>No events</div>}
                 </div>
@@ -409,7 +461,7 @@ function PublicCalendarInner() {
               </div>
               <button onClick={() => { setViewYear(now.getFullYear()); setViewMonth0(now.getMonth()) }} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 7, fontSize: '12.5px', fontWeight: 600, padding: '7px 13px', cursor: 'pointer', fontFamily: 'inherit' }}>Today</button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 8, overflow: 'hidden' }}>
               {DOW.map(d => <div key={d} className="pc-dow" style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: '#a1a1aa', textAlign: 'center' as const, padding: '8px 0', background: '#fff' }}>{d}</div>)}
               {Array.from({ length: firstDayIndex }, (_, i) => <MonthDayCell key={`e${i}`} day={0} monthEvents={[]} isToday={false} isEmpty now={now} onDayClick={() => {}} onEventClick={() => {}} />)}
               {Array.from({ length: daysInMonth }, (_, i) => {
@@ -455,7 +507,15 @@ function PublicCalendarInner() {
               <button onClick={() => setDayModal(null)} style={{ background: 'none', border: 'none', color: '#71717a', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>&times;</button>
             </div>
             <div>
-              {dayModalEvents.sort((a, b) => a.start.getTime() - b.start.getTime()).map(e => <AgendaRow key={e.id} e={e} now={now} onClick={() => openEvent(e)} />)}
+              {groupBySchool(dayModalEvents).map(g => (
+                <div key={g.schoolId} style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 4px' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: g.schoolColor || '#a1a1aa', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#3f3f46', textTransform: 'uppercase' as const, letterSpacing: '0.02em' }}>{g.schoolName}</span>
+                  </div>
+                  {g.events.map(e => <AgendaRow key={e.id} e={e} now={now} onClick={() => openEvent(e)} />)}
+                </div>
+              ))}
             </div>
           </div>
         </div>

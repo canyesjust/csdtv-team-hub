@@ -288,7 +288,18 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
       patch.end_time = sourceEnd
       patch.location = sourceLocation
       patch.description = sourceDescription
-      if (existing.status === 'removed' || existing.status === 'hidden') {
+      // 'removed' (vanished from the source, now back) is genuinely new
+      // information -- worth a fresh look, so send it back to the queue.
+      // 'hidden' is different: it's a staff decision (an explicit Reject, or
+      // an Acknowledge of a past removal), and most source tools bump their
+      // own edit counter (SEQUENCE) on nearly any save, even a trivial one --
+      // that alone was enough to trip `changed` and silently undo a staff
+      // rejection every time the feed resynced. The metadata mirror above
+      // still refreshes either way, so a hidden row someone opens shows
+      // current source data -- it just doesn't jump back into the queue on
+      // its own. Bringing a hidden event back to review is the "Restore to
+      // review" button on that row, not an automatic sync side effect.
+      if (existing.status === 'removed') {
         patch.status = 'needs_review'
       }
     }

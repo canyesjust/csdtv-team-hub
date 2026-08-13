@@ -95,6 +95,35 @@ function fromDateTimeLocal(val: string): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString()
 }
 
+type SupabaseClient = ReturnType<typeof createClient>
+
+// Supabase caps a single request at 1000 rows by default -- with thousands
+// of synced events, a plain .select('*') here silently comes back truncated
+// and the queue looks smaller than it really is (this is why the "Select
+// all" count topped out well under the true backlog). Page through with
+// .range() until a page comes back short. The existing .order('created_at')
+// alone isn't a stable sort when rows share a timestamp (a whole sync batch
+// often does), so add id as a tiebreaker to guarantee no row is skipped or
+// duplicated across pages.
+async function fetchAllEvents(supabase: SupabaseClient): Promise<EventRow[]> {
+  const PAGE_SIZE = 1000
+  const rows: EventRow[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from('calendar_school_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...((data || []) as EventRow[]))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return rows
+}
+
 function draftFromRow(row: EventRow, useSource: boolean): EditDraft {
   return {
     title: (useSource ? row.source_title : row.title) || row.title,
@@ -317,14 +346,14 @@ export default function CalendarReviewPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [{ data: schoolRows }, { data: eventRows }] = await Promise.all([
+    const [{ data: schoolRows }, eventRows] = await Promise.all([
       supabase.from('schools').select('id, name, primary_color')
         .or('type.eq.school,name.eq.Board of Education,name.eq.Canyons School District')
         .eq('active', true).order('name'),
-      supabase.from('calendar_school_events').select('*').order('created_at', { ascending: false }),
+      fetchAllEvents(supabase),
     ])
     setSchools(schoolRows || [])
-    setEvents((eventRows || []) as EventRow[])
+    setEvents(eventRows)
     setLoading(false)
   }, [supabase])
 

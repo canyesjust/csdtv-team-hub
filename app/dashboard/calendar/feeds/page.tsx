@@ -80,6 +80,34 @@ function countsSummary(counts: FeedCounts | undefined): string {
   return `Total tracked: ${parts.join(' · ')}`
 }
 
+type SupabaseClient = ReturnType<typeof createClient>
+
+// Supabase caps a single request at 1000 rows by default (PostgREST's
+// db-max-rows setting) -- a plain .select() on this table silently comes
+// back truncated once there are more rows than that, and since this query
+// has no explicit order, WHICH ~1000 rows come back isn't even consistent
+// between calls (this is why the "Events tracked" stat used to bounce
+// around -- 907, then 864 after a resync -- with no real data change
+// behind it). Page through with .range() and a stable .order('id') so the
+// count reflects every row, every time.
+async function fetchAllEventStatusRows(supabase: SupabaseClient): Promise<{ feed_id: string | null; status: string }[]> {
+  const PAGE_SIZE = 1000
+  const rows: { feed_id: string | null; status: string }[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from('calendar_school_events')
+      .select('feed_id, status')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...((data || []) as { feed_id: string | null; status: string }[]))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return rows
+}
+
 async function callSyncNow(body?: { feedId: string }): Promise<SyncSummary> {
   const res = await fetch('/api/calendar/sync-now', {
     method: 'POST',
@@ -135,7 +163,7 @@ export default function CalendarFeedsPage() {
   const [newFeedUrl, setNewFeedUrl] = useState<Record<string, string>>({})
 
   const loadData = useCallback(async () => {
-    const [{ data: schoolRows }, { data: feedRows }, { data: countRows }] = await Promise.all([
+    const [{ data: schoolRows }, { data: feedRows }, countRows] = await Promise.all([
       supabase.from('schools')
         .select('id, name, short_name, level, type, primary_color')
         .or('type.eq.school,name.eq.Board of Education,name.eq.Canyons School District')
@@ -144,7 +172,7 @@ export default function CalendarFeedsPage() {
       supabase.from('calendar_school_feeds')
         .select('id, school_id, label, ics_url, last_synced_at, last_sync_ok, last_sync_error')
         .order('label'),
-      supabase.from('calendar_school_events').select('feed_id, status'),
+      fetchAllEventStatusRows(supabase),
     ])
 
     const schoolList: School[] = (schoolRows || []).slice().sort((a: School, b: School) => {
@@ -170,7 +198,7 @@ export default function CalendarFeedsPage() {
     setUrlDrafts((prev: Record<string, string>) => ({ ...draftMap, ...prev }))
 
     const counts: Record<string, FeedCounts> = {}
-    ;(countRows || []).forEach((r: { feed_id: string | null; status: string }) => {
+    countRows.forEach((r: { feed_id: string | null; status: string }) => {
       if (!r.feed_id) return
       if (!counts[r.feed_id]) counts[r.feed_id] = {}
       counts[r.feed_id][r.status] = (counts[r.feed_id][r.status] || 0) + 1
