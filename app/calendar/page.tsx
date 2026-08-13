@@ -38,7 +38,7 @@ const CAT_LABEL: Record<CalCategory, string> = Object.fromEntries(CATEGORIES.map
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const WEEK_MAX_VISIBLE = 10
+const WEEK_CELL_HEIGHT = 380
 
 type SchoolGroup = { schoolId: string; schoolName: string; schoolColor: string | null; events: CalEvent[] }
 
@@ -104,6 +104,71 @@ function hexToRgba(hex: string | null, alpha: number): string {
   const b = Number.parseInt(full.slice(4, 6), 16)
   if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return fallback
   return `rgba(${r},${g},${b},${alpha})`
+}
+
+function hexToHsl(hex: string): { h: number; s: number; l: number } | null {
+  const clean = hex.replace('#', '')
+  const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean
+  if (full.length !== 6) return null
+  const r = Number.parseInt(full.slice(0, 2), 16) / 255
+  const g = Number.parseInt(full.slice(2, 4), 16) / 255
+  const b = Number.parseInt(full.slice(4, 6), 16) / 255
+  if ([r, g, b].some(Number.isNaN)) return null
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  let h = 0, s = 0
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0)
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h /= 6
+  }
+  return { h, s, l }
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  function hue2rgb(p: number, q: number, t: number): number {
+    let tt = t
+    if (tt < 0) tt += 1
+    if (tt > 1) tt -= 1
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt
+    if (tt < 1 / 2) return q
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6
+    return p
+  }
+  let r: number, g: number, b: number
+  if (s === 0) {
+    r = g = b = l
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+    const p = 2 * l - q
+    r = hue2rgb(p, q, h + 1 / 3)
+    g = hue2rgb(p, q, h)
+    b = hue2rgb(p, q, h - 1 / 3)
+  }
+  const toHex = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+/** A school's real brand color is sometimes a very dark navy (Corner
+ * Canyon's is #001236 -- correct for letterhead, but at the size of a 6px
+ * dot or a thin border it just reads as black, not "the school's color").
+ * Floors the lightness while keeping the same hue and saturation, so a dark
+ * navy still reads as blue at a glance. Only touches colors that are
+ * already too dark to read; a school with a bright, legible brand color
+ * passes through completely unchanged. This never writes back to the
+ * school's actual stored brand color -- it only affects how the color
+ * renders on this calendar. */
+const MIN_ACCENT_LIGHTNESS = 0.28
+function visibleAccentColor(hex: string | null): string {
+  if (!hex) return '#a1a1aa'
+  const hsl = hexToHsl(hex)
+  if (!hsl) return hex
+  if (hsl.l >= MIN_ACCENT_LIGHTNESS) return hex
+  const s = hsl.s > 0 ? hsl.s : 0.4
+  return hslToHex(hsl.h, Math.min(s, 0.85), MIN_ACCENT_LIGHTNESS)
 }
 
 /** Live only while the event's actual window is in progress; otherwise "streaming" if it's a future/ongoing stream. Text carries the meaning, not color alone. */
@@ -305,7 +370,7 @@ function PublicCalendarInner() {
       id: e.id as string,
       schoolId: e.school_id as string,
       schoolName: schoolMap.get(e.school_id as string)?.name || 'Canyons School District',
-      schoolColor: schoolMap.get(e.school_id as string)?.primary_color || null,
+      schoolColor: visibleAccentColor(schoolMap.get(e.school_id as string)?.primary_color || null),
       title: e.title as string,
       start: new Date(e.start_time as string),
       end: e.end_time ? new Date(e.end_time as string) : null,
@@ -462,32 +527,31 @@ function PublicCalendarInner() {
             {weekDays.map(({ d, dayEvents }, i) => {
               const isToday = sameDay(now, d.getFullYear(), d.getMonth(), d.getDate())
               const groups = groupBySchool(dayEvents)
-              let shown = 0
               return (
-                <div key={i} style={{ background: isToday ? '#eff6ff' : '#fff', minHeight: 340, minWidth: 0, padding: '14px 12px', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                <div key={i} style={{ background: isToday ? '#eff6ff' : '#fff', height: WEEK_CELL_HEIGHT, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '14px 12px 8px', flexShrink: 0 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: '#a1a1aa' }}>{DOW[i]}</span>
                     <span style={isToday
                       ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: '#2791D0', color: '#fff', fontSize: 14, fontWeight: 700 }
                       : { fontSize: 14, fontWeight: 700, color: '#18181b' }
                     }>{d.getDate()}</span>
                   </div>
-                  {groups.map(g => {
-                    const remaining = WEEK_MAX_VISIBLE - shown
-                    if (remaining <= 0) return null
-                    const eventsToShow = g.events.slice(0, remaining)
-                    shown += eventsToShow.length
-                    return (
-                      <div key={g.schoolId} style={{ minWidth: 0, background: hexToRgba(g.schoolColor, 0.08), borderRadius: 7, padding: '4px 5px', marginBottom: 4 }}>
-                        <SchoolGroupHeader group={g} first={shown === eventsToShow.length} />
-                        {eventsToShow.map(e => <EventRow key={e.id} e={e} now={now} hideSchool onClick={() => openEvent(e)} />)}
+                  {/* Every event for the day renders here -- no cap, no "+N more."
+                      A packed day scrolls within its own column instead of either
+                      truncating text or stretching the whole week's row to match
+                      the busiest day. */}
+                  <div className="pc-week-day-scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' as const, padding: '0 12px 12px' }}>
+                    {groups.map((g, gi) => (
+                      <div key={g.schoolId} style={{
+                        minWidth: 0, background: hexToRgba(g.schoolColor, 0.16), borderLeft: `3px solid ${g.schoolColor || '#a1a1aa'}`,
+                        borderRadius: '0 7px 7px 0', padding: '4px 5px 4px 6px', marginBottom: 4,
+                      }}>
+                        <SchoolGroupHeader group={g} first={gi === 0} />
+                        {g.events.map(e => <EventRow key={e.id} e={e} now={now} hideSchool onClick={() => openEvent(e)} />)}
                       </div>
-                    )
-                  })}
-                  {dayEvents.length - shown > 0 && (
-                    <div onClick={() => setDayModal({ y: d.getFullYear(), m: d.getMonth(), d: d.getDate() })} style={{ fontSize: 11, fontWeight: 700, color: '#065687', padding: '6px 3px 2px', cursor: 'pointer' }}>+{dayEvents.length - shown} more</div>
-                  )}
-                  {dayEvents.length === 0 && <div style={{ fontSize: 11, color: '#a1a1aa', padding: '4px 3px' }}>No events</div>}
+                    ))}
+                    {dayEvents.length === 0 && <div style={{ fontSize: 11, color: '#a1a1aa', padding: '4px 3px' }}>No events</div>}
+                  </div>
                 </div>
               )
             })}
@@ -619,6 +683,9 @@ function PublicCalendarInner() {
       )}
 
       <style>{`
+        .pc-week-day-scroll { scrollbar-width: thin; }
+        .pc-week-day-scroll::-webkit-scrollbar { width: 5px; }
+        .pc-week-day-scroll::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 3px; }
         @media (max-width: 700px) {
           .pc-week-grid { display: none !important; }
           .pc-week-daystrip { display: flex !important; }
