@@ -333,7 +333,7 @@ export default function CalendarReviewPage() {
   const [loading, setLoading] = useState(true)
 
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'queue' | 'visible' | 'hidden' | 'all'>('queue')
+  const [statusFilter, setStatusFilter] = useState<'queue' | 'needs_review' | 'updated' | 'removed' | 'visible' | 'hidden' | 'all'>('queue')
   const [schoolFilter, setSchoolFilter] = useState('')
   const [originFilter, setOriginFilter] = useState<'' | Origin>('')
   const [categoryFilter, setCategoryFilter] = useState<'' | CalCategory>('')
@@ -394,6 +394,9 @@ export default function CalendarReviewPage() {
   const filtered = useMemo(() => {
     let list = events
     if (statusFilter === 'queue') list = list.filter(e => e.status === 'needs_review' || e.status === 'updated' || e.status === 'removed')
+    else if (statusFilter === 'needs_review') list = list.filter(e => e.status === 'needs_review')
+    else if (statusFilter === 'updated') list = list.filter(e => e.status === 'updated')
+    else if (statusFilter === 'removed') list = list.filter(e => e.status === 'removed')
     else if (statusFilter === 'visible') list = list.filter(e => e.status === 'visible')
     else if (statusFilter === 'hidden') list = list.filter(e => e.status === 'hidden')
     if (schoolFilter) list = list.filter(e => e.school_id === schoolFilter)
@@ -580,7 +583,10 @@ export default function CalendarReviewPage() {
           style={{ height: '38px', minWidth: '220px', borderRadius: '9px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 12px', fontSize: '13.5px', fontFamily: 'inherit' }}
         />
         <select value={statusFilter} onChange={(e: ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value as typeof statusFilter)} style={{ height: '38px', borderRadius: '9px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 10px', fontSize: '13.5px', fontFamily: 'inherit' }}>
-          <option value="queue">Needs review & changes</option>
+          <option value="queue">Needs review & changes (all)</option>
+          <option value="needs_review">New only</option>
+          <option value="updated">Changed only</option>
+          <option value="removed">Removed only</option>
           <option value="visible">Visible</option>
           <option value="hidden">Hidden</option>
           <option value="all">All</option>

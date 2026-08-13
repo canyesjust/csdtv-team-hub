@@ -38,7 +38,6 @@ const CAT_LABEL: Record<CalCategory, string> = Object.fromEntries(CATEGORIES.map
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const MAX_VISIBLE_PER_CELL = 3
 const WEEK_MAX_VISIBLE = 10
 
 type SchoolGroup = { schoolId: string; schoolName: string; schoolColor: string | null; events: CalEvent[] }
@@ -73,12 +72,38 @@ function startOfWeek(d: Date): Date {
   return c
 }
 
+function addDays(d: Date, n: number): Date {
+  const c = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  c.setDate(c.getDate() + n)
+  return c
+}
+
 function fmtTime(d: Date): string {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(d)
 }
 
 function fmtDateLong(d: Date): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(d)
+}
+
+function fmtDateShort(d: Date): string {
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d)
+}
+
+/** A faded tint of a school's brand color for backgrounds -- readable against
+ * dark text at low opacity, and falls back to a neutral gray for schools
+ * that don't have a color set rather than tinting nothing at all. */
+function hexToRgba(hex: string | null, alpha: number): string {
+  const fallback = `rgba(161,161,170,${alpha})`
+  if (!hex) return fallback
+  const clean = hex.replace('#', '')
+  const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean
+  if (full.length !== 6) return fallback
+  const r = Number.parseInt(full.slice(0, 2), 16)
+  const g = Number.parseInt(full.slice(2, 4), 16)
+  const b = Number.parseInt(full.slice(4, 6), 16)
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return fallback
+  return `rgba(${r},${g},${b},${alpha})`
 }
 
 /** Live only while the event's actual window is in progress; otherwise "streaming" if it's a future/ongoing stream. Text carries the meaning, not color alone. */
@@ -164,39 +189,64 @@ function AgendaRow({ e, now, onClick }: { e: CalEvent; now: Date; onClick: () =>
   )
 }
 
+const MONTH_CELL_HEIGHT = 138
+const MAX_SCHOOL_GROUPS_PER_CELL = 5
+
 function MonthDayCell({
-  day, monthEvents, isToday, isEmpty, now, onDayClick, onEventClick,
+  day, monthEvents, isToday, isEmpty, onDayClick,
 }: {
   day: number
   monthEvents: CalEvent[]
   isToday: boolean
   isEmpty: boolean
-  now: Date
   onDayClick: () => void
-  onEventClick: (e: CalEvent) => void
 }) {
-  if (isEmpty) return <div className="pc-day-cell" style={{ height: 104, background: '#fafafa' }} />
-  const visible = monthEvents.slice(0, MAX_VISIBLE_PER_CELL)
-  const extra = monthEvents.length - visible.length
+  if (isEmpty) return <div className="pc-day-cell" style={{ height: MONTH_CELL_HEIGHT, background: '#fafafa' }} />
+  // A busy day can have 20+ events across half a dozen schools -- listing
+  // every title never fit in a month cell and just cut off mid-word. Group
+  // by school instead so the cell answers "which schools, how much" at a
+  // glance; the day modal (opened by clicking the cell) still has every
+  // single event, grouped and in full.
+  const groups = groupBySchool(monthEvents)
+  const visibleGroups = groups.slice(0, MAX_SCHOOL_GROUPS_PER_CELL)
+  const extraGroups = groups.length - visibleGroups.length
   return (
     <div
       onClick={monthEvents.length > 0 ? onDayClick : undefined}
       className="pc-day-cell"
       style={{
-        height: 104, background: '#fff', padding: '5px 6px', display: 'flex', flexDirection: 'column', gap: 1,
+        height: MONTH_CELL_HEIGHT, background: '#fff', padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 2,
         overflow: 'hidden', position: 'relative', cursor: monthEvents.length > 0 ? 'pointer' : 'default',
       }}
     >
       <div style={isToday
-        ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 19, height: 19, borderRadius: '50%', background: '#2791D0', color: '#fff', fontWeight: 700, fontSize: 11, marginBottom: 3 }
-        : { fontSize: 11, color: '#71717a', fontWeight: 600, marginBottom: 3 }
+        ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 19, height: 19, borderRadius: '50%', background: '#2791D0', color: '#fff', fontWeight: 700, fontSize: 11, marginBottom: 2 }
+        : { fontSize: 11, color: '#71717a', fontWeight: 600, marginBottom: 2 }
       }>{day}</div>
-      <div className="pc-day-cell-rows">
-        {visible.map(e => <EventRow key={e.id} e={e} now={now} dense onClick={() => onEventClick(e)} />)}
-        {extra > 0 && <div style={{ fontSize: 10.5, fontWeight: 700, color: '#065687', padding: '1.5px 3px', marginTop: 'auto' }}>+{extra} more</div>}
+      <div className="pc-day-cell-rows" style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden', minHeight: 0 }}>
+        {visibleGroups.map(g => (
+          <div key={g.schoolId} style={{
+            display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, background: hexToRgba(g.schoolColor, 0.14),
+            borderRadius: 4, padding: '2px 5px',
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: g.schoolColor || '#a1a1aa', flexShrink: 0 }} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#18181b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, minWidth: 0 }}>
+              {g.schoolName}
+            </span>
+            {g.events.length > 1 && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#71717a', flexShrink: 0 }}>{g.events.length}</span>}
+          </div>
+        ))}
+        {extraGroups > 0 && (
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#065687', padding: '1px 5px' }}>+{extraGroups} more school{extraGroups === 1 ? '' : 's'}</div>
+        )}
       </div>
       {monthEvents.length > 0 && (
-        <div className="pc-day-cell-count" style={{ display: 'none', fontSize: 9, fontWeight: 700, color: '#065687', marginTop: 'auto' }}>{monthEvents.length}</div>
+        <>
+          <div style={{ fontSize: 9.5, color: '#a1a1aa', marginTop: 'auto', paddingTop: 2 }}>
+            {monthEvents.length} event{monthEvents.length === 1 ? '' : 's'}
+          </div>
+          <div className="pc-day-cell-count" style={{ display: 'none', fontSize: 9, fontWeight: 700, color: '#065687', marginTop: 'auto' }}>{monthEvents.length}</div>
+        </>
       )}
     </div>
   )
@@ -307,7 +357,10 @@ function PublicCalendarInner() {
 
   const eventModal = eventModalId ? events.find(e => e.id === eventModalId) || null : null
 
-  const weekStart = useMemo(() => startOfWeek(now), [now])
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(now))
+  const thisWeekStart = useMemo(() => startOfWeek(now), [now])
+  const isCurrentWeek = weekStart.getTime() === thisWeekStart.getTime()
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i)
@@ -389,7 +442,21 @@ function PublicCalendarInner() {
         </div>
 
         <div style={{ marginBottom: 22 }}>
-          <h2 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#71717a', margin: '0 0 12px' }}>This week</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h2 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#71717a', margin: 0 }}>
+                {isCurrentWeek ? 'This week' : 'Week of'}
+              </h2>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#18181b' }}>{fmtDateShort(weekStart)} – {fmtDateShort(weekEnd)}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button onClick={() => setWeekStart(addDays(weekStart, -7))} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&larr;</button>
+              <button onClick={() => setWeekStart(addDays(weekStart, 7))} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&rarr;</button>
+              {!isCurrentWeek && (
+                <button onClick={() => setWeekStart(thisWeekStart)} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 7, fontSize: '12.5px', fontWeight: 600, padding: '7px 13px', cursor: 'pointer', fontFamily: 'inherit' }}>This week</button>
+              )}
+            </div>
+          </div>
 
           <div className="pc-week-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 10, overflow: 'hidden' }}>
             {weekDays.map(({ d, dayEvents }, i) => {
@@ -411,7 +478,7 @@ function PublicCalendarInner() {
                     const eventsToShow = g.events.slice(0, remaining)
                     shown += eventsToShow.length
                     return (
-                      <div key={g.schoolId} style={{ minWidth: 0 }}>
+                      <div key={g.schoolId} style={{ minWidth: 0, background: hexToRgba(g.schoolColor, 0.08), borderRadius: 7, padding: '4px 5px', marginBottom: 4 }}>
                         <SchoolGroupHeader group={g} first={shown === eventsToShow.length} />
                         {eventsToShow.map(e => <EventRow key={e.id} e={e} now={now} hideSchool onClick={() => openEvent(e)} />)}
                       </div>
@@ -463,7 +530,7 @@ function PublicCalendarInner() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 8, overflow: 'hidden' }}>
               {DOW.map(d => <div key={d} className="pc-dow" style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: '#a1a1aa', textAlign: 'center' as const, padding: '8px 0', background: '#fff' }}>{d}</div>)}
-              {Array.from({ length: firstDayIndex }, (_, i) => <MonthDayCell key={`e${i}`} day={0} monthEvents={[]} isToday={false} isEmpty now={now} onDayClick={() => {}} onEventClick={() => {}} />)}
+              {Array.from({ length: firstDayIndex }, (_, i) => <MonthDayCell key={`e${i}`} day={0} monthEvents={[]} isToday={false} isEmpty onDayClick={() => {}} />)}
               {Array.from({ length: daysInMonth }, (_, i) => {
                 const day = i + 1
                 const dayEvents = filtered.filter(e => sameDay(e.start, viewYear, viewMonth0, day)).sort((a, b) => a.start.getTime() - b.start.getTime())
@@ -475,9 +542,7 @@ function PublicCalendarInner() {
                     monthEvents={dayEvents}
                     isToday={isToday}
                     isEmpty={false}
-                    now={now}
                     onDayClick={() => setDayModal({ y: viewYear, m: viewMonth0, d: day })}
-                    onEventClick={openEvent}
                   />
                 )
               })}
@@ -508,7 +573,7 @@ function PublicCalendarInner() {
             </div>
             <div>
               {groupBySchool(dayModalEvents).map(g => (
-                <div key={g.schoolId} style={{ marginBottom: 10 }}>
+                <div key={g.schoolId} style={{ marginBottom: 10, background: hexToRgba(g.schoolColor, 0.06), borderRadius: 8, padding: '6px 8px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 4px' }}>
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: g.schoolColor || '#a1a1aa', flexShrink: 0 }} />
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#3f3f46', textTransform: 'uppercase' as const, letterSpacing: '0.02em' }}>{g.schoolName}</span>
