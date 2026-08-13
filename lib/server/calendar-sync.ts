@@ -2,7 +2,35 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { parseIcsEvents, stableUuidFromString, type ParsedIcsEvent } from '@/lib/calendar-ics-parse'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-type FeedRow = { id: string; school_id: string; ics_url: string }
+type FeedRow = { id: string; school_id: string; ics_url: string; label: string }
+
+/**
+ * Feeds labeled as an athletics/sports calendar (e.g. a school's dedicated
+ * sports schedule, separate from its main feed) default new incoming events
+ * to the "athletics" category instead of the "academics" default. Only
+ * applies at insert time -- never overwrites a category a staff member set
+ * by hand later.
+ */
+function defaultCategoryForFeed(label: string): 'athletics' | 'academics' {
+  return /sport|athlet/i.test(label) ? 'athletics' : 'academics'
+}
+
+/** School year runs July 1 -- June 30. Many source ICS feeds are full
+ * multi-year archives, so without a cutoff old events from prior school
+ * years show up alongside current ones. Returns the [start, end) window for
+ * whichever school year `now` falls in -- e.g. on any date from
+ * 2026-07-01 through 2027-06-30 this returns July 1 2026 to July 1 2027.
+ * Computed in UTC, so events right at the July 1 boundary can be off by a
+ * few hours depending on the feed's timezone -- acceptable slop for a
+ * year-scale cutoff. */
+function getSchoolYearWindow(now: Date): { start: Date; end: Date } {
+  const SCHOOL_YEAR_START_MONTH = 6 // July, 0-indexed
+  const year = now.getUTCMonth() >= SCHOOL_YEAR_START_MONTH ? now.getUTCFullYear() : now.getUTCFullYear() - 1
+  return {
+    start: new Date(Date.UTC(year, SCHOOL_YEAR_START_MONTH, 1)),
+    end: new Date(Date.UTC(year + 1, SCHOOL_YEAR_START_MONTH, 1)),
+  }
+}
 
 type ExistingEventRow = {
   id: string
@@ -82,10 +110,17 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
 
   // Synthetic no-uid keys aren't stable across syncs, so events without a real
   // UID can't be tracked for updates/removal -- skip them rather than risk
-  // creating a fresh duplicate row every sync.
+  // creating a fresh duplicate row every sync. Also drop anything outside the
+  // current school year (July 1 -- June 30) -- source feeds are often full
+  // multi-year archives. Events that fall out of the window (including ones
+  // synced in a prior school year, once the window rolls forward) are picked
+  // up by the "gone from source" cleanup below and marked removed.
+  const schoolYear = getSchoolYearWindow(new Date())
   const byUid = new Map<string, ParsedIcsEvent>()
   for (const ev of parsed) {
-    if (!ev.uid.startsWith('no-uid-')) byUid.set(ev.uid, ev)
+    if (ev.uid.startsWith('no-uid-')) continue
+    if (ev.start < schoolYear.start || ev.start >= schoolYear.end) continue
+    byUid.set(ev.uid, ev)
   }
 
   const { data: existingRows, error: existingError } = await service
@@ -117,6 +152,7 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
         feed_id: feed.id,
         source_uid: uid,
         origin: 'synced',
+        category: defaultCategoryForFeed(feed.label),
         is_recurring: ev.isRecurring,
         recurrence_group_id: ev.isRecurring ? stableUuidFromString(`${feed.id}:${uid}`) : null,
         source_title: sourceTitle,
@@ -238,7 +274,7 @@ export async function runCalendarSync(options?: { feedId?: string }): Promise<Ca
   const service = getServiceSupabaseClient()
   if (!service) return { error: 'Server configuration error' }
 
-  let query = service.from('calendar_school_feeds').select('id, school_id, ics_url')
+  let query = service.from('calendar_school_feeds').select('id, school_id, ics_url, label')
   if (options?.feedId) query = query.eq('id', options.feedId)
   const { data: feeds, error: feedsError } = await query
 

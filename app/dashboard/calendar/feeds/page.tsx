@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback, type ChangeEvent } from 'react'
+import { useEffect, useState, useCallback, useMemo, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useTheme } from '@/lib/theme'
 import { createClient } from '@/lib/supabase'
 import { canManageCalendarQueue } from '@/lib/calendar-access'
 import { toast } from '@/lib/toast'
+import { confirmDialog } from '@/lib/confirm'
 import { AsyncButton } from '../../components/AsyncButton'
 
 type School = {
@@ -14,17 +15,21 @@ type School = {
   name: string
   short_name: string | null
   level: string | null
+  type: string
   primary_color: string | null
 }
 
 type Feed = {
   id: string
   school_id: string
+  label: string
   ics_url: string
   last_synced_at: string | null
   last_sync_ok: boolean | null
   last_sync_error: string | null
 }
+
+type FeedCounts = Record<string, number>
 
 type SyncSummary = {
   ok: boolean
@@ -33,6 +38,17 @@ type SyncSummary = {
   updated: number
   removed: number
   failures: { feedId: string; schoolId: string; error?: string }[]
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  visible: 'live',
+  needs_review: 'in review',
+  updated: 'changed',
+  hidden: 'hidden',
+}
+
+function isSportsLabel(label: string): boolean {
+  return /sport|athlet/i.test(label)
 }
 
 function relativeTime(iso: string | null): string {
@@ -45,6 +61,20 @@ function relativeTime(iso: string | null): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.round(hours / 24)
   return `${days}d ago`
+}
+
+function activeCount(counts: FeedCounts | undefined): number {
+  if (!counts) return 0
+  return Object.entries(counts).filter(([status]) => status !== 'removed').reduce((sum, [, n]) => sum + n, 0)
+}
+
+function countsSummary(counts: FeedCounts | undefined): string {
+  if (!counts) return 'No events synced yet'
+  const parts = Object.keys(STATUS_LABELS)
+    .map(key => (counts[key] ? `${counts[key]} ${STATUS_LABELS[key]}` : null))
+    .filter(Boolean) as string[]
+  if (parts.length === 0) return counts.removed ? 'No active events from this feed right now' : 'No events synced yet'
+  return parts.join(' · ')
 }
 
 async function callSyncNow(body?: { feedId: string }): Promise<SyncSummary> {
@@ -86,34 +116,61 @@ export default function CalendarFeedsPage() {
   const [ready, setReady] = useState(false)
   const [allowed, setAllowed] = useState(false)
   const [schools, setSchools] = useState<School[]>([])
-  const [feeds, setFeeds] = useState<Record<string, Feed>>({})
+  const [feedsBySchool, setFeedsBySchool] = useState<Record<string, Feed[]>>({})
+  const [countsByFeed, setCountsByFeed] = useState<Record<string, FeedCounts>>({})
   const [urlDrafts, setUrlDrafts] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  const [addingSchoolId, setAddingSchoolId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const [newFeedOpen, setNewFeedOpen] = useState<Record<string, boolean>>({})
+  const [newFeedLabel, setNewFeedLabel] = useState<Record<string, string>>({})
+  const [newFeedUrl, setNewFeedUrl] = useState<Record<string, string>>({})
+
   const loadData = useCallback(async () => {
-    const { data: schoolRows } = await supabase
-      .from('schools')
-      .select('id, name, short_name, level, primary_color')
-      .eq('type', 'school')
-      .eq('active', true)
-      .order('name')
+    const [{ data: schoolRows }, { data: feedRows }, { data: countRows }] = await Promise.all([
+      supabase.from('schools')
+        .select('id, name, short_name, level, type, primary_color')
+        .or('type.eq.school,name.eq.Board of Education,name.eq.Canyons School District')
+        .eq('active', true)
+        .order('name'),
+      supabase.from('calendar_school_feeds')
+        .select('id, school_id, label, ics_url, last_synced_at, last_sync_ok, last_sync_error')
+        .order('label'),
+      supabase.from('calendar_school_events').select('feed_id, status'),
+    ])
 
-    const { data: feedRows } = await supabase
-      .from('calendar_school_feeds')
-      .select('id, school_id, ics_url, last_synced_at, last_sync_ok, last_sync_error')
+    const schoolList: School[] = (schoolRows || []).slice().sort((a: School, b: School) => {
+      if (a.type === 'district' && b.type !== 'district') return -1
+      if (b.type === 'district' && a.type !== 'district') return 1
+      return a.name.localeCompare(b.name)
+    })
+    setSchools(schoolList)
 
-    setSchools(schoolRows || [])
-    const feedMap: Record<string, Feed> = {}
+    const grouped: Record<string, Feed[]> = {}
     const draftMap: Record<string, string> = {}
     ;(feedRows || []).forEach((f: Feed) => {
-      feedMap[f.school_id] = f
-      draftMap[f.school_id] = f.ics_url
+      if (!grouped[f.school_id]) grouped[f.school_id] = []
+      grouped[f.school_id].push(f)
+      draftMap[f.id] = f.ics_url
     })
-    setFeeds(feedMap)
+    Object.values(grouped).forEach(list => list.sort((a, b) => {
+      if (a.last_sync_ok === false && b.last_sync_ok !== false) return -1
+      if (b.last_sync_ok === false && a.last_sync_ok !== false) return 1
+      return a.label.localeCompare(b.label)
+    }))
+    setFeedsBySchool(grouped)
     setUrlDrafts((prev: Record<string, string>) => ({ ...draftMap, ...prev }))
+
+    const counts: Record<string, FeedCounts> = {}
+    ;(countRows || []).forEach((r: { feed_id: string | null; status: string }) => {
+      if (!r.feed_id) return
+      if (!counts[r.feed_id]) counts[r.feed_id] = {}
+      counts[r.feed_id][r.status] = (counts[r.feed_id][r.status] || 0) + 1
+    })
+    setCountsByFeed(counts)
   }, [supabase])
 
   useEffect(() => {
@@ -143,44 +200,121 @@ export default function CalendarFeedsPage() {
     return () => { cancelled = true }
   }, [supabase, router, loadData])
 
-  async function saveFeed(schoolId: string) {
-    const url = (urlDrafts[schoolId] || '').trim()
+  async function saveFeed(feedId: string, schoolId: string) {
+    const url = (urlDrafts[feedId] || '').trim()
     if (!url) return
-    setSavingId(schoolId)
+    setSavingId(feedId)
     setError(null)
-    const { data, error: upsertError } = await supabase
+    const { data, error: updateError } = await supabase
       .from('calendar_school_feeds')
-      .upsert({ school_id: schoolId, ics_url: url }, { onConflict: 'school_id' })
-      .select('id, school_id, ics_url, last_synced_at, last_sync_ok, last_sync_error')
+      .update({ ics_url: url })
+      .eq('id', feedId)
+      .select('id, school_id, label, ics_url, last_synced_at, last_sync_ok, last_sync_error')
       .single()
     setSavingId(null)
-    if (upsertError) {
-      setError(upsertError.message)
+    if (updateError) {
+      setError(updateError.message)
       return
     }
-    if (data) setFeeds((prev: Record<string, Feed>) => ({ ...prev, [schoolId]: data }))
+    if (data) {
+      setFeedsBySchool((prev: Record<string, Feed[]>) => ({
+        ...prev,
+        [schoolId]: (prev[schoolId] || []).map(f => (f.id === feedId ? data : f)),
+      }))
+    }
   }
 
-  async function removeFeed(schoolId: string) {
-    const feed = feeds[schoolId]
-    if (!feed) return
-    setSavingId(schoolId)
+  async function removeFeed(feedId: string, schoolId: string, label: string) {
+    // Deleting a feed row sets feed_id to null on its events (ON DELETE SET
+    // NULL) but otherwise leaves them exactly as they were -- silently
+    // orphaned, still visible if they'd been approved. Removing a feed is a
+    // deliberate action (unlike a feed just being temporarily unreachable,
+    // which never touches events -- see syncFeed's fail() path), so instead
+    // flag its events as "removed from source" first. That's the same status
+    // already used for events that vanish from a live sync, and it lands
+    // them in the review queue for a human "Acknowledge" rather than
+    // deleting anything outright.
+    const { count } = await supabase
+      .from('calendar_school_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('feed_id', feedId)
+      .neq('status', 'removed')
+
+    const eventNote = count
+      ? ` ${count} event${count === 1 ? '' : 's'} synced from it will be sent to the review queue to confirm removal.`
+      : ' It has no active events to clean up.'
+    const ok = await confirmDialog({
+      message: `Remove the "${label}" feed?${eventNote}`,
+      tone: 'danger',
+      confirmLabel: 'Remove feed',
+    })
+    if (!ok) return
+
+    setSavingId(feedId)
     setError(null)
-    const { error: deleteError } = await supabase
-      .from('calendar_school_feeds')
-      .delete()
-      .eq('id', feed.id)
+
+    if (count) {
+      const { error: cleanupError } = await supabase
+        .from('calendar_school_events')
+        .update({ status: 'removed', updated_at: new Date().toISOString() })
+        .eq('feed_id', feedId)
+        .neq('status', 'removed')
+      if (cleanupError) {
+        setSavingId(null)
+        setError(cleanupError.message)
+        return
+      }
+    }
+
+    const { error: deleteError } = await supabase.from('calendar_school_feeds').delete().eq('id', feedId)
     setSavingId(null)
     if (deleteError) {
       setError(deleteError.message)
       return
     }
-    setFeeds((prev: Record<string, Feed>) => {
+    setFeedsBySchool((prev: Record<string, Feed[]>) => ({
+      ...prev,
+      [schoolId]: (prev[schoolId] || []).filter(f => f.id !== feedId),
+    }))
+    setUrlDrafts((prev: Record<string, string>) => {
       const next = { ...prev }
-      delete next[schoolId]
+      delete next[feedId]
       return next
     })
-    setUrlDrafts((prev: Record<string, string>) => ({ ...prev, [schoolId]: '' }))
+    toast(count ? `Feed removed. ${count} event${count === 1 ? '' : 's'} sent to the review queue.` : 'Feed removed', 'success')
+  }
+
+  function openNewFeed(schoolId: string, suggestedLabel: string) {
+    setNewFeedOpen((prev: Record<string, boolean>) => ({ ...prev, [schoolId]: true }))
+    setNewFeedLabel((prev: Record<string, string>) => ({ ...prev, [schoolId]: prev[schoolId] || suggestedLabel }))
+  }
+
+  async function addFeed(schoolId: string) {
+    const label = (newFeedLabel[schoolId] || '').trim()
+    const url = (newFeedUrl[schoolId] || '').trim()
+    if (!label || !url) return
+    setAddingSchoolId(schoolId)
+    setError(null)
+    const { data, error: insertError } = await supabase
+      .from('calendar_school_feeds')
+      .insert({ school_id: schoolId, label, ics_url: url })
+      .select('id, school_id, label, ics_url, last_synced_at, last_sync_ok, last_sync_error')
+      .single()
+    setAddingSchoolId(null)
+    if (insertError) {
+      setError(insertError.message.toLowerCase().includes('duplicate')
+        ? `This school already has a feed labeled "${label}". Use a different label.`
+        : insertError.message)
+      return
+    }
+    if (data) {
+      setFeedsBySchool((prev: Record<string, Feed[]>) => ({ ...prev, [schoolId]: [...(prev[schoolId] || []), data] }))
+      setUrlDrafts((prev: Record<string, string>) => ({ ...prev, [data.id]: data.ics_url }))
+      setNewFeedOpen((prev: Record<string, boolean>) => ({ ...prev, [schoolId]: false }))
+      setNewFeedLabel((prev: Record<string, string>) => ({ ...prev, [schoolId]: '' }))
+      setNewFeedUrl((prev: Record<string, string>) => ({ ...prev, [schoolId]: '' }))
+      toast(`Added "${label}" feed`, 'success')
+    }
   }
 
   async function syncAll() {
@@ -193,12 +327,10 @@ export default function CalendarFeedsPage() {
     }
   }
 
-  async function syncOne(schoolId: string) {
-    const feed = feeds[schoolId]
-    if (!feed) return
-    setSyncingId(schoolId)
+  async function syncOne(feedId: string) {
+    setSyncingId(feedId)
     try {
-      const summary = await callSyncNow({ feedId: feed.id })
+      const summary = await callSyncNow({ feedId })
       summaryToast(summary)
       await loadData()
     } catch (e) {
@@ -207,6 +339,11 @@ export default function CalendarFeedsPage() {
       setSyncingId(null)
     }
   }
+
+  const allFeeds = useMemo(() => Object.values(feedsBySchool).flat(), [feedsBySchool])
+  const failingFeeds = useMemo(() => allFeeds.filter(f => f.last_sync_ok === false), [allFeeds])
+  const totalActiveEvents = useMemo(() => allFeeds.reduce((sum, f) => sum + activeCount(countsByFeed[f.id]), 0), [allFeeds, countsByFeed])
+  const schoolMap = useMemo(() => new Map(schools.map(s => [s.id, s])), [schools])
 
   if (!ready) {
     return (
@@ -221,14 +358,17 @@ export default function CalendarFeedsPage() {
     !search.trim() || s.name.toLowerCase().includes(search.trim().toLowerCase())
   )
 
+  const statCardStyle = { background: cardBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '10px 16px', minWidth: '110px' }
+
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' as const, marginBottom: '6px' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: text, margin: '0 0 6px' }}>Calendar feeds</h1>
           <p style={{ fontSize: '15px', color: muted, margin: 0, lineHeight: 1.5, maxWidth: '640px' }}>
-            Paste each school&apos;s public ICS calendar link here. Synced events land in the review queue,
-            nothing shows on the district calendar until a staff member approves it there.
+            Paste each school&apos;s public ICS calendar link here. Add a second feed for a school&apos;s athletics
+            calendar if it has one. Synced events land in the review queue -- nothing shows on the district calendar
+            until a staff member approves it there. Only events in the current school year (July 1 – June 30) are synced.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap' as const }}>
@@ -247,9 +387,54 @@ export default function CalendarFeedsPage() {
         </div>
       </div>
 
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' as const, margin: '20px 0 16px' }}>
+        <div style={statCardStyle}>
+          <p style={{ fontSize: '20px', fontWeight: 700, color: text, margin: 0 }}>{allFeeds.length}</p>
+          <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Feeds</p>
+        </div>
+        <div style={statCardStyle}>
+          <p style={{ fontSize: '20px', fontWeight: 700, color: failingFeeds.length > 0 ? '#ef4444' : text, margin: 0 }}>{failingFeeds.length}</p>
+          <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Failing</p>
+        </div>
+        <div style={statCardStyle}>
+          <p style={{ fontSize: '20px', fontWeight: 700, color: text, margin: 0 }}>{totalActiveEvents.toLocaleString()}</p>
+          <p style={{ fontSize: '12px', color: muted, margin: '2px 0 0' }}>Events tracked</p>
+        </div>
+      </div>
+
       {error && (
-        <div style={{ background: 'rgba(239,68,68,0.12)', border: '0.5px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '10px 14px', color: '#ef4444', fontSize: '14px', marginTop: '16px', marginBottom: '16px' }}>
+        <div style={{ background: 'rgba(239,68,68,0.12)', border: '0.5px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '10px 14px', color: '#ef4444', fontSize: '14px', marginBottom: '16px' }}>
           {error}
+        </div>
+      )}
+
+      {failingFeeds.length > 0 && (
+        <div style={{ background: 'rgba(239,68,68,0.08)', border: '0.5px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '14px 16px', marginBottom: '20px' }}>
+          <p style={{ fontSize: '13.5px', fontWeight: 600, color: '#ef4444', margin: '0 0 10px' }}>
+            {failingFeeds.length} feed{failingFeeds.length === 1 ? '' : 's'} failing to sync
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {failingFeeds.map(f => {
+              const school = schoolMap.get(f.school_id)
+              const syncing = syncingId === f.id
+              return (
+                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, fontSize: '13px' }}>
+                  <span style={{ color: text, fontWeight: 500 }}>{school?.name || 'Unknown school'} · {f.label}</span>
+                  <span style={{ color: muted }}>{f.last_sync_error || 'Sync failed'} · {relativeTime(f.last_synced_at)}</span>
+                  <button
+                    onClick={() => syncOne(f.id)}
+                    disabled={syncing}
+                    style={{
+                      fontSize: '12.5px', padding: '5px 10px', borderRadius: '7px', background: 'transparent',
+                      color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.35)', cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {syncing ? 'Syncing…' : 'Retry sync'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -260,91 +445,143 @@ export default function CalendarFeedsPage() {
         style={{
           width: '100%', maxWidth: '360px', height: '40px', borderRadius: '10px',
           border: `0.5px solid ${border}`, background: inputBg, color: text,
-          padding: '0 12px', fontSize: '14px', fontFamily: 'inherit', margin: '20px 0 16px',
+          padding: '0 12px', fontSize: '14px', fontFamily: 'inherit', marginBottom: '16px',
         }}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {filtered.map((school: School) => {
-          const feed = feeds[school.id]
-          const draft = urlDrafts[school.id] ?? ''
-          const dirty = draft.trim() !== (feed?.ics_url || '')
-          const saving = savingId === school.id
-          const syncing = syncingId === school.id
+          const schoolFeeds = feedsBySchool[school.id] || []
+          const isHighSchool = school.level === 'High School'
+          const hasAthletics = schoolFeeds.some(f => isSportsLabel(f.label))
+          const hasMain = schoolFeeds.some(f => f.label.toLowerCase() === 'main')
+          const isOpen = !!newFeedOpen[school.id]
+
           return (
             <div
               key={school.id}
-              style={{
-                background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px',
-                padding: '16px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' as const,
-              }}
+              style={{ background: cardBg, border: `0.5px solid ${border}`, borderRadius: '14px', padding: '16px', display: 'flex', flexDirection: 'column' as const, gap: '12px' }}
             >
-              <div style={{ minWidth: '200px', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: school.primary_color || muted, flexShrink: 0 }} />
-                  <p style={{ fontSize: '15px', fontWeight: 500, color: text, margin: 0 }}>{school.name}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }}>
+                <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: school.primary_color || muted, flexShrink: 0 }} />
+                <p style={{ fontSize: '15px', fontWeight: 500, color: text, margin: 0 }}>{school.name}</p>
+                {school.type === 'district' && (
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#1e6cb5', background: 'rgba(30,108,181,0.14)', padding: '2px 8px', borderRadius: '20px' }}>District-wide</span>
+                )}
+                {schoolFeeds.length === 0 && <span style={{ fontSize: '12.5px', color: muted }}>No feeds yet</span>}
+              </div>
+
+              {schoolFeeds.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {schoolFeeds.map(feed => {
+                    const draft = urlDrafts[feed.id] ?? ''
+                    const dirty = draft.trim() !== feed.ics_url
+                    const saving = savingId === feed.id
+                    const syncing = syncingId === feed.id
+                    const counts = countsByFeed[feed.id]
+                    return (
+                      <div key={feed.id} style={{ border: `0.5px solid ${border}`, borderRadius: '11px', padding: '12px', display: 'flex', flexDirection: 'column' as const, gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: text, background: inputBg, padding: '3px 9px', borderRadius: '7px' }}>{feed.label}</span>
+                          {feed.last_sync_ok === false ? (
+                            <span style={{ fontSize: '12px', color: '#ef4444' }}>Sync failing · {relativeTime(feed.last_synced_at)}</span>
+                          ) : feed.last_synced_at ? (
+                            <span style={{ fontSize: '12px', color: muted }}>Synced {relativeTime(feed.last_synced_at)}</span>
+                          ) : (
+                            <span style={{ fontSize: '12px', color: muted }}>Not synced yet</span>
+                          )}
+                          {isSportsLabel(feed.label) && (
+                            <span style={{ fontSize: '11px', color: muted }}>New events auto-tag as Athletics</span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: '12px', color: muted, margin: 0 }}>{countsSummary(counts)}</p>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                          <input
+                            value={draft}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => setUrlDrafts((prev: Record<string, string>) => ({ ...prev, [feed.id]: e.target.value }))}
+                            placeholder="https://... .ics"
+                            style={{ flex: 1, minWidth: '240px', height: '36px', borderRadius: '8px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 10px', fontSize: '13px', fontFamily: 'inherit' }}
+                          />
+                          <button
+                            onClick={() => syncOne(feed.id)}
+                            disabled={syncing}
+                            style={{ fontSize: '12.5px', padding: '8px 12px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit', minHeight: '36px' }}
+                          >
+                            {syncing ? 'Syncing…' : 'Sync now'}
+                          </button>
+                          <button
+                            onClick={() => saveFeed(feed.id, school.id)}
+                            disabled={!dirty || saving || !draft.trim()}
+                            style={{
+                              fontSize: '12.5px', padding: '8px 14px', borderRadius: '8px',
+                              background: dirty && draft.trim() ? '#1e6cb5' : border,
+                              color: dirty && draft.trim() ? '#fff' : muted,
+                              border: 'none', cursor: dirty && draft.trim() ? 'pointer' : 'default',
+                              fontFamily: 'inherit', fontWeight: 500, minHeight: '36px',
+                            }}
+                          >
+                            {saving ? 'Saving…' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => removeFeed(feed.id, school.id, feed.label)}
+                            disabled={saving}
+                            style={{ fontSize: '12.5px', padding: '8px 12px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit', minHeight: '36px' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <p style={{ fontSize: '12.5px', color: muted, margin: '4px 0 0 18px' }}>
-                  {feed
-                    ? feed.last_sync_ok === false
-                      ? <span style={{ color: '#ef4444' }}>Sync failing · {relativeTime(feed.last_synced_at)}</span>
-                      : relativeTime(feed.last_synced_at)
-                    : 'No feed yet'}
-                </p>
-              </div>
+              )}
 
-              <input
-                value={draft}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setUrlDrafts((prev: Record<string, string>) => ({ ...prev, [school.id]: e.target.value }))}
-                placeholder="https://... .ics"
-                style={{
-                  flex: 1, minWidth: '260px', height: '38px', borderRadius: '9px',
-                  border: `0.5px solid ${border}`, background: inputBg, color: text,
-                  padding: '0 12px', fontSize: '13.5px', fontFamily: 'inherit',
-                }}
-              />
-
-              <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                {feed && (
+              {isOpen ? (
+                <div style={{ border: `0.5px dashed ${border}`, borderRadius: '11px', padding: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
+                  <input
+                    value={newFeedLabel[school.id] || ''}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setNewFeedLabel((prev: Record<string, string>) => ({ ...prev, [school.id]: e.target.value }))}
+                    placeholder="Label (e.g. Main, Athletics)"
+                    style={{ width: '190px', height: '36px', borderRadius: '8px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 10px', fontSize: '13px', fontFamily: 'inherit' }}
+                  />
+                  <input
+                    value={newFeedUrl[school.id] || ''}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setNewFeedUrl((prev: Record<string, string>) => ({ ...prev, [school.id]: e.target.value }))}
+                    placeholder="https://... .ics"
+                    style={{ flex: 1, minWidth: '220px', height: '36px', borderRadius: '8px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 10px', fontSize: '13px', fontFamily: 'inherit' }}
+                  />
                   <button
-                    onClick={() => syncOne(school.id)}
-                    disabled={syncing}
-                    style={{
-                      fontSize: '13.5px', padding: '9px 14px', borderRadius: '9px',
-                      background: 'transparent', color: muted, border: `0.5px solid ${border}`,
-                      cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit', minHeight: '38px',
-                    }}
+                    onClick={() => addFeed(school.id)}
+                    disabled={addingSchoolId === school.id || !(newFeedLabel[school.id] || '').trim() || !(newFeedUrl[school.id] || '').trim()}
+                    style={{ fontSize: '12.5px', padding: '8px 14px', borderRadius: '8px', background: '#1e6cb5', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, minHeight: '36px' }}
                   >
-                    {syncing ? 'Syncing…' : 'Sync now'}
+                    {addingSchoolId === school.id ? 'Adding…' : 'Add'}
                   </button>
-                )}
-                <button
-                  onClick={() => saveFeed(school.id)}
-                  disabled={!dirty || saving || !draft.trim()}
-                  style={{
-                    fontSize: '13.5px', padding: '9px 16px', borderRadius: '9px',
-                    background: dirty && draft.trim() ? '#1e6cb5' : border,
-                    color: dirty && draft.trim() ? '#fff' : muted,
-                    border: 'none', cursor: dirty && draft.trim() ? 'pointer' : 'default',
-                    fontFamily: 'inherit', fontWeight: 500, minHeight: '38px',
-                  }}
-                >
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                {feed && (
                   <button
-                    onClick={() => removeFeed(school.id)}
-                    disabled={saving}
-                    style={{
-                      fontSize: '13.5px', padding: '9px 14px', borderRadius: '9px',
-                      background: 'transparent', color: muted, border: `0.5px solid ${border}`,
-                      cursor: 'pointer', fontFamily: 'inherit', minHeight: '38px',
-                    }}
+                    onClick={() => setNewFeedOpen((prev: Record<string, boolean>) => ({ ...prev, [school.id]: false }))}
+                    style={{ fontSize: '12.5px', color: muted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
                   >
-                    Remove
+                    Cancel
                   </button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
+                  <button
+                    onClick={() => openNewFeed(school.id, hasMain ? '' : 'Main')}
+                    style={{ fontSize: '12.5px', padding: '7px 12px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    + Add feed
+                  </button>
+                  {isHighSchool && !hasAthletics && (
+                    <button
+                      onClick={() => openNewFeed(school.id, 'Athletics')}
+                      style={{ fontSize: '12.5px', padding: '7px 12px', borderRadius: '8px', background: 'transparent', color: muted, border: `0.5px solid ${border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      + Add Athletics feed
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}

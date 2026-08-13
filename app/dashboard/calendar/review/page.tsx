@@ -307,11 +307,13 @@ export default function CalendarReviewPage() {
   const [statusFilter, setStatusFilter] = useState<'queue' | 'visible' | 'hidden' | 'all'>('queue')
   const [schoolFilter, setSchoolFilter] = useState('')
   const [originFilter, setOriginFilter] = useState<'' | Origin>('')
+  const [categoryFilter, setCategoryFilter] = useState<'' | CalCategory>('')
   const [sortBy, setSortBy] = useState<'start_asc' | 'start_desc' | 'created_desc'>('created_desc')
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, EditDraft>>({})
+  const [bulkCategory, setBulkCategory] = useState<CalCategory>('athletics')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -367,6 +369,7 @@ export default function CalendarReviewPage() {
     else if (statusFilter === 'hidden') list = list.filter(e => e.status === 'hidden')
     if (schoolFilter) list = list.filter(e => e.school_id === schoolFilter)
     if (originFilter) list = list.filter(e => e.origin === originFilter)
+    if (categoryFilter) list = list.filter(e => e.category === categoryFilter)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(e => e.title.toLowerCase().includes(q) || (schoolMap.get(e.school_id)?.name || '').toLowerCase().includes(q))
@@ -376,7 +379,7 @@ export default function CalendarReviewPage() {
     else if (sortBy === 'start_desc') sorted.sort((a, b) => b.start_time.localeCompare(a.start_time))
     else sorted.sort((a, b) => b.created_at.localeCompare(a.created_at))
     return sorted
-  }, [events, statusFilter, schoolFilter, originFilter, search, sortBy, schoolMap])
+  }, [events, statusFilter, schoolFilter, originFilter, categoryFilter, search, sortBy, schoolMap])
 
   function toggleSelect(id: string) {
     setSelected(prev => {
@@ -476,12 +479,34 @@ export default function CalendarReviewPage() {
     }
   }
 
+  async function runBulkCategory() {
+    const rows = filtered.filter(e => selected.has(e.id))
+    if (rows.length === 0) return
+    if (!(await confirmDialog({
+      message: `Set category to "${CAT_LABEL[bulkCategory]}" for ${rows.length} selected event${rows.length === 1 ? '' : 's'}? This applies whether or not they're already approved.`,
+      confirmLabel: 'Apply',
+    }))) return
+    const ids = rows.map(r => r.id)
+    const { data, error } = await supabase
+      .from('calendar_school_events')
+      .update({ category: bulkCategory, updated_at: new Date().toISOString() })
+      .in('id', ids)
+      .select('*')
+    if (error) {
+      toast(error.message, 'error')
+      return
+    }
+    const byId = new Map((data as EventRow[]).map(r => [r.id, r]))
+    setEvents(prev => prev.map(e => byId.get(e.id) || e))
+    toast(`Category set to ${CAT_LABEL[bulkCategory]} for ${rows.length} event${rows.length === 1 ? '' : 's'}`, 'success')
+  }
+
   if (!ready) {
     return <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '40px 20px', color: muted, fontSize: '15px' }}>Loading…</div>
   }
   if (!allowed) return null
 
-  const selectableCount = filtered.filter(e => e.status === 'needs_review' || e.status === 'updated').length
+  const selectableCount = filtered.filter(e => e.status !== 'removed').length
 
   return (
     <div style={{ maxWidth: '1600px', margin: '0 auto', padding: '20px' }}>
@@ -529,6 +554,10 @@ export default function CalendarReviewPage() {
           <option value="manual">Manual</option>
           <option value="submitted">Submitted</option>
         </select>
+        <select value={categoryFilter} onChange={(e: ChangeEvent<HTMLSelectElement>) => setCategoryFilter(e.target.value as '' | CalCategory)} style={{ height: '38px', borderRadius: '9px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 10px', fontSize: '13.5px', fontFamily: 'inherit' }}>
+          <option value="">All categories</option>
+          {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+        </select>
         <select value={sortBy} onChange={(e: ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as typeof sortBy)} style={{ height: '38px', borderRadius: '9px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 10px', fontSize: '13.5px', fontFamily: 'inherit' }}>
           <option value="created_desc">Newest first</option>
           <option value="start_asc">Event date (soonest)</option>
@@ -541,6 +570,11 @@ export default function CalendarReviewPage() {
           <span style={{ fontSize: '13.5px', color: text, fontWeight: 500 }}>{selected.size} selected</span>
           <AsyncButton onClick={() => runBatch('approve')} pendingLabel="Approving…" style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: '#16a34a', color: '#fff', border: 'none', fontWeight: 500, minHeight: '34px' }}>Approve selected</AsyncButton>
           <AsyncButton onClick={() => runBatch('reject')} pendingLabel="…" style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.3)', fontWeight: 500, minHeight: '34px' }}>Reject selected</AsyncButton>
+          <span style={{ width: '1px', height: '20px', background: border }} />
+          <select value={bulkCategory} onChange={(e: ChangeEvent<HTMLSelectElement>) => setBulkCategory(e.target.value as CalCategory)} style={{ height: '34px', borderRadius: '8px', border: `0.5px solid ${border}`, background: inputBg, color: text, padding: '0 8px', fontSize: '13px', fontFamily: 'inherit' }}>
+            {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+          <AsyncButton onClick={runBulkCategory} pendingLabel="Applying…" style={{ fontSize: '13px', padding: '7px 14px', borderRadius: '8px', background: 'transparent', color: text, border: `0.5px solid ${border}`, fontWeight: 500, minHeight: '34px' }}>Set category</AsyncButton>
           <button onClick={() => setSelected(new Set())} style={{ fontSize: '13px', color: muted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Clear selection</button>
         </div>
       )}
@@ -551,7 +585,7 @@ export default function CalendarReviewPage() {
             type="checkbox"
             checked={selected.size === selectableCount && selectableCount > 0}
             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-              if (e.target.checked) setSelected(new Set(filtered.filter(x => x.status === 'needs_review' || x.status === 'updated').map(x => x.id)))
+              if (e.target.checked) setSelected(new Set(filtered.filter(x => x.status !== 'removed').map(x => x.id)))
               else setSelected(new Set())
             }}
             style={{ width: '16px', height: '16px' }}
@@ -576,7 +610,7 @@ export default function CalendarReviewPage() {
               selected={selected.has(row.id)}
               expanded={expandedId === row.id}
               draft={drafts[row.id]}
-              canSelect={row.status === 'needs_review' || row.status === 'updated'}
+              canSelect={row.status !== 'removed'}
               onToggleSelect={toggleSelect}
               onToggleExpand={toggleExpand}
               onDraftChange={updateDraft}

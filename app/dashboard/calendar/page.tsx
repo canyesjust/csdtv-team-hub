@@ -90,9 +90,10 @@ export default function CalendarOverviewPage() {
   const [schoolFilter, setSchoolFilter] = useState('')
 
   const loadData = useCallback(async () => {
-    setLoading(true)
     const [{ data: schoolRows }, { data: eventRows }, { data: campaignRows }, { data: captureRows }] = await Promise.all([
-      supabase.from('schools').select('id, name, primary_color').eq('type', 'school').eq('active', true).order('name'),
+      supabase.from('schools').select('id, name, primary_color')
+        .or('type.eq.school,name.eq.Board of Education,name.eq.Canyons School District')
+        .eq('active', true).order('name'),
       supabase.from('calendar_school_events')
         .select('id, school_id, title, start_time, end_time, location, category, is_streaming')
         .eq('status', 'visible')
@@ -151,7 +152,10 @@ export default function CalendarOverviewPage() {
   }, [supabase])
 
   useEffect(() => {
-    void loadData()
+    async function run() {
+      await loadData()
+    }
+    run()
   }, [loadData])
 
   function toggleLayer(kind: LayerKind) {
