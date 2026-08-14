@@ -1,0 +1,941 @@
+/*
+  Scoped CSDtv "/watch" design system.
+
+  Every selector is prefixed with `.csdtv-watch` so nothing here leaks into the
+  Team Hub, and the Team Hub's global styles (Roboto body font, a{color:link},
+  theme vars) don't reach in. Keyframes are namespaced `cw-*` to avoid clashes.
+  Intentionally does NOT `@import "tailwindcss"` — the root globals.css already
+  loads it; this file is plain, self-contained CSS.
+*/
+
+.csdtv-watch {
+  /* Brand + surface tokens (scoped) */
+  --navy-900: #06121f;
+  --navy-850: #081a2b;
+  --navy-800: #0a2034;
+  --navy-700: #0e2c47;
+  --blue-1: #065687;
+  --blue-2: #2791d0;
+  --blue-3: #3abfe8;
+  --gold: #fbae42;
+  --gold-bright: #ffc163;
+  --paper: #ffffff;
+  --paper-2: #f4f8fb;
+  --paper-3: #eaf1f7;
+  --ink: #0c1a28;
+  --ink-2: #4a5f76;
+  --ink-3: #7d90a6;
+  --cloud: #e4ecf3;
+  --on-dark: #eaf2fb;
+  --on-dark-2: #9fb4d0;
+  --on-dark-3: #6f88a8;
+  --wrap: 1340px;
+  --pad: clamp(18px, 4.5vw, 52px);
+  --r: 14px;
+  --r-lg: 18px;
+  --font-display: var(--font-archivo);
+  --font-body: var(--font-hanken);
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.csdtv-watch *,
+.csdtv-watch *::before,
+.csdtv-watch *::after {
+  box-sizing: border-box;
+}
+
+.csdtv-watch :is(h1, h2, h3, h4, p) {
+  margin: 0;
+}
+
+.csdtv-watch :is(h1, h2, h3),
+.csdtv-watch .disp {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+.csdtv-watch a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.csdtv-watch button {
+  font-family: inherit;
+}
+
+/* ---------- HERO ---------- */
+.csdtv-watch .hero {
+  position: relative;
+  color: var(--on-dark);
+  min-height: min(86vh, 720px);
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 90% at 82% 8%, rgba(58, 191, 232, 0.2), transparent 55%),
+    radial-gradient(90% 70% at 12% 100%, rgba(6, 86, 135, 0.55), transparent 60%),
+    linear-gradient(180deg, #0a2236 0%, var(--navy-900) 70%);
+  overflow: hidden;
+}
+.csdtv-watch .hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0.025) 0 2px,
+    transparent 2px 44px
+  );
+  pointer-events: none;
+}
+.csdtv-watch .hero::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  background: linear-gradient(180deg, transparent, rgba(6, 18, 31, 0.85));
+  pointer-events: none;
+}
+
+.csdtv-watch .topnav {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 22px var(--pad);
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin: 0 auto;
+  width: 100%;
+}
+.csdtv-watch .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+.csdtv-watch .logo .chev {
+  display: inline-flex;
+  color: var(--gold);
+}
+.csdtv-watch .logo .chev svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.csdtv-watch .logo small {
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--on-dark-2);
+  display: block;
+  margin-top: 2px;
+}
+.csdtv-watch .navlinks {
+  display: flex;
+  gap: 26px;
+  margin-left: 14px;
+}
+.csdtv-watch .navlinks a {
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--on-dark);
+  opacity: 0.82;
+  transition: opacity 0.2s;
+  position: relative;
+  padding: 4px 0;
+}
+.csdtv-watch .navlinks a:hover {
+  opacity: 1;
+}
+.csdtv-watch .navlinks a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 2px;
+  width: 0;
+  background: var(--gold);
+  transition: width 0.25s;
+}
+.csdtv-watch .navlinks a:hover::after {
+  width: 100%;
+}
+.csdtv-watch .nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.csdtv-watch .searchbtn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 100px;
+  color: var(--on-dark-2);
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  transition: 0.2s;
+  cursor: pointer;
+}
+.csdtv-watch .searchbtn:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+.csdtv-watch .onair {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 100px;
+  background: rgba(251, 174, 66, 0.14);
+  border: 1px solid rgba(251, 174, 66, 0.4);
+}
+.csdtv-watch .onair .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 0 rgba(251, 174, 66, 0.7);
+  animation: cw-pulse 2s infinite;
+}
+
+.csdtv-watch .hero-body {
+  position: relative;
+  z-index: 4;
+  margin-top: auto;
+  width: 100%;
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 var(--pad) clamp(40px, 7vh, 72px);
+}
+.csdtv-watch .kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 18px;
+  opacity: 0;
+  transform: translateY(16px);
+  animation: cw-rise 0.7s 0.1s forwards;
+}
+.csdtv-watch .kicker::before {
+  content: "";
+  width: 26px;
+  height: 2px;
+  background: var(--gold);
+}
+.csdtv-watch .hero-title {
+  font-weight: 800;
+  font-size: clamp(34px, 5.6vw, 68px);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  max-width: 16ch;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(16px);
+  animation: cw-rise 0.7s 0.22s forwards;
+}
+.csdtv-watch .hero-desc {
+  margin-top: 18px;
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.55;
+  max-width: 52ch;
+  color: var(--on-dark-2);
+  opacity: 0;
+  transform: translateY(16px);
+  animation: cw-rise 0.7s 0.34s forwards;
+}
+.csdtv-watch .hero-actions {
+  margin-top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  opacity: 0;
+  transform: translateY(16px);
+  animation: cw-rise 0.7s 0.46s forwards;
+}
+.csdtv-watch .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 14px 26px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    background 0.2s,
+    box-shadow 0.2s;
+  border: 0;
+}
+.csdtv-watch .btn-gold {
+  background: var(--gold);
+  color: #3a2503;
+  box-shadow: 0 8px 28px -8px rgba(251, 174, 66, 0.6);
+}
+.csdtv-watch .btn-gold:hover {
+  background: var(--gold-bright);
+  transform: translateY(-2px);
+}
+.csdtv-watch .btn-ghost {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.csdtv-watch .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.csdtv-watch .hero-meta {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--on-dark-3);
+  opacity: 0;
+  transform: translateY(16px);
+  animation: cw-rise 0.7s 0.58s forwards;
+}
+.csdtv-watch .hero-meta .tag {
+  color: var(--gold);
+  font-weight: 600;
+}
+.csdtv-watch .hero-meta .sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--on-dark-3);
+}
+
+/* ---------- STICKY CATEGORY NAV ---------- */
+.csdtv-watch .catnav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--cloud);
+  transition: box-shadow 0.25s;
+}
+.csdtv-watch .catnav.stuck {
+  box-shadow: 0 6px 22px -14px rgba(12, 26, 40, 0.35);
+}
+.csdtv-watch .catnav-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin: 0 auto;
+  padding: 12px var(--pad);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.csdtv-watch .catnav-inner::-webkit-scrollbar {
+  display: none;
+}
+.csdtv-watch .pill {
+  flex: none;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 9px 16px;
+  border-radius: 100px;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--cloud);
+  cursor: pointer;
+  transition: 0.18s;
+  white-space: nowrap;
+}
+.csdtv-watch .pill:hover {
+  border-color: var(--blue-2);
+  color: var(--blue-1);
+}
+.csdtv-watch .pill.active {
+  background: var(--navy-900);
+  color: #fff;
+  border-color: var(--navy-900);
+}
+.csdtv-watch .pill.schools {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--paper-3);
+  border-color: transparent;
+  color: var(--ink);
+}
+.csdtv-watch .pill.schools:hover {
+  background: var(--paper-3);
+  color: var(--ink);
+}
+.csdtv-watch .pill.schools .ic {
+  transition: transform 0.25s;
+  display: inline-flex;
+}
+.csdtv-watch .pill.schools.open .ic {
+  transform: rotate(180deg);
+}
+
+/* schools panel */
+.csdtv-watch .schools-panel {
+  display: none;
+  border-bottom: 1px solid var(--cloud);
+  background: var(--paper);
+}
+.csdtv-watch .schools-panel.open {
+  display: block;
+  animation: cw-drop 0.2s ease;
+}
+.csdtv-watch .sp-inner {
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin: 0 auto;
+  padding: 20px var(--pad) 22px;
+}
+.csdtv-watch .sp-filters {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--cloud);
+}
+.csdtv-watch .fpill {
+  font-weight: 600;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 100px;
+  border: 1px solid var(--cloud);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: 0.15s;
+  background: transparent;
+}
+.csdtv-watch .fpill:hover {
+  border-color: var(--blue-2);
+}
+.csdtv-watch .fpill.active {
+  background: var(--blue-1);
+  color: #fff;
+  border-color: var(--blue-1);
+}
+.csdtv-watch .sp-level {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 14px 0 9px;
+}
+.csdtv-watch .sp-inner > div:first-of-type .sp-level {
+  margin-top: 0;
+}
+.csdtv-watch .sp-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.csdtv-watch .schl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 7px 13px 7px 8px;
+  border-radius: 100px;
+  background: var(--paper-2);
+  border: 1px solid var(--cloud);
+  cursor: pointer;
+  transition: 0.15s;
+}
+.csdtv-watch .schl:hover {
+  background: #fff;
+  border-color: var(--blue-2);
+  transform: translateY(-1px);
+}
+.csdtv-watch .crest {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 11px;
+  color: #fff;
+  flex: none;
+}
+
+/* ---------- LIVE STRIP ---------- */
+.csdtv-watch .livestrip {
+  background: var(--navy-900);
+  color: var(--on-dark);
+}
+.csdtv-watch .live-inner {
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin: 0 auto;
+  padding: 18px var(--pad);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+.csdtv-watch .live-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.csdtv-watch .live-label .reddot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff4d4d;
+  box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.7);
+  animation: cw-pulse-red 1.8s infinite;
+}
+.csdtv-watch .live-prog {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.csdtv-watch .live-ch {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.csdtv-watch .live-prog .t {
+  font-weight: 600;
+  font-size: 15px;
+  color: #fff;
+}
+.csdtv-watch .live-watch {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--navy-900);
+  background: var(--gold);
+  padding: 10px 18px;
+  border-radius: 100px;
+  transition: 0.2s;
+}
+.csdtv-watch .live-watch:hover {
+  background: var(--gold-bright);
+}
+
+/* ---------- CONTENT ROWS ---------- */
+.csdtv-watch main {
+  padding: 14px 0 10px;
+}
+.csdtv-watch .row {
+  margin: 38px 0;
+}
+.csdtv-watch .row-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin: 0 auto 16px;
+  padding: 0 var(--pad);
+}
+.csdtv-watch .row-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(19px, 2.2vw, 24px);
+  letter-spacing: -0.02em;
+}
+.csdtv-watch .row-link {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--blue-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: gap 0.2s;
+}
+.csdtv-watch .row-link:hover {
+  gap: 9px;
+}
+.csdtv-watch .scroller {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 6px var(--pad) 14px;
+  scrollbar-width: none;
+}
+.csdtv-watch .scroller::-webkit-scrollbar {
+  display: none;
+}
+.csdtv-watch .card {
+  flex: none;
+  width: clamp(240px, 26vw, 300px);
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+.csdtv-watch .thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--navy-800);
+}
+.csdtv-watch .thumb .grad {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.4s ease;
+}
+.csdtv-watch .card:hover .thumb .grad {
+  transform: scale(1.06);
+}
+.csdtv-watch .thumb .shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 35%, rgba(6, 18, 31, 0.78));
+}
+.csdtv-watch .thumb .play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.csdtv-watch .card:hover .thumb .play {
+  opacity: 1;
+}
+.csdtv-watch .play .pbtn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(251, 174, 66, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3a2503;
+  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.5);
+}
+.csdtv-watch .thumb .badge {
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: rgba(6, 18, 31, 0.6);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.csdtv-watch .thumb .dur {
+  position: absolute;
+  bottom: 11px;
+  right: 11px;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(6, 18, 31, 0.78);
+  color: #fff;
+}
+.csdtv-watch .thumb .ov-title {
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  bottom: 11px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: #fff;
+  opacity: 0.92;
+}
+.csdtv-watch .card-cat {
+  margin-top: 11px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.csdtv-watch .card-title {
+  margin-top: 3px;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.32;
+  letter-spacing: -0.01em;
+}
+.csdtv-watch .card-meta {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.csdtv-watch .card:hover .card-title {
+  color: var(--blue-1);
+}
+.csdtv-watch .card-school {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.csdtv-watch .cdot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+
+/* gradient presets for placeholder thumbs */
+.csdtv-watch .g1 {
+  background: linear-gradient(135deg, #0a2c47, #065687 60%, #2791d0);
+}
+.csdtv-watch .g2 {
+  background: linear-gradient(150deg, #08243a, #0e3a5c 55%, #1f6ea0);
+}
+.csdtv-watch .g3 {
+  background: linear-gradient(135deg, #0a2236, #15455f 60%, #3abfe8);
+}
+.csdtv-watch .g4 {
+  background: linear-gradient(145deg, #0c1f30, #243a55 70%, #3a5680);
+}
+.csdtv-watch .g5 {
+  background: linear-gradient(135deg, #1a2030, #3a3530 55%, #fbae42);
+}
+.csdtv-watch .g6 {
+  background: linear-gradient(150deg, #0a2236, #0b3550 50%, #2791d0 90%);
+}
+
+/* ---------- THREE-UP CTA ---------- */
+.csdtv-watch .cta-sec {
+  margin: 54px auto 0;
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  padding: 0 var(--pad);
+}
+.csdtv-watch .cta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+.csdtv-watch .cta-card {
+  position: relative;
+  border-radius: var(--r-lg);
+  padding: 28px 26px;
+  overflow: hidden;
+  background: var(--navy-900);
+  color: #fff;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: transform 0.2s;
+}
+.csdtv-watch .cta-card:hover {
+  transform: translateY(-4px);
+}
+.csdtv-watch .cta-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+  background: radial-gradient(
+    120% 100% at 100% 0,
+    rgba(58, 191, 232, 0.28),
+    transparent 55%
+  );
+}
+.csdtv-watch .cta-card.gold {
+  background: var(--gold);
+  color: #3a2503;
+}
+.csdtv-watch .cta-card.gold::before {
+  background: radial-gradient(
+    120% 100% at 100% 0,
+    rgba(255, 255, 255, 0.35),
+    transparent 55%
+  );
+}
+.csdtv-watch .cta-ic {
+  position: relative;
+  font-size: 24px;
+  margin-bottom: auto;
+}
+.csdtv-watch .cta-h {
+  position: relative;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  margin-bottom: 5px;
+}
+.csdtv-watch .cta-d {
+  position: relative;
+  font-size: 13.5px;
+  opacity: 0.82;
+  line-height: 1.45;
+}
+.csdtv-watch .cta-card.gold .cta-d {
+  opacity: 0.78;
+}
+.csdtv-watch .cta-arrow {
+  position: relative;
+  margin-top: 14px;
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* ---------- FOOTER ---------- */
+.csdtv-watch footer {
+  margin-top: 56px;
+  background: var(--navy-900);
+  color: var(--on-dark-2);
+}
+.csdtv-watch .foot-top {
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin: 0 auto;
+  padding: 46px var(--pad) 34px;
+  display: flex;
+  gap: 40px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+.csdtv-watch .foot-brand {
+  max-width: 300px;
+}
+.csdtv-watch .foot-brand .logo {
+  margin-bottom: 14px;
+}
+.csdtv-watch .foot-brand p {
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.csdtv-watch .foot-cols {
+  display: flex;
+  gap: 54px;
+  flex-wrap: wrap;
+}
+.csdtv-watch .foot-col h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  margin-bottom: 14px;
+}
+.csdtv-watch .foot-col a {
+  display: block;
+  font-size: 14px;
+  padding: 5px 0;
+  color: var(--on-dark-2);
+  transition: color 0.15s;
+}
+.csdtv-watch .foot-col a:hover {
+  color: var(--gold);
+}
+.csdtv-watch .foot-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.csdtv-watch .foot-bottom .wrap2 {
+  max-width: calc(var(--wrap) + var(--pad) * 2);
+  margin: 0 auto;
+  padding: 18px var(--pad);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--on-dark-3);
+}
+
+/* ---------- Keyframes (namespaced) ---------- */
+@keyframes cw-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(251, 174, 66, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(251, 174, 66, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 174, 66, 0);
+  }
+}
+@keyframes cw-pulse-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(255, 77, 77, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0);
+  }
+}
+@keyframes cw-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes cw-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .csdtv-watch .navlinks {
+    display: none;
+  }
+  .csdtv-watch .cta-grid {
+    grid-template-columns: 1fr;
+  }
+  .csdtv-watch .hero-meta {
+    flex-wrap: wrap;
+  }
+}
