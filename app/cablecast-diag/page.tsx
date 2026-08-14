@@ -1,19 +1,16 @@
 /*
   TEMPORARY Cablecast diagnostic page — DELETE after wiring live data.
 
-  Path is intentionally NOT under /watch so it stays behind the Team Hub auth
-  gate (middleware publicPaths matches "/watch" by prefix). Only logged-in staff
-  can open csdtvstaff.org/cablecast-diag.
+  Auth-gated (path is NOT under /watch, so Team Hub middleware requires login).
 
-  It exercises the Cablecast client with the server token and reports:
-   - whether auth works (systeminfo)
-   - reference lists (categories / projects / producers)
-   - showfields (where Featured + School Related field IDs + option names live)
-   - publicsites (site id + gallery/carousel config) and channels (channel id)
-   - a sample of shows
-   - which Advanced Search request envelope the server accepts (3 variants)
+  Finding so far: the authenticated /v1 API is NOT reachable from the public
+  internet — canyons-school.cablecast.tv is a CloudFront distribution that only
+  serves cachable public GET content (POST -> 403 "only cachable requests",
+  GET /v1/* -> 502). So this version tests the PUBLIC publicsitedata endpoints,
+  which ARE what that CloudFront serves, plus echoes the deployment's config.
 */
-import { authedGet, authedPost } from "@/lib/cablecast/client";
+import { publicGet, authedGet } from "@/lib/cablecast/client";
+import { serverEnv, publicEnv } from "@/lib/cablecast/config";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: { absolute: "Cablecast Diagnostics" } };
@@ -25,13 +22,7 @@ interface ProbeResult {
   json?: string;
 }
 
-function arrLen(data: unknown, key: string): number {
-  const rec = data as Record<string, unknown> | null;
-  const arr = rec?.[key];
-  return Array.isArray(arr) ? arr.length : 0;
-}
-
-function pretty(data: unknown, max = 4000): string {
+function pretty(data: unknown, max = 6000): string {
   const s = JSON.stringify(data, null, 2);
   return s.length > max ? `${s.slice(0, max)}\n… (truncated)` : s;
 }
@@ -43,110 +34,85 @@ async function probe(
 ): Promise<ProbeResult> {
   try {
     const data = await fn();
-    return {
-      label,
-      ok: true,
-      note: note ? note(data) : "ok",
-      json: pretty(data),
-    };
+    return { label, ok: true, note: note ? note(data) : "ok", json: pretty(data) };
   } catch (error) {
     const e = error as { status?: number; message?: string; body?: string };
     return {
       label,
       ok: false,
       note: `${e.status ?? ""} ${e.message ?? String(error)}`.trim(),
-      json: e.body ? String(e.body).slice(0, 1500) : undefined,
+      json: e.body ? String(e.body).slice(0, 1200) : undefined,
     };
   }
 }
 
-// Simple sample query used to test the Advanced Search request envelope.
-const sampleQuery = {
-  groups: [
-    {
-      orAnd: "and",
-      filters: [
-        { field: "hasVod", operator: "equals", searchValue: true },
-        { field: "cgExempt", operator: "equals", searchValue: false },
-      ],
-    },
-  ],
-  sortOptions: [{ field: "eventDate", direction: "desc" }],
-};
+function summariseSiteConfig(data: unknown): string {
+  const d = data as {
+    title?: string;
+    galleries?: { id?: number; title?: string }[];
+    slideShow?: unknown[];
+    scheduleItems?: unknown[];
+    liveStreamUrl?: string;
+  };
+  const galleries = Array.isArray(d?.galleries)
+    ? d.galleries.map((g) => `#${g?.id} ${g?.title ?? ""}`).join(", ")
+    : "none";
+  return [
+    `title: ${d?.title ?? "?"}`,
+    `galleries: ${Array.isArray(d?.galleries) ? d.galleries.length : 0} [${galleries}]`,
+    `slideShow: ${Array.isArray(d?.slideShow) ? d.slideShow.length : 0}`,
+    `scheduleItems: ${Array.isArray(d?.scheduleItems) ? d.scheduleItems.length : 0}`,
+    `liveStreamUrl: ${d?.liveStreamUrl ? "yes" : "no"}`,
+  ].join(" · ");
+}
+
+const site = serverEnv.cablecastSiteId;
+const channel = serverEnv.cablecastChannelId || undefined;
 
 export default async function CablecastDiagnostics() {
+  const config = {
+    CABLECAST_BASE_URL: serverEnv.cablecastBaseUrl,
+    CABLECAST_SITE_ID: serverEnv.cablecastSiteId,
+    CABLECAST_CHANNEL_ID: serverEnv.cablecastChannelId || "(unset)",
+    NEXT_PUBLIC_CABLECAST_HOST: publicEnv.cablecastHost,
+    tokenIdPresent: Boolean(serverEnv.cablecastTokenId),
+    tokenSecretPresent: Boolean(serverEnv.cablecastTokenSecret),
+  };
+
   const results = await Promise.all([
-    probe("GET /v1/systeminfo (auth check)", () =>
-      authedGet("/v1/systeminfo", { revalidate: 0 }),
-    ),
     probe(
-      "GET /v1/categories",
-      () => authedGet("/v1/categories", { revalidate: 0 }),
-      (d) => `${arrLen(d, "categories")} categories`,
-    ),
-    probe(
-      "GET /v1/projects",
-      () => authedGet("/v1/projects", { revalidate: 0 }),
-      (d) => `${arrLen(d, "projects")} projects`,
-    ),
-    probe(
-      "GET /v1/producers",
-      () => authedGet("/v1/producers", { revalidate: 0 }),
-      (d) => `${arrLen(d, "producers")} producers`,
-    ),
-    probe(
-      "GET /v1/showfields  ← Featured + School Related IDs live here",
-      () => authedGet("/v1/showfields", { revalidate: 0 }),
-      (d) =>
-        `${arrLen(d, "showFields")} showFields, ${arrLen(d, "fieldDefinitions")} fieldDefinitions`,
-    ),
-    probe(
-      "GET /v1/publicsites  ← site id + gallery/carousel config",
-      () => authedGet("/v1/publicsites", { revalidate: 0 }),
-      (d) => `${arrLen(d, "publicSites")} public sites`,
-    ),
-    probe(
-      "GET /v1/channels  ← channel id for live/schedule",
-      () => authedGet("/v1/channels", { searchParams: { page_size: 20 }, revalidate: 0 }),
-      (d) => `${arrLen(d, "channels")} channels`,
-    ),
-    probe(
-      "GET /v1/shows?page_size=10&include=vods,thumbnails",
+      `GET /publicsitedata?site=${site}${channel ? `&channel=${channel}` : ""}  ← site config, galleries, carousel, live URL`,
       () =>
-        authedGet("/v1/shows", {
-          searchParams: { page_size: 10, include: "vods,thumbnails" },
+        publicGet("/publicsitedata", {
+          searchParams: { site, channel },
           revalidate: 0,
         }),
-      (d) => `${arrLen(d, "shows")} shows`,
+      summariseSiteConfig,
     ),
     probe(
-      "POST /v1/shows/search/advanced — body = { query }",
-      () =>
-        authedPost(
-          "/v1/shows/search/advanced",
-          { query: sampleQuery },
-          { searchParams: { page_size: 3 }, revalidate: 0 },
-        ),
-      (d) => `${arrLen(d, "shows")} shows returned`,
+      "GET /publicsitedata?site=1  (fallback: explicit site=1)",
+      () => publicGet("/publicsitedata", { searchParams: { site: 1 }, revalidate: 0 }),
+      summariseSiteConfig,
     ),
     probe(
-      "POST /v1/shows/search/advanced — body = query (bare)",
+      `GET /publicsitedata/schedule?site=${site}  ← schedule / TV guide`,
       () =>
-        authedPost("/v1/shows/search/advanced", sampleQuery, {
-          searchParams: { page_size: 3 },
+        publicGet("/publicsitedata/schedule", {
+          searchParams: { site, channel },
           revalidate: 0,
         }),
-      (d) => `${arrLen(d, "shows")} shows returned`,
     ),
     probe(
-      "POST /v1/shows/search/advanced — body = { savedShowSearch: { query } }",
+      `GET /publicsitedata/shows/search?search=board&site=${site}  ← full-text search`,
       () =>
-        authedPost(
-          "/v1/shows/search/advanced",
-          { savedShowSearch: { query: sampleQuery } },
-          { searchParams: { page_size: 3 }, revalidate: 0 },
-        ),
-      (d) => `${arrLen(d, "shows")} shows returned`,
+        publicGet("/publicsitedata/shows/search", {
+          searchParams: { search: "board", site, page_size: 3 },
+          revalidate: 0,
+        }),
+    ),
+    probe(
+      "GET /v1/systeminfo  (re-confirm: authed API expected to fail from public internet)",
+      () => authedGet("/v1/systeminfo", { revalidate: 0 }),
     ),
   ]);
 
@@ -163,10 +129,37 @@ export default async function CablecastDiagnostics() {
       }}
     >
       <h1 style={{ fontSize: 22, marginBottom: 6 }}>Cablecast Diagnostics</h1>
-      <p style={{ color: "#5e7389", marginBottom: 24, fontSize: 13 }}>
-        Temporary. Confirms the API token works and reveals the real IDs the
-        /watch pages need. Delete <code>app/cablecast-diag/</code> once wired.
+      <p style={{ color: "#5e7389", marginBottom: 20, fontSize: 13 }}>
+        Temporary. Testing which endpoints are reachable from Vercel and echoing
+        the deployment config. Delete <code>app/cablecast-diag/</code> once wired.
       </p>
+
+      <section
+        style={{
+          border: "1px solid #e4ecf3",
+          borderRadius: 10,
+          padding: 14,
+          marginBottom: 18,
+        }}
+      >
+        <strong style={{ fontSize: 13 }}>Deployment config (secrets masked)</strong>
+        <pre
+          style={{
+            margin: "8px 0 0",
+            fontSize: 11.5,
+            lineHeight: 1.5,
+            background: "#f4f8fb",
+            border: "1px solid #eaf1f7",
+            borderRadius: 8,
+            padding: 12,
+            overflowX: "auto",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {JSON.stringify(config, null, 2)}
+        </pre>
+      </section>
+
       {results.map((r) => (
         <section
           key={r.label}
