@@ -302,7 +302,7 @@ function SchoolGroupHeader({ group, first }: { group: SchoolGroup; first: boolea
 function AgendaRow({ e, now, onClick }: { e: CalEvent; now: Date; onClick: () => void }) {
   const state = streamState(e, now)
   return (
-    <div onClick={onClick} style={{ display: 'block', padding: '10px 10px', borderRadius: 8, cursor: 'pointer', borderBottom: '1px solid #e4e4e7' }}>
+    <div onClick={onClick} className="pc-agenda-row" style={{ display: 'block', padding: '10px 10px', borderRadius: 8, cursor: 'pointer', borderBottom: '1px solid #e4e4e7' }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#18181b' }}>{e.schoolName}</div>
       <div style={{ fontSize: 12.5, color: '#71717a', marginTop: 1 }}><StreamTag state={state} />{e.title}</div>
       <div style={{ fontSize: 11.5, color: '#a1a1aa', marginTop: 1 }}>{fmtDateLong(e.start)} · {fmtTime(e.start)}{e.location ? ` · ${e.location}` : ''}</div>
@@ -334,7 +334,7 @@ function MonthDayCell({
   return (
     <div
       onClick={monthEvents.length > 0 ? onDayClick : undefined}
-      className="pc-day-cell"
+      className={`pc-day-cell${monthEvents.length > 0 ? ' pc-day-cell-clickable' : ''}`}
       style={{
         height: MONTH_CELL_HEIGHT, background: '#fff', padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 2,
         overflow: 'hidden', position: 'relative', cursor: monthEvents.length > 0 ? 'pointer' : 'default',
@@ -519,13 +519,13 @@ function PublicCalendarInner() {
   const eventState = eventModal ? streamState(eventModal, now) : null
 
   return (
-    <div style={{ margin: 0, background: '#fafafa', color: '#18181b', fontFamily: '-apple-system, BlinkMacSystemFont, Inter, "Segoe UI", Helvetica, Arial, sans-serif', fontSize: '14.5px', lineHeight: 1.5, minHeight: '100vh' }}>
-      <div style={{ background: '#fff', borderBottom: '1px solid #e4e4e7', padding: '14px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div className="pc-page" style={{ margin: 0, background: '#fafafa', color: '#18181b', fontFamily: '-apple-system, BlinkMacSystemFont, Inter, "Segoe UI", Helvetica, Arial, sans-serif', fontSize: '14.5px', lineHeight: 1.5, minHeight: '100vh' }}>
+      <div style={{ background: '#fff', borderBottom: '1px solid #e4e4e7', padding: '14px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(24,24,27,0.03)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 700, fontSize: '14.5px', letterSpacing: '-0.01em' }}>
           <span style={{ width: 26, height: 26, borderRadius: 7, background: '#065687', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>C</span>
           CSDtv <span style={{ color: '#71717a', fontWeight: 500 }}>&nbsp;/ District Calendar</span>
         </div>
-        <Link href="/calendar/submit" style={{ background: '#065687', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>
+        <Link href="/calendar/submit" className="pc-btn-primary" style={{ background: '#065687', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}>
           + Submit an event
         </Link>
       </div>
@@ -537,6 +537,15 @@ function PublicCalendarInner() {
           <span style={{ color: '#dc2626', fontWeight: 800, fontSize: '0.85em' }}>LIVE NOW</span> or{' '}
           <span style={{ color: '#9a6208', fontWeight: 800, fontSize: '0.85em' }}>STREAMING</span> next to an event to know CSDtv is broadcasting it.
         </p>
+        <div style={{
+          display: 'flex', gap: 10, alignItems: 'flex-start', maxWidth: 700, margin: '14px 0 4px',
+          background: '#f0f6fa', border: '1px solid #cfe3ee', borderRadius: 10, padding: '11px 14px',
+        }}>
+          <span style={{ fontSize: 14, lineHeight: 1, marginTop: 1 }}>ℹ️</span>
+          <p style={{ fontSize: 12.5, color: '#2c4a5c', margin: 0, lineHeight: 1.55 }}>
+            <strong>This is an aggregated listing, not an exhaustive one.</strong> It&apos;s gathered from event feeds published by schools across the district, so a school&apos;s full schedule may include items that aren&apos;t captured here. It&apos;s intended to help board members and district leadership see what&apos;s happening and choose what to attend.
+          </p>
+        </div>
         <p style={{ fontSize: 12.5, color: '#a1a1aa', marginTop: 10 }}>
           {loading ? 'Loading…' : `${monthEventsThisMonth.length} event${monthEventsThisMonth.length === 1 ? '' : 's'} this month across ${distinctSchoolsThisMonth} school${distinctSchoolsThisMonth === 1 ? '' : 's'}.`}
         </p>
@@ -548,12 +557,14 @@ function PublicCalendarInner() {
             value={search}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
             placeholder="Search events..."
-            style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, padding: '0 12px', height: 36, fontSize: '13.5px', fontFamily: 'inherit', flex: 1, minWidth: 190 }}
+            className="pc-field"
+            style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, padding: '0 12px', height: 36, fontSize: '13.5px', fontFamily: 'inherit', flex: 1, minWidth: 190, boxShadow: '0 1px 2px rgba(24,24,27,0.03)' }}
           />
           <select
             value={schoolFilter}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => setSchoolFilter(e.target.value)}
-            style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, padding: '0 12px', height: 36, fontSize: '13.5px', fontFamily: 'inherit', minWidth: 170 }}
+            className="pc-field"
+            style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, padding: '0 12px', height: 36, fontSize: '13.5px', fontFamily: 'inherit', minWidth: 170, boxShadow: '0 1px 2px rgba(24,24,27,0.03)' }}
           >
             <option value="">All {schools.length} schools</option>
             {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -561,7 +572,8 @@ function PublicCalendarInner() {
           <select
             value={categoryFilter}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => setCategoryFilter(e.target.value)}
-            style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, padding: '0 12px', height: 36, fontSize: '13.5px', fontFamily: 'inherit', minWidth: 170 }}
+            className="pc-field"
+            style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, padding: '0 12px', height: 36, fontSize: '13.5px', fontFamily: 'inherit', minWidth: 170, boxShadow: '0 1px 2px rgba(24,24,27,0.03)' }}
           >
             <option value="">All categories</option>
             {CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
@@ -587,15 +599,15 @@ function PublicCalendarInner() {
               <span style={{ fontSize: 13, fontWeight: 700, color: '#18181b' }}>{fmtDateShort(weekStart)} – {fmtDateShort(weekEnd)}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={() => setWeekStart(addDays(weekStart, -7))} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&larr;</button>
-              <button onClick={() => setWeekStart(addDays(weekStart, 7))} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&rarr;</button>
+              <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="pc-navbtn" style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&larr;</button>
+              <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="pc-navbtn" style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&rarr;</button>
               {!isCurrentWeek && (
-                <button onClick={() => setWeekStart(thisWeekStart)} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 7, fontSize: '12.5px', fontWeight: 600, padding: '7px 13px', cursor: 'pointer', fontFamily: 'inherit' }}>This week</button>
+                <button onClick={() => setWeekStart(thisWeekStart)} className="pc-navbtn" style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 7, fontSize: '12.5px', fontWeight: 600, padding: '7px 13px', cursor: 'pointer', fontFamily: 'inherit' }}>This week</button>
               )}
             </div>
           </div>
 
-          <div className="pc-week-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 10, overflow: 'hidden' }}>
+          <div className="pc-week-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 2px rgba(24,24,27,0.04), 0 6px 20px rgba(24,24,27,0.035)' }}>
             {weekDays.map(({ d, dayEvents }, i) => {
               const isToday = sameDay(now, d.getFullYear(), d.getMonth(), d.getDate())
               const groups = groupBySchool(dayEvents)
@@ -655,14 +667,14 @@ function PublicCalendarInner() {
         </div>
 
         {view === 'month' ? (
-          <div style={{ background: '#fff', border: '1px solid #e4e4e7', borderRadius: 12, padding: 16 }}>
+          <div style={{ background: '#fff', border: '1px solid #e4e4e7', borderRadius: 12, padding: 16, boxShadow: '0 1px 2px rgba(24,24,27,0.04), 0 6px 20px rgba(24,24,27,0.035)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button onClick={() => { let m = viewMonth0 - 1, y = viewYear; if (m < 0) { m = 11; y-- } setViewMonth0(m); setViewYear(y) }} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&larr;</button>
+                <button onClick={() => { let m = viewMonth0 - 1, y = viewYear; if (m < 0) { m = 11; y-- } setViewMonth0(m); setViewYear(y) }} className="pc-navbtn" style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&larr;</button>
                 <span style={{ fontSize: '15.5px', fontWeight: 700, letterSpacing: '-0.01em', minWidth: 150, display: 'inline-block' }}>{monthLabel}</span>
-                <button onClick={() => { let m = viewMonth0 + 1, y = viewYear; if (m > 11) { m = 0; y++ } setViewMonth0(m); setViewYear(y) }} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&rarr;</button>
+                <button onClick={() => { let m = viewMonth0 + 1, y = viewYear; if (m > 11) { m = 0; y++ } setViewMonth0(m); setViewYear(y) }} className="pc-navbtn" style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #d4d4d8', background: '#fff', color: '#18181b', cursor: 'pointer', fontSize: 13 }}>&rarr;</button>
               </div>
-              <button onClick={() => { setViewYear(now.getFullYear()); setViewMonth0(now.getMonth()) }} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 7, fontSize: '12.5px', fontWeight: 600, padding: '7px 13px', cursor: 'pointer', fontFamily: 'inherit' }}>Today</button>
+              <button onClick={() => { setViewYear(now.getFullYear()); setViewMonth0(now.getMonth()) }} className="pc-navbtn" style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 7, fontSize: '12.5px', fontWeight: 600, padding: '7px 13px', cursor: 'pointer', fontFamily: 'inherit' }}>Today</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1, background: '#e4e4e7', border: '1px solid #e4e4e7', borderRadius: 8, overflow: 'hidden' }}>
               {DOW.map(d => <div key={d} className="pc-dow" style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: '#a1a1aa', textAlign: 'center' as const, padding: '8px 0', background: '#fff' }}>{d}</div>)}
@@ -685,7 +697,7 @@ function PublicCalendarInner() {
             </div>
           </div>
         ) : (
-          <div style={{ background: '#fff', border: '1px solid #e4e4e7', borderRadius: 12, padding: 16 }}>
+          <div style={{ background: '#fff', border: '1px solid #e4e4e7', borderRadius: 12, padding: 16, boxShadow: '0 1px 2px rgba(24,24,27,0.04), 0 6px 20px rgba(24,24,27,0.035)' }}>
             {filtered.length === 0 ? (
               <div style={{ padding: 30, textAlign: 'center' as const, color: '#71717a', fontSize: 13 }}>No events match that search.</div>
             ) : (
@@ -738,18 +750,18 @@ function PublicCalendarInner() {
             {eventModal.description && <p style={{ fontSize: '13.5px', color: '#18181b', margin: '0 0 16px', lineHeight: 1.6 }}>{eventModal.description}</p>}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
               {eventState === 'live' && eventModal.streamUrl && (
-                <a href={eventModal.streamUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#065687', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', textDecoration: 'none' }}>▶ Watch live</a>
+                <a href={eventModal.streamUrl} target="_blank" rel="noreferrer" className="pc-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#065687', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', textDecoration: 'none' }}>▶ Watch live</a>
               )}
               {eventState === 'upcoming' && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fafafa', color: '#a1a1aa', border: '1px solid #e4e4e7', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px' }}>Watch link available day-of</span>
               )}
               <div ref={addCalendarRef} style={{ position: 'relative' as const }}>
-                <button onClick={() => setAddCalendarOpen(o => !o)} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add to my calendar</button>
+                <button onClick={() => setAddCalendarOpen(o => !o)} className="pc-navbtn" style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add to my calendar</button>
                 {addCalendarOpen && (
                   <div style={{ position: 'absolute' as const, top: '100%', left: 0, marginTop: 4, background: '#fff', border: '1px solid #e4e4e7', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.14)', zIndex: 70, minWidth: 200, overflow: 'hidden' }}>
-                    <a href={googleCalendarUrl(eventModal)} target="_blank" rel="noreferrer" onClick={() => setAddCalendarOpen(false)} style={{ display: 'block', padding: '9px 14px', fontSize: 13, color: '#18181b', textDecoration: 'none' }}>Google Calendar</a>
-                    <a href={outlookCalendarUrl(eventModal)} target="_blank" rel="noreferrer" onClick={() => setAddCalendarOpen(false)} style={{ display: 'block', padding: '9px 14px', fontSize: 13, color: '#18181b', textDecoration: 'none', borderTop: '1px solid #f4f4f5' }}>Outlook.com</a>
-                    <button onClick={() => { downloadIcs(eventModal); setAddCalendarOpen(false) }} style={{ display: 'block', width: '100%', textAlign: 'left' as const, padding: '9px 14px', fontSize: 13, color: '#18181b', background: 'none', border: 'none', borderTop: '1px solid #f4f4f5', cursor: 'pointer', fontFamily: 'inherit' }}>Apple Calendar / other (.ics)</button>
+                    <a href={googleCalendarUrl(eventModal)} target="_blank" rel="noreferrer" onClick={() => setAddCalendarOpen(false)} className="pc-menu-item" style={{ display: 'block', padding: '9px 14px', fontSize: 13, color: '#18181b', textDecoration: 'none' }}>Google Calendar</a>
+                    <a href={outlookCalendarUrl(eventModal)} target="_blank" rel="noreferrer" onClick={() => setAddCalendarOpen(false)} className="pc-menu-item" style={{ display: 'block', padding: '9px 14px', fontSize: 13, color: '#18181b', textDecoration: 'none', borderTop: '1px solid #f4f4f5' }}>Outlook.com</a>
+                    <button onClick={() => { downloadIcs(eventModal); setAddCalendarOpen(false) }} className="pc-menu-item" style={{ display: 'block', width: '100%', textAlign: 'left' as const, padding: '9px 14px', fontSize: 13, color: '#18181b', background: 'none', border: 'none', borderTop: '1px solid #f4f4f5', cursor: 'pointer', fontFamily: 'inherit' }}>Apple Calendar / other (.ics)</button>
                   </div>
                 )}
               </div>
@@ -757,7 +769,7 @@ function PublicCalendarInner() {
                 navigator.clipboard.writeText(`${window.location.origin}/calendar?event=${eventModal.id}`)
                 setCopied(true)
                 setTimeout(() => setCopied(false), 1500)
-              }} style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>{copied ? 'Link copied' : 'Copy link'}</button>
+              }} className="pc-navbtn" style={{ background: '#fff', border: '1px solid #d4d4d8', color: '#18181b', borderRadius: 8, fontSize: 13, fontWeight: 600, padding: '9px 15px', cursor: 'pointer', fontFamily: 'inherit' }}>{copied ? 'Link copied' : 'Copy link'}</button>
             </div>
           </div>
         </div>
@@ -767,6 +779,25 @@ function PublicCalendarInner() {
         .pc-week-day-scroll { scrollbar-width: thin; }
         .pc-week-day-scroll::-webkit-scrollbar { width: 5px; }
         .pc-week-day-scroll::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 3px; }
+
+        /* Smooths every color/shadow change on interactive elements (active
+           view-toggle state, "today" pill, etc.) even where we don't add a
+           dedicated hover rule below. */
+        .pc-page button, .pc-page a, .pc-page input, .pc-page select {
+          transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease;
+        }
+
+        /* These use !important because the buttons set their own background
+           inline (it can depend on component state, e.g. the active view
+           toggle) -- a plain :hover rule in this stylesheet would lose to
+           that inline style every time. */
+        .pc-navbtn:hover { background: #f4f4f5 !important; border-color: #c4c4c8 !important; }
+        .pc-btn-primary:hover { background: #054e73 !important; }
+        .pc-menu-item:hover { background: #f4f4f5 !important; }
+        .pc-agenda-row:hover { background: #fafafa !important; }
+        .pc-day-cell-clickable:hover { background: #f7fafc !important; }
+        .pc-field:focus { outline: none; border-color: #065687 !important; box-shadow: 0 0 0 3px rgba(6,86,135,0.12) !important; }
+
         @media (max-width: 700px) {
           .pc-week-grid { display: none !important; }
           .pc-week-daystrip { display: flex !important; }

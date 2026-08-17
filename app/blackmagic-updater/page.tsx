@@ -20,7 +20,8 @@ const c = {
 }
 
 const GH = 'https://github.com/canyesjust/csdtv-team-hub/releases/latest/download'
-const DOWNLOAD_MAC = `${GH}/Blackmagic-Update-Checker-macOS.zip`
+const DOWNLOAD_MAC_ARM = `${GH}/Blackmagic-Update-Checker-macOS-AppleSilicon.zip`
+const DOWNLOAD_MAC_INTEL = `${GH}/Blackmagic-Update-Checker-macOS-Intel.zip`
 const DOWNLOAD_WIN = `${GH}/Blackmagic-Update-Checker-Windows.zip`
 const DOWNLOAD_SRC = '/downloads/blackmagic-update-checker.zip'
 
@@ -71,19 +72,31 @@ export default async function BlackmagicUpdaterPage() {
           <div style={{ fontSize: 14, color: c.muted, marginTop: 4 }}>Free. Pick your platform, unzip, and open the app.</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
             <a
-              href={DOWNLOAD_MAC}
-              style={{ background: c.accent, color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 15, padding: '12px 20px', borderRadius: 10, whiteSpace: 'nowrap' }}
+              href={DOWNLOAD_MAC_ARM}
+              style={btn}
             >
-              Download for macOS
+              macOS · Apple Silicon
+            </a>
+            <a
+              href={DOWNLOAD_MAC_INTEL}
+              style={btn}
+            >
+              macOS · Intel
             </a>
             <a
               href={DOWNLOAD_WIN}
-              style={{ background: c.accent, color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 15, padding: '12px 20px', borderRadius: 10, whiteSpace: 'nowrap' }}
+              style={btn}
             >
               Download for Windows
             </a>
           </div>
           <div style={{ fontSize: 13, color: c.muted, marginTop: 14, lineHeight: 1.5 }}>
+            <strong style={{ color: c.text }}>Which Mac do I have?</strong> Apple menu →{' '}
+            <strong>About This Mac</strong>. If the <em>Chip</em> line says Apple M1, M2, M3 or M4, take Apple Silicon.
+            If it says Intel, take Intel. The wrong one won&apos;t open at all — macOS reports it as &ldquo;not supported
+            on this Mac.&rdquo;
+          </div>
+          <div style={{ fontSize: 13, color: c.muted, marginTop: 10, lineHeight: 1.5 }}>
             First launch, the app is unsigned. On macOS, right-click it and choose <strong>Open</strong>. On Windows, if
             SmartScreen warns, click <strong>More info → Run anyway</strong>. Prefer the raw script or want to build it
             yourself? <a href={DOWNLOAD_SRC} style={{ color: c.text }}>Download the source</a>.
@@ -176,6 +189,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+const btn: React.CSSProperties = {
+  background: c.accent,
+  color: '#fff',
+  textDecoration: 'none',
+  fontWeight: 700,
+  fontSize: 15,
+  padding: '12px 20px',
+  borderRadius: 10,
+  whiteSpace: 'nowrap',
+}
 const p: React.CSSProperties = { margin: '0 0 10px', fontSize: 15, lineHeight: 1.6 }
 const code: React.CSSProperties = { background: 'rgba(0,0,0,0.06)', padding: '1px 6px', borderRadius: 5, fontSize: 13.5 }
 const th: React.CSSProperties = { padding: '10px 14px', fontWeight: 700, fontSize: 13 }
