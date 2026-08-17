@@ -19,11 +19,16 @@ Run it:
   Text-only mode:  add --cli
 """
 
+import hashlib
 import json
 import os
 import platform
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
+import urllib.parse
 import webbrowser
 import glob
 import urllib.request
@@ -39,15 +44,36 @@ BM_NAME_HINTS = (
     "videohub", "teranex", "smartview", "smartscope", "desktop video",
     "cintel", "web presenter", "multiview", "decklink", "ultrastudio",
     "proxy generator", "media express",
+    # Utilities that don't always carry the "Blackmagic" prefix in the app name.
+    "streaming", "camera setup", "video assist", "converter setup",
+    "sync generator", "audio monitor", "disk speed", "cloud store",
 )
 
 SUPPORT_URL = "https://www.blackmagicdesign.com/support/"
+
+# Shown in the Installed column when the app is on disk but its Info.plist
+# carries no version. Deliberately not a number, so compare_versions() treats it
+# as "unknown" rather than pretending it's older or newer than the latest release.
+INSTALLED_NO_VERSION = "Installed (version n/a)"
 
 # Live catalog endpoint. Served by the CSD TV Team Hub, which pulls Blackmagic's
 # own download feed and always returns current versions. Leave "" to use only the
 # bundled catalog.json fallback.
 CATALOG_URL = "https://www.csdtvstaff.org/api/catalog"
 FETCH_TIMEOUT = 6  # seconds
+
+# Self-update. The build workflow publishes version.json next to the app zips on
+# the "app-latest" GitHub release, so this URL always describes the newest build.
+RELEASE_BASE = "https://github.com/canyesjust/csdtv-team-hub/releases/latest/download"
+VERSION_MANIFEST_URL = RELEASE_BASE + "/version.json"
+# Downloads must stay on GitHub. Release asset links redirect to a CDN host, so
+# those are allowed too; anything else is refused rather than followed.
+ALLOWED_DOWNLOAD_HOSTS = (
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+)
+DOWNLOAD_TIMEOUT = 120  # seconds
 
 
 # ----------------------------------------------------------------------------
@@ -83,15 +109,25 @@ def latest_for_os(entry):
 # Detection: macOS
 # ----------------------------------------------------------------------------
 def detect_mac(entry):
+    """Version string if the app is installed, INSTALLED_NO_VERSION if it's on
+    disk but won't tell us its version, None if it isn't there at all.
+
+    The three states matter. Several Blackmagic setup utilities ship an
+    Info.plist with no CFBundleShortVersionString and no CFBundleVersion. This
+    used to return None for those, so an app sitting in /Applications was
+    reported as "Not installed" — worse than saying nothing, because it's wrong.
+    """
     import plistlib
     app_names = entry.get("mac_app", [])
     search_dirs = ["/Applications", os.path.expanduser("~/Applications")]
+    found_without_version = False
     for app_name in app_names:
         for base in search_dirs:
             candidate = os.path.join(base, app_name)
             paths = [candidate] if os.path.isdir(candidate) else []
             paths += glob.glob(os.path.join(base, "*", app_name))
             for path in paths:
+                found_without_version = True
                 plist_path = os.path.join(path, "Contents", "Info.plist")
                 if os.path.isfile(plist_path):
                     try:
@@ -103,7 +139,7 @@ def detect_mac(entry):
                             return str(ver)
                     except Exception:
                         continue
-    return None
+    return INSTALLED_NO_VERSION if found_without_version else None
 
 
 # ----------------------------------------------------------------------------
@@ -190,11 +226,40 @@ def davinci_edition(win_cache, mac_hit_path=None):
     return None
 
 
+def _mac_app_search_roots():
+    """Every folder a Blackmagic .app might sit in.
+
+    /Applications and ~/Applications, plus one folder deeper in each, because
+    some Blackmagic installers group their utilities in a subfolder rather than
+    dropping them at the top level.
+    """
+    roots = []
+    for base in ("/Applications", os.path.expanduser("~/Applications")):
+        if not os.path.isdir(base):
+            continue
+        roots.append(base)
+        try:
+            for name in sorted(os.listdir(base)):
+                sub = os.path.join(base, name)
+                if not name.endswith(".app") and os.path.isdir(sub):
+                    roots.append(sub)
+        except OSError:
+            continue
+    return roots
+
+
 def _all_installed_bm_apps_mac():
-    """List (app_name, version, path) for every Blackmagic-looking .app."""
+    """List (app_name, version, path) for every Blackmagic-looking .app.
+
+    Searches the same depth detect_mac() does. These two used to disagree:
+    detect_mac() globbed one folder down but this listed only the top level, so
+    an app in a subfolder could be version-checked and still never appear in the
+    "found but not in the catalog" catch-all.
+    """
     import plistlib
     found = []
-    for base in ("/Applications", os.path.expanduser("~/Applications")):
+    seen = set()
+    for base in _mac_app_search_roots():
         try:
             names = os.listdir(base)
         except OSError:
@@ -205,7 +270,11 @@ def _all_installed_bm_apps_mac():
             low = name.lower()
             if not any(h in low for h in BM_NAME_HINTS):
                 continue
-            plist_path = os.path.join(base, name, "Contents", "Info.plist")
+            path = os.path.join(base, name)
+            if path in seen:
+                continue
+            seen.add(path)
+            plist_path = os.path.join(path, "Contents", "Info.plist")
             ver = "-"
             try:
                 with open(plist_path, "rb") as fh:
@@ -214,7 +283,7 @@ def _all_installed_bm_apps_mac():
                           or data.get("CFBundleVersion") or "-")
             except Exception:
                 pass
-            found.append((name, ver, os.path.join(base, name)))
+            found.append((name, ver, path))
     return found
 
 
@@ -337,6 +406,230 @@ def load_catalog():
 
 
 # ----------------------------------------------------------------------------
+# Self-update
+# ----------------------------------------------------------------------------
+class UpdateError(Exception):
+    """Anything that stops an update, with a message worth showing the user."""
+
+
+def update_target():
+    """Key into version.json's 'assets' for this machine, or None if unsupported."""
+    if IS_WINDOWS:
+        return "windows"
+    if IS_MAC:
+        return "macos-arm64" if platform.machine() == "arm64" else "macos-x86_64"
+    return None
+
+
+def installed_app_path():
+    """Path this app would replace when updating.
+
+    macOS: the .app bundle. Windows: the .exe. None when running from source,
+    because there is no packaged app to swap.
+    """
+    if not getattr(sys, "frozen", False):
+        return None
+    exe = os.path.realpath(sys.executable)
+    if IS_MAC:
+        path = exe
+        while path not in ("/", ""):
+            if path.endswith(".app"):
+                return path
+            path = os.path.dirname(path)
+        return None
+    return exe
+
+
+def fetch_update_manifest(url=VERSION_MANIFEST_URL):
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "BMDUpdateChecker/%s" % APP_VERSION})
+    with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def available_update(catalog=None):
+    """Describe a newer build for this machine, or return None.
+
+    Prefers version.json on the GitHub release, which carries a downloadable
+    asset. Falls back to the catalog's 'app' block, which knows the version but
+    has no asset — that path can only send the user to the download page.
+    """
+    try:
+        manifest = fetch_update_manifest()
+    except Exception:
+        manifest = None
+
+    if manifest:
+        version = str(manifest.get("version", ""))
+        if compare_versions(APP_VERSION, version) == "update_available":
+            asset = (manifest.get("assets") or {}).get(update_target() or "") or {}
+            return {
+                "version": version,
+                "url": asset.get("url", ""),
+                "sha256": asset.get("sha256", ""),
+                "notes": manifest.get("notes", ""),
+                "installable": bool(asset.get("url")) and installed_app_path() is not None,
+                "page_url": manifest.get("page_url", ""),
+            }
+        return None
+
+    app_info = (catalog or {}).get("app") or {}
+    version = str(app_info.get("version", ""))
+    if compare_versions(APP_VERSION, version) == "update_available":
+        return {
+            "version": version, "url": "", "sha256": "", "notes": "",
+            "installable": False, "page_url": app_info.get("download_url", ""),
+        }
+    return None
+
+
+def _check_download_host(url):
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if urllib.parse.urlparse(url).scheme != "https" or host not in ALLOWED_DOWNLOAD_HOSTS:
+        raise UpdateError("Refusing to download the update from an unexpected "
+                          "address:\n%s" % url)
+
+
+def download_update(url, sha256, dest_dir, progress=None):
+    """Download the update zip and verify its hash. Returns the file path."""
+    _check_download_host(url)
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "BMDUpdateChecker/%s" % APP_VERSION})
+    zip_path = os.path.join(dest_dir, "update.zip")
+    digest = hashlib.sha256()
+    with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as resp:
+        _check_download_host(resp.geturl())  # a redirect must stay on an allowed host
+        total = int(resp.headers.get("Content-Length") or 0)
+        done = 0
+        with open(zip_path, "wb") as fh:
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                fh.write(chunk)
+                digest.update(chunk)
+                done += len(chunk)
+                if progress:
+                    progress(done, total)
+    if sha256 and digest.hexdigest().lower() != sha256.lower():
+        raise UpdateError("The downloaded update didn't match its checksum, so it "
+                          "was discarded. Try again, or download it from the site.")
+    return zip_path
+
+
+def _extract(zip_path, into):
+    """Unpack the update. ditto on macOS so bundle metadata survives."""
+    if IS_MAC:
+        subprocess.check_call(["/usr/bin/ditto", "-x", "-k", zip_path, into])
+    else:
+        import zipfile
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(into)
+
+
+def _staged_payload(stage_dir):
+    """Find the .app (macOS) or .exe (Windows) inside the extracted update."""
+    want = ".app" if IS_MAC else ".exe"
+    for root, dirs, files in os.walk(stage_dir):
+        if IS_MAC:
+            for d in dirs:
+                if d.endswith(want):
+                    return os.path.join(root, d)
+        for f in files:
+            if f.lower().endswith(want):
+                return os.path.join(root, f)
+        if IS_MAC and root.count(os.sep) - stage_dir.count(os.sep) > 3:
+            break
+    return None
+
+
+MAC_SWAP_SCRIPT = """#!/bin/sh
+# Wait for the running app to quit, swap the bundle, relaunch. The old bundle is
+# kept aside until the copy succeeds so a failure can't leave the Mac appless.
+while kill -0 %(pid)d 2>/dev/null; do sleep 0.3; done
+sleep 0.5
+BACKUP="%(target)s.old-$$"
+if ! /bin/mv "%(target)s" "$BACKUP"; then
+  /usr/bin/open "%(target)s"
+  exit 1
+fi
+if /usr/bin/ditto "%(new)s" "%(target)s"; then
+  /bin/rm -rf "$BACKUP"
+  /usr/bin/xattr -dr com.apple.quarantine "%(target)s" 2>/dev/null
+else
+  /bin/rm -rf "%(target)s"
+  /bin/mv "$BACKUP" "%(target)s"
+fi
+/usr/bin/open "%(target)s"
+/bin/rm -rf "%(stage)s"
+"""
+
+WIN_SWAP_SCRIPT = """@echo off
+:wait
+tasklist /FI "PID eq %(pid)d" 2>nul | find "%(pid)d" >nul
+if not errorlevel 1 (
+  timeout /t 1 /nobreak >nul
+  goto wait
+)
+move /Y "%(new)s" "%(target)s" >nul
+start "" "%(target)s"
+rmdir /S /Q "%(stage)s"
+"""
+
+
+def apply_update(zip_path, stage_dir):
+    """Swap in the downloaded build and relaunch. Does not return on success."""
+    target = installed_app_path()
+    if not target:
+        raise UpdateError("This copy is running from source, so there's no "
+                          "installed app to replace.")
+    extract_dir = os.path.join(stage_dir, "new")
+    os.makedirs(extract_dir, exist_ok=True)
+    _extract(zip_path, extract_dir)
+    new_payload = _staged_payload(extract_dir)
+    if not new_payload:
+        raise UpdateError("The downloaded update didn't contain an app where one "
+                          "was expected.")
+
+    parent = os.path.dirname(target.rstrip(os.sep))
+    if not os.access(parent, os.W_OK) or not os.access(target, os.W_OK):
+        raise UpdateError(
+            "No permission to replace:\n%s\n\nMove the app somewhere you can "
+            "write to, or install the update manually from the download page."
+            % target)
+
+    fields = {"pid": os.getpid(), "target": target, "new": new_payload,
+              "stage": stage_dir}
+    if IS_MAC:
+        script = os.path.join(stage_dir, "swap.sh")
+        with open(script, "w", encoding="utf-8") as fh:
+            fh.write(MAC_SWAP_SCRIPT % fields)
+        os.chmod(script, 0o755)
+        subprocess.Popen(["/bin/sh", script], start_new_session=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        script = os.path.join(stage_dir, "swap.cmd")
+        with open(script, "w", encoding="utf-8") as fh:
+            fh.write(WIN_SWAP_SCRIPT % fields)
+        subprocess.Popen(["cmd", "/c", script],
+                         creationflags=0x00000008 | 0x08000000)  # DETACHED | NO_WINDOW
+
+
+def install_update(info, progress=None):
+    """Download, verify, and hand off to the swap helper. Caller should quit."""
+    if not info.get("url"):
+        raise UpdateError("No downloadable build was published for this computer.")
+    stage_dir = tempfile.mkdtemp(prefix="bmd-update-")
+    try:
+        zip_path = download_update(info["url"], info.get("sha256", ""),
+                                   stage_dir, progress=progress)
+        apply_update(zip_path, stage_dir)
+    except Exception:
+        shutil.rmtree(stage_dir, ignore_errors=True)
+        raise
+
+
+# ----------------------------------------------------------------------------
 # GUI
 # ----------------------------------------------------------------------------
 def run_gui():
@@ -378,16 +671,92 @@ def run_gui():
     ttk.Label(header, textvariable=meta_var,
               foreground="#888888", font=("Helvetica", 10)).pack(side="right")
 
-    # --- app self-update notice (notify only, never auto-installs) ---
+    # --- app self-update notice (always asks first, never installs silently) ---
     app_notice = tk.Label(root, anchor="w", padx=16, pady=7, font=("Helvetica", 11),
                           bg="#eef2fb", fg="#1a3f8a", cursor="hand2")
-    app_dl = {"url": ""}
+    app_update = {"info": None}
+
+    def do_install(info):
+        """Download and swap in the new build, then quit so the helper can relaunch."""
+        prog = tk.Toplevel(root)
+        prog.title("Updating")
+        prog.resizable(False, False)
+        prog.transient(root)
+        tk.Label(prog, text="Downloading Update Checker v%s..." % info["version"],
+                 padx=20, pady=(16, 6)).pack()
+        bar = ttk.Progressbar(prog, length=320, mode="determinate", maximum=100)
+        bar.pack(padx=20, pady=(0, 16))
+        prog.update()
+
+        def on_progress(done, total):
+            bar.config(mode="determinate" if total else "indeterminate")
+            if total:
+                bar["value"] = done * 100.0 / total
+            prog.update()
+
+        try:
+            install_update(info, progress=on_progress)
+        except UpdateError as e:
+            prog.destroy()
+            messagebox.showerror("Update failed", str(e))
+            return
+        except Exception as e:
+            prog.destroy()
+            messagebox.showerror("Update failed",
+                                 "Could not install the update:\n%s" % e)
+            return
+        prog.destroy()
+        root.destroy()  # the helper waits for us to exit, then relaunches
 
     def open_app_update(_e=None):
-        if app_dl["url"]:
-            webbrowser.open(app_dl["url"])
+        info = app_update["info"]
+        if not info:
+            return
+        if not info.get("installable"):
+            if info.get("page_url"):
+                webbrowser.open(info["page_url"])
+            return
+        detail_text = "\n\n%s" % info["notes"] if info.get("notes") else ""
+        if messagebox.askyesno(
+                "Update Update Checker",
+                "Version %s is available. You're on %s.%s\n\n"
+                "Download and install it now? The app will restart when it's done."
+                % (info["version"], APP_VERSION, detail_text)):
+            do_install(info)
 
     app_notice.bind("<Button-1>", open_app_update)
+
+    def check_for_updates(announce_when_current=False):
+        """Look for a newer Update Checker. Runs off the UI thread so a slow or
+        unreachable network never freezes the window."""
+        import threading
+
+        def show(info):
+            app_update["info"] = info
+            if not info:
+                app_notice.pack_forget()
+                if announce_when_current:
+                    messagebox.showinfo(
+                        "Blackmagic Update Checker",
+                        "You're on the latest version (v%s)." % APP_VERSION)
+                return
+            if info.get("installable"):
+                text = ("  ↑  Update Checker v%s is available. Click here to "
+                        "install it." % info["version"])
+            else:
+                text = ("  ↑  Update Checker v%s is available. Click here to open "
+                        "the download page." % info["version"])
+            app_notice.config(text=text)
+            app_notice.pack(fill="x", padx=16, pady=(4, 0), before=banner)
+
+        def work():
+            try:
+                info = available_update(state.get("catalog"))
+            except Exception:
+                info = None
+            root.after(0, lambda: show(info))
+
+        threading.Thread(target=work, daemon=True).start()
 
     # --- banner ---
     banner = tk.Label(root, anchor="w", padx=16, pady=8, font=("Helvetica", 12))
@@ -477,17 +846,8 @@ def run_gui():
             banner.config(text="  ✓  Everything installed is up to date.",
                           bg="#eaf3ea", fg="#1a7f37")
 
-        # App self-update notice: show only if the catalog reports a newer app.
-        app_info = state["catalog"].get("app") or {}
-        newer = compare_versions(APP_VERSION, app_info.get("version", ""))
-        if newer == "update_available":
-            app_dl["url"] = app_info.get("download_url", "")
-            app_notice.config(
-                text="  ↑  A newer Update Checker (v%s) is available. Click here to "
-                     "download it when you're ready." % app_info.get("version", ""))
-            app_notice.pack(fill="x", padx=16, pady=(4, 0), before=banner)
-        else:
-            app_notice.pack_forget()
+        # App self-update notice. Checked in the background; see check_for_updates.
+        check_for_updates()
 
     def open_selected():
         sel = tree.selection()
@@ -523,6 +883,9 @@ def run_gui():
     filemenu.add_command(label="Quit", command=root.destroy)
     menubar.add_cascade(label="File", menu=filemenu)
     helpmenu = tk.Menu(menubar, tearoff=0)
+    helpmenu.add_command(label="Check for Updates...",
+                         command=lambda: check_for_updates(announce_when_current=True))
+    helpmenu.add_separator()
     helpmenu.add_command(label="About", command=show_about)
     menubar.add_cascade(label="Help", menu=helpmenu)
     root.config(menu=menubar)
@@ -561,14 +924,45 @@ def run_cli():
             print("Update %s:  %s" % (r["name"], r["url"]))
             if r.get("notes"):
                 print("   What's new: %s" % r["notes"])
-    app_info = catalog.get("app") or {}
-    if compare_versions(APP_VERSION, app_info.get("version", "")) == "update_available":
-        print("\nA newer Update Checker (v%s) is available: %s"
-              % (app_info.get("version", ""), app_info.get("download_url", "")))
+    info = available_update(catalog)
+    if info:
+        print("\nA newer Update Checker (v%s) is available." % info["version"])
+        if info.get("installable"):
+            print("   Install it with:  %s --self-update" % os.path.basename(sys.argv[0]))
+        elif info.get("page_url"):
+            print("   Download: %s" % info["page_url"])
+
+
+def run_self_update():
+    """Non-interactive update, for the --self-update flag."""
+    info = available_update()
+    if not info:
+        print("Already on the latest version (v%s)." % APP_VERSION)
+        return 0
+    if not info.get("installable"):
+        print("Update v%s is available but can't be installed automatically here.\n"
+              "Download it from: %s" % (info["version"], info.get("page_url") or RELEASE_BASE))
+        return 1
+    print("Updating %s -> %s ..." % (APP_VERSION, info["version"]))
+
+    def progress(done, total):
+        if total:
+            sys.stdout.write("\r  %3d%%" % (done * 100 // total))
+            sys.stdout.flush()
+
+    try:
+        install_update(info, progress=progress)
+    except UpdateError as e:
+        print("\nUpdate failed: %s" % e)
+        return 1
+    print("\nInstalling. The app will relaunch on its own.")
+    return 0
 
 
 if __name__ == "__main__":
-    if "--cli" in sys.argv:
+    if "--self-update" in sys.argv:
+        sys.exit(run_self_update())
+    elif "--cli" in sys.argv:
         run_cli()
     else:
         try:

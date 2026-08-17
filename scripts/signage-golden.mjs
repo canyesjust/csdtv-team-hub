@@ -9,6 +9,19 @@ import path from 'node:path'
 import { renderScreenDocument } from '../lib/signage/build-screen-html.ts'
 import { CASES } from './signage-fixtures.mjs'
 
+// Freeze the clock so the render is deterministic. The zoned2 layout bakes
+// today's date into the markup (build-screen-html.ts -> dateStr), so without
+// this the snapshot goes stale the day after it's taken and `check` fails
+// forever on a date string nobody changed. Same trick as _react-render-entry.jsx.
+// This instant is the one the committed goldens were taken at — Thursday, July 30.
+const FIXED = new Date('2026-07-30T15:30:00-06:00').getTime()
+const RealDate = Date
+class FrozenDate extends RealDate {
+  constructor(...args) { super(...(args.length ? args : [FIXED])) }
+  static now() { return FIXED }
+}
+globalThis.Date = FrozenDate
+
 const OUT = path.join(process.cwd(), '.signage-golden')
 
 const mode = process.argv[2] || 'check'

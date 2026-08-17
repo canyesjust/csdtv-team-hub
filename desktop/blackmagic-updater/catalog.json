@@ -184,10 +184,10 @@
     },
     {
       "id": "web_presenter_setup",
-      "name": "Web Presenter Setup",
+      "name": "Web Presenter / Streaming Setup",
       "family": "Streaming and Encoding",
-      "mac_app": ["Blackmagic Web Presenter Setup.app"],
-      "win_match": ["Web Presenter"],
+      "mac_app": ["Blackmagic Web Presenter Setup.app", "Blackmagic Streaming Setup.app"],
+      "win_match": ["Web Presenter", "Streaming"],
       "latest": { "windows": "3.5", "macos": "3.5" },
       "verified": false,
       "url": "https://www.blackmagicdesign.com/support/family/streaming-and-encoding"

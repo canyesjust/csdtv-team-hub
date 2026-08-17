@@ -159,9 +159,48 @@ jobs:
     needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
         with:
           path: artifacts
+      # version.json is what the app's built-in updater reads. It carries the
+      # version, the right zip per platform/arch, and a SHA-256 for each so a
+      # truncated or corrupt download is rejected instead of installed.
+      # APP_VERSION in blackmagic_updater.py is the single source of truth —
+      # bump it there to ship an update, nothing else to remember.
+      - name: Build version.json
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/^APP_VERSION *= *"\(.*\)"/\1/p' "$SRC_DIR/blackmagic_updater.py" | head -1)"
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not read APP_VERSION from $SRC_DIR/blackmagic_updater.py"
+            exit 1
+          fi
+          echo "Publishing version $VERSION"
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download"
+          sha() { sha256sum "$1" | cut -d' ' -f1; }
+          MAC_ARM=artifacts/macos-AppleSilicon/Blackmagic-Update-Checker-macOS-AppleSilicon.zip
+          MAC_X86=artifacts/macos-Intel/Blackmagic-Update-Checker-macOS-Intel.zip
+          WIN=artifacts/windows/Blackmagic-Update-Checker-Windows.zip
+          for f in "$MAC_ARM" "$MAC_X86" "$WIN"; do
+            [ -f "$f" ] || { echo "::error::missing build artifact $f"; exit 1; }
+          done
+          cat > version.json <<JSON
+          {
+            "version": "$VERSION",
+            "published": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${GITHUB_SHA}",
+            "page_url": "https://www.csdtvstaff.org/blackmagic-updater",
+            "notes": "",
+            "assets": {
+              "macos-arm64":  { "url": "$BASE/$(basename "$MAC_ARM")", "sha256": "$(sha "$MAC_ARM")" },
+              "macos-x86_64": { "url": "$BASE/$(basename "$MAC_X86")", "sha256": "$(sha "$MAC_X86")" },
+              "windows":      { "url": "$BASE/$(basename "$WIN")",     "sha256": "$(sha "$WIN")" }
+            }
+          }
+          JSON
+          python3 -m json.tool version.json > /dev/null
+          cat version.json
       - name: Publish / update the latest release
         uses: softprops/action-gh-release@v3
         with:
@@ -179,3 +218,4 @@ jobs:
             artifacts/macos-AppleSilicon/Blackmagic-Update-Checker-macOS-AppleSilicon.zip
             artifacts/macos-Intel/Blackmagic-Update-Checker-macOS-Intel.zip
             artifacts/windows/Blackmagic-Update-Checker-Windows.zip
+            version.json
