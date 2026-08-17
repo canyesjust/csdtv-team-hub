@@ -108,6 +108,117 @@ def latest_for_os(entry):
 # ----------------------------------------------------------------------------
 # Detection: macOS
 # ----------------------------------------------------------------------------
+_RECEIPTS = {}
+
+
+def mac_receipt_versions():
+    """{package-id: version} from macOS installer receipts, Blackmagic only.
+
+    Several Blackmagic setup utilities ship an Info.plist whose version keys are
+    present but blank, so the bundle can't tell us anything. Their .pkg installer
+    still leaves a receipt that carries a real version. This is the macOS
+    counterpart to reading the installed-programs registry on Windows.
+
+    Cached for the life of the process — each lookup is a subprocess.
+    """
+    if _RECEIPTS:
+        return _RECEIPTS
+    _RECEIPTS["_loaded"] = ""
+    if not IS_MAC:
+        return _RECEIPTS
+    try:
+        out = subprocess.run(["/usr/sbin/pkgutil", "--pkgs"], timeout=20,
+                             capture_output=True, text=True).stdout
+    except Exception:
+        return _RECEIPTS
+    for pkg in out.split():
+        low = pkg.lower()
+        if not any(h in low for h in ("blackmagic", "davinci", "atem", "decklink",
+                                      "desktopvideo", "ultrastudio", "fusion")):
+            continue
+        try:
+            info = subprocess.run(["/usr/sbin/pkgutil", "--pkg-info", pkg],
+                                  timeout=10, capture_output=True, text=True).stdout
+        except Exception:
+            continue
+        for line in info.splitlines():
+            if line.startswith("version:"):
+                ver = line.split(":", 1)[1].strip()
+                if ver:
+                    _RECEIPTS[pkg] = ver
+                break
+    return _RECEIPTS
+
+
+def _receipt_match_keys(entry):
+    """Fragments to look for in a package id for this product.
+
+    Uses the catalog's optional 'mac_pkg' list when present. Otherwise falls back
+    to the .app names with spaces and the .app suffix stripped, which is how
+    Blackmagic tends to build its package ids (Blackmagic Camera Setup.app ->
+    com.blackmagic-design.BlackmagicCameraSetup).
+    """
+    keys = [k.lower() for k in entry.get("mac_pkg", []) if k]
+    if keys:
+        return keys
+    for app in entry.get("mac_app", []):
+        base = app[:-4] if app.lower().endswith(".app") else app
+        flat = base.replace(" ", "").lower()
+        keys.append(flat)
+        # Some ids drop the vendor prefix (com.blackmagic-design.MediaExpress
+        # for "Blackmagic Media Express.app"). Only use the shortened form when
+        # it's still long enough to be distinctive, so "Blackmagic RAW" doesn't
+        # start matching every id containing "raw".
+        if flat.startswith("blackmagic"):
+            short = flat[len("blackmagic"):]
+            if len(short) >= 8:
+                keys.append(short)
+    return keys
+
+
+def detect_mac_receipt(entry):
+    """Version for this product from installer receipts, or None.
+
+    Blackmagic splits one product across several packages and frequently leaves
+    the main one's version blank while the sibling ones carry it. On a real
+    machine:
+
+        com.blackmagic-design.WebPresenter            version: (blank)
+        com.blackmagic-design.WebPresenterAssets      version: 4.2.3
+        com.blackmagic-design.WebPresenterUninstaller version: 4.2.3
+
+    So we gather every package whose id matches, drop the blanks, and prefer the
+    plain product package, then Assets, and only fall back to Uninstaller last.
+    """
+    keys = [k.replace("-", "").replace("_", "").lower()
+            for k in _receipt_match_keys(entry)]
+    if not keys:
+        return None
+
+    def rank(pkg_id):
+        low = pkg_id.lower()
+        if low.endswith("uninstaller"):
+            return 2
+        if low.endswith("assets"):
+            return 1
+        return 0
+
+    hits = []
+    for pkg, ver in mac_receipt_versions().items():
+        if not ver:
+            continue
+        flat = pkg.replace("-", "").replace("_", "").lower()
+        tail = flat.rsplit(".", 1)[-1]
+        for k in keys:
+            if k and k in tail:
+                hits.append((rank(pkg), pkg, ver))
+                break
+    if not hits:
+        return None
+    hits.sort(key=lambda h: h[0])
+    return hits[0][2]
+
+
 def detect_mac(entry):
     """Version string if the app is installed, INSTALLED_NO_VERSION if it's on
     disk but won't tell us its version, None if it isn't there at all.
@@ -139,6 +250,13 @@ def detect_mac(entry):
                             return str(ver)
                     except Exception:
                         continue
+    # Either the bundle is here but won't name its version, or we never found a
+    # bundle at all. Installer receipts answer both cases: Blackmagic products
+    # install by .pkg, so a receipt is good evidence the product is on the disk
+    # even when the app lives somewhere we don't look.
+    receipt = detect_mac_receipt(entry)
+    if receipt:
+        return receipt
     return INSTALLED_NO_VERSION if found_without_version else None
 
 
