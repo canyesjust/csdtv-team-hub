@@ -2,14 +2,22 @@
  * Minimal RFC 5545 ICS parser for the calendar suite's sync job.
  * Extracts every VEVENT field this app has a use for today (UID, SUMMARY,
  * DTSTART/DTEND, LOCATION, DESCRIPTION, STATUS, ORGANIZER, TRANSP, SEQUENCE,
- * URL, RRULE, CATEGORIES, CLASS, CREATED/LAST-MODIFIED, and whether it's an
- * all-day entry) plus the complete raw VEVENT block verbatim as a fallback,
- * so nothing is silently dropped even for properties not listed above.
- * Does not expand recurrence rules — most published school-calendar feeds
- * already emit one VEVENT per occurrence sharing a UID, which this handles
- * via recurrenceGroupId. If a feed instead relies on raw RRULE expansion,
- * only the first/master occurrence will come through; revisit if that turns
- * out to matter for real feeds (the raw RRULE text is captured either way).
+ * URL, RRULE, RECURRENCE-ID, CATEGORIES, CLASS, CREATED/LAST-MODIFIED, and
+ * whether it's an all-day entry) plus the complete raw VEVENT block verbatim
+ * as a fallback, so nothing is silently dropped even for properties not
+ * listed above.
+ *
+ * Does not expand RRULE recurrence rules — if a feed relies on raw RRULE
+ * expansion (a single VEVENT saying "every Tuesday until June" instead of
+ * one VEVENT per occurrence), only the first/master occurrence comes
+ * through; revisit if that turns out to matter for real feeds (the raw
+ * RRULE text is captured either way). Most published school-calendar feeds
+ * instead emit one full VEVENT per occurrence, all sharing the same UID and
+ * usually without RRULE or RECURRENCE-ID on any of them at all -- this
+ * parser returns every one of those VEVENTs as its own ParsedIcsEvent
+ * (nothing here collapses same-UID events); it's calendar-sync.ts's job to
+ * decide how same-UID occurrences map to distinct rows, using RECURRENCE-ID
+ * when present and DTSTART otherwise to tell them apart.
  */
 
 export type ParsedIcsEvent = {
@@ -42,6 +50,15 @@ export type ParsedIcsEvent = {
   sourceClass: string | null
   createdAt: Date | null
   lastModifiedAt: Date | null
+  /** RECURRENCE-ID, when present: identifies which single occurrence of a
+   * recurring series this VEVENT overrides (a moved time, a cancellation,
+   * etc.), distinguishing it from a genuinely separate event that happens to
+   * share the same UID. Also doubles, along with DTSTART, as the signal
+   * calendar-sync.ts uses to tell apart multiple VEVENTs that share one UID
+   * without any RECURRENCE-ID at all -- the more common way school calendar
+   * tools publish a recurring series (one VEVENT per occurrence, no RRULE,
+   * no RECURRENCE-ID, just repeated UIDs with different DTSTARTs). */
+  recurrenceId: Date | null
   /** The complete raw VEVENT block exactly as received, BEGIN:VEVENT through
    * END:VEVENT. Archival -- covers every property this parser doesn't
    * explicitly extract (ATTACH, CONTACT, GEO, X-* extensions, etc.) so no
@@ -50,12 +67,33 @@ export type ParsedIcsEvent = {
   rawText: string
 }
 
+/** A single left-to-right scan, not chained regex replaces. Chained
+ * replaces are order-dependent: whichever pattern runs first "claims"
+ * characters the later patterns might have needed, so a literal backslash
+ * immediately followed by "n" (encoded on the wire as \\n -- an escaped
+ * backslash, then a plain, unrelated "n") got corrupted regardless of which
+ * order the four replaces ran in. Scanning once, left to right, and only
+ * ever consuming a backslash together with the one character after it
+ * handles every case correctly, including runs of escaped backslashes. */
 function unescapeIcalText(value: string): string {
-  return value
-    .replace(/\\n/gi, '\n')
-    .replace(/\\,/g, ',')
-    .replace(/\\;/g, ';')
-    .replace(/\\\\/g, '\\')
+  let out = ''
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]
+    if (ch === '\\' && i + 1 < value.length) {
+      const next = value[i + 1]
+      if (next === 'n' || next === 'N') { out += '\n'; i++; continue }
+      if (next === ',') { out += ','; i++; continue }
+      if (next === ';') { out += ';'; i++; continue }
+      if (next === '\\') { out += '\\'; i++; continue }
+      // Not a recognized RFC 5545 escape -- pass the backslash through
+      // rather than silently eating it for a source that isn't perfectly
+      // spec-compliant.
+      out += ch
+      continue
+    }
+    out += ch
+  }
+  return out
 }
 
 /** Unfold RFC 5545 continuation lines (a line starting with a space or tab continues the previous line). */
@@ -109,6 +147,43 @@ function parseLine(line: string): PropLine | null {
 /** Default timezone for floating (no TZID, no Z) date-times in district feeds. */
 const DEFAULT_TZ = 'America/Denver'
 
+/** Windows/Outlook exports TZID using Windows time-zone display names (e.g.
+ * "Eastern Standard Time") rather than IANA zone IDs ("America/New_York"),
+ * and some sources send a bare "UTC" or "GMT" -- valid IANA-adjacent names
+ * that just don't contain a "/". Intl.DateTimeFormat only resolves real IANA
+ * names, so an unmapped Windows name throws and correctly falls through to
+ * DEFAULT_TZ below -- but a bare "UTC"/"GMT" or an unmapped Windows name
+ * both used to get diverted to DEFAULT_TZ *before* ever being tried, via a
+ * `tzid.includes('/')` check that rejected anything without a slash. That
+ * silently shifted every timed event on the feed by the gap between the
+ * source's real zone and Mountain time, with no error anywhere. Not
+ * exhaustive -- covers the common continental US names Outlook emits; add
+ * more here if a specific feed needs one that's missing. */
+const WINDOWS_TZ_TO_IANA: Record<string, string> = {
+  UTC: 'Etc/UTC',
+  GMT: 'Etc/UTC',
+  'GMT Standard Time': 'Europe/London',
+  'Eastern Standard Time': 'America/New_York',
+  'Central Standard Time': 'America/Chicago',
+  'Mountain Standard Time': 'America/Denver',
+  'US Mountain Standard Time': 'America/Phoenix',
+  'Pacific Standard Time': 'America/Los_Angeles',
+  'Alaskan Standard Time': 'America/Anchorage',
+  'Hawaiian Standard Time': 'Pacific/Honolulu',
+}
+
+/** Resolves a TZID param to a zone name worth trying with Intl. Previously
+ * this only trusted a TZID if it already contained a "/", which rejected
+ * "UTC", "GMT", and every Windows-style name before they ever got a chance
+ * to resolve. Now every TZID is at least attempted (mapped first if it's a
+ * known Windows name) -- an IANA name Intl doesn't recognize still safely
+ * falls back to DEFAULT_TZ via the try/catch at the call site, exactly as
+ * before, it just no longer happens for names that were valid all along. */
+function resolveTzid(tzid: string | undefined): string {
+  if (!tzid) return DEFAULT_TZ
+  return WINDOWS_TZ_TO_IANA[tzid] || tzid
+}
+
 function isDateOnlyValue(prop: PropLine): boolean {
   const v = prop.value.trim()
   return prop.params.VALUE === 'DATE' || (v.length === 8 && !v.includes('T'))
@@ -135,8 +210,7 @@ function parseDateTimeValue(prop: PropLine): Date | null {
   if (z === 'Z') {
     return new Date(Date.UTC(Number(yy), Number(mo) - 1, Number(dd), Number(hh), Number(mi), Number(ss)))
   }
-  const tzid = prop.params.TZID
-  const tz = tzid && tzid.includes('/') ? tzid : DEFAULT_TZ
+  const tz = resolveTzid(prop.params.TZID)
   try {
     return zonedTimeToUtc(Number(yy), Number(mo), Number(dd), Number(hh), Number(mi), Number(ss), tz)
   } catch {
@@ -179,6 +253,7 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
           const classProp = get('CLASS')
           const createdProp = get('CREATED')
           const modifiedProp = get('LAST-MODIFIED')
+          const recurrenceIdProp = get('RECURRENCE-ID')
           events.push({
             uid: uidProp ? uidProp.value.trim() : `no-uid-${summaryProp!.value}-${dtstartProp!.value}`,
             title: summaryProp ? unescapeIcalText(summaryProp.value) : 'Untitled event',
@@ -199,6 +274,7 @@ export function parseIcsEvents(icsText: string): ParsedIcsEvent[] {
             sourceClass: classProp ? classProp.value.trim() || null : null,
             createdAt: createdProp ? parseDateTimeValue(createdProp) : null,
             lastModifiedAt: modifiedProp ? parseDateTimeValue(modifiedProp) : null,
+            recurrenceId: recurrenceIdProp ? parseDateTimeValue(recurrenceIdProp) : null,
             // Reconstructed from unfolded lines, not the original folded
             // bytes -- same content, one property per line instead of
             // possibly wrapped across 75-char continuation lines.

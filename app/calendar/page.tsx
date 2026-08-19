@@ -45,19 +45,27 @@ type SchoolGroup = { schoolId: string; schoolName: string; schoolColor: string |
 /** Groups a day's events by school so one school's games/events read together
  * instead of interleaving with every other school by pure time. Groups are
  * ordered by their earliest event so the day still reads roughly
- * chronologically at a glance. */
+ * chronologically at a glance. Builds fresh sorted arrays rather than
+ * sorting `events` in place -- harmless today since each group's array is
+ * newly built by this function, but sorting a copy means that stays true
+ * even if a future caller starts passing in an array it reuses elsewhere. */
 function groupBySchool(dayEvents: CalEvent[]): SchoolGroup[] {
   const order: string[] = []
-  const map = new Map<string, SchoolGroup>()
+  const map = new Map<string, CalEvent[]>()
   for (const e of dayEvents) {
-    if (!map.has(e.schoolId)) {
-      map.set(e.schoolId, { schoolId: e.schoolId, schoolName: e.schoolName, schoolColor: e.schoolColor, events: [] })
+    const existing = map.get(e.schoolId)
+    if (existing) {
+      existing.push(e)
+    } else {
+      map.set(e.schoolId, [e])
       order.push(e.schoolId)
     }
-    map.get(e.schoolId)!.events.push(e)
   }
-  const groups = order.map(id => map.get(id)!)
-  for (const g of groups) g.events.sort((a, b) => a.start.getTime() - b.start.getTime())
+  const groups: SchoolGroup[] = order.map(id => {
+    const events = [...map.get(id)!].sort((a, b) => a.start.getTime() - b.start.getTime())
+    const first = events[0]
+    return { schoolId: first.schoolId, schoolName: first.schoolName, schoolColor: first.schoolColor, events }
+  })
   groups.sort((a, b) => a.events[0].start.getTime() - b.events[0].start.getTime())
   return groups
 }
@@ -310,6 +318,50 @@ function AgendaRow({ e, now, onClick }: { e: CalEvent; now: Date; onClick: () =>
   )
 }
 
+type SupabaseClient = ReturnType<typeof createClient>
+
+type RawEventRow = {
+  id: string
+  school_id: string
+  title: string
+  start_time: string
+  end_time: string | null
+  location: string | null
+  description: string | null
+  category: string | null
+  is_streaming: boolean | null
+  stream_url: string | null
+}
+
+// Supabase caps a single request at 1000 rows by default. The public
+// calendar was under that cap when this was written (published events
+// numbered in the low thousands total, visible ones fewer still), so a
+// plain .select() here happened to return everything -- but that was luck,
+// not a guarantee, and the same silent-truncation bug this fixed on the
+// staff review/feeds pages was waiting here too as the visible count grew.
+// Page through with .range() until a page comes back short, same pattern as
+// fetchAllEvents in app/dashboard/calendar/review/page.tsx. id is a stable
+// tiebreaker for rows sharing a start_time (a whole sync batch often does).
+async function fetchAllVisibleEvents(supabase: SupabaseClient): Promise<RawEventRow[]> {
+  const PAGE_SIZE = 1000
+  const rows: RawEventRow[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from('calendar_school_events')
+      .select('id, school_id, title, start_time, end_time, location, description, category, is_streaming, stream_url')
+      .eq('status', 'visible')
+      .order('start_time', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    rows.push(...((data || []) as RawEventRow[]))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return rows
+}
+
 const MONTH_CELL_HEIGHT = 138
 const MAX_SCHOOL_GROUPS_PER_CELL = 5
 
@@ -408,38 +460,44 @@ function PublicCalendarInner() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [{ data: schoolRows }, { data: eventRows }] = await Promise.all([
-      supabase.from('schools')
-        .select('id, name, primary_color')
-        .eq('active', true)
-        .or('type.eq.school,name.eq.Board of Education,name.eq.Canyons School District')
-        .order('name'),
-      supabase.from('calendar_school_events')
-        .select('id, school_id, title, start_time, end_time, location, description, category, is_streaming, stream_url')
-        .eq('status', 'visible')
-        .order('start_time', { ascending: true }),
-    ])
+    try {
+      const [{ data: schoolRows }, eventRows] = await Promise.all([
+        supabase.from('schools')
+          .select('id, name, primary_color')
+          .eq('active', true)
+          .or('type.eq.school,name.eq.Board of Education,name.eq.Canyons School District')
+          .order('name'),
+        fetchAllVisibleEvents(supabase),
+      ])
 
-    const schoolList: SchoolOption[] = schoolRows || []
-    setSchools(schoolList)
-    const schoolMap = new Map(schoolList.map(s => [s.id, s]))
+      const schoolList: SchoolOption[] = schoolRows || []
+      setSchools(schoolList)
+      const schoolMap = new Map(schoolList.map(s => [s.id, s]))
 
-    const mapped: CalEvent[] = (eventRows || []).map((e: Record<string, unknown>) => ({
-      id: e.id as string,
-      schoolId: e.school_id as string,
-      schoolName: schoolMap.get(e.school_id as string)?.name || 'Canyons School District',
-      schoolColor: visibleAccentColor(schoolMap.get(e.school_id as string)?.primary_color || null),
-      title: e.title as string,
-      start: new Date(e.start_time as string),
-      end: e.end_time ? new Date(e.end_time as string) : null,
-      location: (e.location as string) || null,
-      description: (e.description as string) || null,
-      category: (e.category as CalCategory) || 'academics',
-      isStreaming: !!e.is_streaming,
-      streamUrl: (e.stream_url as string) || null,
-    }))
-    setEvents(mapped)
-    setLoading(false)
+      const mapped: CalEvent[] = eventRows.map(e => ({
+        id: e.id,
+        schoolId: e.school_id,
+        schoolName: schoolMap.get(e.school_id)?.name || 'Canyons School District',
+        schoolColor: visibleAccentColor(schoolMap.get(e.school_id)?.primary_color || null),
+        title: e.title,
+        start: new Date(e.start_time),
+        end: e.end_time ? new Date(e.end_time) : null,
+        location: e.location || null,
+        description: e.description || null,
+        category: (e.category as CalCategory) || 'academics',
+        isStreaming: !!e.is_streaming,
+        streamUrl: e.stream_url || null,
+      }))
+      setEvents(mapped)
+    } catch (err) {
+      // A page failing partway through (network hiccup, a transient 500)
+      // shouldn't leave the page stuck on "Loading..." forever with no
+      // explanation -- fall back to whatever's already in state (empty on
+      // first load) and let the page render normally.
+      console.error('Failed to load calendar data', err)
+    } finally {
+      setLoading(false)
+    }
   }, [supabase])
 
   useEffect(() => {
@@ -492,6 +550,26 @@ function PublicCalendarInner() {
     )
   }, [events, search, schoolFilter, categoryFilter])
 
+  // Every "which events land on this specific day" lookup (week columns,
+  // every month cell, the day modal) used to re-filter the *entire* filtered
+  // list from scratch -- fine at today's few-hundred-events scale, but
+  // O(days x events) and only getting worse as more schools' feeds get
+  // synced. One grouping pass here, memoized on `filtered`, turns every one
+  // of those into an O(1) map lookup instead. Each day's array is
+  // pre-sorted by start time so callers don't need to sort again.
+  const eventsByDayKey = useMemo(() => {
+    const map = new Map<string, CalEvent[]>()
+    for (const e of filtered) {
+      const key = `${e.start.getFullYear()}-${e.start.getMonth()}-${e.start.getDate()}`
+      const existing = map.get(key)
+      if (existing) existing.push(e)
+      else map.set(key, [e])
+    }
+    for (const dayEvents of map.values()) dayEvents.sort((a, b) => a.start.getTime() - b.start.getTime())
+    return map
+  }, [filtered])
+  const dayKey = (y: number, m: number, d: number) => `${y}-${m}-${d}`
+
   const eventModal = eventModalId ? events.find(e => e.id === eventModalId) || null : null
 
   const [weekStart, setWeekStart] = useState(() => startOfWeek(now))
@@ -501,19 +579,25 @@ function PublicCalendarInner() {
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i)
-      const dayEvents = filtered.filter(e => sameDay(e.start, d.getFullYear(), d.getMonth(), d.getDate()))
+      const dayEvents = eventsByDayKey.get(dayKey(d.getFullYear(), d.getMonth(), d.getDate())) || []
       return { d, dayEvents }
     })
-  }, [weekStart, filtered])
+  }, [weekStart, eventsByDayKey])
 
   const monthLabel = `${MONTH_NAMES[viewMonth0]} ${viewYear}`
   const daysInMonth = new Date(viewYear, viewMonth0 + 1, 0).getDate()
   const firstDayIndex = new Date(viewYear, viewMonth0, 1).getDay()
-  const monthEventsThisMonth = filtered.filter(e => e.start.getFullYear() === viewYear && e.start.getMonth() === viewMonth0)
-  const distinctSchoolsThisMonth = new Set(monthEventsThisMonth.map(e => e.schoolId)).size
+  const monthEventsThisMonth = useMemo(
+    () => filtered.filter(e => e.start.getFullYear() === viewYear && e.start.getMonth() === viewMonth0),
+    [filtered, viewYear, viewMonth0]
+  )
+  const distinctSchoolsThisMonth = useMemo(
+    () => new Set(monthEventsThisMonth.map(e => e.schoolId)).size,
+    [monthEventsThisMonth]
+  )
 
   const dayModalEvents = dayModal
-    ? filtered.filter(e => sameDay(e.start, dayModal.y, dayModal.m, dayModal.d))
+    ? eventsByDayKey.get(dayKey(dayModal.y, dayModal.m, dayModal.d)) || []
     : []
 
   const eventState = eventModal ? streamState(eventModal, now) : null
@@ -681,7 +765,7 @@ function PublicCalendarInner() {
               {Array.from({ length: firstDayIndex }, (_, i) => <MonthDayCell key={`e${i}`} day={0} monthEvents={[]} isToday={false} isEmpty onDayClick={() => {}} />)}
               {Array.from({ length: daysInMonth }, (_, i) => {
                 const day = i + 1
-                const dayEvents = filtered.filter(e => sameDay(e.start, viewYear, viewMonth0, day)).sort((a, b) => a.start.getTime() - b.start.getTime())
+                const dayEvents = eventsByDayKey.get(dayKey(viewYear, viewMonth0, day)) || []
                 const isToday = sameDay(now, viewYear, viewMonth0, day)
                 return (
                   <MonthDayCell

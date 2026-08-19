@@ -70,6 +70,24 @@ function staleReason(feed: Feed): string | null {
 
 type FeedCounts = Record<string, number>
 
+/** A single event the mass-removal guard is holding back -- see
+ * lib/server/calendar-sync.ts's MassRemovalCandidate. Mirrored here rather
+ * than imported since that module pulls in server-only Supabase code that
+ * can't land in this client bundle. */
+type MassRemovalCandidate = { id: string; title: string | null; start: string | null; location: string | null }
+
+type FeedSyncResult = {
+  feedId: string
+  schoolId: string
+  ok: boolean
+  added: number
+  updated: number
+  removed: number
+  error?: string
+  massRemovalCandidates?: MassRemovalCandidate[]
+  massRemovalTotal?: number
+}
+
 type SyncSummary = {
   ok: boolean
   feedsProcessed: number
@@ -77,6 +95,7 @@ type SyncSummary = {
   updated: number
   removed: number
   failures: { feedId: string; schoolId: string; error?: string }[]
+  results?: FeedSyncResult[]
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -100,6 +119,11 @@ function relativeTime(iso: string | null): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.round(hours / 24)
   return `${days}d ago`
+}
+
+function fmtCandidateDate(iso: string | null): string {
+  if (!iso) return 'No date'
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
 }
 
 function activeCount(counts: FeedCounts | undefined): number {
@@ -147,7 +171,7 @@ async function fetchAllEventStatusRows(supabase: SupabaseClient): Promise<{ feed
   return rows
 }
 
-async function callSyncNow(body?: { feedId: string }): Promise<SyncSummary> {
+async function callSyncNow(body?: { feedId: string; allowMassRemoval?: boolean }): Promise<SyncSummary> {
   const res = await fetch('/api/calendar/sync-now', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -193,6 +217,11 @@ export default function CalendarFeedsPage() {
   const [urlDrafts, setUrlDrafts] = useState<Record<string, string>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  // Populated straight from a sync response, never persisted -- a "Retry
+  // sync" always re-fetches the source fresh, so the candidate list here is
+  // always what the guard would hold back right now, not a stale snapshot
+  // from whenever the last cron run happened to catch it.
+  const [massRemovalByFeed, setMassRemovalByFeed] = useState<Record<string, { candidates: MassRemovalCandidate[]; total: number }>>({})
   const [addingSchoolId, setAddingSchoolId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -389,10 +418,31 @@ export default function CalendarFeedsPage() {
     }
   }
 
+  // Rebuilds massRemovalByFeed from a sync response's per-feed results --
+  // fresh every time, so a feed that's no longer suspicious (fixed itself,
+  // or was just confirmed and applied) drops out automatically instead of
+  // leaving a stale banner up.
+  function applyMassRemovalResults(results: FeedSyncResult[] | undefined, onlyFeedId?: string) {
+    if (!results) return
+    setMassRemovalByFeed(prev => {
+      const next = { ...prev }
+      for (const r of results) {
+        if (onlyFeedId && r.feedId !== onlyFeedId) continue
+        if (r.massRemovalCandidates && r.massRemovalCandidates.length > 0) {
+          next[r.feedId] = { candidates: r.massRemovalCandidates, total: r.massRemovalTotal || r.massRemovalCandidates.length }
+        } else {
+          delete next[r.feedId]
+        }
+      }
+      return next
+    })
+  }
+
   async function syncAll() {
     try {
       const summary = await callSyncNow()
       summaryToast(summary)
+      applyMassRemovalResults(summary.results)
       await loadData()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Sync failed', 'error')
@@ -404,9 +454,32 @@ export default function CalendarFeedsPage() {
     try {
       const summary = await callSyncNow({ feedId })
       summaryToast(summary)
+      applyMassRemovalResults(summary.results, feedId)
       await loadData()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Sync failed', 'error')
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
+  async function confirmMassRemoval(feedId: string, label: string, schoolName: string) {
+    const info = massRemovalByFeed[feedId]
+    if (!info) return
+    const ok = await confirmDialog({
+      message: `Mark ${info.total} event${info.total === 1 ? '' : 's'} removed for "${schoolName} · ${label}"? This applies what the source calendar reported -- review the list above first if you haven't. Nothing is deleted outright; removed events can still be restored from the review queue.`,
+      tone: 'danger',
+      confirmLabel: `Remove ${info.total} event${info.total === 1 ? '' : 's'}`,
+    })
+    if (!ok) return
+    setSyncingId(feedId)
+    try {
+      const summary = await callSyncNow({ feedId, allowMassRemoval: true })
+      summaryToast(summary)
+      applyMassRemovalResults(summary.results, feedId)
+      await loadData()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Removal failed', 'error')
     } finally {
       setSyncingId(null)
     }
@@ -493,24 +566,58 @@ export default function CalendarFeedsPage() {
           <p style={{ fontSize: '13.5px', fontWeight: 600, color: '#ef4444', margin: '0 0 10px' }}>
             {failingFeeds.length} feed{failingFeeds.length === 1 ? '' : 's'} failing to sync
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {failingFeeds.map(f => {
               const school = schoolMap.get(f.school_id)
               const syncing = syncingId === f.id
+              const massRemoval = massRemovalByFeed[f.id]
               return (
-                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, fontSize: '13px' }}>
-                  <span style={{ color: text, fontWeight: 500 }}>{school?.name || 'Unknown school'} · {f.label}</span>
-                  <span style={{ color: muted }}>{f.last_sync_error || 'Sync failed'} · {relativeTime(f.last_synced_at)}</span>
-                  <button
-                    onClick={() => syncOne(f.id)}
-                    disabled={syncing}
-                    style={{
-                      fontSize: '12.5px', padding: '5px 10px', borderRadius: '7px', background: 'transparent',
-                      color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.35)', cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit',
-                    }}
-                  >
-                    {syncing ? 'Syncing…' : 'Retry sync'}
-                  </button>
+                <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const, fontSize: '13px' }}>
+                    <span style={{ color: text, fontWeight: 500 }}>{school?.name || 'Unknown school'} · {f.label}</span>
+                    <span style={{ color: muted }}>{f.last_sync_error || 'Sync failed'} · {relativeTime(f.last_synced_at)}</span>
+                    <button
+                      onClick={() => syncOne(f.id)}
+                      disabled={syncing}
+                      style={{
+                        fontSize: '12.5px', padding: '5px 10px', borderRadius: '7px', background: 'transparent',
+                        color: '#ef4444', border: '0.5px solid rgba(239,68,68,0.35)', cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      {syncing ? 'Syncing…' : 'Retry sync'}
+                    </button>
+                  </div>
+                  {massRemoval && (
+                    <div style={{ background: cardBg, border: '0.5px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '12px' }}>
+                      <p style={{ fontSize: '12.5px', color: text, margin: '0 0 8px' }}>
+                        This looks like it might be a real bulk change, not a glitch -- {massRemoval.total} event{massRemoval.total === 1 ? '' : 's'} on the source calendar are gone.
+                        {massRemoval.candidates.length < massRemoval.total ? ` Showing the first ${massRemoval.candidates.length}:` : ' Here they are:'}
+                      </p>
+                      <div style={{ maxHeight: '160px', overflowY: 'auto' as const, border: `0.5px solid ${border}`, borderRadius: '8px', marginBottom: '10px' }}>
+                        {massRemoval.candidates.map(c => (
+                          <div key={c.id} style={{ padding: '6px 10px', borderBottom: `0.5px solid ${border}`, fontSize: '12.5px' }}>
+                            <span style={{ color: text, fontWeight: 500 }}>{c.title || 'Untitled event'}</span>
+                            <span style={{ color: muted }}> · {fmtCandidateDate(c.start)}{c.location ? ` · ${c.location}` : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => confirmMassRemoval(f.id, f.label, school?.name || 'Unknown school')}
+                          disabled={syncing}
+                          style={{
+                            fontSize: '12.5px', padding: '6px 12px', borderRadius: '7px', background: '#ef4444', color: '#fff',
+                            border: 'none', fontWeight: 600, cursor: syncing ? 'default' : 'pointer', fontFamily: 'inherit',
+                          }}
+                        >
+                          Confirm removal
+                        </button>
+                        <span style={{ fontSize: '12px', color: muted, alignSelf: 'center' }}>
+                          Only removes what&apos;s currently gone from the source -- nothing is deleted outright, and it can still be restored from the review queue.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
