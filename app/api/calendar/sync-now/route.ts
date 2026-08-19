@@ -11,7 +11,10 @@ export const maxDuration = 60
  * Manual "sync now" trigger for a calendar approver, from
  * /dashboard/calendar/feeds. Runs the same logic as the scheduled cron
  * (lib/server/calendar-sync.ts). Optional JSON body { feedId } syncs just one
- * school's feed instead of all of them.
+ * school's feed instead of all of them. { feedId, allowMassRemoval: true }
+ * overrides the mass-removal guard for that one feed -- used by the
+ * "Confirm removal" action after a human has reviewed the candidate list a
+ * prior sync returned.
  */
 export async function POST(request: Request) {
   const teamUser = await getAuthenticatedTeamUser()
@@ -26,14 +29,19 @@ export async function POST(request: Request) {
   }
 
   let feedId: string | undefined
+  let allowMassRemoval = false
   try {
     const body = await request.json()
     if (body && typeof body.feedId === 'string') feedId = body.feedId
+    // Only meaningful alongside a specific feedId -- a human reviewed that
+    // one feed's massRemovalCandidates from a prior sync and confirmed it's
+    // real. Ignored entirely for an all-feeds sync.
+    if (body && body.allowMassRemoval === true) allowMassRemoval = true
   } catch {
     // No body / not JSON -- sync all feeds.
   }
 
-  const summary = await runCalendarSync(feedId ? { feedId } : undefined)
+  const summary = await runCalendarSync(feedId ? { feedId, allowMassRemoval } : undefined)
   if ('error' in summary) {
     return NextResponse.json({ error: summary.error }, { status: 500 })
   }

@@ -56,6 +56,11 @@ function looksLikeCompleteIcs(text: string): boolean {
 
 const FETCH_ATTEMPTS = 3
 const RETRY_DELAY_MS = 1500
+// One hanging school server (no response, connection just sits open) would
+// otherwise consume the entire cron function's time budget by itself,
+// starving every feed queued behind it. 20s is generous for a calendar file
+// but short enough that one bad host can't eat the whole run.
+const FETCH_TIMEOUT_MS = 20000
 
 type FetchIcsResult =
   | { text: string; etag: string | null; lastModified: string | null }
@@ -88,7 +93,14 @@ async function fetchIcsWithRetry(
       const headers: Record<string, string> = { 'User-Agent': 'CSDtv-Calendar-Sync/1.0' }
       if (conditional?.etag) headers['If-None-Match'] = conditional.etag
       if (conditional?.lastModified) headers['If-Modified-Since'] = conditional.lastModified
-      const res = await fetch(url, { headers, cache: 'no-store' })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+      let res: Response
+      try {
+        res = await fetch(url, { headers, cache: 'no-store', signal: controller.signal })
+      } finally {
+        clearTimeout(timeout)
+      }
       if (res.status === 304) {
         return { notModified: true, etag: res.headers.get('etag'), lastModified: res.headers.get('last-modified') }
       }
@@ -104,7 +116,9 @@ async function fetchIcsWithRetry(
           : "Response wasn't a valid ICS calendar (no BEGIN:VCALENDAR) -- the source may be blocking automated requests or returned an error page instead of the calendar"
       }
     } catch (e) {
-      lastError = e instanceof Error ? e.message : 'Fetch failed'
+      lastError = e instanceof Error && e.name === 'AbortError'
+        ? `Feed did not respond within ${FETCH_TIMEOUT_MS / 1000}s`
+        : e instanceof Error ? e.message : 'Fetch failed'
     }
     if (attempt < FETCH_ATTEMPTS) await sleep(RETRY_DELAY_MS)
   }
@@ -129,6 +143,17 @@ type ExistingEventRow = {
   is_all_day: boolean
 }
 
+/** A single event the mass-removal guard is holding back from being marked
+ * removed -- enough detail (title, when, where) for a human to look at the
+ * list and judge whether this is really "the school wiped their calendar"
+ * or something's still wrong with the fetch. */
+export type MassRemovalCandidate = {
+  id: string
+  title: string | null
+  start: string | null
+  location: string | null
+}
+
 export type CalendarSyncFeedResult = {
   feedId: string
   schoolId: string
@@ -141,6 +166,12 @@ export type CalendarSyncFeedResult = {
    * request -- the feed wasn't reprocessed at all this run because nothing
    * changed since the last fetch. */
   notModified?: boolean
+  /** Set only when the mass-removal guard (see syncFeed) held back a
+   * removal for looking like incomplete feed data. A sample of what it
+   * would have removed, for a human to review before confirming with
+   * allowMassRemoval. Capped at 50 -- see massRemovalTotal for the real count. */
+  massRemovalCandidates?: MassRemovalCandidate[]
+  massRemovalTotal?: number
   error?: string
 }
 
@@ -168,7 +199,11 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item
   return results
 }
 
-async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<CalendarSyncFeedResult> {
+async function syncFeed(
+  service: SupabaseClient,
+  feed: FeedRow,
+  options?: { allowMassRemoval?: boolean }
+): Promise<CalendarSyncFeedResult> {
   const result: CalendarSyncFeedResult = {
     feedId: feed.id, schoolId: feed.school_id, ok: false, added: 0, updated: 0, removed: 0, unchanged: 0,
   }
@@ -230,11 +265,41 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
   // synced in a prior school year, once the window rolls forward) are picked
   // up by the "gone from source" cleanup below and marked removed.
   const schoolYear = getSchoolYearWindow(new Date())
-  const byUid = new Map<string, ParsedIcsEvent>()
+  const uidGroups = new Map<string, ParsedIcsEvent[]>()
   for (const ev of parsed) {
     if (ev.uid.startsWith('no-uid-')) continue
     if (ev.start < schoolYear.start || ev.start >= schoolYear.end) continue
-    byUid.set(ev.uid, ev)
+    const group = uidGroups.get(ev.uid)
+    if (group) group.push(ev)
+    else uidGroups.set(ev.uid, [ev])
+  }
+
+  // byUid is keyed by *storage* UID, which usually equals the raw ICS UID
+  // (ev.uid) one-for-one -- the overwhelmingly common case, one VEVENT per
+  // UID. Some feeds instead publish a recurring series as several separate
+  // VEVENTs that all share one UID, distinguished only by RECURRENCE-ID or
+  // (more often, for school calendar tools) just a different DTSTART, with
+  // no RRULE and no RECURRENCE-ID on any of them at all. A plain
+  // `byUid.set(ev.uid, ev)` there silently collapses the whole group down to
+  // whichever occurrence happened to parse last, dropping every earlier one
+  // with no error -- this is what was actually happening for any feed using
+  // that pattern. Detecting the collision and disambiguating the storage key
+  // per occurrence keeps every one of them as its own row instead. The raw
+  // UID is preserved on the event itself (ev.uid) for recurrence_group_id
+  // below, so occurrences of the same series still group together in the
+  // review queue even though their storage keys now differ.
+  const multiOccurrenceUids = new Set<string>()
+  const byUid = new Map<string, ParsedIcsEvent>()
+  for (const [rawUid, group] of uidGroups) {
+    if (group.length === 1) {
+      byUid.set(rawUid, group[0])
+      continue
+    }
+    multiOccurrenceUids.add(rawUid)
+    for (const ev of group) {
+      const disambiguator = (ev.recurrenceId || ev.start).toISOString()
+      byUid.set(`${rawUid}::${disambiguator}`, ev)
+    }
   }
 
   const { data: existingRows, error: existingError } = await service
@@ -257,6 +322,14 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
 
   for (const [uid, ev] of byUid) {
     const existing = existingByUid.get(uid)
+    // A VEVENT can be "recurring" two ways now: it carries its own RRULE, or
+    // it's one of several VEVENTs sharing a raw UID (see multiOccurrenceUids
+    // above) -- the pattern most real school feeds actually use, which never
+    // sets RRULE on the individual occurrences. Checking only ev.isRecurring
+    // (RRULE-only) meant recurrence_group_id never activated for that
+    // pattern, so "apply to whole series" in the review queue silently found
+    // no siblings for the majority of real recurring events.
+    const isRecurring = ev.isRecurring || multiOccurrenceUids.has(ev.uid)
     const sourceTitle = ev.title
     const sourceStart = ev.start.toISOString()
     const sourceEnd = ev.end ? ev.end.toISOString() : null
@@ -287,8 +360,12 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
         source_uid: uid,
         origin: 'synced',
         category: defaultCategoryForFeed(feed.label),
-        is_recurring: ev.isRecurring,
-        recurrence_group_id: ev.isRecurring ? stableUuidFromString(`${feed.id}:${uid}`) : null,
+        is_recurring: isRecurring,
+        // Grouped by the raw ICS UID (ev.uid), not the storage key (uid,
+        // the loop variable) -- the storage key is disambiguated per
+        // occurrence so it differs across a series, but every occurrence of
+        // the same series shares one raw UID and should land in one group.
+        recurrence_group_id: isRecurring ? stableUuidFromString(`${feed.id}:${ev.uid}`) : null,
         source_title: sourceTitle,
         source_start: sourceStart,
         source_end: sourceEnd,
@@ -313,21 +390,31 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
       continue
     }
 
-    const changed =
-      existing.source_title !== sourceTitle ||
-      existing.source_start !== sourceStart ||
-      existing.source_end !== sourceEnd ||
-      existing.source_location !== sourceLocation ||
-      existing.source_description !== sourceDescription ||
-      existing.source_sequence !== metadata.source_sequence ||
-      existing.source_url !== metadata.source_url ||
-      existing.source_categories !== metadata.source_categories ||
-      existing.source_class !== metadata.source_class ||
-      existing.organizer_email !== metadata.organizer_email ||
-      existing.busy_status !== metadata.busy_status ||
-      existing.is_all_day !== metadata.is_all_day
+    // Human-readable labels for exactly which fields differ, not just
+    // whether something differs. This is the only record of "what changed"
+    // that survives to the review queue -- the metadata columns below
+    // (sequence, organizer, categories, ...) get overwritten with the new
+    // values a few lines down regardless of review status, so by the time
+    // staff opens the queue the "before" value is already gone. Without
+    // capturing the field names here, a change to (say) only the organizer
+    // or only the description showed up in the review queue as a "Changed"
+    // badge next to a diff panel where every visible field looked identical
+    // -- there was nothing left to show it against.
+    const changedFields: string[] = []
+    if (existing.source_title !== sourceTitle) changedFields.push('title')
+    if (existing.source_start !== sourceStart) changedFields.push('start time')
+    if (existing.source_end !== sourceEnd) changedFields.push('end time')
+    if (existing.source_location !== sourceLocation) changedFields.push('location')
+    if (existing.source_description !== sourceDescription) changedFields.push('description')
+    if (existing.source_sequence !== metadata.source_sequence) changedFields.push('sequence number')
+    if (existing.source_url !== metadata.source_url) changedFields.push('event link')
+    if (existing.source_categories !== metadata.source_categories) changedFields.push('categories')
+    if (existing.source_class !== metadata.source_class) changedFields.push('visibility class')
+    if (existing.organizer_email !== metadata.organizer_email) changedFields.push('organizer')
+    if (existing.busy_status !== metadata.busy_status) changedFields.push('busy status')
+    if (existing.is_all_day !== metadata.is_all_day) changedFields.push('all-day flag')
 
-    if (!changed) continue
+    if (changedFields.length === 0) continue
 
     const patch: Record<string, unknown> = {
       source_title: sourceTitle,
@@ -344,8 +431,12 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
       // published. Flip to 'updated' so a human reviews the incoming change;
       // the display fields (title/start_time/etc) are left untouched. The
       // metadata mirrors above still refresh either way -- they're
-      // reference data, not something staff approve/publish.
+      // reference data, not something staff approve/publish. changed_fields
+      // is what lets the review queue explain the change even for fields
+      // (organizer, categories, ...) whose "before" value won't exist in the
+      // database a moment after this write.
       patch.status = 'updated'
+      patch.changed_fields = changedFields
     } else {
       // Nothing has been reviewed yet (or it was hidden/removed and just came
       // back) -- safe to refresh the display fields directly along with the mirror.
@@ -368,6 +459,10 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
       if (existing.status === 'removed') {
         patch.status = 'needs_review'
       }
+      // The display fields were just refreshed directly above, so there's no
+      // pending "incoming vs. current" decision left for changed_fields to
+      // describe -- clear any stale value from a previous review cycle.
+      patch.changed_fields = null
     }
 
     updates.push({ id: existing.id, patch })
@@ -376,9 +471,9 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
   // Anything still in the DB for this feed that the fresh sync didn't see at all
   // (not even as STATUS:CANCELLED) has disappeared from the source calendar entirely.
   const seenUids = new Set(byUid.keys())
-  const goneIds = (existingRows || [])
+  const goneRows = (existingRows || [])
     .filter((row: ExistingEventRow) => row.source_uid && !seenUids.has(row.source_uid) && row.status !== 'removed')
-    .map((row: ExistingEventRow) => row.id)
+  const goneIds = goneRows.map((row: ExistingEventRow) => row.id)
 
   // A single flaky or partial fetch (network hiccup, the source truncating
   // its response, a timeout mid-download) looks identical to "most of these
@@ -388,9 +483,23 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
   // that's far more likely a bad fetch than a real mass cancellation --
   // skip the removal step and fail the sync instead, so nothing gets
   // silently wiped and the next retry (with a hopefully-complete fetch)
-  // fixes it.
+  // fixes it. allowMassRemoval is the escape hatch: a human looked at
+  // massRemovalCandidates from a prior run and confirmed this is real, so
+  // this one run is allowed through despite tripping the same threshold.
+  //
+  // The percentage check alone has a blind spot on large feeds: a feed with
+  // 300 tracked events can lose 149 of them (49%) in one bad sync and slip
+  // under the 50% bar untouched, even though 149 vanishing events is a huge
+  // absolute change by any measure. MASS_REMOVAL_ABSOLUTE_CEILING closes
+  // that gap -- a sync that would remove this many events gets held back
+  // for review regardless of what percentage that is of the feed.
+  const MASS_REMOVAL_ABSOLUTE_CEILING = 100
   const previouslyActiveCount = (existingRows || []).filter((row: ExistingEventRow) => row.status !== 'removed').length
-  const suspiciousMassRemoval = goneIds.length >= 5 && previouslyActiveCount > 0 && goneIds.length / previouslyActiveCount > 0.5
+  const suspiciousMassRemoval =
+    goneIds.length >= 5 &&
+    previouslyActiveCount > 0 &&
+    (goneIds.length / previouslyActiveCount > 0.5 || goneIds.length >= MASS_REMOVAL_ABSOLUTE_CEILING)
+  const blockRemoval = suspiciousMassRemoval && !options?.allowMassRemoval
 
   if (newRows.length > 0) {
     // Upsert instead of a plain insert: if two syncs for this feed overlap
@@ -419,9 +528,13 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
     result.updated = updates.length - failed.length
   }
 
-  if (suspiciousMassRemoval) {
+  if (blockRemoval) {
+    result.massRemovalCandidates = goneRows.slice(0, 50).map((row: ExistingEventRow) => ({
+      id: row.id, title: row.source_title, start: row.source_start, location: row.source_location,
+    }))
+    result.massRemovalTotal = goneIds.length
     if (!result.error) {
-      result.error = `This sync would have marked ${goneIds.length} of ${previouslyActiveCount} previously tracked events as removed -- skipped that step since it usually means the feed returned incomplete data rather than that many events actually disappearing. Retry the sync; if this keeps happening, double-check the feed URL.`
+      result.error = `This sync would mark ${goneIds.length} of ${previouslyActiveCount} previously tracked events as removed -- skipped that step since it usually means the feed returned incomplete data rather than that many events actually disappearing. Review the list on the Feeds page; if it's correct, confirm removal there. Otherwise retry the sync, or double-check the feed URL if this keeps happening.`
     }
   } else if (goneIds.length > 0) {
     const { error: removeError } = await service
@@ -465,7 +578,9 @@ async function syncFeed(service: SupabaseClient, feed: FeedRow): Promise<Calenda
  * (app/api/cron/calendar-sync) and the staff-auth-gated manual trigger
  * (app/api/calendar/sync-now).
  */
-export async function runCalendarSync(options?: { feedId?: string }): Promise<CalendarSyncSummary | { error: string }> {
+export async function runCalendarSync(
+  options?: { feedId?: string; allowMassRemoval?: boolean }
+): Promise<CalendarSyncSummary | { error: string }> {
   const service = getServiceSupabaseClient()
   if (!service) return { error: 'Server configuration error' }
 
@@ -475,7 +590,13 @@ export async function runCalendarSync(options?: { feedId?: string }): Promise<Ca
 
   if (feedsError) return { error: feedsError.message }
 
-  const results = await mapWithConcurrency((feeds || []) as FeedRow[], 6, feed => syncFeed(service, feed))
+  // allowMassRemoval only ever applies to the one feed a human explicitly
+  // confirmed -- if feedId wasn't also given (e.g. the scheduled cron run,
+  // which never passes either option), this comparison is false for every
+  // feed and the guard in syncFeed behaves exactly as it always has.
+  const results = await mapWithConcurrency((feeds || []) as FeedRow[], 6, feed =>
+    syncFeed(service, feed, { allowMassRemoval: !!options?.allowMassRemoval && options?.feedId === feed.id })
+  )
 
   return {
     ok: true,

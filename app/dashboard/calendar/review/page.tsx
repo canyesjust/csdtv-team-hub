@@ -54,6 +54,13 @@ type EventRow = {
   approved_at: string | null
   created_at: string
   updated_at: string
+  /** Which fields the sync found different, captured at the moment the row
+   * flipped to 'updated' -- see the changed_fields column comment. Several
+   * of these (organizer, categories, sequence number, ...) can't be diffed
+   * from the row's current data by the time it's viewed, because the sync
+   * writer refreshes those mirror columns on every run regardless of review
+   * status -- this is the only surviving record of what actually differed. */
+  changed_fields: string[] | null
 }
 
 type EditDraft = {
@@ -213,22 +220,46 @@ function EventCard({
         }}>{expanded ? 'Close' : 'Edit'}</button>
       </div>
 
-      {row.status === 'updated' && (
-        <div style={{ background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '12px', fontSize: '13px', color: muted, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-          <div>
-            <p style={{ margin: '0 0 4px', fontWeight: 600, color: text }}>Currently live</p>
-            <p style={{ margin: 0 }}>{row.title}</p>
-            <p style={{ margin: 0 }}>{formatDateTime(row.start_time)}{row.end_time ? ` – ${formatDateTime(row.end_time)}` : ''}</p>
-            {row.location && <p style={{ margin: 0 }}>{row.location}</p>}
+      {row.status === 'updated' && (() => {
+        // changed_fields is captured once, at the moment the row flips to
+        // 'updated' -- see the column comment in the migration. Fields like
+        // organizer or sequence number can't be diffed here even in
+        // principle, because the sync writer already overwrote that mirror
+        // column with the new value regardless of review status; this list
+        // is the only surviving record that they changed at all.
+        const VISIBLE_DIFF_FIELDS = new Set(['title', 'start time', 'end time', 'location', 'description'])
+        const changedFields = row.changed_fields || []
+        const metadataChanges = changedFields.filter(f => !VISIBLE_DIFF_FIELDS.has(f))
+        const legacyRow = changedFields.length === 0
+        return (
+          <div style={{ background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '12px', fontSize: '13px', color: muted, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+            <div>
+              <p style={{ margin: '0 0 4px', fontWeight: 600, color: text }}>Currently live</p>
+              <p style={{ margin: 0 }}>{row.title}</p>
+              <p style={{ margin: 0 }}>{formatDateTime(row.start_time)}{row.end_time ? ` – ${formatDateTime(row.end_time)}` : ''}</p>
+              {row.location && <p style={{ margin: 0 }}>{row.location}</p>}
+              {row.description && <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' as const }}>{row.description}</p>}
+            </div>
+            <div>
+              <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#d97706' }}>Incoming from source</p>
+              <p style={{ margin: 0 }}>{row.source_title}</p>
+              <p style={{ margin: 0 }}>{formatDateTime(row.source_start)}{row.source_end ? ` – ${formatDateTime(row.source_end)}` : ''}</p>
+              {row.source_location && <p style={{ margin: 0 }}>{row.source_location}</p>}
+              {row.source_description && <p style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' as const }}>{row.source_description}</p>}
+            </div>
+            {metadataChanges.length > 0 && (
+              <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: '12px', color: muted, borderTop: `0.5px solid ${border}`, paddingTop: '8px' }}>
+                Also changed on the source calendar: {metadataChanges.join(', ')}. These aren&apos;t shown publicly, so there&apos;s nothing to compare above.
+              </p>
+            )}
+            {legacyRow && (
+              <p style={{ gridColumn: '1 / -1', margin: 0, fontSize: '12px', color: muted, borderTop: `0.5px solid ${border}`, paddingTop: '8px' }}>
+                This event was flagged before we started recording exactly what changed -- if title, time, location, and description above all look identical, the difference is likely in calendar metadata (organizer, category tags, etc.) that isn&apos;t shown publicly.
+              </p>
+            )}
           </div>
-          <div>
-            <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#d97706' }}>Incoming from source</p>
-            <p style={{ margin: 0 }}>{row.source_title}</p>
-            <p style={{ margin: 0 }}>{formatDateTime(row.source_start)}{row.source_end ? ` – ${formatDateTime(row.source_end)}` : ''}</p>
-            {row.source_location && <p style={{ margin: 0 }}>{row.source_location}</p>}
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {row.status === 'removed' && (
         <p style={{ fontSize: '13px', color: muted, margin: 0 }}>No longer on the source calendar. Acknowledge to clear it from the active queue.</p>
@@ -454,7 +485,7 @@ export default function CalendarReviewPage() {
         }
       case 'accept_incoming':
         return {
-          status: 'visible', approved_by: teamId, approved_at: nowIso,
+          status: 'visible', approved_by: teamId, approved_at: nowIso, changed_fields: null,
           title: (draft?.title.trim()) || row.source_title || row.title,
           category: draft?.category ?? row.category,
           start_time: (draft ? fromDateTimeLocal(draft.start) : row.source_start) || row.start_time,
@@ -465,9 +496,9 @@ export default function CalendarReviewPage() {
           stream_url: (draft?.is_streaming ?? row.is_streaming) ? ((draft?.stream_url.trim()) ?? row.stream_url) : null,
         }
       case 'keep_current':
-        return { status: 'visible', approved_by: teamId, approved_at: nowIso }
+        return { status: 'visible', approved_by: teamId, approved_at: nowIso, changed_fields: null }
       case 'reject':
-        return { status: 'hidden' }
+        return { status: 'hidden', changed_fields: null }
       case 'acknowledge':
         return { status: 'hidden' }
       case 'restore':
