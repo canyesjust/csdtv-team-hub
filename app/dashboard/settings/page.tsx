@@ -109,7 +109,7 @@ export default function SettingsPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [invitePassword, setInvitePassword] = useState('')
   const [inviteRole, setInviteRole] = useState('Staff')
-  const [inviteHubInterface, setInviteHubInterface] = useState<'default' | 'production_focus'>('default')
+  const [inviteHubInterface, setInviteHubInterface] = useState<'default' | 'production_focus' | 'signage_only'>('default')
   const [inviteColor, setInviteColor] = useState('var(--brand-primary)')
   const [inviting, setInviting] = useState(false)
   const [inviteResult, setInviteResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -311,6 +311,9 @@ export default function SettingsPage() {
 
   const inviteUser = async () => {
     if (!inviteEmail || !currentUser) return
+    // Signage-only is a separate axis from role: it locks them to the signage
+    // tool (see middleware.ts). Managers are excluded — see /api/signage/approvers.
+    const signageOnly = inviteHubInterface === 'signage_only' && inviteRole !== 'Manager'
     const usePassword = invitePassword.trim().length >= MIN_PASSWORD_LENGTH
     const confirmMsg = usePassword
       ? `Add ${inviteEmail} to the team as ${inviteRole}? You'll set their login password directly (no invite email).`
@@ -341,8 +344,10 @@ export default function SettingsPage() {
             inviteRole === PRODUCTION_FOCUS_ROLE || inviteHubInterface === 'production_focus'
               ? 'production_focus'
               : 'default',
+          signage_role: signageOnly ? 'editor' : null,
         })
         let message = `${name} was added with a login password. Share their email and password — they sign in at csdtvstaff.org with Password (not magic link).`
+        if (signageOnly) message += ' They sign in at csdtvstaff.org/signage-login. Give them a location or specific screens under Signage → Access — until you do, they will see nothing.'
         if (result.onboardingStarted) message += ' Onboarding checklist has been started for them.'
         else if (result.onboardingError) message += ` Onboarding could not be started: ${result.onboardingError}`
         setInviteResult({ success: true, message })
@@ -376,6 +381,7 @@ export default function SettingsPage() {
             inviteRole === PRODUCTION_FOCUS_ROLE || inviteHubInterface === 'production_focus'
               ? 'production_focus'
               : 'default',
+          signage_role: signageOnly ? 'editor' : null,
         }),
       })
       const result = await res.json()
@@ -394,6 +400,18 @@ export default function SettingsPage() {
       }
 
       let message = `Invite sent to ${inviteEmail}. They'll receive an email with a sign-in link.`
+      if (result.teamId && signageOnly) {
+        // The edge function sets signage_role itself, but re-assert it here so a
+        // stale deploy of that function can't silently drop it.
+        const sigRes = await fetch('/api/signage/approvers', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ team_id: result.teamId, signage_role: 'editor' }),
+        })
+        message += sigRes.ok
+          ? ' The email points them at the signage sign-in page. Give them a location or specific screens under Signage → Access — until you do, they will see nothing.'
+          : ' Their account was created, but signage-only access could not be set — set it under Signage → Access.'
+      }
       if (result.teamId) {
         const { started, error: obErr } = await startOnboardingAfterInviteIfNeeded(
           supabase,
@@ -1659,6 +1677,8 @@ export default function SettingsPage() {
                     const next = e.target.value
                     setInviteRole(next)
                     if (next === PRODUCTION_FOCUS_ROLE) setInviteHubInterface('production_focus')
+                    // A Manager can't be signage-only — they'd lose the rest of the Hub.
+                    if (next === 'Manager' && inviteHubInterface === 'signage_only') setInviteHubInterface('default')
                   }}
                   style={inputStyle}
                 >
@@ -1671,13 +1691,16 @@ export default function SettingsPage() {
                 <select
                   value={inviteHubInterface}
                   onChange={e =>
-                    setInviteHubInterface(e.target.value as 'default' | 'production_focus')
+                    setInviteHubInterface(e.target.value as 'default' | 'production_focus' | 'signage_only')
                   }
                   disabled={inviteRole === PRODUCTION_FOCUS_ROLE}
                   style={inputStyle}
                 >
                   <option value="default">Full hub</option>
                   <option value="production_focus">Productions focus</option>
+                  <option value="signage_only" disabled={inviteRole === 'Manager'}>
+                    Signage only
+                  </option>
                 </select>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: inputBg, border: `0.5px solid ${border}`, borderRadius: '10px', padding: '8px 12px' }}>
                   <span style={{ fontSize: '14px', color: muted, flexShrink: 0 }}>Color:</span>

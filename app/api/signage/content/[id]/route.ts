@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  assertCanAccessSignageSite,
+  assertCanReadSignageSite,
+  assertCanTargetSignageScreens,
   requireSignageEditorApi,
   requireSignageApproverApi,
 } from '@/lib/signage/server-auth'
@@ -8,22 +9,19 @@ import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { emailSignageSubmitterDecision } from '@/lib/signage/email'
 import { clampDisplaySeconds } from '@/lib/signage/content-display'
-import {
-  isAllowedImageMime,
-  isAllowedVideoMime,
-  processSignageImage,
-  validateVideoBuffer,
-  extFromVideoMime,
-} from '@/lib/signage/media-process'
-
 export const dynamic = 'force-dynamic'
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireSignageApproverApi()
+  // Approvers review submissions; signage editors edit their own content. Both
+  // reach this route — `canReview` below is what separates them, and the
+  // targeting checks are what scope an editor to their own screens.
+  const approverAuth = await requireSignageApproverApi()
+  const auth = 'error' in approverAuth ? await requireSignageEditorApi() : approverAuth
   if ('error' in auth) return auth.error
+  const canReview = !('error' in approverAuth)
   const { user, service } = auth
   const { id } = await params
 
@@ -35,12 +33,21 @@ export async function PATCH(
   const { data: existing } = await service.from('signage_content').select('*').eq('id', id).maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const siteCheck = await assertCanAccessSignageSite(service, user, existing.site_id)
+  const siteCheck = await assertCanReadSignageSite(service, user, existing.site_id)
   if ('error' in siteCheck) return siteCheck.error
+
+  // A screen-scoped editor may only touch a row that already lives on one of
+  // their screens — otherwise they could retarget somebody else's site-wide
+  // slide onto their own screen and pull it off every other screen.
+  const ownsRow = await assertCanTargetSignageScreens(service, user, existing.site_id, existing)
+  if ('error' in ownsRow) return ownsRow.error
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
   if (typeof body.status === 'string') {
+    if (!canReview) {
+      return NextResponse.json({ error: 'Approving or rejecting content requires reviewer access.' }, { status: 403 })
+    }
     if (!['pending', 'approved', 'rejected'].includes(body.status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
@@ -109,6 +116,15 @@ export async function PATCH(
     patch.reject_reason = body.reject_reason
   }
 
+  // ...and after the edit it must still be aimed only at their screens.
+  const mergedTargeting = await assertCanTargetSignageScreens(service, user, existing.site_id, {
+    all_screens: (patch.all_screens as boolean | undefined) ?? existing.all_screens,
+    target_screen_ids: (patch.target_screen_ids as string[] | undefined) ?? existing.target_screen_ids ?? [],
+    target_area_ids: (patch.target_area_ids as string[] | undefined) ?? existing.target_area_ids ?? [],
+    target_buildings: (patch.target_buildings as string[] | undefined) ?? existing.target_buildings ?? [],
+  })
+  if ('error' in mergedTargeting) return mergedTargeting.error
+
   const { data, error } = await service.from('signage_content').update(patch).eq('id', id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -144,10 +160,17 @@ export async function DELETE(
   const { user, service } = auth
   const { id } = await params
 
-  const { data: row } = await service.from('signage_content').select('media_path, thumb_path, site_id').eq('id', id).maybeSingle()
+  const { data: row } = await service
+    .from('signage_content')
+    .select('media_path, thumb_path, site_id, all_screens, target_screen_ids, target_area_ids, target_buildings')
+    .eq('id', id)
+    .maybeSingle()
   if (row) {
-    const siteCheck = await assertCanAccessSignageSite(service, user, row.site_id)
+    const siteCheck = await assertCanReadSignageSite(service, user, row.site_id)
     if ('error' in siteCheck) return siteCheck.error
+    // Screen-scoped editors can only delete content that lives on their screens.
+    const ownsRow = await assertCanTargetSignageScreens(service, user, row.site_id, row)
+    if ('error' in ownsRow) return ownsRow.error
   }
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

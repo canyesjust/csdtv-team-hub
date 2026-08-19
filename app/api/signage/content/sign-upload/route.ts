@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
+import { checkRateLimit } from '@/lib/server/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,23 @@ const MAX_VIDEO_BYTES = 200 * 1024 * 1024 // 200 MB ceiling for direct uploads
 export async function POST(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
+
+  // Each call mints a slot for a 200 MB object in a public-read bucket, and the
+  // row that would justify it isn't created until /finalize. Bound it per user
+  // so a compromised or careless editor account can't fill the bucket.
+  const rl = await checkRateLimit(request, {
+    scope: 'signage_sign_upload',
+    keySuffix: user.id,
+    max: 20,
+    windowMs: 60 * 60 * 1000,
+  })
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many uploads started. Try again in a bit.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
+  }
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
   const mime = String(body.mime || '')

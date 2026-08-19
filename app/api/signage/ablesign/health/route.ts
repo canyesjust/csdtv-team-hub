@@ -8,7 +8,7 @@ import { AbleSignApiError, listAllScreens, type AbleSignScreen } from '@/lib/ser
 import { deriveAbleSignOnline, writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
 import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
 import { verifySignageCron } from '@/lib/signage/ablesign-cron'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { requireSignageSiteManagerApi } from '@/lib/signage/server-auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { timingSafeEqualStr } from '@/lib/server/security'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
     if (service) authorized = await verifyPushToken(request, service)
   }
   if (!authorized) {
-    const auth = await requireSignageEditorApi()
+    const auth = await requireSignageSiteManagerApi()
     if ('error' in auth) return auth.error
   }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanReadSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { renderSystemBlockHtml } from '@/lib/signage/build-screen-feed'
 
 export const dynamic = 'force-dynamic'
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
-  const { service } = auth
+  const { user, service } = auth
 
   const id = (new URL(request.url).searchParams.get('id') || '').trim()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
   if (!row || !row.system_kind) {
     return NextResponse.json({ error: 'Not a stock block' }, { status: 404 })
   }
+  const siteCheck = await assertCanReadSignageSite(service, user, row.site_id as string | null)
+  if ('error' in siteCheck) return siteCheck.error
 
   const html = await renderSystemBlockHtml(service, {
     system_kind: row.system_kind as string | null,

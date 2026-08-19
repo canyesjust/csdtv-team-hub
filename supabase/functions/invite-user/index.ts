@@ -23,9 +23,13 @@ function siteBase(): string {
   return "https://www.csdtvstaff.org"
 }
 
-function authCallbackUrl(): string {
-  return `${siteBase()}/auth/callback?next=${encodeURIComponent("/dashboard")}`
+function authCallbackUrl(next = "/dashboard"): string {
+  return `${siteBase()}/auth/callback?next=${encodeURIComponent(next)}`
 }
+
+/** Where a signage-only editor lands. Mirrors SIGNAGE_HOME_PATH in lib/auth-constants.ts. */
+const SIGNAGE_HOME_PATH = "/dashboard/signage/content"
+const SIGNAGE_LOGIN_PATH = "/signage-login"
 
 /** Paginated lookup — listUsers() only returns the first page by default. */
 async function findAuthUserByEmail(
@@ -94,6 +98,10 @@ Deno.serve(async (req) => {
       role === "Production Focus" || body.dashboard_profile === "production_focus"
         ? "production_focus"
         : "default"
+    // Signage-only locks them to the signage tool (middleware.ts). A Manager
+    // can't be signage-only — that would lock them out of the rest of the Hub.
+    const signage_role = body.signage_role === "editor" && role !== "Manager" ? "editor" : null
+    const signageOnly = signage_role === "editor"
 
     if (!email || !name || !role) {
       return json({ error: "Missing email, name, or role" }, 400)
@@ -136,6 +144,7 @@ Deno.serve(async (req) => {
           role,
           avatar_color,
           dashboard_profile,
+          signage_role,
         })
         .eq("id", teamId)
       if (teamUpdateErr) {
@@ -152,6 +161,7 @@ Deno.serve(async (req) => {
           supabase_user_id: authUserId,
           active: true,
           dashboard_profile,
+          signage_role,
         })
         .select("id")
         .single()
@@ -162,7 +172,7 @@ Deno.serve(async (req) => {
       teamId = newTeam.id
     }
 
-    const redirectTo = authCallbackUrl()
+    const redirectTo = authCallbackUrl(signageOnly ? SIGNAGE_HOME_PATH : "/dashboard")
     const { data: magicLink, error: linkError } = await supabase.auth.admin.generateLink({
       type: "magiclink",
       email,
@@ -187,7 +197,31 @@ Deno.serve(async (req) => {
     }
 
     const firstName = name.split(" ")[0] || name
-    const html = `
+
+    // A signage-only person runs one screen in their building. Telling them
+    // about productions, equipment and crew schedules just confuses them, and
+    // pointing them at the CSDtv portal is the wrong front door.
+    const signageHtml = `
+      <div style="font-family:system-ui,sans-serif;max-width:500px;margin:0 auto;color:#1a1f36">
+        <div style="text-align:center;margin-bottom:24px">
+          <h1 style="font-size:24px;margin:0 0 4px">Canyons Digital Signage</h1>
+          <p style="color:#6b7280;margin:0">Manage the screens in your building</p>
+        </div>
+        <p>Hi ${firstName},</p>
+        <p>You've been given access to manage digital signage for Canyons School District. You can post announcements, schedule what appears, and see what's playing right now.</p>
+        <div style="text-align:center;margin:24px 0">
+          <a href="${loginUrl}" style="display:inline-block;background:#1e6cb5;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:600;font-size:16px">
+            Open Digital Signage
+          </a>
+        </div>
+        <p style="font-size:14px;color:#6b7280">This link signs you in and takes you straight to your screens. After your first visit, sign in any time at <a href="${siteBase()}${SIGNAGE_LOGIN_PATH}" style="color:#1e6cb5">${siteBase().replace(/^https?:\/\//, "")}${SIGNAGE_LOGIN_PATH}</a> with your email and password, or request a new link from that page.</p>
+        <p style="font-size:14px;color:#6b7280">If you don't see any screens yet, your administrator hasn't assigned them to you. Reply to whoever invited you and they can sort it out.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0" />
+        <p style="font-size:12px;color:#9ca3af;margin:0">Canyons School District</p>
+      </div>
+    `
+
+    const hubHtml = `
       <div style="font-family:system-ui,sans-serif;max-width:500px;margin:0 auto;color:#1a1f36">
         <div style="text-align:center;margin-bottom:24px">
           <h1 style="font-size:24px;margin:0 0 4px">Welcome to CSDtv Team Hub</h1>
@@ -203,9 +237,11 @@ Deno.serve(async (req) => {
         <p style="font-size:14px;color:#6b7280">This link opens the Team Hub for your account. After your first visit, you can sign in with your email and password, or request another link from the login page.</p>
         <p style="font-size:14px;color:#6b7280">Site: <a href="${siteBase()}" style="color:#1e6cb5">csdtvstaff.org</a></p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0" />
-        <p style="font-size:12px;color:#9ca3af;margin:0">CSDtv Production Office · Canyon School District</p>
+        <p style="font-size:12px;color:#9ca3af;margin:0">CSDtv Production Office · Canyons School District</p>
       </div>
     `
+
+    const html = signageOnly ? signageHtml : hubHtml
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -214,9 +250,13 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "CSDtv <noreply@csdtvstaff.org>",
+        from: signageOnly
+          ? "Canyons Digital Signage <noreply@csdtvstaff.org>"
+          : "CSDtv <noreply@csdtvstaff.org>",
         to: email,
-        subject: "Your CSDtv Team Hub access",
+        subject: signageOnly
+          ? "Your Canyons digital signage access"
+          : "Your CSDtv Team Hub access",
         html,
       }),
     })

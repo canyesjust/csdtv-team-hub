@@ -194,12 +194,16 @@ type TargetingProps = {
   /** Building takeovers are building-only by design — hides "All screens",
    *  Areas, and "Specific screens", leaving just the Buildings chip group. */
   buildingsOnly?: boolean
+  /** Screen-scoped editors may only name their own screens — hides "All
+   *  screens", Areas, and Buildings, leaving the screen list always open.
+   *  Matches the server rule in canTargetScreens(). */
+  screensOnly?: boolean
 }
 
-export default function SignageTargetingPicker({ areas, screens, value, onChange, lbl, buildingsOnly }: TargetingProps) {
+export default function SignageTargetingPicker({ areas, screens, value, onChange, lbl, buildingsOnly, screensOnly }: TargetingProps) {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
-  const [showScreens, setShowScreens] = useState(value.target_screen_ids.length > 0)
+  const [showScreens, setShowScreens] = useState(screensOnly || value.target_screen_ids.length > 0)
   const buildings = value.target_buildings ?? []
 
   // Screens grouped by area — powers the "(4)" counts and the grouped picker.
@@ -267,8 +271,8 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
 
   return (
     <div>
-      {lbl && <p style={lbl}>{buildingsOnly ? 'Building(s)' : 'Show on'}</p>}
-      {!buildingsOnly && (
+      {lbl && <p style={lbl}>{buildingsOnly ? 'Building(s)' : screensOnly ? 'Your screens' : 'Show on'}</p>}
+      {!buildingsOnly && !screensOnly && (
         <div>
           <button type="button" onClick={toggleAll} style={s.chip(value.all_screens)}>
             {value.all_screens ? '✓ ' : ''}All screens
@@ -276,9 +280,9 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
         </div>
       )}
 
-      {(buildingsOnly || !value.all_screens) && (
+      {(buildingsOnly || screensOnly || !value.all_screens) && (
         <>
-          {!buildingsOnly && areas.length > 0 && (
+          {!buildingsOnly && !screensOnly && areas.length > 0 && (
             <div style={{ marginTop: 8 }}>
               <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Areas</p>
               {areas.map(a => (
@@ -289,7 +293,7 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
             </div>
           )}
 
-          {buildingNames.length > 0 && (
+          {buildingNames.length > 0 && !screensOnly && (
             <div style={{ marginTop: buildingsOnly ? 0 : 8 }}>
               {!buildingsOnly && <p style={{ ...(lbl ?? {}), margin: '0 0 4px' }}>Buildings</p>}
               {buildingNames.map(b => (
@@ -300,7 +304,7 @@ export default function SignageTargetingPicker({ areas, screens, value, onChange
             </div>
           )}
 
-          {!buildingsOnly && (
+          {!buildingsOnly && !screensOnly && (
             <div style={{ marginTop: 8 }}>
               <button type="button" onClick={() => setShowScreens(v => !v)} style={s.chip(showScreens || value.target_screen_ids.length > 0)}>
                 {showScreens ? '− ' : '+ '}Specific screens
@@ -362,7 +366,13 @@ export function SignageAnnouncementIconPicker({ value, onChange, lbl }: Announce
   )
 }
 
-type SignageNavItem = { href: string; label: string; managerOnly?: boolean }
+/**
+ * `managerOnly`  — hidden from approvers (who only get the content queue).
+ * `screenScoped` — still reachable when the user holds individual screens
+ *                  rather than a whole location. Everything without this flag
+ *                  is site-wide and is hidden from them.
+ */
+type SignageNavItem = { href: string; label: string; managerOnly?: boolean; screenScoped?: boolean }
 type SignageNavGroup = { key: string; label: string; href?: string; admin?: boolean; items: SignageNavItem[] }
 
 // Groups above the `admin` group follow the active location. The admin group is
@@ -373,7 +383,7 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     key: 'content',
     label: 'Content',
     items: [
-      { href: '/dashboard/signage/content', label: 'Content' },
+      { href: '/dashboard/signage/content', label: 'Content', screenScoped: true },
       { href: '/dashboard/signage/announcements', label: 'Announcements', managerOnly: true },
       { href: '/dashboard/signage/visitors', label: 'Visitors', managerOnly: true },
     ],
@@ -382,8 +392,8 @@ const SIGNAGE_NAV: SignageNavGroup[] = [
     key: 'screens',
     label: 'Screens',
     items: [
-      { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true },
-      { href: '/dashboard/signage/layout-builder', label: 'Layout builder', managerOnly: true },
+      { href: '/dashboard/signage/screens', label: 'Screens', managerOnly: true, screenScoped: true },
+      { href: '/dashboard/signage/layout-builder', label: 'Layout builder', managerOnly: true, screenScoped: true },
       { href: '/dashboard/signage/areas', label: 'Areas', managerOnly: true },
       { href: '/dashboard/signage/wayfinding', label: 'Wayfinding', managerOnly: true },
     ],
@@ -422,7 +432,17 @@ function readableText(hex: string): string {
   return lum > 0.6 ? '#0f2c3f' : '#fff'
 }
 
-export function SignageRail({ active, isManager, accent }: { active: string; isManager: boolean; accent: string }) {
+export function SignageRail({
+  active,
+  isManager,
+  screenScoped,
+  accent,
+}: {
+  active: string
+  isManager: boolean
+  screenScoped: boolean
+  accent: string
+}) {
   // The rail is always the dark navy surface (matches the standalone-tool design).
   // Bright links read as the clickable items; gold dividers mark the sections.
   const idle = '#eef2fa'
@@ -435,7 +455,14 @@ export function SignageRail({ active, isManager, accent }: { active: string; isM
 
   // Every group is always visible; each group keeps only the destinations this user can reach.
   const groups = SIGNAGE_NAV
-    .map(g => ({ ...g, items: g.items.filter(it => isManager || !it.managerOnly) }))
+    .map(g => ({
+      ...g,
+      items: g.items.filter(it => {
+        if (!isManager && it.managerOnly) return false
+        if (screenScoped && !it.screenScoped) return false
+        return true
+      }),
+    }))
     .filter(g => g.items.length > 0)
 
   const renderItem = (it: SignageNavItem, idleColor: string) => {
@@ -508,7 +535,7 @@ export function useSignageTheme(theme: string) {
 
 export function SignagePageShell({ children, title, subtitle }: { children: ReactNode; title: string; subtitle?: string }) {
   const pathname = usePathname()
-  const { isManager, sites, activeSiteId, setActiveSite } = useSignage()
+  const { isManager, screenScoped, sites, activeSiteId, setActiveSite } = useSignage()
   const { theme } = useTheme()
   const { text, muted } = useSignageTheme(theme)
   const activeSite = sites.find(s => s.id === activeSiteId)
@@ -539,7 +566,7 @@ export function SignagePageShell({ children, title, subtitle }: { children: Reac
             <span style={{ fontSize: 14, fontWeight: 700, color: '#e8eefb' }}>{activeSite?.name || 'Digital signage'}</span>
           </div>
         )}
-        <SignageRail active={pathname} isManager={isManager} accent={accent} />
+        <SignageRail active={pathname} isManager={isManager} screenScoped={screenScoped} accent={accent} />
       </aside>
 
       <div className="sig-main" style={{ minWidth: 0, maxWidth: 1320, width: '100%' }}>

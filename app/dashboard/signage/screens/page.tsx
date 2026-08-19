@@ -74,7 +74,7 @@ export default function SignageScreensPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { areas, refreshCatalog, activeSiteId } = useSignage()
+  const { areas, refreshCatalog, activeSiteId, screenScoped } = useSignage()
   const [loading, setLoading] = useState(true)
   const [screens, setScreens] = useState<Screen[]>([])
   const [form, setForm] = useState<ScreenForm>(empty)
@@ -199,14 +199,18 @@ export default function SignageScreensPage() {
     <SignagePageShell title="Screens" subtitle="The physical displays around the building">
       <SignagePushStatus />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-        <AbleSignPushAllHtmlButton onDone={() => void loadScreens()} />
-        <button
-          type="button"
-          onClick={() => { resetForm(); setShowForm(v => !v) }}
-          style={s.btnPrimary}
-        >
-          {showForm ? 'Cancel' : '+ Add screen'}
-        </button>
+        {/* Both act on the whole location, so they're hidden from an editor
+            who only holds individual screens. */}
+        {!screenScoped && <AbleSignPushAllHtmlButton onDone={() => void loadScreens()} />}
+        {!screenScoped && (
+          <button
+            type="button"
+            onClick={() => { resetForm(); setShowForm(v => !v) }}
+            style={s.btnPrimary}
+          >
+            {showForm ? 'Cancel' : '+ Add screen'}
+          </button>
+        )}
       </div>
 
       <details style={{ marginBottom: 16 }}>
@@ -395,7 +399,7 @@ export default function SignageScreensPage() {
           </details>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
             <button type="button" onClick={resetForm} style={s.btn}>Cancel</button>
-            {editId && (
+            {editId && !screenScoped && (
               <SignageDeleteButton
                 confirmMessage={`Delete screen "${form.name}" (${form.code})?`}
                 onConfirm={async () => {

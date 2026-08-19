@@ -1,0 +1,109 @@
+/* The show screen. One screen, three modes. Scoped under .gfx-root. */
+.sh { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+.sh-modes { display: flex; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.16); border-radius: 9px; padding: 2px; }
+.sh-modes button { background: transparent; border: 0; color: #c9d7ea; font: inherit; font-weight: 800;
+  font-size: 11.5px; letter-spacing: .08em; padding: 6px 15px; border-radius: 7px; cursor: pointer; }
+.sh-modes button.on { background: #fff; color: #0a2c52; }
+.sh-modes button.on.run { background: var(--gx-live); color: #fff; }
+.sh-role { background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.22); color: #eaf0fb;
+  border-radius: 8px; padding: 6px 9px; font: inherit; font-weight: 600; font-size: 12px; }
+
+.sh-timing { display: flex; align-items: stretch; flex: none; padding: 7px 12px;
+  background: linear-gradient(100deg, #0b1626, #101f36); border-bottom: 1px solid var(--gx-ln); }
+.sh-timing.hot { background: linear-gradient(100deg, #2a0d12, #4a1219); border-bottom-color: var(--gx-live); }
+.sh-tc { padding: 0 15px; border-right: 1px solid var(--gx-ln); min-width: 84px; }
+.sh-tc:last-child { border-right: 0; }
+.sh-tc .k { font-size: 8.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--gx-mu); font-weight: 700; }
+.sh-tc .v { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.25; margin-top: 1px; }
+.sh-tc .v.sm { font-size: 14px; font-weight: 700; }
+.sh-heavy { color: #e2574a; } .sh-light { color: #43b581; }
+
+.sh-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 430px; min-height: 0; }
+.sh-center { min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--gx-ln); }
+.sh-scroll { flex: 1; overflow: auto; min-height: 0; }
+.sh-side { display: flex; flex-direction: column; min-height: 0; overflow: auto; background: #080d17; }
+
+.sh-tools { display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: #0a1120;
+  border-bottom: 1px solid var(--gx-ln); flex: none; flex-wrap: wrap; }
+
+table.sh-rd { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.sh-rd th { text-align: left; font-size: 8.5px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--gx-mu); font-weight: 700; padding: 6px 7px; border-bottom: 1px solid var(--gx-ln);
+  position: sticky; top: 0; background: var(--gx-bg); z-index: 3; }
+table.sh-rd td { padding: 6px 7px; border-bottom: 1px solid rgba(255,255,255,.05); vertical-align: top; }
+tr.sh-row { cursor: pointer; }
+tr.sh-row:hover td { background: rgba(63,143,216,.08); }
+tr.sh-sel td { background: rgba(63,143,216,.15); }
+tr.sh-air td { background: linear-gradient(90deg, rgba(226,55,68,.26), rgba(226,55,68,.05)); box-shadow: inset 3px 0 0 var(--gx-live); }
+tr.sh-next td { background: linear-gradient(90deg, rgba(47,182,115,.22), rgba(47,182,115,.04)); box-shadow: inset 3px 0 0 var(--gx-next); }
+tr.sh-done td { opacity: .4; }
+tr.sh-float td { opacity: .38; text-decoration: line-through; text-decoration-color: rgba(226,55,68,.6); }
+tr.sh-brk td { background: #0a1120; color: var(--gx-mu); font-weight: 700; letter-spacing: .07em; text-transform: uppercase; font-size: 10px; }
+tr.sh-block td { background: #101a2c; font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 800; color: #a9b7cd; }
+.sh-anchor { font-size: 9px; color: var(--gx-gold); font-weight: 700; margin-left: 8px; }
+.sh-pg { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--gx-mu); white-space: nowrap; }
+.sh-slug { font-weight: 600; }
+.sh-num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.sh-form { font-size: 9px; font-weight: 800; letter-spacing: .05em; padding: 1px 5px; border-radius: 4px; background: #1b2537; color: #9fb2cc; }
+.sh-form.LIVE { background: #3a1218; color: #ff9ba4; }
+.sh-form.VT { background: #12283a; color: #7fc4e8; }
+.sh-form.GFX { background: #2a1b3d; color: #c3a6f0; }
+.sh-form.BREAK { background: #2c2413; color: #e7c977; }
+.sh-form.MUSIC { background: #12331f; color: #6fd39a; }
+.sh-gdot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; background: #a888f5; margin-right: 5px; box-shadow: 0 0 5px #a888f5; }
+.sh-tick { color: #43b581; font-weight: 800; }
+.sh-warn { color: var(--gx-gold); font-size: 10.5px; }
+.sh-addrow { padding: 5px 8px; color: #4d5a70; font-size: 11px; font-weight: 600; cursor: pointer; border-top: 1px dashed rgba(255,255,255,.10); }
+.sh-addrow:hover { color: var(--gx-ac); background: rgba(63,143,216,.07); }
+
+.sh-sect { border-bottom: 1px solid var(--gx-ln); }
+.sh-sect > h4 { padding: 8px 12px; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--gx-mu); display: flex; align-items: center; gap: 7px; background: #0a1120; }
+.sh-sect > h4 .r { margin-left: auto; font-size: 9.5px; letter-spacing: 0; text-transform: none; font-weight: 500; }
+.sh-in { padding: 10px 12px; }
+.sh-label { display: block; font-size: 9px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--gx-mu); font-weight: 700; margin: 9px 0 3px; }
+.sh-in input, .sh-in textarea, .sh-in select { font: inherit; font-size: 12.5px; color: var(--gx-tx);
+  background: #050810; border: 1px solid var(--gx-ln); border-radius: 7px; padding: 6px 8px; width: 100%; }
+.sh-in textarea { resize: vertical; line-height: 1.5; }
+.sh-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.sh-seg { display: flex; gap: 3px; flex-wrap: wrap; }
+.sh-seg button { flex: 1; min-width: 52px; padding: 5px 3px; font-size: 10px; }
+.sh-seg button.on { background: var(--gx-ac); border-color: var(--gx-ac); color: #04203a; }
+
+.sh-mon { border-radius: 9px; overflow: hidden; border: 2px solid var(--gx-ln); position: relative; }
+.sh-mon.pvw { border-color: var(--gx-next); }
+.sh-mon.pgm { border-color: var(--gx-live); }
+.sh-mon .lab { position: absolute; top: 0; left: 0; z-index: 20; font-size: 8px; font-weight: 800;
+  letter-spacing: .11em; padding: 2px 7px; border-radius: 0 0 6px 0; }
+.sh-mon.pvw .lab { background: var(--gx-next); color: #04220f; }
+.sh-mon.pgm .lab { background: var(--gx-live); color: #fff; }
+.sh-screen { position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden;
+  background: radial-gradient(70% 60% at 30% 30%, rgba(255,220,170,.24), transparent 65%),
+              radial-gradient(60% 70% at 78% 70%, rgba(90,150,255,.18), transparent 65%),
+              linear-gradient(170deg, #1b2740, #060a12 72%); }
+.sh-pvpg { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.sh-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.sh-tiles button { min-height: 46px; font-size: 11.5px; line-height: 1.3; white-space: normal; }
+.sh-tiles button.on { background: var(--gx-live); border-color: var(--gx-live); color: #fff; }
+.sh-lrow { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--gx-pn2);
+  border: 1px solid var(--gx-ln); border-radius: 8px; margin-bottom: 4px; cursor: pointer; font-size: 11.5px; }
+.sh-lrow.air { border-color: var(--gx-live); background: rgba(226,55,68,.15); }
+.sh-busy { opacity: .55; pointer-events: none; }
+
+/* ---- jersey pad ---- */
+.jp-display { background: #050810; border: 2px solid var(--gx-next); border-radius: 10px;
+  padding: 6px 12px; text-align: center; margin-bottom: 6px;
+  font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.jp-two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+.jp-card { background: #111a2b; border: 1px solid var(--gx-ln); border-top: 3px solid var(--jp, #555);
+  border-radius: 9px; padding: 7px 8px; text-align: center; }
+.jp-team { font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--jp, #999); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jp-name { font-size: 13px; font-weight: 700; margin-top: 3px; min-height: 17px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jp-meta { font-size: 10.5px; color: var(--gx-mu); min-height: 14px; }
+.jp-card button { width: 100%; margin-top: 6px; min-height: 38px; }
+.jp-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.jp-pad button { min-height: 46px; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }

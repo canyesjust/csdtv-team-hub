@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanAccessSignageScreenCode, requireSignageEditorApi } from '@/lib/signage/server-auth'
 import { renderAndPushScreen } from '@/lib/signage/push-screen'
 import { buildScreenHtml } from '@/lib/signage/build-screen-html'
 
@@ -16,13 +16,8 @@ export async function POST(
   const { user, service } = auth
 
   const { code } = await context.params
-  const { data: screen } = await service
-    .from('signage_screens')
-    .select('site_id')
-    .eq('code', code)
-    .maybeSingle()
-  const siteCheck = await assertCanAccessSignageSite(service, user, screen?.site_id)
-  if ('error' in siteCheck) return siteCheck.error
+  const screenCheck = await assertCanAccessSignageScreenCode(service, user, code)
+  if ('error' in screenCheck) return screenCheck.error
 
   const result = await renderAndPushScreen(service, code, { trigger: 'manual', force: true })
 
@@ -45,13 +40,8 @@ export async function GET(
   const { user, service } = auth
 
   const { code } = await context.params
-  const { data: screen } = await service
-    .from('signage_screens')
-    .select('site_id')
-    .eq('code', code)
-    .maybeSingle()
-  const siteCheck = await assertCanAccessSignageSite(service, user, screen?.site_id)
-  if ('error' in siteCheck) return siteCheck.error
+  const screenCheck = await assertCanAccessSignageScreenCode(service, user, code)
+  if ('error' in screenCheck) return screenCheck.error
   const built = await buildScreenHtml(service, code)
   if ('error' in built) {
     return NextResponse.json({ error: built.error }, { status: built.error === 'not_found' ? 404 : 500 })

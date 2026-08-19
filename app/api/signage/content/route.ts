@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
+import {
+  assertCanReadSignageSite,
+  assertCanTargetSignageScreens,
+  requireSignageEditorApi,
+} from '@/lib/signage/server-auth'
 import { markScreensDirty } from '@/lib/signage/ablesign-helpers'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import {
@@ -26,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   const form = await request.formData()
   const siteId = String(form.get('site_id') ?? '') || null
-  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  const siteCheck = await assertCanReadSignageSite(service, user, siteId)
   if ('error' in siteCheck) return siteCheck.error
 
   const title = String(form.get('title') ?? '').trim()
@@ -34,6 +38,16 @@ export async function POST(request: NextRequest) {
   const targetAreaIds = JSON.parse(String(form.get('target_area_ids') ?? '[]')) as string[]
   const targetScreenIds = JSON.parse(String(form.get('target_screen_ids') ?? '[]')) as string[]
   const targetBuildings = JSON.parse(String(form.get('target_buildings') ?? '[]')) as string[]
+  // Screen-scoped editors may only name their own screens — no all-screens,
+  // no area or building targeting (either would spill onto screens they were
+  // not granted). Site owners and managers pass straight through.
+  const targetCheck = await assertCanTargetSignageScreens(service, user, siteId, {
+    all_screens: allScreens,
+    target_screen_ids: targetScreenIds,
+    target_area_ids: targetAreaIds,
+    target_buildings: targetBuildings,
+  })
+  if ('error' in targetCheck) return targetCheck.error
   const priority = parseInt(String(form.get('priority') ?? '0'), 10) || 0
   const fullScreen = String(form.get('full_screen') ?? 'false') === 'true'
   const displaySeconds = clampDisplaySeconds(form.get('display_seconds'))

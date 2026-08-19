@@ -1,0 +1,20 @@
+/* The audio source has no picture. This page is only ever seen while somebody
+   is setting the machine up, so it explains itself and then gets out of the way. */
+.au-root { position: fixed; inset: 0; display: grid; place-items: center; background: #05080f;
+  color: #eaf0fb; font-family: 'Inter', system-ui, sans-serif; padding: 24px; }
+.au-unlock { display: flex; flex-direction: column; gap: 8px; align-items: center; text-align: center;
+  max-width: 460px; padding: 26px 30px; border-radius: 14px; cursor: pointer;
+  background: #0d1424; border: 1px solid rgba(255,255,255,.14); color: inherit; font: inherit; }
+.au-unlock:hover { border-color: #3f8fd8; }
+.au-unlock b { font-size: 19px; }
+.au-unlock span { font-size: 12.5px; color: #8794ab; line-height: 1.6; }
+.au-status { width: min(460px, 100%); }
+.au-head { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+.au-dot { width: 9px; height: 9px; border-radius: 50%; background: #2fb673; box-shadow: 0 0 8px #2fb673; }
+.au-idle { font-size: 12.5px; color: #8794ab; }
+.au-err { font-size: 12px; color: #ff9ba4; margin-bottom: 8px; }
+.au-cue { display: flex; align-items: center; gap: 10px; padding: 9px 11px; margin-bottom: 5px;
+  background: #111a2b; border: 1px solid rgba(255,255,255,.10); border-left: 4px solid #3fb9b0; border-radius: 9px; }
+.au-cue b { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: #3fb9b0; min-width: 62px; }
+.au-cue span { font-size: 12.5px; }
+.au-gain { margin-left: auto; color: #8794ab; font-variant-numeric: tabular-nums; }

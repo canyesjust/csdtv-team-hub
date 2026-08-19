@@ -1,0 +1,180 @@
+/* ============================================================================
+   The graphics app is deliberately NOT the hub. It does not inherit the site's
+   light theme, type scale or spacing tokens. Everything here is scoped to
+   .gfx-root so nothing leaks either direction.
+   ========================================================================== */
+
+html:has(.gfx-root),
+html.light:has(.gfx-root),
+html.dark:has(.gfx-root) {
+  background: #070b13 !important;
+  color-scheme: dark;
+}
+html:has(.gfx-root) body {
+  background: #070b13 !important;
+  color: #eaf0fb;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.gfx-root {
+  --gx-bg: #070b13;
+  --gx-pn: #0d1424;
+  --gx-pn2: #111a2c;
+  --gx-ln: rgba(255, 255, 255, 0.1);
+  --gx-tx: #eaf0fb;
+  --gx-mu: #8794ab;
+  --gx-ac: #3f8fd8;
+  /* Broadcast standard: red is on air, green is next. */
+  --gx-live: #e23744;
+  --gx-next: #2fb673;
+  --gx-take: #eef3fb;
+  --gx-gold: #e7c977;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--gx-bg);
+  color: var(--gx-tx);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow: hidden;
+}
+
+.gfx-root *,
+.gfx-root *::before,
+.gfx-root *::after { box-sizing: border-box; }
+
+.gfx-root h1, .gfx-root h2, .gfx-root h3, .gfx-root h4 { margin: 0; font-weight: 700; }
+
+.gfx-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 50px;
+  flex: none;
+  padding: 0 12px;
+  background: linear-gradient(100deg, #0a2c52, #14416f);
+  border-bottom: 1px solid var(--gx-ln);
+}
+.gfx-bar .brand { font-weight: 800; font-size: 14px; line-height: 1.1; white-space: nowrap; }
+.gfx-bar .brand small {
+  display: block; font-weight: 500; font-size: 9px; opacity: 0.7;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+.gfx-spacer { flex: 1; }
+
+.gfx-body { flex: 1; min-height: 0; overflow: auto; }
+
+.gfx-btn {
+  font: inherit; font-weight: 600; font-size: 12.5px;
+  color: var(--gx-tx); background: var(--gx-pn2);
+  border: 1px solid var(--gx-ln); border-radius: 8px;
+  padding: 7px 11px; cursor: pointer;
+}
+.gfx-btn:hover { border-color: var(--gx-ac); }
+.gfx-btn[disabled] { opacity: 0.32; cursor: default; }
+.gfx-btn.take { background: var(--gx-take); border-color: #fff; color: #0a1626; font-weight: 800; }
+.gfx-btn.live { background: var(--gx-live); border-color: var(--gx-live); color: #fff; }
+.gfx-btn.next { background: #0f3324; border-color: var(--gx-next); color: #9ff0c6; }
+.gfx-btn.ghost { background: transparent; }
+.gfx-btn.sm { padding: 4px 8px; font-size: 11px; }
+
+.gfx-chip {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+}
+.gfx-chip.idle { background: rgba(255, 255, 255, 0.12); color: #cfdcee; }
+.gfx-chip.onair { background: #fff; color: #c2283a; }
+
+.gfx-note { font-size: 11.5px; color: var(--gx-mu); line-height: 1.6; }
+.gfx-card { background: var(--gx-pn); border: 1px solid var(--gx-ln); border-radius: 12px; }
+.gfx-empty { padding: 40px 20px; text-align: center; color: var(--gx-mu); }
+
+.gfx-list { display: flex; flex-direction: column; gap: 6px; padding: 14px; max-width: 900px; margin: 0 auto; }
+.gfx-showrow {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; background: var(--gx-pn2);
+  border: 1px solid var(--gx-ln); border-left: 4px solid var(--gx-ln);
+  border-radius: 10px; text-decoration: none; color: inherit;
+}
+.gfx-showrow:hover { border-color: var(--gx-ac); }
+.gfx-showrow.live { border-color: var(--gx-live); border-left-color: var(--gx-live); }
+.gfx-showrow .nm { font-weight: 700; font-size: 14px; }
+.gfx-showrow .sub { font-size: 11.5px; color: var(--gx-mu); margin-top: 2px; }
+
+/* ============================================================================
+   Bare output surfaces. Rendered inside an OBS browser source, so the page must
+   composite over the camera with nothing of its own behind it.
+   ========================================================================== */
+html:has(.gfx-bare),
+html.light:has(.gfx-bare),
+html.dark:has(.gfx-bare),
+html:has(.gfx-bare) body {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+html:has(.gfx-bare) body { overflow: hidden; }
+
+.gfx-bare {
+  position: fixed;
+  inset: 0;
+  background: transparent !important;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ---- drawer ---- */
+.gfx-scrim { position: fixed; inset: 0; background: rgba(3,6,12,.66); z-index: 80; opacity: 0;
+  pointer-events: none; transition: opacity .2s ease; }
+.gfx-scrim.on { opacity: 1; pointer-events: auto; }
+.gfx-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--gx-pn);
+  border-left: 1px solid var(--gx-ln); z-index: 81; transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.16,.84,.24,1); overflow: auto; }
+.gfx-drawer.on { transform: none; }
+.gfx-drawer-head { position: sticky; top: 0; background: var(--gx-pn); border-bottom: 1px solid var(--gx-ln);
+  padding: 12px 14px; display: flex; align-items: center; gap: 9px; z-index: 2; }
+.gfx-dsec { border-bottom: 1px solid var(--gx-ln); padding: 12px 14px; }
+.gfx-dsec > h5 { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--gx-mu);
+  font-weight: 700; margin: 0 0 8px; }
+.gfx-dsec input, .gfx-dsec select, .gfx-dsec textarea { font: inherit; font-size: 12.5px; color: var(--gx-tx);
+  background: #050810; border: 1px solid var(--gx-ln); border-radius: 7px; padding: 6px 8px; width: 100%; }
+.gfx-swatches { display: flex; gap: 4px; flex-wrap: wrap; }
+.gfx-sw { padding: 5px 8px; border-radius: 7px; border: 1px solid var(--gx-ln); background: var(--gx-pn2);
+  cursor: pointer; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 5px; color: var(--gx-tx); }
+.gfx-sw i { width: 9px; height: 9px; border-radius: 3px; display: block; }
+.gfx-sw.on { border-color: var(--gx-ac); box-shadow: 0 0 0 1px var(--gx-ac); }
+.gfx-chk { display: flex; align-items: center; gap: 7px; padding: 5px 8px; border-radius: 6px;
+  margin-bottom: 3px; font-size: 11.5px; }
+.gfx-chk.ok { background: rgba(30,158,106,.10); color: #8fe0b8; }
+.gfx-chk.no { background: rgba(226,55,68,.12); color: #ffb3b9; }
+.gfx-url { display: block; overflow: auto; white-space: nowrap; background: #111a2c;
+  border: 1px solid var(--gx-ln); border-radius: 6px; padding: 6px 8px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+
+/* ---- drag reorder ---- */
+tr.sh-dragging td { opacity: .35; }
+tr.sh-dropb td { box-shadow: inset 0 3px 0 -1px var(--gx-ac); }
+tr.sh-dropa td { box-shadow: inset 0 -3px 0 -1px var(--gx-ac); }
+.sh-handle { color: #3c4557; cursor: grab; user-select: none; margin-right: 5px; }
+.sh-handle:hover { color: var(--gx-tx); }
+
+/* Shows list, grouped by when. Empty buckets never render, so the page is as
+   short as the week is quiet. */
+.gfx-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.gfx-group h2 {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--gx-mu); padding: 4px 2px 2px; margin: 0;
+}
+.gfx-group h2 .gfx-note { font-size: 11px; opacity: .6; }
+.gfx-rig {
+  font-size: 11.5px; color: var(--gx-mu); white-space: nowrap;
+  padding: 3px 9px; border-radius: 20px; border: 1px solid var(--gx-ln);
+}

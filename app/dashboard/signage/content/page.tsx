@@ -121,7 +121,7 @@ export default function SignageContentPage() {
   const { theme } = useTheme()
   const s = useSignageAdminStyles(theme)
   const supabase = useMemo(() => createClient(), [])
-  const { isManager, areas, screens, activeSiteId, sites } = useSignage()
+  const { isManager, screenScoped, areas, screens, activeSiteId, sites } = useSignage()
 
   // Each location has its own submission form at /signage/<slug>/submit.
   const activeSite = sites.find(x => x.id === activeSiteId) || null
@@ -166,7 +166,14 @@ export default function SignageContentPage() {
   const [addFile, setAddFile] = useState<File | null>(null)
   const [addContentType, setAddContentType] = useState<'image' | 'video' | 'html'>('image')
   const [addHtmlBody, setAddHtmlBody] = useState('')
-  const [addTargeting, setAddTargeting] = useState<TargetingValue>({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
+  // A screen-scoped editor can't publish to all screens, so never start there.
+  // SignageProvider resolves scope before rendering children, so screenScoped
+  // is already settled on this first render.
+  const [addTargeting, setAddTargeting] = useState<TargetingValue>(() => ({
+    all_screens: !screenScoped,
+    target_area_ids: [],
+    target_screen_ids: [],
+  }))
   // Building takeover: a scheduled, building-only, exclusive override — a
   // different targeting/scheduling shape from regular content, so it gets its
   // own toggle and its own start/end (datetime, not just date) fields rather
@@ -381,7 +388,12 @@ export default function SignageContentPage() {
         toast('Dates required', 'error')
         return
       }
+      if (screenScoped && addTargeting.target_screen_ids.length === 0) {
+        toast('Pick at least one of your screens', 'error')
+        return
+      }
       if (
+        !screenScoped &&
         !addTargeting.all_screens &&
         addTargeting.target_area_ids.length === 0 &&
         addTargeting.target_screen_ids.length === 0 &&
@@ -502,7 +514,7 @@ export default function SignageContentPage() {
     setAddFile(null)
     setAddContentType('image')
     setAddHtmlBody('')
-    setAddTargeting({ all_screens: true, target_area_ids: [], target_screen_ids: [] })
+    setAddTargeting({ all_screens: !screenScoped, target_area_ids: [], target_screen_ids: [] })
     setAddDates({ title: '', start_date: '', end_date: '', priority: 0, display_seconds: SIGNAGE_DEFAULT_DISPLAY_SECONDS })
     setAddTakeover(false)
     setAddTakeoverWindow({ starts_at: '', ends_at: '' })
@@ -693,6 +705,9 @@ export default function SignageContentPage() {
               </select>
             </div>
 
+            {/* A building takeover overrides every screen in a building, so it's
+                off the table for someone scoped to individual screens. */}
+            {!screenScoped && (
             <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 10, border: `1px solid ${addTakeover ? '#ef4444' : s.border}`, background: addTakeover ? 'rgba(239,68,68,0.08)' : 'transparent', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -711,6 +726,7 @@ export default function SignageContentPage() {
                 </span>
               </span>
             </label>
+            )}
 
             {addTakeover && (
               <div style={s.row}>
@@ -736,7 +752,7 @@ export default function SignageContentPage() {
               </div>
             )}
 
-            <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} lbl={s.lbl} buildingsOnly={addTakeover} />
+            <SignageTargetingPicker areas={areas} screens={screens} value={addTargeting} onChange={setAddTargeting} lbl={s.lbl} buildingsOnly={addTakeover} screensOnly={screenScoped} />
             {addContentType === 'html' ? (
               <>
                 <p style={s.lbl}>HTML</p>
@@ -891,6 +907,7 @@ export default function SignageContentPage() {
                       onChange={v => setEdits(prev => ({ ...prev, [row.id]: { ...e, ...v } }))}
                       lbl={s.lbl}
                       buildingsOnly={row.is_takeover}
+                      screensOnly={screenScoped}
                     />
                     {row.is_takeover ? (
                       <div style={{ ...s.row, marginTop: 12 }}>

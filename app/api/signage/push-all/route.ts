@@ -17,7 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { verifySignageCron } from '@/lib/signage/ablesign-cron'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { requireSignageSiteManagerApi } from '@/lib/signage/server-auth'
 import { writeAbleSignLog } from '@/lib/signage/ablesign-helpers'
 import { renderAndPushScreen, type PushTrigger } from '@/lib/signage/push-screen'
 import { timingSafeEqualStr } from '@/lib/server/security'
@@ -171,7 +171,7 @@ async function handle(request: NextRequest) {
     if (service) authorized = await verifyPushToken(request, service)
   }
   if (!authorized) {
-    const auth = await requireSignageEditorApi()
+    const auth = await requireSignageSiteManagerApi()
     if ('error' in auth) return auth.error
   }
 

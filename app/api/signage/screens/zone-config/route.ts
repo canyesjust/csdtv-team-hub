@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  assertCanAccessSignageSite,
-  loadSignageRowSiteId,
+  assertCanAccessSignageScreen,
   requireSignageEditorApi,
 } from '@/lib/signage/server-auth'
 import { resolveZoneConfig, isDefaultZoneConfig } from '@/lib/signage/zones'
@@ -19,9 +18,10 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'id required' }, { status: 400 })
   }
 
-  const siteId = await loadSignageRowSiteId(auth.service, 'signage_screens', body.id)
-  const siteCheck = await assertCanAccessSignageSite(auth.service, auth.user, siteId)
-  if ('error' in siteCheck) return siteCheck.error
+  // Layout is a property of the screen itself, so a screen-scoped editor may
+  // change it on the screens they were granted.
+  const screenCheck = await assertCanAccessSignageScreen(auth.service, auth.user, body.id)
+  if ('error' in screenCheck) return screenCheck.error
 
   // Validate through the shared resolver. Store NULL when the arrangement equals
   // the default, so a reset leaves no row-level override.

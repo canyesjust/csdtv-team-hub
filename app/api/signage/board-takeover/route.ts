@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { requireSignageSiteManagerApi } from '@/lib/signage/server-auth'
 import { getAuthenticatedTeamUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { pushTakeoverScreens } from '@/lib/signage/takeover-push'
@@ -30,7 +30,7 @@ async function pushToBoardTakeoverScreens(service: SupabaseClient) {
 }
 
 export async function GET() {
-  const auth = await requireSignageEditorApi()
+  const auth = await requireSignageSiteManagerApi()
   if ('error' in auth) return auth.error
   const { service } = auth
   const { data } = await service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle()
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
-  const auth = await requireSignageEditorApi()
+  const auth = await requireSignageSiteManagerApi()
   if ('error' in auth) return auth.error
   const { service } = auth
 

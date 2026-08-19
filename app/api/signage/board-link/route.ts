@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'node:crypto'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { requireSignageSiteManagerApi } from '@/lib/signage/server-auth'
 import { signageAbsoluteHubUrl } from '@/lib/signage/constants'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ function urlFor(token: string): string {
 }
 
 export async function GET() {
-  const auth = await requireSignageEditorApi()
+  const auth = await requireSignageSiteManagerApi()
   if ('error' in auth) return auth.error
   const { data } = await auth.service.from('app_settings').select('value').eq('key', KEY).maybeSingle()
   const token = ((data?.value as string | undefined) || '').trim()
@@ -24,7 +24,7 @@ export async function GET() {
 }
 
 export async function POST() {
-  const auth = await requireSignageEditorApi()
+  const auth = await requireSignageSiteManagerApi()
   if ('error' in auth) return auth.error
   const token = randomBytes(16).toString('hex')
   const { error } = await auth.service

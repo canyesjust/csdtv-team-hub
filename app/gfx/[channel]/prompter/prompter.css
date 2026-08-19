@@ -1,0 +1,14 @@
+/* Prompter output. No chrome. Controls live in the show screen. */
+.pr-root { position: fixed; inset: 0; background: #000; overflow: hidden; }
+.pr-scroll { position: absolute; inset: 0; overflow: hidden; }
+.pr-inner { padding: 34vh 7vw; will-change: transform; }
+.pr-line { font-size: 3.2vw; line-height: 1.45; font-weight: 600; color: #fff; margin-bottom: 3.4vw; }
+.pr-line.past { opacity: .3; }
+.pr-slug { display: block; font-size: 1.1vw; letter-spacing: .14em; text-transform: uppercase;
+  color: #8f9db4; font-weight: 800; margin-bottom: .7vw; }
+.pr-ifb { display: block; font-size: 1.6vw; color: #ff8f98; font-style: italic; margin-top: .9vw; }
+.pr-cue { position: absolute; left: 0; right: 0; top: 34vh; border-top: 2px solid rgba(226,55,68,.5);
+  pointer-events: none; z-index: 2; }
+.pr-rehearsal { position: absolute; top: 16px; right: 20px; z-index: 3; font-size: 12px; font-weight: 800;
+  letter-spacing: .14em; text-transform: uppercase; color: #f0c66a; border: 1px solid #f0c66a;
+  border-radius: 999px; padding: 4px 12px; }

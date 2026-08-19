@@ -7,6 +7,7 @@ import { toast } from '@/lib/toast'
 import { SignagePageShell, useSignageAdminStyles } from '../components/SignageAdmin'
 
 type SiteRow = { id: string; name: string; slug: string; active: boolean; sort_order: number }
+type ScreenRow = { id: string; code: string; name: string; site_id: string | null; active: boolean }
 type TeamMember = { id: string; name: string | null; role: string; signage_approver: boolean; signage_role: string | null }
 
 export default function SignageAccessPage() {
@@ -15,31 +16,49 @@ export default function SignageAccessPage() {
   const supabase = useMemo(() => createClient(), [])
 
   const [sites, setSites] = useState<SiteRow[]>([])
+  const [screens, setScreens] = useState<ScreenRow[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [access, setAccess] = useState<Record<string, string[]>>({})
+  const [screenAccess, setScreenAccess] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [savingSite, setSavingSite] = useState<string | null>(null)
   const [savingRole, setSavingRole] = useState<string | null>(null)
+  const [savingScreens, setSavingScreens] = useState<string | null>(null)
+  const [openMember, setOpenMember] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [siteRes, teamRes, accessRes] = await Promise.all([
+    const [siteRes, screenRes, teamRes, accessRes, screenAccessRes] = await Promise.all([
       supabase.from('signage_sites').select('id, name, slug, active, sort_order').order('sort_order'),
+      supabase.from('signage_screens').select('id, code, name, site_id, active').order('code'),
       supabase.from('team').select('id, name, role, signage_approver, signage_role').eq('active', true).order('name'),
       supabase.from('signage_site_access').select('team_id, site_id'),
+      fetch('/api/signage/sites/screen-access').then(r => r.json()).catch(() => ({ grants: [] })),
     ])
     setSites((siteRes.data as SiteRow[]) || [])
+    setScreens((screenRes.data as ScreenRow[]) || [])
     setTeam((teamRes.data as TeamMember[]) || [])
+
     const map: Record<string, string[]> = {}
     for (const row of (accessRes.data as { team_id: string; site_id: string }[]) || []) {
       ;(map[row.site_id] ||= []).push(row.team_id)
     }
     setAccess(map)
+
+    const byMember: Record<string, string[]> = {}
+    for (const row of (screenAccessRes?.grants as { team_id: string; screen_id: string }[]) || []) {
+      ;(byMember[row.team_id] ||= []).push(row.screen_id)
+    }
+    setScreenAccess(byMember)
     setLoading(false)
   }, [supabase])
 
   useEffect(() => { void load() }, [load])
 
   const nonManagers = team.filter(m => m.role !== 'Manager')
+  const siteName = useCallback(
+    (id: string | null) => sites.find(x => x.id === id)?.name || 'No location',
+    [sites],
+  )
 
   const persist = useCallback(async (siteId: string, teamIds: string[]) => {
     setSavingSite(siteId)
@@ -67,6 +86,32 @@ export default function SignageAccessPage() {
     })
   }
 
+  const persistScreens = useCallback(async (memberId: string, screenIds: string[]) => {
+    setSavingScreens(memberId)
+    const res = await fetch('/api/signage/sites/screen-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team_id: memberId, screen_ids: screenIds }),
+    })
+    setSavingScreens(null)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast(data.error || 'Save failed', 'error')
+      void load()
+      return
+    }
+    toast('Screen access updated', 'success')
+  }, [load])
+
+  const toggleScreen = (memberId: string, screenId: string) => {
+    setScreenAccess(prev => {
+      const current = prev[memberId] || []
+      const next = current.includes(screenId) ? current.filter(x => x !== screenId) : [...current, screenId]
+      void persistScreens(memberId, next)
+      return { ...prev, [memberId]: next }
+    })
+  }
+
   const setEditor = useCallback(async (memberId: string, makeEditor: boolean) => {
     setSavingRole(memberId)
     const res = await fetch('/api/signage/approvers', {
@@ -84,20 +129,37 @@ export default function SignageAccessPage() {
     toast(makeEditor ? 'Signage editor access granted' : 'Signage editor access removed', 'success')
   }, [])
 
+  /** One-line plain-English summary of what a person can actually reach. */
+  const reachLabel = (memberId: string): string => {
+    const siteGrants = sites.filter(site => (access[site.id] || []).includes(memberId))
+    const screenGrants = screenAccess[memberId] || []
+    if (siteGrants.length === 0 && screenGrants.length === 0) return 'All locations (no grants set)'
+    const parts: string[] = []
+    if (siteGrants.length) parts.push(siteGrants.map(x => x.name).join(', '))
+    if (screenGrants.length) parts.push(`${screenGrants.length} screen${screenGrants.length === 1 ? '' : 's'}`)
+    return parts.join(' + ')
+  }
+
   if (loading) {
     return (
-      <SignagePageShell title="Site access" subtitle="Who can manage each location">
+      <SignagePageShell title="Access" subtitle="Who can manage which locations and screens">
         <div style={{ color: s.muted, padding: 16 }}>Loading…</div>
       </SignagePageShell>
     )
   }
 
+  const screensBySite = sites
+    .map(site => ({ site, list: screens.filter(sc => sc.site_id === site.id) }))
+    .filter(g => g.list.length > 0)
+  const orphanScreens = screens.filter(sc => !sc.site_id || !sites.some(x => x.id === sc.site_id))
+
   return (
-    <SignagePageShell title="Site access" subtitle="Who can manage each location">
-      <p style={{ fontSize: 13, color: s.muted, maxWidth: 640, margin: '0 0 16px', lineHeight: 1.5 }}>
-        Managers always see every site, so they aren&apos;t listed here. Grant a non-manager access to a site and
-        they&apos;ll only see that site&apos;s screens, content, and areas. People with no grants fall back to all
-        sites (legacy behavior) until the per-site database policy is enabled.
+    <SignagePageShell title="Access" subtitle="Who can manage which locations and screens">
+      <p style={{ fontSize: 13, color: s.muted, maxWidth: 680, margin: '0 0 20px', lineHeight: 1.55 }}>
+        Managers always see everything, so they aren&apos;t listed here. Grants stack: a <strong>location</strong> grant
+        hands someone the whole site. A <strong>screen</strong> grant hands them one screen and nothing else, no
+        announcements, areas, branding, or live takeover. Someone with no grants at all still falls back to every
+        location, which is the old behavior.
       </p>
 
       {nonManagers.length === 0 && (
@@ -108,7 +170,7 @@ export default function SignageAccessPage() {
         <div style={{ ...s.card, marginBottom: 20 }}>
           <div style={{ fontWeight: 600, color: s.text, fontSize: 14, marginBottom: 2 }}>Signage-only editors</div>
           <div style={{ fontSize: 12, color: s.muted, marginBottom: 12, lineHeight: 1.5 }}>
-            A signage editor signs in to this tool only — no other part of the Hub. Pair with a site grant below to scope them to specific locations.
+            A signage editor signs in to this tool only, no other part of the Hub. Pair with a location or screen grant below to scope them.
           </div>
           <div style={{ display: 'grid', gap: 4 }}>
             {nonManagers.map(m => (
@@ -127,7 +189,11 @@ export default function SignageAccessPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+      <h3 style={{ ...s.h3, marginBottom: 4 }}>Whole locations</h3>
+      <p style={{ fontSize: 12.5, color: s.muted, margin: '0 0 12px' }}>
+        Full run of a site: every screen, plus areas, announcements, wayfinding, branding, and live takeover.
+      </p>
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginBottom: 28 }}>
         {sites.map(site => {
           const granted = access[site.id] || []
           return (
@@ -149,6 +215,75 @@ export default function SignageAccessPage() {
                   </label>
                 ))}
               </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <h3 style={{ ...s.h3, marginBottom: 4 }}>Single screens</h3>
+      <p style={{ fontSize: 12.5, color: s.muted, margin: '0 0 12px', maxWidth: 680, lineHeight: 1.55 }}>
+        Pick a person, then tick the screens they run. They&apos;ll see only those screens: they can post and schedule
+        content on them and change each screen&apos;s own layout and theme. They can&apos;t publish to all screens,
+        target an area or building, add or delete screens, or touch anything else in the location. A location grant
+        above already covers every screen in that site, so don&apos;t tick both.
+      </p>
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        {nonManagers.map(m => {
+          const mine = screenAccess[m.id] || []
+          const open = openMember === m.id
+          return (
+            <div key={m.id} style={{ ...s.card, padding: 0, overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setOpenMember(open ? null : m.id)}
+                style={{
+                  display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between',
+                  gap: 10, padding: '12px 14px', background: 'transparent', border: 'none',
+                  cursor: 'pointer', textAlign: 'left', color: s.text, fontSize: 13.5,
+                }}
+              >
+                <span>
+                  <span style={{ fontWeight: 600 }}>{m.name || '(unnamed)'}</span>{' '}
+                  <span style={{ fontSize: 11.5, color: s.muted }}>
+                    {m.signage_role === 'editor' ? 'signage editor' : m.role}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: s.muted, marginTop: 2 }}>
+                    {savingScreens === m.id ? 'Saving…' : reachLabel(m.id)}
+                  </span>
+                </span>
+                <span aria-hidden style={{ color: s.muted, fontSize: 12 }}>{open ? '▾' : '▸'}</span>
+              </button>
+
+              {open && (
+                <div style={{ padding: '0 14px 14px', display: 'grid', gap: 12 }}>
+                  {[...screensBySite, ...(orphanScreens.length ? [{ site: null, list: orphanScreens }] : [])].map(group => (
+                    <div key={group.site?.id ?? 'orphan'}>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: s.muted, margin: '0 0 5px' }}>
+                        {group.site ? group.site.name : siteName(null)}
+                      </div>
+                      <div style={{ display: 'grid', gap: 4 }}>
+                        {group.list.map(sc => (
+                          <label key={sc.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: s.text }}>
+                            <input
+                              type="checkbox"
+                              checked={mine.includes(sc.id)}
+                              disabled={savingScreens === m.id}
+                              onChange={() => toggleScreen(m.id, sc.id)}
+                            />
+                            {sc.name}
+                            <span style={{ fontSize: 11, color: s.muted, fontFamily: 'ui-monospace, monospace' }}>/{sc.code}</span>
+                            {!sc.active && <span style={{ fontSize: 11, color: s.muted }}>· inactive</span>}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {screens.length === 0 && (
+                    <div style={{ fontSize: 12.5, color: s.muted }}>No screens exist yet.</div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}

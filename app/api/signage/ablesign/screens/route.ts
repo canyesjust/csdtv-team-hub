@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AbleSignApiError, listAllScreens } from '@/lib/server/ablesign'
 import { getSiteAbleSignCreds } from '@/lib/signage/ablesign-creds'
-import { requireSignageEditorApi } from '@/lib/signage/server-auth'
+import { assertCanReadSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,8 +9,13 @@ export async function GET(request: NextRequest) {
   const auth = await requireSignageEditorApi()
   if ('error' in auth) return auth.error
 
+  const siteId = new URL(request.url).searchParams.get('siteId')
+  // Without this, any editor could name another location's siteId and get that
+  // workspace's whole screen list back.
+  const siteCheck = await assertCanReadSignageSite(auth.service, auth.user, siteId)
+  if ('error' in siteCheck) return siteCheck.error
+
   try {
-    const siteId = new URL(request.url).searchParams.get('siteId')
     const creds = await getSiteAbleSignCreds(auth.service, siteId)
     const screens = await listAllScreens(creds)
     return NextResponse.json({

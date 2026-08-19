@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { STUDENT_INTERN_HOME_PATH, STUDENT_INTERN_ROLE, isSignageEditorRole, hasParentSquareAccess } from './lib/roles'
 import { isDashboardPathAllowed } from './lib/dashboard-access'
+import { SIGNAGE_HOME_PATH, SIGNAGE_LOGIN_PATH } from './lib/auth-constants'
 import { getActorTeamRow, getEffectiveTeamRow } from './lib/server/effective-team'
 
 const BRAND_REVIEW_COOKIE = 'csd_brand_review'
@@ -18,6 +19,14 @@ function safeEqualHex(a: string, b: string): boolean {
   let result = 0
   for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return result === 0
+}
+
+/**
+ * Someone bounced off a signage page should land back on the signage sign-in
+ * page, not the CSDtv crew portal they've never heard of.
+ */
+function loginPathFor(pathname: string): string {
+  return pathname.startsWith('/dashboard/signage') ? SIGNAGE_LOGIN_PATH : '/login'
 }
 
 export async function middleware(request: NextRequest) {
@@ -77,7 +86,7 @@ export async function middleware(request: NextRequest) {
     const teamAccess = await getEffectiveTeamRow(supabase, user)
     if (teamAccess === null) {
       await supabase.auth.signOut()
-      const loginUrl = new URL('/login', request.url)
+      const loginUrl = new URL(loginPathFor(pathname), request.url)
       loginUrl.searchParams.set('reason', 'not-on-team')
       const redirectResponse = NextResponse.redirect(loginUrl)
       response.cookies.getAll().forEach((cookie) => {
@@ -122,7 +131,9 @@ export async function middleware(request: NextRequest) {
       const inSignage = pathname === '/dashboard/signage' || pathname.startsWith('/dashboard/signage/')
       if (!inSignage) {
         const url = request.nextUrl.clone()
-        url.pathname = '/dashboard/signage/overview'
+        // Content, not overview: overview is a whole-location view, and a
+        // screen-scoped editor gets bounced off it again by SignageProvider.
+        url.pathname = SIGNAGE_HOME_PATH
         return NextResponse.redirect(url)
       }
     }
@@ -138,8 +149,15 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
+    // Signage editors are already constrained to /dashboard/signage/* by the
+    // lock above. Running them through the profile allowlist as well is what
+    // caused an infinite redirect: a Production Focus signage editor was
+    // refused /dashboard/signage/* here, sent to /dashboard, and bounced back
+    // by the signage lock forever. The signage lock is the narrower rule, so
+    // it wins.
     if (
       role &&
+      !isSignageEditorRole(signageRole) &&
       !isDashboardPathAllowed(pathname, role, dashboardProfile)
     ) {
       const url = request.nextUrl.clone()
@@ -150,7 +168,7 @@ export async function middleware(request: NextRequest) {
 
   // If no user and trying to access dashboard or control surface, redirect to login
   if (!user && requiresTeam) {
-    const loginUrl = new URL('/login', request.url)
+    const loginUrl = new URL(loginPathFor(pathname), request.url)
     loginUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(loginUrl)
   }

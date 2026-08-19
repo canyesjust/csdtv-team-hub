@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { assertCanAccessSignageSite, requireSignageEditorApi } from '@/lib/signage/server-auth'
+import {
+  assertCanReadSignageSite,
+  assertCanTargetSignageScreens,
+  requireSignageEditorApi,
+} from '@/lib/signage/server-auth'
 import { SIGNAGE_MEDIA_BUCKET } from '@/lib/signage/constants'
 import { clampDisplaySeconds } from '@/lib/signage/content-display'
 
@@ -21,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
   const siteId = body.site_id ? String(body.site_id) : null
-  const siteCheck = await assertCanAccessSignageSite(service, user, siteId)
+  const siteCheck = await assertCanReadSignageSite(service, user, siteId)
   if ('error' in siteCheck) return siteCheck.error
 
 
@@ -35,6 +39,16 @@ export async function POST(request: NextRequest) {
   const targetAreaIds = Array.isArray(body.target_area_ids) ? (body.target_area_ids as unknown[]).map(String) : []
   const targetScreenIds = Array.isArray(body.target_screen_ids) ? (body.target_screen_ids as unknown[]).map(String) : []
   const targetBuildings = Array.isArray(body.target_buildings) ? (body.target_buildings as unknown[]).map(String) : []
+
+  // Same targeting rule as the direct-upload route: a screen-scoped editor
+  // can only publish to the screens they were granted.
+  const targetCheck = await assertCanTargetSignageScreens(service, user, siteId, {
+    all_screens: allScreens,
+    target_screen_ids: targetScreenIds,
+    target_area_ids: targetAreaIds,
+    target_buildings: targetBuildings,
+  })
+  if ('error' in targetCheck) return targetCheck.error
 
   // Building takeover: same rules as the image/HTML creation route
   // (app/api/signage/content/route.ts) — building-only targeting, a valid

@@ -103,6 +103,7 @@ export async function POST(request: Request) {
         role,
         avatar_color,
         dashboard_profile,
+        signage_role: rawSignageRole,
         password: rawPassword,
       } = payload || {}
 
@@ -152,6 +153,11 @@ export async function POST(request: Request) {
           ? 'production_focus'
           : 'default'
 
+      // Signage-only lands them in the signage tool and nowhere else in the Hub
+      // (middleware.ts enforces it). A Manager can't be signage-only — that
+      // would lock them out of the rest of the Hub.
+      const signageRole = rawSignageRole === 'editor' && role.trim() !== 'Manager' ? 'editor' : null
+
       const { data: newTeam, error: teamError } = await supabase
         .from('team')
         .insert({
@@ -162,6 +168,7 @@ export async function POST(request: Request) {
           supabase_user_id: authUserId,
           active: true,
           dashboard_profile: profile,
+          signage_role: signageRole,
         })
         .select('id')
         .single()

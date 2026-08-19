@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const decoded = decodeURIComponent(rawNext)
     if (decoded.startsWith('/') && !decoded.startsWith('//')) {
       const pathOnly = decoded.split('?')[0].split('#')[0]
-      if (pathOnly === '/login' || pathOnly.startsWith('/dashboard')) {
+      if (pathOnly === '/login' || pathOnly === '/signage-login' || pathOnly.startsWith('/dashboard')) {
         next = decoded
       }
     }
@@ -47,5 +47,8 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth`)
+  // Mail scanners routinely prefetch and burn magic links, so this path is hit
+  // in normal use. Send signage people back to the signage sign-in page.
+  const failPath = next.startsWith('/dashboard/signage') ? '/signage-login' : '/login'
+  return NextResponse.redirect(`${origin}${failPath}?error=auth`)
 }

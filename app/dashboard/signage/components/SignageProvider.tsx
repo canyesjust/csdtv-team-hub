@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { SIGNAGE_LOGIN_PATH } from '@/lib/auth-constants'
 import Loader from '../../components/Loader'
 import type { SignageArea, SignageScreen } from './SignageAdmin'
 
@@ -43,6 +44,14 @@ type SignageContextValue = {
   ready: boolean
   isManager: boolean
   isApprover: boolean
+  /**
+   * True when this person holds individual SCREEN grants only — no whole-location
+   * grant anywhere. They get their screens' content and settings and nothing
+   * site-wide. Mirrors requireSignageSiteManagerApi on the server.
+   */
+  screenScoped: boolean
+  /** When screenScoped, the exact screen ids they were granted. */
+  grantedScreenIds: string[]
   areas: SignageArea[]
   screens: SignageScreen[]
   sites: SignageSite[]
@@ -72,6 +81,8 @@ export function SignageProvider({ children }: { children: ReactNode }) {
   const [screens, setScreens] = useState<SignageScreen[]>([])
   const [sites, setSites] = useState<SignageSite[]>([])
   const [activeSiteId, setActiveSiteId] = useState<string>('')
+  const [screenScoped, setScreenScoped] = useState(false)
+  const [grantedScreenIds, setGrantedScreenIds] = useState<string[]>([])
 
   const refreshCatalog = useCallback(async () => {
     if (!activeSiteId) { setAreas([]); setScreens([]); return }
@@ -80,8 +91,12 @@ export function SignageProvider({ children }: { children: ReactNode }) {
       supabase.from('signage_screens').select('id, code, name, area_id, building').eq('site_id', activeSiteId).order('code'),
     ])
     setAreas(areasRes.data || [])
-    setScreens(screensRes.data || [])
-  }, [supabase, activeSiteId])
+    // RLS already hides screens a screen-scoped user wasn't granted, but filter
+    // here too so the UI is right even if the policy is ever relaxed.
+    const allowed = new Set(grantedScreenIds)
+    const rows = screensRes.data || []
+    setScreens(screenScoped ? rows.filter(r => allowed.has(r.id)) : rows)
+  }, [supabase, activeSiteId, screenScoped, grantedScreenIds])
 
   const refreshSites = useCallback(async () => {
     const [{ data }, schoolPrimary] = await Promise.all([
@@ -103,7 +118,7 @@ export function SignageProvider({ children }: { children: ReactNode }) {
      try {
       const { data: { session } } = await supabase.auth.getSession()
       if (cancelled) return
-      if (!session) { router.replace('/login'); return }
+      if (!session) { router.replace(SIGNAGE_LOGIN_PATH); return }
 
       const { data: user, error: userError } = await supabase
         .from('team')
@@ -130,17 +145,42 @@ export function SignageProvider({ children }: { children: ReactNode }) {
 
       let list: SignageSite[] = ((siteRows as SiteSelectRow[]) || []).map(r => mapSite(r, schoolPrimary))
 
-      // Non-managers are scoped to the sites they've been granted access to.
-      // If they have no explicit grants, fall back to all active sites so an
-      // approver who predates the access model isn't locked out.
+      // Non-managers are scoped by their grants. Two kinds stack:
+      //   signage_site_access   -> the whole location
+      //   signage_screen_access -> one screen, plus read of the location it's in
+      // No grants of either kind = all active sites, so an approver who predates
+      // the access model isn't locked out.
       if (!managerRole && user?.id) {
-        const { data: accessRows } = await supabase
-          .from('signage_site_access')
-          .select('site_id')
-          .eq('team_id', user.id)
+        const [siteGrantRes, screenGrantRes] = await Promise.all([
+          supabase.from('signage_site_access').select('site_id').eq('team_id', user.id),
+          supabase.from('signage_screen_access').select('screen_id').eq('team_id', user.id),
+        ])
         if (cancelled) return
-        const allowed = new Set((accessRows || []).map(r => r.site_id))
-        if (allowed.size > 0) list = list.filter(s => allowed.has(s.id))
+        const siteGrants = new Set((siteGrantRes.data || []).map(r => r.site_id as string))
+        const screenGrants = (screenGrantRes.data || []).map(r => r.screen_id as string)
+
+        // Signage-only editors can't predate the access model, so for them an
+        // empty grant set means no access at all, not the legacy "sees
+        // everything" fallback. Mirrors resolveSignageScope() on the server.
+        if (signageEditor && siteGrants.size === 0 && screenGrants.length === 0) {
+          list = []
+        } else if (siteGrants.size > 0 || screenGrants.length > 0) {
+          const screenSiteIds = new Set<string>()
+          if (screenGrants.length > 0) {
+            const { data: grantedScreens } = await supabase
+              .from('signage_screens')
+              .select('id, site_id')
+              .in('id', screenGrants)
+            if (cancelled) return
+            for (const row of grantedScreens || []) {
+              if (row.site_id) screenSiteIds.add(row.site_id as string)
+            }
+          }
+          list = list.filter(s => siteGrants.has(s.id) || screenSiteIds.has(s.id))
+          setGrantedScreenIds(screenGrants)
+          // Screen-scoped means: screens but no location anywhere.
+          setScreenScoped(siteGrants.size === 0 && screenGrants.length > 0)
+        }
       }
 
       setSites(list)
@@ -165,6 +205,7 @@ export function SignageProvider({ children }: { children: ReactNode }) {
     if (access === 'ok') void refreshCatalog()
   }, [access, refreshCatalog])
 
+  // Approvers (not editors) only ever get the content queue.
   useEffect(() => {
     if (access !== 'ok' || isManager) return
     if (!pathname.startsWith('/dashboard/signage/content')) {
@@ -172,11 +213,27 @@ export function SignageProvider({ children }: { children: ReactNode }) {
     }
   }, [access, isManager, pathname, router])
 
+  // Screen-scoped editors get their content plus their screens' own settings.
+  // Everything else in the tool is site-wide, so bounce them back to content.
+  useEffect(() => {
+    if (access !== 'ok' || !screenScoped) return
+    const allowed = [
+      '/dashboard/signage/content',
+      '/dashboard/signage/screens',
+      '/dashboard/signage/layout-builder',
+    ]
+    if (!allowed.some(prefix => pathname.startsWith(prefix))) {
+      router.replace('/dashboard/signage/content')
+    }
+  }, [access, screenScoped, pathname, router])
+
   const value = useMemo(
     () => ({
       ready: access === 'ok',
       isManager,
       isApprover,
+      screenScoped,
+      grantedScreenIds,
       areas,
       screens,
       sites,
@@ -185,7 +242,7 @@ export function SignageProvider({ children }: { children: ReactNode }) {
       refreshCatalog,
       refreshSites,
     }),
-    [access, isManager, isApprover, areas, screens, sites, activeSiteId, setActiveSite, refreshCatalog, refreshSites],
+    [access, isManager, isApprover, screenScoped, grantedScreenIds, areas, screens, sites, activeSiteId, setActiveSite, refreshCatalog, refreshSites],
   )
 
   if (access === 'loading') return <Loader />
@@ -193,6 +250,17 @@ export function SignageProvider({ children }: { children: ReactNode }) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
         <p>Manager or signage approver access required.</p>
+      </div>
+    )
+  }
+  if (sites.length === 0) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', maxWidth: 420, margin: '0 auto', lineHeight: 1.6 }}>
+        <p style={{ fontWeight: 600, marginBottom: 6 }}>No screens assigned yet</p>
+        <p style={{ opacity: 0.7, fontSize: 14 }}>
+          Your account has signage access, but nobody has given you a location or a screen to manage.
+          Ask a signage manager to assign you under Signage → Access.
+        </p>
       </div>
     )
   }
