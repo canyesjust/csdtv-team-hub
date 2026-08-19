@@ -32,6 +32,7 @@ export default function LibraryClient({
       <div className="gfx-bar">
         <div className="brand">CSDtv<small>Library</small></div>
         <a href="/gfx" className="gfx-btn sm ghost" style={{ textDecoration: 'none' }}>← Shows</a>
+        <a href="/dashboard" className="gfx-btn sm ghost" style={{ textDecoration: 'none' }}>Hub</a>
         <div className="gfx-spacer" />
         {error && <span style={{ color: '#ff9ba4', fontSize: 11.5 }}>{error}</span>}
         {ok && <span style={{ color: '#8fe0b8', fontSize: 11.5 }}>{ok}</span>}

@@ -59,6 +59,7 @@ export default async function GraphicsShowsPage() {
     <>
       <div className="gfx-bar">
         <div className="brand">CSDtv<small>Graphics</small></div>
+        <Link href="/dashboard" className="gfx-btn sm ghost" style={{ textDecoration: 'none' }}>← Hub</Link>
         <Link href="/gfx/library" className="gfx-btn sm ghost" style={{ textDecoration: 'none' }}>Library</Link>
         <div className="gfx-spacer" />
         <span className="gfx-note">{user.role}</span>

@@ -43,6 +43,7 @@ const PATHS: Record<string, React.ReactNode> = {
   students: <><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.66 4 3 6 3s6-1.34 6-3v-5"/></>,
   image: <><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
   tv: <><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></>,
+  graphics: <><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="5" y="13" width="11" height="4" rx="1"/></>,
 }
 
 function Icon({ type, size = 16 }: { type: string; size?: number }) {

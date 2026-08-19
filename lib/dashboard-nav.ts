@@ -17,6 +17,15 @@ const WORK_BASE: DashboardNavItem[] = [
   { label: 'Video library', href: '/dashboard/videos', icon: 'film' },
 ]
 
+// Live graphics runs outside the dashboard shell on purpose, so this link is
+// the only way anyone finds it. Staff and Manager only, matching the gate on
+// /gfx itself, so nobody clicks through to a 403.
+const LIVE_GRAPHICS: DashboardNavItem = {
+  label: 'Live graphics',
+  href: '/gfx',
+  icon: 'graphics',
+}
+
 const OBS_ASSETS: DashboardNavItem = {
   label: 'OBS assets',
   href: '/dashboard/obs-assets',
@@ -104,6 +113,7 @@ export function buildStaffDashboardNav(
   moreItems: DashboardNavItem[]
 } {
   const manager = isManagerRole(role)
+  const graphicsVisible = manager || role === 'Staff'
   const brandLibrary = manager ? BRAND_LIBRARY_MANAGE : BRAND_LIBRARY_PUBLIC
   // ParentSquare is an add-on grant — Managers always have it, others need the explicit flag.
   const parentSquareVisible = manager || !!parentsquareAccess
@@ -123,6 +133,7 @@ export function buildStaffDashboardNav(
   const workItems: DashboardNavItem[] = [
     ...WORK_BASE.slice(0, 2),
     ...(manager ? [BOARD_MEETINGS] : []),
+    ...(graphicsVisible ? [LIVE_GRAPHICS] : []),
     ...WORK_BASE.slice(2),
   ]
 
@@ -135,6 +146,7 @@ export function buildStaffDashboardNav(
 
   const moreItems: DashboardNavItem[] = [
     ...(!manager ? [BOARD_MEETINGS] : []),
+    ...(graphicsVisible ? [LIVE_GRAPHICS] : []),
     ...MORE_BASE,
     ...(manager ? [SIGNAGE, OFFICE_SIGNAGE] : []),
     ...(parentSquareVisible ? [PARENTSQUARE] : []),
