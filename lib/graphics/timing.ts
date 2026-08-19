@@ -136,3 +136,16 @@ export function formatClock(epochMs: number, withSeconds = false): string {
     ...(withSeconds ? { second: '2-digit' as const } : {}),
   })
 }
+
+/**
+ * Read a duration back out of the grid. Accepts `90`, `1:30` and `1:02:05`,
+ * because a producer types whichever is fastest and both mean ninety seconds.
+ */
+export function parseDuration(input: string): number {
+  const parts = String(input).trim().split(':')
+  if (parts.some(p => p !== '' && !/^\d+$/.test(p))) return 0
+  const nums = parts.map(p => Number(p || 0))
+  let seconds = 0
+  for (const n of nums) seconds = seconds * 60 + (Number.isFinite(n) ? n : 0)
+  return Math.max(0, Math.min(86400, Math.round(seconds)))
+}

@@ -8,7 +8,8 @@ type ProductionOption = {
   id: string
   production_number: number | null
   title: string
-  event_date: string | null
+  status: string | null
+  starts_at: string | null
   start_datetime: string | null
   end_datetime: string | null
   venue: string | null
@@ -46,7 +47,13 @@ export default function NewShowButton({
   const [hardOutAt, setHardOutAt] = useState('')
   const [venue, setVenue] = useState('')
   const [productions, setProductions] = useState<ProductionOption[]>([])
+  const [productionsLoaded, setProductionsLoaded] = useState(false)
   const [productionId, setProductionId] = useState<string | null>(null)
+
+  const dateLabel = (iso: string | null) => {
+    if (!iso) return ''
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
 
   const toLocal = (iso: string | null) => {
     if (!iso) return ''
@@ -62,8 +69,12 @@ export default function NewShowButton({
     let cancelled = false
     void fetch('/api/gfx/productions')
       .then(r => (r.ok ? r.json() : { productions: [] }))
-      .then(body => { if (!cancelled) setProductions(body.productions || []) })
-      .catch(() => {})
+      .then(body => {
+        if (cancelled) return
+        setProductions(body.productions || [])
+        setProductionsLoaded(true)
+      })
+      .catch(() => { if (!cancelled) setProductionsLoaded(true) })
     return () => { cancelled = true }
   }, [open])
 
@@ -74,7 +85,7 @@ export default function NewShowButton({
     setEventType(p.event_type)
     if (p.school_code) setSchoolCode(p.school_code)
     if (p.venue) setVenue(p.venue)
-    if (p.start_datetime) setAirAt(toLocal(p.start_datetime))
+    if (p.starts_at || p.start_datetime) setAirAt(toLocal(p.starts_at || p.start_datetime))
     if (p.end_datetime) setHardOutAt(toLocal(p.end_datetime))
   }, [])
 
@@ -116,27 +127,40 @@ export default function NewShowButton({
           <button className="gfx-btn sm ghost" onClick={() => setOpen(false)}>Cancel</button>
         </div>
 
-        {productions.length > 0 && (
-          <section className="gfx-dsec">
-            <h5>Start from a production</h5>
-            <select value={productionId ?? ''} onChange={e => {
-              pickProduction(productions.find(p => p.id === e.target.value) ?? null)
-            }}>
-              <option value="">Not from a production…</option>
-              {productions.map(p => (
-                <option key={p.id} value={p.id} disabled={p.has_show}>
-                  {p.production_number ? `#${p.production_number} · ` : ''}{p.title}
-                  {p.event_date ? ` · ${new Date(`${p.event_date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
-                  {p.has_show ? ' · already has a show' : ''}
-                </option>
-              ))}
-            </select>
-            <p className="gfx-note" style={{ marginTop: 7 }}>
-              The production record already knows the title, the school, the date and the venue. Picking one
-              fills all of it in and links the two, so the as-run log lands back on the production afterwards.
+        <section className="gfx-dsec">
+          <h5>Start from a production</h5>
+          {!productionsLoaded ? (
+            <p className="gfx-note">Loading the schedule\u2026</p>
+          ) : productions.length === 0 ? (
+            <p className="gfx-note">
+              Nothing on the schedule in the next while. You can still build the show here and link it to a
+              production later from the show&rsquo;s setup drawer.
             </p>
-          </section>
-        )}
+          ) : (
+            <>
+              <select value={productionId ?? ''} onChange={e => {
+                pickProduction(productions.find(p => p.id === e.target.value) ?? null)
+              }}>
+                <option value="">Not from a production\u2026</option>
+                {productions.map(p => (
+                  <option key={p.id} value={p.id} disabled={p.has_show}>
+                    {p.production_number ? `#${p.production_number} \u00b7 ` : ''}{p.title}
+                    {p.starts_at ? ` \u00b7 ${dateLabel(p.starts_at)}` : ''}
+                    {p.has_show ? ' \u00b7 already has a show' : ''}
+                  </option>
+                ))}
+              </select>
+              {productionId && (
+                <button className="gfx-btn sm ghost" style={{ marginTop: 7 }}
+                  onClick={() => { setProductionId(null) }}>Unlink</button>
+              )}
+            </>
+          )}
+          <p className="gfx-note" style={{ marginTop: 7 }}>
+            The production record already knows the title, the school, the date and the venue. Picking one
+            fills all of it in and links the two, so the as-run log lands back on the production afterwards.
+          </p>
+        </section>
 
         <section className="gfx-dsec">
           <h5>What are we covering?</h5>

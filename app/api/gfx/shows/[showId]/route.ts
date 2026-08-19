@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { withGraphicsControl, controlError } from '@/lib/graphics/control'
 import { GRAPHICS_EVENT_TYPES, GRAPHICS_SHOW_STATES } from '@/lib/graphics/types'
 import { sanitizeShowSponsors } from '@/lib/graphics/sponsors'
+import { sanitizePrompterSeek } from '@/lib/graphics/prompter'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sh
         patch[key] = new Date(parsed).toISOString()
       } else if (body[key] === null) patch[key] = null
     }
-    for (const key of ['school_code', 'away_code', 'channel_id', 'show_date', 'home_roster_id', 'away_roster_id'] as const) {
+    for (const key of ['school_code', 'away_code', 'channel_id', 'show_date', 'home_roster_id', 'away_roster_id', 'production_id'] as const) {
       if (typeof body[key] === 'string' || body[key] === null) patch[key] = body[key]
     }
     if (body.sponsors !== undefined) {
@@ -50,6 +51,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sh
       patch.prompter_speed = Math.max(0.1, Math.min(6, n))
     }
     if (body.theme_override !== undefined) patch.theme_override = body.theme_override
+
+    /**
+     * A seek is a command, not a value. The counter is stamped server-side so
+     * two surfaces pressing back at once cannot land on the same number and
+     * have the output swallow one of them.
+     */
+    if (body.prompter_seek !== undefined) {
+      const seek = sanitizePrompterSeek(body.prompter_seek)
+      if (!seek) return controlError('Unknown prompter seek')
+      const { data: current } = await ctx.service
+        .from('graphics_shows').select('prompter_seek_n').eq('id', ctx.showId).maybeSingle()
+      patch.prompter_seek_n = Number(current?.prompter_seek_n ?? 0) + 1
+      patch.prompter_seek_kind = seek.kind
+      patch.prompter_seek_value = seek.value
+    }
 
     if (Object.keys(patch).length === 0) return controlError('Nothing to update')
     const { error } = await ctx.service.from('graphics_shows').update(patch).eq('id', ctx.showId)

@@ -48,7 +48,8 @@ export default async function GraphicsShowsPage() {
         .order('show_date', { ascending: false, nullsFirst: false })
         .limit(80),
       service.from('graphics_channels').select('id, name').order('sort_order'),
-      service.from('schools').select('code, short_name, name').order('short_name'),
+      service.from('schools').select('code, short_name, name')
+        .eq('type', 'school').eq('active', true).order('level').order('name'),
     ])
     shows = (showsRes.data || []) as unknown as ShowRow[]
     channels = channelsRes.data || []

@@ -107,3 +107,24 @@ tr.sh-block td { background: #101a2c; font-size: 9.5px; letter-spacing: .12em; t
 .jp-card button { width: 100%; margin-top: 6px; min-height: 38px; }
 .jp-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
 .jp-pad button { min-height: 46px; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ---- edit in the grid ----
+   The right panel is for the graphic. Retyping a slug should happen where the
+   slug is, not three hundred pixels away. */
+.sh-cell {
+  font: inherit; font-size: inherit; color: inherit;
+  background: transparent; border: 1px solid transparent; border-radius: 5px;
+  padding: 2px 5px; width: 100%; min-width: 0;
+}
+.sh-cell.strong { font-weight: 600; }
+.sh-cell.tiny { max-width: 70px; text-transform: uppercase; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+.sh-cell.num { text-align: right; font-variant-numeric: tabular-nums; max-width: 72px; margin-left: auto; }
+.sh-cell:hover { border-color: var(--gx-ln); background: rgba(255,255,255,.03); }
+.sh-cell:focus { outline: none; border-color: var(--gx-ac); background: #050810; }
+.sh-cell::placeholder { color: #46516a; }
+
+/* ---- block header ---- */
+.sh-block td { position: relative; }
+.sh-bl { font-weight: 800; letter-spacing: .1em; }
+.sh-bacts { display: none; gap: 4px; margin-left: 12px; vertical-align: middle; }
+.sh-block:hover .sh-bacts { display: inline-flex; }

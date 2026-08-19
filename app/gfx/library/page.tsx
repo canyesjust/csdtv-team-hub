@@ -20,7 +20,8 @@ export default async function GraphicsLibraryPage() {
     service!.from('graphics_rosters').select('id, name, school_code, sport, season, players').order('name'),
     service!.from('graphics_sponsors').select('id, name, tagline, scope, school_code, active').order('sort_order').order('name'),
     service!.from('graphics_channels').select('id, slug, name, note, output_token, control_token, listening, panel_enabled').order('sort_order'),
-    service!.from('schools').select('code, short_name, name').order('short_name'),
+    service!.from('schools').select('code, short_name, name')
+      .eq('type', 'school').eq('active', true).order('level').order('name'),
   ])
 
   return (

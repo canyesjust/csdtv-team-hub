@@ -83,6 +83,25 @@ html:has(.gfx-root) body {
 .gfx-btn.ghost { background: transparent; }
 .gfx-btn.sm { padding: 4px 8px; font-size: 11px; }
 
+/* Selected. This has to read from across a dark van at a glance, and it has to
+   survive losing focus, because the very next thing you do is click elsewhere. */
+.gfx-btn.on,
+.gfx-btn.on:hover {
+  background: #11365c;
+  border-color: var(--gx-ac);
+  box-shadow: inset 3px 0 0 var(--gx-ac), 0 0 0 1px var(--gx-ac);
+  color: #fff;
+}
+.gfx-btn.on .gfx-note { color: #a9cbe8; }
+
+/* Focus is not selection. Keep the two visually distinct or every click looks
+   like it chose something. */
+.gfx-btn:focus-visible {
+  outline: 2px solid var(--gx-gold);
+  outline-offset: 2px;
+}
+.gfx-btn:focus:not(:focus-visible) { outline: none; }
+
 .gfx-chip {
   font-size: 9.5px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
   padding: 4px 10px; border-radius: 999px; white-space: nowrap;

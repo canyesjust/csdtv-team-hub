@@ -21,7 +21,10 @@ export default async function ShowPage({ params }: { params: Promise<{ showId: s
     service!.from('graphics_channels').select('id, slug, name, output_token').order('sort_order'),
     service!.from('schools')
       .select('code, short_name, name, primary_color, secondary_color, accent_color')
-      .order('short_name'),
+      .eq('type', 'school')
+      .eq('active', true)
+      .order('level')
+      .order('name'),
   ])
 
   return <ShowClient bundle={bundle} channels={channels || []} schools={schools || []} />

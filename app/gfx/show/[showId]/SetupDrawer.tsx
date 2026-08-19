@@ -9,6 +9,7 @@ import type { ShowBundle } from '@/lib/graphics/show-data'
 type SchoolOption = { code: string; short_name: string | null; name: string | null; primary_color: string | null; secondary_color: string | null; accent_color: string | null }
 type PackageOption = { id: string; name: string; event_type: string; template_ids: string[]; uses: number }
 type RosterOption = { id: string; name: string; school_code: string | null; sport: string | null; season: string | null; players: unknown[] }
+type ProductionOption = { id: string; production_number: number | null; title: string; starts_at: string | null; has_show: boolean }
 
 /** Everything you touch once per show, in one place, off the main screen. */
 export default function SetupDrawer({
@@ -32,6 +33,7 @@ export default function SetupDrawer({
 
   const [packages, setPackages] = useState<PackageOption[]>([])
   const [rosters, setRosters] = useState<RosterOption[]>([])
+  const [productions, setProductions] = useState<ProductionOption[]>([])
   const [libLoaded, setLibLoaded] = useState(false)
   const [pkgBusy, setPkgBusy] = useState(false)
   const [pkgNote, setPkgNote] = useState<string | null>(null)
@@ -42,13 +44,15 @@ export default function SetupDrawer({
     if (!open || libLoaded) return
     let alive = true
     void (async () => {
-      const [pkg, ros] = await Promise.all([
+      const [pkg, ros, prod] = await Promise.all([
         fetch(`/api/gfx/packages?event_type=${show.event_type}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
         fetch('/api/gfx/rosters').then(r => (r.ok ? r.json() : null)).catch(() => null),
+        fetch('/api/gfx/productions').then(r => (r.ok ? r.json() : null)).catch(() => null),
       ])
       if (!alive) return
       setPackages(pkg?.packages || [])
       setRosters(ros?.rosters || [])
+      setProductions(prod?.productions || [])
       setLibLoaded(true)
     })()
     return () => { alive = false }
@@ -131,6 +135,37 @@ export default function SetupDrawer({
           <p className="gfx-note" style={{ marginTop: 7 }}>
             Anything but <b>live</b> puts a rehearsal flag in the corner of the output, so a student can run the
             whole show on the real machine and nobody wonders whether it went out.
+          </p>
+        </section>
+
+        <section className="gfx-dsec">
+          <h5>Production</h5>
+          {!libLoaded ? (
+            <p className="gfx-note">Loading the schedule\u2026</p>
+          ) : (
+            <>
+              <select value={show.production_id ?? ''}
+                onChange={e => onPatch({ production_id: e.target.value || null })}>
+                <option value="">Not linked to a production</option>
+                {productions.map(p => (
+                  <option key={p.id} value={p.id} disabled={p.has_show && p.id !== show.production_id}>
+                    {p.production_number ? `#${p.production_number} \u00b7 ` : ''}{p.title}
+                    {p.starts_at ? ` \u00b7 ${new Date(p.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                    {p.has_show && p.id !== show.production_id ? ' \u00b7 already has a show' : ''}
+                  </option>
+                ))}
+              </select>
+              {show.production_id && (
+                <p className="gfx-note" style={{ marginTop: 7 }}>
+                  Linked. Nothing on this show is overwritten by the link, so the times and the school stay
+                  exactly as you set them.
+                </p>
+              )}
+            </>
+          )}
+          <p className="gfx-note" style={{ marginTop: 7 }}>
+            You can link a show to a production at any point, before or after you build the rundown. Starting
+            from a production just saves the retyping.
           </p>
         </section>
 

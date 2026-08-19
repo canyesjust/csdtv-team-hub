@@ -68,6 +68,7 @@ export type ShowBundle = {
     home_roster_id: string | null
     away_roster_id: string | null
     package_id: string | null
+    production_id: string | null
     channel: { id: string; slug: string; name: string } | null
   }
   blocks: ShowBlock[]
@@ -92,7 +93,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
   const { data: show } = await service
     .from('graphics_shows')
     .select(
-      'id, name, event_type, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, graphics_channels(id, slug, name)',
+      'id, name, event_type, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, production_id, graphics_channels(id, slug, name)',
     )
     .eq('id', showId)
     .maybeSingle()
@@ -169,6 +170,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
       home_roster_id: show.home_roster_id ?? null,
       away_roster_id: show.away_roster_id ?? null,
       package_id: show.package_id ?? null,
+      production_id: show.production_id ?? null,
       channel,
     },
     blocks: (blocks || []) as ShowBlock[],

@@ -1,14 +1,14 @@
 'use client'
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SetupDrawer from './SetupDrawer'
 import JerseyPad from './JerseyPad'
-import { useShowSync } from '@/lib/graphics/use-show-sync'
+import { useShowState } from '@/lib/graphics/use-show-sync'
+import { autoPages } from '@/lib/graphics/pages'
 import StagePreview from '@/app/gfx/components/StagePreview'
 import type { MarkContext } from '@/app/gfx/components/LogoMark'
 import { themeCssVars } from '@/lib/graphics/theme'
-import { computeTiming, formatClock, formatDuration, readSeconds } from '@/lib/graphics/timing'
+import { computeTiming, formatClock, formatDuration, parseDuration, readSeconds } from '@/lib/graphics/timing'
 import { templateById, templatesForEvent, LOGO_CHOICES, blankData } from '@/lib/graphics/templates'
 import { GRAPHICS_LAYER_LABELS } from '@/lib/graphics/types'
 import type { ShowBundle, ShowRow } from '@/lib/graphics/show-data'
@@ -37,13 +37,14 @@ type SchoolOption = {
 type ChannelOption = { id: string; slug: string; name: string; output_token: string }
 
 export default function ShowClient({
-  bundle, channels, schools: schoolOptions,
+  bundle: initialBundle, channels, schools: schoolOptions,
 }: {
   bundle: ShowBundle
   channels: ChannelOption[]
   schools: SchoolOption[]
 }) {
-  const router = useRouter()
+  // State lives here, not in a server re-render. See use-show-sync for why.
+  const { bundle, refresh: pullState, setPaused } = useShowState(initialBundle.show.id, initialBundle)
   const [mode, setMode] = useState<Mode>('build')
   const [role, setRole] = useState<Role>('director')
   const [selId, setSelId] = useState<string | null>(bundle.rows[0]?.id ?? null)
@@ -107,11 +108,18 @@ export default function ShowClient({
     [],
   )
 
-  const refresh = useCallback(() => { setDraft({}); router.refresh() }, [router])
+  /**
+   * Pull fresh state and drop any local draft the server has now caught up on.
+   * Drafts that are still ahead survive, so a refetch never yanks a field out
+   * from under someone mid-word.
+   */
+  const refresh = useCallback(() => { void pullState(true) }, [pullState])
 
-  // Someone else on the same show, or the same person on the van dock. Push is
-  // the fast path, a slow poll underneath catches a dropped broadcast.
-  useShowSync(show.channel?.slug ?? null, () => router.refresh(), Object.keys(draft).length === 0)
+  /** Structural change: renumber the pages, then pull. */
+  const refreshAndRenumber = useCallback(async () => {
+    await call(`/api/gfx/shows/${show.id}/renumber`, { method: 'POST' })
+    await pullState(true)
+  }, [call, show.id, pullState])
 
   const take = useCallback(async () => {
     if (!nextId) return
@@ -140,15 +148,25 @@ export default function ShowClient({
     refresh()
   }, [call, show.id, refresh])
 
-  /** Debounced save. The preview updates on the keystroke, the DB catches up. */
+  /**
+   * Debounced save. The draft is the truth on screen the moment you type; the
+   * database catches up 600ms later and nothing re-renders when it does. This
+   * used to call router.refresh() on every save, which re-ran the whole server
+   * page per keystroke burst. That was the lag.
+   */
   const patchRow = useCallback((rowId: string, patch: Partial<ShowRow>) => {
+    setPaused(true)
     setDraft(d => ({ ...d, [rowId]: { ...d[rowId], ...patch } }))
     clearTimeout(saveTimers.current[rowId])
     saveTimers.current[rowId] = setTimeout(async () => {
-      await call(`/api/gfx/shows/${show.id}/rows/${rowId}`, { method: 'PATCH', body: JSON.stringify(patch) })
-      router.refresh()
+      await fetch(`/api/gfx/shows/${show.id}/rows/${rowId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      }).catch(() => null)
+      setPaused(false)
     }, 600)
-  }, [call, show.id, router])
+  }, [show.id, setPaused])
 
   const patchShow = useCallback(async (patch: Record<string, unknown>) => {
     const ok = await call(`/api/gfx/shows/${show.id}`, { method: 'PATCH', body: JSON.stringify(patch) })
@@ -157,8 +175,8 @@ export default function ShowClient({
 
   const deleteRow = useCallback(async (rowId: string) => {
     const ok = await call(`/api/gfx/shows/${show.id}/rows/${rowId}`, { method: 'DELETE' })
-    if (ok) { if (selId === rowId) setSelId(null); refresh() }
-  }, [call, show.id, selId, refresh])
+    if (ok) { if (selId === rowId) setSelId(null); void refreshAndRenumber() }
+  }, [call, show.id, selId, refreshAndRenumber])
 
   const duplicateRow = useCallback(async (row: ShowRow) => {
     const ok = await call(`/api/gfx/shows/${show.id}/rows`, {
@@ -169,22 +187,44 @@ export default function ShowClient({
         is_break: row.is_break, graphic: row.graphic,
       }),
     })
-    if (ok) refresh()
-  }, [call, show.id, refresh])
+    if (ok) void refreshAndRenumber()
+  }, [call, show.id, refreshAndRenumber])
 
   const moveRow = useCallback(async (rowId: string, targetId: string, before: boolean) => {
     const ok = await call(`/api/gfx/shows/${show.id}/reorder`, {
       method: 'POST', body: JSON.stringify({ row_id: rowId, target_row_id: targetId, before }),
     })
-    if (ok) refresh()
-  }, [call, show.id, refresh])
+    if (ok) void refreshAndRenumber()
+  }, [call, show.id, refreshAndRenumber])
 
   const addBlock = useCallback(async () => {
     const label = window.prompt('Block name', 'NEW BLOCK')
     if (!label) return
     const ok = await call(`/api/gfx/shows/${show.id}/blocks`, { method: 'POST', body: JSON.stringify({ label }) })
+    if (ok) void refreshAndRenumber()
+  }, [call, show.id, refreshAndRenumber])
+
+  const renameBlock = useCallback(async (blockId: string, current: string) => {
+    const label = window.prompt('Block name', current)
+    if (!label || label === current) return
+    const ok = await call(`/api/gfx/shows/${show.id}/blocks/${blockId}`, {
+      method: 'PATCH', body: JSON.stringify({ label }),
+    })
     if (ok) refresh()
   }, [call, show.id, refresh])
+
+  /**
+   * Deleting a block keeps its rows. Losing a whole segment because someone
+   * meant to rename it is not a recoverable mistake mid-build.
+   */
+  const deleteBlock = useCallback(async (blockId: string, label: string, rowCount: number) => {
+    const message = rowCount === 0
+      ? `Delete the ${label} block?`
+      : `Delete the ${label} block? Its ${rowCount} row${rowCount === 1 ? '' : 's'} stay, unassigned.`
+    if (!window.confirm(message)) return
+    const ok = await call(`/api/gfx/shows/${show.id}/blocks/${blockId}`, { method: 'DELETE' })
+    if (ok) void refreshAndRenumber()
+  }, [call, show.id, refreshAndRenumber])
 
   const addShelfItem = useCallback(async (tid: string) => {
     const template = templateById(tid)
@@ -248,8 +288,17 @@ export default function ShowClient({
         graphic: withGraphic && template ? { tid: template.id, data: blankData(template) } : null,
       }),
     })
-    if (ok) refresh()
-  }, [call, show.id, selId, show.event_type, refresh])
+    if (ok) void refreshAndRenumber()
+  }, [call, show.id, selId, show.event_type, refreshAndRenumber])
+
+  /** Add straight into a block, so you add where you are looking. */
+  const addRowToBlock = useCallback(async (blockId: string | null, afterRowId: string | null) => {
+    const ok = await call(`/api/gfx/shows/${show.id}/rows`, {
+      method: 'POST',
+      body: JSON.stringify({ after_row_id: afterRowId, block_id: blockId, slug: 'New row' }),
+    })
+    if (ok) void refreshAndRenumber()
+  }, [call, show.id, refreshAndRenumber])
 
   /**
    * Auto-out sweep. A row lower third comes down on its own so nobody has to
@@ -288,30 +337,82 @@ export default function ShowClient({
     return () => window.removeEventListener('keydown', onKey)
   }, [take, merged, nextId])
 
+  const pages = useMemo(() => autoPages(blocks, merged), [blocks, merged])
+
+  /**
+   * Rows grouped under their block, every block shown whether or not it has
+   * rows. A block header used to render only when a row pointed at it, so a
+   * brand new block was invisible and looked like the button had done nothing.
+   */
+  const plan = useMemo(() => {
+    type Entry =
+      | { kind: 'block'; block: ShowBundle['blocks'][number] | null; count: number; lastRowId: string | null }
+      | { kind: 'row'; row: ShowRow; index: number }
+
+    const indexOf = new Map(merged.map((r, i) => [r.id, i]))
+    const visible = merged.filter(r => !(role === 'graphics' && mode !== 'build' && !r.graphic))
+    const out: Entry[] = []
+
+    const ordered = [...blocks].sort((a, b) => a.sort_order - b.sort_order)
+    for (const block of ordered) {
+      const rows = visible.filter(r => r.block_id === block.id)
+      if (rows.length === 0 && mode !== 'build') continue
+      out.push({ kind: 'block', block, count: rows.length, lastRowId: rows.at(-1)?.id ?? null })
+      for (const row of rows) out.push({ kind: 'row', row, index: indexOf.get(row.id) ?? 0 })
+    }
+
+    const loose = visible.filter(r => !r.block_id || !ordered.some(b => b.id === r.block_id))
+    if (loose.length > 0) {
+      out.push({ kind: 'block', block: null, count: loose.length, lastRowId: loose.at(-1)?.id ?? null })
+      for (const row of loose) out.push({ kind: 'row', row, index: indexOf.get(row.id) ?? 0 })
+    }
+    return out
+  }, [blocks, merged, role, mode])
   const columns = mode === 'build' ? ROLE_COLUMNS.director : ROLE_COLUMNS[role]
   const previewGraphic = selected?.graphic ?? null
   const live = show.state === 'live'
+
+  /** Edit in the grid. The right panel is for the graphic, not for retyping a slug. */
+  const editing = mode === 'build'
+  const field = (
+    row: ShowRow, key: keyof ShowRow, className = '', placeholder = '',
+  ) => (
+    <input
+      className={`sh-cell ${className}`}
+      value={String(row[key] ?? '')}
+      placeholder={placeholder}
+      onClick={e => e.stopPropagation()}
+      onChange={e => patchRow(row.id, { [key]: e.target.value } as Partial<ShowRow>)}
+    />
+  )
 
   const cell = (row: ShowRow, key: string, index: number) => {
     switch (key) {
       case 'pg': return (
         <td key={key} className="sh-pg">
           {mode === 'build' && <span className="sh-handle">⠿</span>}
-          {row.page}
+          {row.page || <span className="gfx-note">{pages[row.id] || ''}</span>}
         </td>
       )
       case 'slug': return (
         <td key={key} className="sh-slug">
-          {row.slug}
+          {editing ? field(row, 'slug', 'strong', 'Slug') : row.slug}
           {row.repeat_count > 0 && <span className="gfx-note"> {row.repeat_count} × {row.per_unit_seconds}s</span>}
           {row.floated && <span className="gfx-chip idle" style={{ marginLeft: 6 }}>float</span>}
         </td>
       )
-      case 'form': return <td key={key}><span className={`sh-form ${row.form}`}>{row.form}</span></td>
-      case 'video': return <td key={key}>{row.video}</td>
-      case 'camera': return <td key={key}>{row.camera}</td>
-      case 'audio': return <td key={key}>{row.audio_source}</td>
-      case 'talent': return <td key={key}>{row.talent}</td>
+      case 'form': return (
+        <td key={key}>
+          {editing
+            ? <input className="sh-cell tiny" value={row.form} onClick={e => e.stopPropagation()}
+                onChange={e => patchRow(row.id, { form: e.target.value.toUpperCase().slice(0, 12) })} />
+            : <span className={`sh-form ${row.form}`}>{row.form}</span>}
+        </td>
+      )
+      case 'video': return <td key={key}>{editing ? field(row, 'video') : row.video}</td>
+      case 'camera': return <td key={key}>{editing ? field(row, 'camera') : row.camera}</td>
+      case 'audio': return <td key={key}>{editing ? field(row, 'audio_source') : row.audio_source}</td>
+      case 'talent': return <td key={key}>{editing ? field(row, 'talent') : row.talent}</td>
       case 'gfx': return <td key={key}>{row.graphic ? <><span className="sh-gdot" />{templateById(row.graphic.tid)?.name}</> : null}</td>
       case 'gdetail': return <td key={key} className="gfx-note">{row.graphic ? templateById(row.graphic.tid)?.summary(row.graphic.data) : ''}</td>
       case 'est': {
@@ -319,7 +420,11 @@ export default function ShowClient({
         const over = row.script && script > timing.est[index] + 3
         return (
           <td key={key} className="sh-num">
-            {formatDuration(timing.est[index])}
+            {editing ? (
+              <input className="sh-cell num" value={formatDuration(row.est_seconds)}
+                onClick={e => e.stopPropagation()}
+                onChange={e => patchRow(row.id, { est_seconds: parseDuration(e.target.value) })} />
+            ) : formatDuration(timing.est[index])}
             {over ? <div className="sh-warn">script {formatDuration(script)}</div> : null}
           </td>
         )
@@ -337,7 +442,6 @@ export default function ShowClient({
     }
   }
 
-  let lastBlock: string | null = '__none__'
 
   return (
     <div className="sh" style={themeCssVars(theme) as React.CSSProperties}>
@@ -401,6 +505,7 @@ export default function ShowClient({
               <button className="gfx-btn sm" onClick={() => void addRow(false)}>＋ Row</button>
               <button className="gfx-btn sm" onClick={() => void addRow(true)}>＋ Row with graphic</button>
               <button className="gfx-btn sm ghost" onClick={() => void addBlock()}>＋ Block</button>
+              <button className="gfx-btn sm ghost" onClick={() => void refreshAndRenumber()}>Renumber</button>
               {selected && (
                 <>
                   <span style={{ width: 1, height: 18, background: 'var(--gx-ln)', margin: '0 3px' }} />
@@ -417,11 +522,45 @@ export default function ShowClient({
             <table className="sh-rd">
               <thead><tr>{columns.map(c => <th key={c}>{COLUMN_LABEL[c]}</th>)}</tr></thead>
               <tbody>
-                {merged.map((row, i) => {
-                  if (role === 'graphics' && mode !== 'build' && !row.graphic) return null
-                  const block = blocks.find(b => b.id === row.block_id)
-                  const header = block && block.id !== lastBlock ? block : null
-                  if (block) lastBlock = block.id
+                {plan.map(entry => {
+                  if (entry.kind === 'block') {
+                    const b = entry.block
+                    return (
+                      <tr className="sh-block" key={`b-${b?.id ?? 'none'}`}>
+                        <td colSpan={columns.length}>
+                          <span className="sh-bl">{b ? b.label : 'UNASSIGNED'}</span>
+                          {b?.anchor_at && (
+                            <span className="sh-anchor">
+                              {b.anchor_type === 'hard_start' ? 'hard start ' : b.anchor_type === 'hard_out' ? 'hard out ' : 'target '}
+                              {formatClock(Date.parse(b.anchor_at))}
+                            </span>
+                          )}
+                          {mode === 'build' && (
+                            <span className="sh-bacts">
+                              <button className="gfx-btn sm ghost"
+                                onClick={e => { e.stopPropagation(); void addRowToBlock(b?.id ?? null, entry.lastRowId) }}>
+                                ＋ Row
+                              </button>
+                              {b && (
+                                <>
+                                  <button className="gfx-btn sm ghost"
+                                    onClick={e => { e.stopPropagation(); void renameBlock(b.id, b.label) }}>Rename</button>
+                                  <button className="gfx-btn sm ghost" style={{ color: '#ff9ba4' }}
+                                    onClick={e => { e.stopPropagation(); void deleteBlock(b.id, b.label, entry.count) }}>Delete</button>
+                                </>
+                              )}
+                            </span>
+                          )}
+                          {entry.count === 0 && (
+                            <span className="gfx-note" style={{ marginLeft: 10 }}>empty</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  const row = entry.row
+                  const i = entry.index
                   const classes = [
                     'sh-row',
                     row.id === airRow?.id ? 'sh-air' : '',
@@ -432,47 +571,33 @@ export default function ShowClient({
                     row.id === selId ? 'sh-sel' : '',
                   ].filter(Boolean).join(' ')
                   return (
-                    <Fragment key={row.id}>
-                      {header && (
-                        <tr className="sh-block">
-                          <td colSpan={columns.length}>
-                            {header.label}
-                            {header.anchor_at && (
-                              <span className="sh-anchor">
-                                {header.anchor_type === 'hard_start' ? 'hard start ' : header.anchor_type === 'hard_out' ? 'hard out ' : 'target '}
-                                {formatClock(Date.parse(header.anchor_at))}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                      <tr
-                        className={[
-                          classes,
-                          dragId === row.id ? 'sh-dragging' : '',
-                          dropTarget?.id === row.id ? (dropTarget.before ? 'sh-dropb' : 'sh-dropa') : '',
-                        ].filter(Boolean).join(' ')}
-                        draggable={mode === 'build'}
-                        onClick={() => { setSelId(row.id); setNextId(row.id) }}
-                        onDragStart={() => setDragId(row.id)}
-                        onDragEnd={() => { setDragId(null); setDropTarget(null) }}
-                        onDragOver={e => {
-                          if (mode !== 'build' || !dragId) return
-                          e.preventDefault()
-                          const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                          setDropTarget({ id: row.id, before: e.clientY < box.top + box.height / 2 })
-                        }}
-                        onDrop={e => {
-                          if (mode !== 'build' || !dragId) return
-                          e.preventDefault()
-                          const before = dropTarget?.id === row.id ? dropTarget.before : true
-                          if (dragId !== row.id) void moveRow(dragId, row.id, before)
-                          setDragId(null); setDropTarget(null)
-                        }}
-                      >
-                        {columns.map(c => cell(row, c, i))}
-                      </tr>
-                    </Fragment>
+                    <tr
+                      key={row.id}
+                      className={[
+                        classes,
+                        dragId === row.id ? 'sh-dragging' : '',
+                        dropTarget?.id === row.id ? (dropTarget.before ? 'sh-dropb' : 'sh-dropa') : '',
+                      ].filter(Boolean).join(' ')}
+                      draggable={mode === 'build'}
+                      onClick={() => { setSelId(row.id); setNextId(row.id) }}
+                      onDragStart={() => setDragId(row.id)}
+                      onDragEnd={() => { setDragId(null); setDropTarget(null) }}
+                      onDragOver={e => {
+                        if (mode !== 'build' || !dragId) return
+                        e.preventDefault()
+                        const box = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                        setDropTarget({ id: row.id, before: e.clientY < box.top + box.height / 2 })
+                      }}
+                      onDrop={e => {
+                        if (mode !== 'build' || !dragId) return
+                        e.preventDefault()
+                        const before = dropTarget?.id === row.id ? dropTarget.before : true
+                        if (dragId !== row.id) void moveRow(dragId, row.id, before)
+                        setDragId(null); setDropTarget(null)
+                      }}
+                    >
+                      {columns.map(c => cell(row, c, i))}
+                    </tr>
                   )
                 })}
                 {mode === 'build' && (

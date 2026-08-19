@@ -293,3 +293,40 @@ Buckets compare America/Denver calendar days, never timestamps. A UTC
 comparison would flip a 7pm Friday game to "tomorrow" at 5pm local during
 daylight time, which is precisely when someone is looking for it.
 `scripts/graphics-shows.test.mts` holds the boundaries, including the DST one.
+
+## Build log, session 7
+
+**The lag.** The show screen called `router.refresh()` on every debounced row
+save, on every realtime push and on a 15 second timer. Each one re-ran the
+server page, re-queried the whole bundle, re-serialised the React tree and
+reconciled the entire screen. On a keystroke cadence that is exactly what it
+felt like.
+
+It now works the way the board outputs work. `GET /api/gfx/shows/<id>/state`
+returns the bundle as JSON, `useShowState` holds it in client state, and the
+poll runs on a ladder: 30s when nobody is live, 4s live with realtime
+connected, 1.2s live when realtime is down and the poll IS the transport, and
+off entirely while someone is typing. Saving a row no longer refetches at all.
+The draft on screen is the truth and the database catches up 600ms later.
+
+**Blocks were invisible.** A block header only rendered when a row pointed at
+it, so a brand new empty block drew nothing and the button looked broken. The
+rundown now renders from a plan built out of the blocks, so every block appears
+whether or not it holds rows, with an inline row-add, rename and delete on the
+header. Deleting a block keeps its rows and drops them into an UNASSIGNED
+group, because losing a segment to a misclick is not recoverable mid-build.
+
+**Pages number themselves.** `lib/graphics/pages.ts` derives A1, A2, B1 from
+block order and running order. Every structural change (add, delete, duplicate,
+reorder, block change) calls `/renumber`, which writes only the rows whose page
+is actually wrong. A clean show costs zero writes. There is a Renumber button
+in the BUILD toolbar for the rare manual case.
+
+**Edit in the grid.** Slug, form, video, camera, audio, talent and estimate are
+editable in the row itself. The right panel is for the graphic. Estimates
+accept `90`, `1:30` or `1:02:05` because a producer types whichever is fastest.
+
+**The school picker was every department.** The `schools` table also holds all
+33 district departments, so the picker listed Purchasing and Risk Management
+next to Alta High. Every graphics query now filters `type = 'school'` and
+`active`, ordered by level then name.

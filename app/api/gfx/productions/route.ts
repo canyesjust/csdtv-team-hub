@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
-import { listProductionsForGraphics, guessEventType, guessSchoolCode, guessVenue } from '@/lib/graphics/from-production'
+import {
+  listProductionsForGraphics, guessEventType, guessSchoolCode, guessVenue, productionDate,
+} from '@/lib/graphics/from-production'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,10 +33,11 @@ export async function GET() {
       id: p.id,
       production_number: p.production_number,
       title: p.title,
-      event_date: p.event_date,
+      status: p.status,
+      starts_at: productionDate(p),
       start_datetime: p.start_datetime,
       end_datetime: p.end_datetime,
-      venue: guessVenue(p),
+      venue: guessVenue(p, schoolList),
       school_code: guessSchoolCode(p, schoolList),
       event_type: guessEventType(p),
       has_show: taken.has(p.id),
