@@ -1,6 +1,6 @@
 import type { GraphicsLayer, GraphicsMotion, GraphicsEventType } from '@/lib/graphics/types'
 
-export type FieldType = 'text' | 'textarea' | 'logo' | 'number' | 'choice'
+export type FieldType = 'text' | 'textarea' | 'logo' | 'number' | 'choice' | 'image'
 
 export type TemplateField = {
   id: string
@@ -28,6 +28,7 @@ const f = (id: string, label: string, type: FieldType = 'text', placeholder = ''
   id, label, type, placeholder,
 })
 const logo = (id = 'logo', label = 'Mark'): TemplateField => ({ id, label, type: 'logo', placeholder: 'school' })
+const img = (id = 'image', label = 'Image'): TemplateField => ({ id, label, type: 'image' })
 
 /**
  * Where a lower third sits. Venues put things in the bottom of frame that we do
@@ -186,6 +187,66 @@ export const GRAPHIC_TEMPLATES: Record<string, GraphicTemplate> = {
       f('body', 'One line each', 'textarea'), f('foot', 'Footer'),
     ],
     summary: d => d.title || 'Card',
+  },
+  free_image: {
+    id: 'free_image', name: 'Freeform image', layer: 'full', motion: 'slate',
+    eventTypes: ALL, recommendedSeconds: 0,
+    fields: [img(), f('caption', 'Caption'), f('credit', 'Credit')],
+    summary: d => d.caption || 'Image',
+  },
+  backdrop: {
+    id: 'backdrop', name: 'Background image', layer: 'full', motion: 'slate',
+    eventTypes: ALL, recommendedSeconds: 0,
+    fields: [img(), f('kick', 'Kicker'), f('title', 'Title'), f('sub', 'Sub'), logo()],
+    summary: d => d.title || 'Background',
+  },
+  social_bug: {
+    id: 'social_bug', name: 'Social bug', layer: 'corner', motion: 'drop',
+    eventTypes: ALL, recommendedSeconds: 12,
+    fields: [f('handle', 'Handle'), f('kick', 'Kicker', 'text', 'FOLLOW ALONG'), logo()],
+    summary: d => d.handle || 'Social',
+  },
+  lower_matchup: {
+    id: 'lower_matchup', name: 'Matchup lower third', layer: 'lower', motion: 'wipeL',
+    eventTypes: ['game'], recommendedSeconds: 14,
+    fields: [
+      f('home', 'Home'), f('hscore', 'Home score'), logo('hlogo', 'Home mark'),
+      f('away', 'Away'), f('ascore', 'Away score'), logo('alogo', 'Away mark'),
+      f('note', 'Note'), pos(),
+    ],
+    summary: d => `${d.away || ''} at ${d.home || ''}`,
+  },
+  player_bio: {
+    id: 'player_bio', name: 'Player or team bio', layer: 'lower', motion: 'wipeL',
+    eventTypes: ['game', 'ceremony', 'other'], recommendedSeconds: 16,
+    fields: [
+      img('photo', 'Photo'), f('name', 'Name'), f('role', 'Position or role'),
+      f('team', 'Team'), f('bio', 'Bio', 'textarea'), logo(), pos(),
+    ],
+    summary: d => `Bio: ${d.name || ''}`,
+  },
+  lineup_panel: {
+    id: 'lineup_panel', name: 'Lineup side panel', layer: 'full', motion: 'wipeL',
+    eventTypes: ['game', 'concert'], recommendedSeconds: 0,
+    fields: [
+      f('team', 'Team'), f('kick', 'Heading'), logo(),
+      f('rows', 'One per line', 'textarea'), pos(),
+    ],
+    summary: d => `Lineup: ${d.team || ''}`,
+  },
+  crawl: {
+    id: 'crawl', name: 'Crawl', layer: 'ticker', motion: 'rise',
+    eventTypes: ALL, recommendedSeconds: 0,
+    fields: [
+      f('items', 'One per line', 'textarea'), f('kick', 'Label'), logo(),
+      { id: 'speed', label: 'Speed', type: 'choice', placeholder: 'normal',
+        options: [
+          { value: 'slow', label: 'Slow' },
+          { value: 'normal', label: 'Normal' },
+          { value: 'fast', label: 'Fast' },
+        ] },
+    ],
+    summary: () => 'Crawl',
   },
   corner_bug: {
     id: 'corner_bug', name: 'Corner bug', layer: 'corner', motion: 'drop',

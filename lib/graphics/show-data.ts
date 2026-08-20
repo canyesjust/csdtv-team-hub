@@ -7,6 +7,9 @@ import type {
 } from '@/lib/graphics/types'
 import { sanitizePlayers, type Player } from '@/lib/graphics/rosters'
 import type { GraphicsDepth } from '@/lib/graphics/depth'
+import type { ShowSponsor } from '@/lib/graphics/sponsors'
+import { loadMarkArt } from '@/lib/graphics/mark-data'
+import type { MarkArt } from '@/lib/graphics/marks'
 
 export type ShowBlock = {
   id: string
@@ -68,7 +71,7 @@ export type ShowBundle = {
     started_at: string | null
     prompter_roll: boolean
     prompter_speed: number
-    sponsors: { id: string; name: string; scope: 'district' | 'event'; on: boolean }[]
+    sponsors: ShowSponsor[]
     home_roster_id: string | null
     away_roster_id: string | null
     package_id: string | null
@@ -83,6 +86,8 @@ export type ShowBundle = {
   rosters: { home: Player[]; away: Player[] }
   audioAssets: { id: string; name: string; kind: string; duration_seconds: number | null }[]
   theme: GraphicsTheme
+  /** Real logo files, keyed by school code. Null when a school has no usable art. */
+  marks: Record<string, MarkArt>
   /** Brand data for every school the show references, for logo marks. */
   schools: Record<string, {
     short_name: string | null; name: string | null; mascot: string | null
@@ -127,6 +132,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
     .order('name')
 
   const codes = [show.school_code, show.away_code].filter((c): c is string => Boolean(c))
+  const marks = await loadMarkArt(service, codes)
   const schools: ShowBundle['schools'] = {}
   if (codes.length > 0) {
     const { data: schoolRows } = await service
@@ -185,6 +191,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
     rosters,
     audioAssets: audioAssets || [],
     theme,
+    marks,
     schools,
   }
 }

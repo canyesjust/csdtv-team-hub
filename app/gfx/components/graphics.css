@@ -130,3 +130,211 @@
 .gx-stage.gx-nomotion *,
 .gx-nomotion .gx-st { animation: none !important; }
 .gx-nomotion .gx-shine::after { display: none; }
+
+/* Real logo art. Contained rather than cropped, because a wordmark and a crest
+   are wildly different aspect ratios and both have to sit in the same cell
+   without the graphic re-laying out around them. The drop shadow is what keeps
+   a white knockout mark readable against a light panel. */
+.gx-mark.gx-art {
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+
+/* ============================================================================
+   Masked reveal and anchored grow.
+
+   Read off a broadcast reference frame by frame: a dark header cap wipes in
+   first and its title is revealed THROUGH the cap's own edge, then the body
+   panel grows downward from under the cap's rail. Nothing fades up. The
+   difference between that and a cross-fade is most of what reads as broadcast
+   rather than as a web page.
+
+   Three pieces, usable on any template:
+     gx-cap     the header slab, wipes in and carries the title
+     gx-reveal  text revealed through a moving mask rather than faded
+     gx-grow    a panel that expands from an anchored edge
+   ========================================================================== */
+
+@keyframes gxCapIn {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+@keyframes gxCapOut {
+  from { clip-path: inset(0 0 0 0); }
+  to   { clip-path: inset(0 0 0 101%); }
+}
+.gx-cap { animation: gxCapIn 0.42s var(--gx-ease) both; transform-origin: left center; }
+.gx-out .gx-cap { animation: gxCapOut 0.26s var(--gx-ease-out) both; }
+
+/* The text sits still and a mask uncovers it. A fade would make the letters
+   grey for 200ms, which over a bright camera reads as a mistake. */
+@keyframes gxRevealIn {
+  from { clip-path: inset(0 100% -20% 0); }
+  to   { clip-path: inset(0 -2% -20% 0); }
+}
+.gx-reveal {
+  animation: gxRevealIn 0.44s var(--gx-ease) both;
+  animation-delay: calc(var(--rd, 120ms));
+}
+.gx-out .gx-reveal { animation: none; clip-path: none; }
+
+/* Grows from the edge it is anchored to, so the panel has a root rather than
+   arriving from nowhere. Height, not scale: scaling would squash the type. */
+@keyframes gxGrowDown {
+  from { clip-path: inset(0 0 100% 0); }
+  to   { clip-path: inset(0 0 -2% 0); }
+}
+@keyframes gxGrowDownOut {
+  from { clip-path: inset(0 0 -2% 0); }
+  to   { clip-path: inset(0 0 100% 0); }
+}
+.gx-grow {
+  animation: gxGrowDown 0.46s var(--gx-ease) both;
+  animation-delay: calc(var(--gd, 200ms));
+}
+.gx-out .gx-grow { animation: gxGrowDownOut 0.26s var(--gx-ease-out) both; }
+
+/* Two-team graphics: the wings push out from the centre carrying team colour,
+   after the middle has established itself. */
+@keyframes gxWingL {
+  from { clip-path: inset(0 0 0 100%); opacity: 0; }
+  to   { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+@keyframes gxWingR {
+  from { clip-path: inset(0 100% 0 0); opacity: 0; }
+  to   { clip-path: inset(0 0 0 0); opacity: 1; }
+}
+.gx-wing-l { animation: gxWingL 0.5s var(--gx-ease) both; animation-delay: 0.34s; }
+.gx-wing-r { animation: gxWingR 0.5s var(--gx-ease) both; animation-delay: 0.34s; }
+.gx-out .gx-wing-l, .gx-out .gx-wing-r { animation: none; clip-path: none; opacity: 1; }
+
+/* A row that fills from its own side, so a left column reads left and a right
+   column reads right rather than both arriving from the same place. */
+@keyframes gxFillL { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes gxFillR { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
+.gx-fill-l { animation: gxFillL 0.4s var(--gx-ease) both; animation-delay: calc(var(--i, 0) * 70ms + var(--base, 380ms)); }
+.gx-fill-r { animation: gxFillR 0.4s var(--gx-ease) both; animation-delay: calc(var(--i, 0) * 70ms + var(--base, 380ms)); }
+.gx-out .gx-fill-l, .gx-out .gx-fill-r { animation: none; clip-path: none; }
+
+/* ---- swap in place ----
+   When the same layer changes content, the panel holds and only the contents
+   change. Taking a whole lower third out to bring an identical one back in is
+   the single most amateur thing a graphics system can do. */
+@keyframes gxSwapOut { to { opacity: 0; transform: translateY(-10px); } }
+@keyframes gxSwapIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.gx-swap .gx-st { animation: gxSwapIn 0.34s var(--gx-ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.gx-swapping .gx-st { animation: gxSwapOut 0.2s var(--gx-ease-out) both; }
+/* The panel itself does not re-animate on a swap. */
+.gx-swap > .gx-panel { animation: none !important; }
+.gx-swap .gx-cap, .gx-swap .gx-grow, .gx-swap .gx-reveal,
+.gx-swap .gx-bar3, .gx-swap .gx-shine { animation: none !important; clip-path: none; transform: none; }
+
+/* ---- number roll ----
+   A score or a stat counts rather than cuts. */
+@keyframes gxRoll {
+  from { transform: translateY(0.55em); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.gx-num { display: inline-block; overflow: hidden; vertical-align: bottom; font-variant-numeric: tabular-nums; }
+.gx-num > span { display: inline-block; animation: gxRoll 0.42s var(--gx-ease) both; animation-delay: var(--nd, 0.42s); }
+.gx-out .gx-num > span, .gx-swap .gx-num > span { animation: none; transform: none; opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gx-cap, .gx-reveal, .gx-grow, .gx-wing-l, .gx-wing-r,
+  .gx-fill-l, .gx-fill-r, .gx-num > span {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
+}
+
+/* ---- fullscreen matchup, built the way the reference builds ---- */
+.gx-mucap {
+  position: absolute; top: 132px; left: 50%; transform: translateX(-50%); z-index: 6;
+  background: #0b1017; border-radius: 10px; padding: 13px 46px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5), inset 0 -3px 0 var(--gx-1);
+  white-space: nowrap;
+}
+.gx-mubody {
+  position: absolute; top: 196px; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 60px 90px 120px;
+}
+.gx-muwing {
+  position: absolute; top: 0; bottom: 0; width: 27%; z-index: 1; opacity: .9;
+}
+.gx-muwing.l { left: 0; background: linear-gradient(90deg, var(--gx-1) 0%, transparent 100%); }
+.gx-muwing.r { right: 0; background: linear-gradient(270deg, var(--gx-2) 0%, transparent 100%); }
+
+/* ---- images ---- */
+.gx-fullimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gx-scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(6,10,18,.35) 0%, rgba(6,10,18,.72) 62%, rgba(6,10,18,.9) 100%);
+}
+.gx-imgcap {
+  position: absolute; left: 90px; right: 90px; bottom: 92px; z-index: 5; text-align: left;
+  text-shadow: var(--gx-tsh);
+}
+.gx-bio-photo {
+  flex: none; width: 132px; align-self: stretch; overflow: hidden;
+  border-right: 3px solid var(--gx-1); background: #0a1120;
+}
+.gx-bio-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gx-bio-text {
+  font-size: 21px; margin-top: 9px; opacity: .88; line-height: 1.45;
+  max-width: 62ch; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ---- matchup lower third ---- */
+.gx-lmu { display: flex; align-items: stretch; height: 104px; }
+.gx-lmu-side { display: flex; align-items: center; gap: 20px; padding: 0 26px; flex: 1; }
+.gx-lmu-side.l { background: linear-gradient(90deg, color-mix(in srgb, var(--gx-1) 62%, transparent), transparent); }
+.gx-lmu-side.r { background: linear-gradient(270deg, color-mix(in srgb, var(--gx-2) 62%, transparent), transparent); justify-content: flex-end; }
+.gx-lmu-mark { width: 62px; height: 62px; display: flex; flex: none; }
+.gx-lmu-team { font-size: 34px; font-weight: 800; color: #fff; text-shadow: var(--gx-tsh); white-space: nowrap; }
+.gx-lmu-score { font-size: 52px; font-weight: 900; color: #fff; text-shadow: var(--gx-tsh); min-width: 74px; text-align: center; }
+.gx-lmu-mid {
+  flex: none; display: flex; align-items: center; padding: 0 22px;
+  font-size: 17px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--gx-3); background: rgba(0,0,0,.34);
+}
+
+/* ---- lineup side panel ---- */
+.gx-lpanel { top: 118px; bottom: 118px; width: 520px; padding: 0; border-radius: 14px; overflow: hidden; }
+.gx-lpcap { background: #0b1017; padding: 12px 24px; box-shadow: inset 0 -3px 0 var(--gx-1); white-space: nowrap; }
+.gx-lpbody { padding: 20px 24px 24px; overflow: hidden; }
+.gx-lpmark { height: 74px; margin-bottom: 12px; }
+.gx-lpteam { font-size: 34px; margin-bottom: 14px; }
+.gx-lplist { display: flex; flex-direction: column; gap: 3px; }
+.gx-lprow {
+  font-size: 25px; color: #eef3fb; text-shadow: var(--gx-tsh);
+  padding: 5px 10px; border-left: 3px solid var(--gx-1); background: rgba(255,255,255,.05);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- crawl ----
+   A real crawl runs continuously, so the text is duplicated and the pair
+   translates by exactly half its width. Any other number leaves a seam. */
+.gx-crawlbar {
+  left: 0; right: 0; bottom: 0; height: 70px; border-radius: 0;
+  display: flex; align-items: center; overflow: hidden;
+}
+.gx-crawl-mark { display: flex; padding: 0 18px 0 24px; position: relative; z-index: 6; height: 44px; }
+.gx-crawl-kick {
+  position: relative; z-index: 6; flex: none;
+  font-size: 15px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+  color: #04203a; background: var(--gx-3); padding: 7px 14px; border-radius: 5px; margin-right: 4px;
+}
+.gx-crawl-track {
+  position: relative; z-index: 5; flex: 1; overflow: hidden;
+  display: flex; white-space: nowrap;
+  color: #fff; font-size: 28px; text-shadow: var(--gx-tsh);
+  mask-image: linear-gradient(90deg, transparent 0, #000 34px, #000 calc(100% - 34px), transparent 100%);
+}
+@keyframes gxCrawl { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+.gx-crawl-run { display: inline-flex; flex: none; animation: gxCrawl linear infinite; }
+@media (prefers-reduced-motion: reduce) { .gx-crawl-run { animation: none; } }

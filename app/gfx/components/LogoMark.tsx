@@ -1,10 +1,17 @@
 import { relativeLuminance } from '@/lib/graphics/theme'
+import { CSDTV_CODE } from '@/lib/graphics/marks'
 
 export type MarkContext = {
   schoolCode: string | null
   awayCode: string | null
   schools: Record<string, { short_name?: string | null; name?: string | null; mascot?: string | null;
     primary_color?: string | null; secondary_color?: string | null; accent_color?: string | null }>
+  /** Real logo files by school code. Absent means fall back to the drawn mark. */
+  marks?: Record<string, { badge: string | null; wordmark: string | null }>
+  /** Sponsor art on the show, keyed by sponsor name. */
+  sponsorMarks?: Record<string, string | null>
+  /** The sponsor a graphic is currently naming, so the bug can find its logo. */
+  sponsorName?: string | null
 }
 
 /** Resolves a template's logo field to a concrete mark. */
@@ -18,14 +25,29 @@ export function resolveMarkCode(value: string | undefined, ctx: MarkContext): st
 }
 
 /**
- * Placeholder marks until `school_logos` art is wired in. The shape is the
- * point: a mark always sits in its own fixed cell, so a wide wordmark and a
- * square crest both drop in without re-laying-out the graphic.
+ * A mark always sits in its own fixed cell, so a wide wordmark and a square
+ * crest both drop in without re-laying-out the graphic.
+ *
+ * Real art out of `school_logos` when the school has usable art, and the drawn
+ * crest when it does not. The fallback matters: a school with only print files
+ * still gets something on air in its own colours rather than a broken image.
  */
-export default function LogoMark({ code, size, ctx }: { code: string | null; size: number; ctx: MarkContext }) {
+export default function LogoMark({
+  code, size, ctx, intent = 'badge',
+}: {
+  code: string | null
+  size: number
+  ctx: MarkContext
+  intent?: 'badge' | 'wordmark'
+}) {
   if (!code) return null
 
   if (code === 'sponsor') {
+    const art = ctx.sponsorName ? ctx.sponsorMarks?.[ctx.sponsorName] : null
+    if (art) {
+      // eslint-disable-next-line @next/next/no-img-element
+      return <img className="gx-mark gx-art" src={art} alt="" width={size} height={size} />
+    }
     return (
       <svg className="gx-mark" width={size} height={size} viewBox="0 0 100 100" aria-hidden>
         <rect x="4" y="22" width="92" height="56" rx="9" fill="#12203a" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
@@ -33,6 +55,13 @@ export default function LogoMark({ code, size, ctx }: { code: string | null; siz
       </svg>
     )
   }
+  const art = ctx.marks?.[code === 'csdtv' ? CSDTV_CODE : code]
+  const file = intent === 'wordmark' ? (art?.wordmark ?? art?.badge) : (art?.badge ?? art?.wordmark)
+  if (file) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="gx-mark gx-art" src={file} alt="" width={size} height={size} />
+  }
+
   if (code === 'csdtv') {
     return (
       <svg className="gx-mark" width={size} height={size} viewBox="0 0 100 100" aria-hidden>

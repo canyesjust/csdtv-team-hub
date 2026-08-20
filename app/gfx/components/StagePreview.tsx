@@ -15,16 +15,20 @@ import './graphics.css'
  * time the panel re-renders reads as a glitch.
  */
 export default function StagePreview({
-  air, single, ctx, animate = false, className = '',
+  air, single, ctx, animate = false, className = '', replay = false,
 }: {
   air?: AirEntry[]
   single?: GraphicPayload | null
   ctx: MarkContext
   animate?: boolean
   className?: string
+  /** Show a play button. Motion you cannot watch is motion nobody can fix. */
+  replay?: boolean
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.2)
+  /** Bumping this remounts the graphics, which is what replays the entrance. */
+  const [take, setTake] = useState(0)
 
   useEffect(() => {
     const box = boxRef.current
@@ -46,17 +50,21 @@ export default function StagePreview({
   return (
     <div ref={boxRef} className={`sh-screen ${className}`}>
       <div
-        className={`gx-stage${animate ? '' : ' gx-nomotion'}`}
+        className={`gx-stage${animate || take > 0 ? '' : ' gx-nomotion'}`}
         style={{ transform: `scale(${scale})` }}
       >
         {entries.map(entry => (
           <GraphicRenderer
-            key={`${entry.layer}:${entry.graphic.tid}:${entry.taken_at}`}
+            key={`${entry.layer}:${entry.graphic.tid}:${entry.taken_at}:${take}`}
             graphic={entry.graphic}
             ctx={ctx}
           />
         ))}
       </div>
+      {replay && entries.length > 0 && (
+        <button className="sh-replay" title="Play the animation"
+          onClick={e => { e.stopPropagation(); setTake(t => t + 1) }}>▶</button>
+      )}
     </div>
   )
 }

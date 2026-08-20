@@ -5,6 +5,7 @@ import { isGraphicsDepth, defaultDepthFor } from '@/lib/graphics/depth'
 import { GRAPHICS_EVENT_TYPES, type GraphicsEventType } from '@/lib/graphics/types'
 import { starterFor } from '@/lib/graphics/starters'
 import { mergeLibraryIntoShow } from '@/lib/graphics/sponsors'
+import { sponsorLibraryWithArt } from '@/lib/graphics/images'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,12 +35,7 @@ export async function POST(request: Request) {
 
   // District sponsors carry into every new show, switched on. Untick one on
   // the show if it should not run tonight.
-  const { data: sponsorLibrary } = await service
-    .from('graphics_sponsors')
-    .select('id, name, scope')
-    .eq('active', true)
-    .order('sort_order')
-  const sponsors = mergeLibraryIntoShow([], (sponsorLibrary || []) as { id: string; name: string; scope: 'district' | 'school' }[])
+  const sponsors = mergeLibraryIntoShow([], await sponsorLibraryWithArt(service))
 
   const { data: show, error } = await service
     .from('graphics_shows')

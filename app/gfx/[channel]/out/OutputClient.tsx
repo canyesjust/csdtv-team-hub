@@ -122,9 +122,45 @@ export default function OutputClient({
     return () => clearTimeout(t)
   }, [air])
 
+  /**
+   * Layers whose content changed while the template stayed the same. Those
+   * swap in place; anything else animates in fully.
+   */
+  const [swapping, setSwapping] = useState<Set<string>>(new Set())
+  const lastByLayer = useRef<Record<string, string>>({})
+  useEffect(() => {
+    const next: Record<string, string> = {}
+    const swapped = new Set<string>()
+    for (const entry of air) {
+      next[entry.layer] = entry.graphic.tid
+      if (lastByLayer.current[entry.layer] === entry.graphic.tid) swapped.add(entry.layer)
+    }
+    lastByLayer.current = next
+    setSwapping(swapped)
+    if (swapped.size === 0) return
+    const t = setTimeout(() => setSwapping(new Set()), 600)
+    return () => clearTimeout(t)
+  }, [air])
+
   const theme = payload?.state.theme
   const vars = theme ? themeCssVars(theme) : {}
-  const ctx: MarkContext = EMPTY_CTX
+
+  /**
+   * This used to be EMPTY_CTX, which meant every logo field on air resolved to
+   * nothing and no mark was ever drawn in a browser source. The state payload
+   * now carries the school brand and the real logo URLs, so the output draws
+   * the same marks the control surface previews.
+   */
+  const ctx: MarkContext = useMemo(() => {
+    const state = payload?.state
+    if (!state) return EMPTY_CTX
+    return {
+      schoolCode: state.school_code ?? null,
+      awayCode: state.away_code ?? null,
+      schools: state.schools ?? {},
+      marks: state.marks ?? {},
+    }
+  }, [payload])
 
   return (
     <div className="gx-fit" style={vars as React.CSSProperties}>
@@ -140,13 +176,21 @@ export default function OutputClient({
             <GraphicRenderer graphic={entry.graphic} ctx={ctx} />
           </div>
         ))}
-        {sortAirForRender(air).map(entry => (
-          <GraphicRenderer
-            key={`${entry.layer}:${entry.graphic.tid}:${entry.taken_at}`}
-            graphic={entry.graphic}
-            ctx={ctx}
-          />
-        ))}
+        {sortAirForRender(air).map(entry => {
+          /**
+           * Keying on the template rather than the take is what makes a swap a
+           * swap. One player lower third replacing another keeps the same key,
+           * so React reuses the panel and only the contents change. Taking a
+           * lower third out to bring an identical one back in is the single
+           * most amateur thing a graphics system can do.
+           */
+          const swap = swapping.has(entry.layer)
+          return (
+            <div key={`${entry.layer}:${entry.graphic.tid}`} className={swap ? 'gx-swap' : undefined}>
+              <GraphicRenderer graphic={entry.graphic} ctx={ctx} />
+            </div>
+          )
+        })}
         {safeArea && (
           <div style={{ position: 'absolute', inset: '5%', border: '2px dashed rgba(255,255,255,.25)', borderRadius: 4 }} />
         )}

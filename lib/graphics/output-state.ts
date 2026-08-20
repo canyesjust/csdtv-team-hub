@@ -2,6 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { deriveTheme } from '@/lib/graphics/theme'
+import { loadMarkArt } from '@/lib/graphics/mark-data'
 import type {
   AirEntry,
   GraphicsChannel,
@@ -63,6 +64,9 @@ export async function buildChannelOutputState(channelId: string): Promise<Graphi
     show_id: null, show_name: null, state: null,
     theme: { ...GRAPHICS_DEFAULT_THEME },
     air: [], audio: { one: null, bed: null },
+    // The output page had no mark context at all, so every logo field on air
+    // rendered nothing. This is what carries the art to the browser source.
+    marks: {}, schools: {}, school_code: null, away_code: null,
     server_now: now, rev: 0,
   }
 
@@ -71,7 +75,7 @@ export async function buildChannelOutputState(channelId: string): Promise<Graphi
 
   const { data: show } = await service
     .from('graphics_shows')
-    .select('id, name, state, school_code, theme_override, updated_at')
+    .select('id, name, state, school_code, away_code, theme_override, updated_at')
     .eq('channel_id', channelId)
     .in('state', ['rehearsal', 'live'])
     .order('state', { ascending: false })
@@ -80,13 +84,31 @@ export async function buildChannelOutputState(channelId: string): Promise<Graphi
 
   if (!show) return empty
 
-  const [{ data: airRows }, theme] = await Promise.all([
+  const codes = [show.school_code, show.away_code].filter((c): c is string => Boolean(c))
+  const [{ data: airRows }, theme, marks, { data: schoolRows }] = await Promise.all([
     service
       .from('graphics_air')
       .select('layer, graphic, source, out_seconds, taken_at')
       .eq('show_id', show.id),
     resolveTheme(service, show.school_code, show.theme_override),
+    loadMarkArt(service, codes),
+    codes.length
+      ? service.from('schools')
+          .select('code, short_name, name, mascot, primary_color, secondary_color, accent_color')
+          .in('code', codes)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
   ])
+
+  const schools: GraphicsOutputState['schools'] = {}
+  for (const row of (schoolRows || []) as {
+    code: string; short_name: string | null; name: string | null; mascot: string | null
+    primary_color: string | null; secondary_color: string | null; accent_color: string | null
+  }[]) {
+    schools[row.code] = {
+      short_name: row.short_name, name: row.name, mascot: row.mascot,
+      primary_color: row.primary_color, secondary_color: row.secondary_color, accent_color: row.accent_color,
+    }
+  }
 
   return {
     show_id: show.id,
@@ -95,6 +117,10 @@ export async function buildChannelOutputState(channelId: string): Promise<Graphi
     theme,
     air: (airRows || []) as AirEntry[],
     audio: { one: null, bed: null },
+    marks,
+    schools,
+    school_code: show.school_code,
+    away_code: show.away_code ?? null,
     server_now: now,
     rev: Date.parse(show.updated_at || now) || 0,
   }

@@ -38,6 +38,19 @@ function Slate({ children }: { children: React.ReactNode }) {
 
 const lines = (v: string | undefined) => String(v || '').split('\n').filter(Boolean)
 
+/** A number that counts in rather than cutting. */
+function Num({ children, delay = 420 }: { children: React.ReactNode; delay?: number }) {
+  return <span className="gx-num" style={{ ['--nd' as string]: `${delay}ms` }}><span>{children}</span></span>
+}
+
+/** An operator-supplied still. Never stretched, because a squashed crest reads
+    worse than no crest. */
+function Img({ src, className = '', style }: { src?: string; className?: string; style?: React.CSSProperties }) {
+  if (!src) return null
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" className={className} style={style} />
+}
+
 /**
  * Where a lower third sits. Raised clears a venue scoreboard or burned-in
  * captions; right is for when the subject is framed left. The band is the same
@@ -223,6 +236,151 @@ export default function GraphicRenderer({ graphic, ctx }: { graphic: GraphicPayl
       )
     }
 
+    case 'free_image':
+      return (
+        <div className="gx gx-m-slate">
+          <div className="gx-slate-bg"><span className="gx-vignette" /></div>
+          <div className="gx-grow" style={{ position: 'absolute', inset: 0 }}>
+            <Img src={d.image} className="gx-fullimg" />
+          </div>
+          {(d.caption || d.credit) && (
+            <div className="gx-imgcap">
+              {d.caption && <St i={0} base={420}><div className="gx-name" style={{ fontSize: 46 }}>{d.caption}</div></St>}
+              {d.credit && <St i={1} base={420}><div className="gx-kick" style={{ fontSize: 20, marginTop: 6 }}>{d.credit}</div></St>}
+            </div>
+          )}
+        </div>
+      )
+
+    case 'backdrop':
+      return (
+        <div className="gx gx-m-slate">
+          <div className="gx-slate-bg">
+            <Img src={d.image} className="gx-fullimg" />
+            <span className="gx-scrim" />
+            <span className="gx-vignette" />
+          </div>
+          <div className="gx-panel gx-slate-body">
+            {mark('logo', 130) && <St i={0} base={220} style={{ marginBottom: 26, height: 130 }}>{mark('logo', 130)}</St>}
+            {d.kick && <St i={1} base={220}><div className="gx-kick" style={{ fontSize: 28, letterSpacing: 6 }}>{d.kick}</div></St>}
+            {d.title && <St i={2} base={220}><div className="gx-name" style={{ fontSize: 92, marginTop: 12 }}>{d.title}</div></St>}
+            {d.sub && <St i={3} base={220}><div className="gx-sub" style={{ fontSize: 34, marginTop: 14 }}>{d.sub}</div></St>}
+          </div>
+        </div>
+      )
+
+    case 'social_bug':
+      return (
+        <Overlay motion="drop" style={{ right: 70, top: 60, borderRadius: 46, padding: '10px 26px 10px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {mark('logo', 52) && <span className="gx-st" style={{ ['--i' as string]: 0, ['--base' as string]: '150ms', display: 'flex' }}>{mark('logo', 52)}</span>}
+            <div>
+              {d.kick && <St i={1} base={150}><div className="gx-kick" style={{ fontSize: 15 }}>{d.kick}</div></St>}
+              <St i={2} base={150}><div className="gx-name" style={{ fontSize: 27 }}>{d.handle}</div></St>
+            </div>
+          </div>
+        </Overlay>
+      )
+
+    case 'lower_matchup':
+      return (
+        <Overlay motion="wipeL" style={place(d, { maxWidth: 1180, borderRadius: 16, padding: 0 })}>
+          <div className="gx-lmu">
+            <span className="gx-lmu-side l">
+              <span className="gx-lmu-mark">{mark('alogo', 62)}</span>
+              <span className="gx-lmu-team">{d.away}</span>
+              <span className="gx-lmu-score gx-fill-l" style={{ ['--i' as string]: 0 }}>
+                <Num delay={380}>{d.ascore}</Num>
+              </span>
+            </span>
+            <span className="gx-lmu-mid">{d.note || 'vs'}</span>
+            <span className="gx-lmu-side r">
+              <span className="gx-lmu-score gx-fill-r" style={{ ['--i' as string]: 0 }}>
+                <Num delay={380}>{d.hscore}</Num>
+              </span>
+              <span className="gx-lmu-team">{d.home}</span>
+              <span className="gx-lmu-mark">{mark('hlogo', 62)}</span>
+            </span>
+          </div>
+        </Overlay>
+      )
+
+    case 'player_bio':
+      return (
+        <Overlay motion="wipeL" style={place(d, { maxWidth: 1500, borderRadius: 16, padding: 0 })}>
+          <div style={{ display: 'flex', alignItems: 'stretch' }}>
+            {d.photo
+              ? <span className="gx-bio-photo"><Img src={d.photo} /></span>
+              : markCell('logo', 80, '0 26px 0 30px')}
+            <div style={{ padding: '20px 44px 24px 30px', minWidth: 0 }}>
+              {d.team && <St i={1}><div className="gx-kick" style={{ fontSize: 18, marginBottom: 5 }}>{d.team}</div></St>}
+              <St i={2}><div className="gx-name" style={{ fontSize: 54 }}>{d.name}</div></St>
+              {d.role && <St i={3}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 7 }}>
+                  <span className="gx-dot" /><span className="gx-kick" style={{ fontSize: 23 }}>{d.role}</span>
+                </div>
+              </St>}
+              {d.bio && <St i={4}><div className="gx-sub gx-bio-text">{d.bio}</div></St>}
+            </div>
+          </div>
+        </Overlay>
+      )
+
+    case 'lineup_panel': {
+      const entries = lines(d.rows)
+      const right = String(d.pos || 'left-low').startsWith('right')
+      return (
+        <div className={`gx gx-m-${right ? 'wipeR' : 'wipeL'}`}>
+          <div className="gx-panel gx-lpanel" style={right ? { right: 70 } : { left: 70 }}>
+            <div className="gx-cap gx-lpcap">
+              <span className="gx-reveal gx-kick" style={{ fontSize: 21, letterSpacing: 4 }}>
+                {d.kick || 'STARTING LINEUP'}
+              </span>
+            </div>
+            <div className="gx-grow gx-lpbody">
+              {mark('logo', 74) && <div className="gx-st gx-lpmark" style={{ ['--i' as string]: 0, ['--base' as string]: '300ms' }}>{mark('logo', 74)}</div>}
+              {d.team && <St i={1} base={300}><div className="gx-name gx-lpteam">{d.team}</div></St>}
+              <div className="gx-lplist">
+                {entries.slice(0, 14).map((line, i) => (
+                  <div key={line + i} className="gx-fill-l gx-lprow" style={{ ['--i' as string]: i, ['--base' as string]: '420ms' }}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    case 'crawl': {
+      const items = lines(d.items)
+      const seconds = d.speed === 'fast' ? 26 : d.speed === 'slow' ? 68 : 44
+      const run = items.length ? items : ['']
+      return (
+        <div className="gx gx-m-rise">
+          <div className="gx-panel gx-crawlbar">
+            <span className="gx-bar3" />
+            {mark('logo', 44) && <span className="gx-crawl-mark">{mark('logo', 44)}</span>}
+            {d.kick && <span className="gx-crawl-kick">{d.kick}</span>}
+            <div className="gx-crawl-track">
+              {/* Two identical runs so the loop has no seam. */}
+              {[0, 1].map(copy => (
+                <div key={copy} className="gx-crawl-run" style={{ animationDuration: `${seconds}s` }} aria-hidden={copy === 1}>
+                  {run.map((item, i) => (
+                    <span key={i}>
+                      <span style={{ padding: '0 46px' }}>{item}</span>
+                      <span style={{ color: 'var(--gx-3)' }}>◆</span>
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     case 'corner_bug':
       return (
         <Overlay motion="drop" style={{ right: 70, top: 60, borderRadius: 46, padding: '10px 26px 10px 12px' }}>
@@ -314,21 +472,31 @@ export default function GraphicRenderer({ graphic, ctx }: { graphic: GraphicPayl
     case 'matchup':
       return (
         <Slate>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 70, width: '100%', maxWidth: 1560 }}>
-            <St i={0} style={{ flex: 1 }}>
-              <div style={{ marginBottom: 18 }}>{mark('alogo', 150)}</div>
-              <div className="gx-name" style={{ fontSize: 62 }}>{d.away}</div>
-              <div className="gx-kick" style={{ fontSize: 25, marginTop: 9 }}>{d.arec}</div>
-            </St>
-            <St i={1}><div className="gx-huge" style={{ fontSize: 56, opacity: 0.55 }}>at</div></St>
-            <St i={2} style={{ flex: 1 }}>
-              <div style={{ marginBottom: 18 }}>{mark('hlogo', 150)}</div>
-              <div className="gx-name" style={{ fontSize: 62 }}>{d.home}</div>
-              <div className="gx-kick" style={{ fontSize: 25, marginTop: 9 }}>{d.hrec}</div>
-            </St>
+          {/* The build read off the reference: the cap lands first with its
+              title revealed through it, the body grows down from the rail,
+              then the wings push out carrying each team's colour. */}
+          <div className="gx-cap gx-mucap">
+            <span className="gx-reveal gx-kick" style={{ fontSize: 30, letterSpacing: 7 }}>
+              {d.meta || 'MATCHUP'}
+            </span>
           </div>
-          <St i={3}><div className="gx-rule" /></St>
-          <St i={4}><div className="gx-sub" style={{ fontSize: 30 }}>{d.meta}</div></St>
+          <div className="gx-grow gx-mubody">
+            <div className="gx-wing-l gx-muwing l" />
+            <div className="gx-wing-r gx-muwing r" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 70, width: '100%', maxWidth: 1560, position: 'relative', zIndex: 3 }}>
+              <St i={0} base={420} style={{ flex: 1 }}>
+                <div style={{ marginBottom: 18, height: 150 }}>{mark('alogo', 150)}</div>
+                <div className="gx-name" style={{ fontSize: 62 }}>{d.away}</div>
+                <div className="gx-kick" style={{ fontSize: 25, marginTop: 9 }}>{d.arec}</div>
+              </St>
+              <St i={1} base={420}><div className="gx-huge" style={{ fontSize: 56, opacity: 0.55 }}>at</div></St>
+              <St i={2} base={420} style={{ flex: 1 }}>
+                <div style={{ marginBottom: 18, height: 150 }}>{mark('hlogo', 150)}</div>
+                <div className="gx-name" style={{ fontSize: 62 }}>{d.home}</div>
+                <div className="gx-kick" style={{ fontSize: 25, marginTop: 9 }}>{d.hrec}</div>
+              </St>
+            </div>
+          </div>
         </Slate>
       )
 

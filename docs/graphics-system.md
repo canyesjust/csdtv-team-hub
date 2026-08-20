@@ -491,3 +491,61 @@ prompter position controls, which meant the Back and Ahead keys read
 Fixed everywhere and swept with a scanner that flags any `\uXXXX` sitting
 outside quotes or backticks on its line. Worth re-running after any bulk edit
 that writes JSX from a script.
+
+## Build log, session 13
+
+**Logos were never on air at all.** Two bugs stacked. Every mark was a
+placeholder SVG drawn in code, and the OBS output page passed `EMPTY_CTX`, so
+even the placeholder never rendered in a browser source. Meanwhile
+`school_logos` holds **1,327 real files across 51 schools**, already catalogued
+by the brand library.
+
+`lib/graphics/marks.ts` picks one file per school per intent and is pure, so the
+ranking is testable. The rules that matter:
+
+- EPS and DOCX are print assets and can never reach a browser.
+- PNG and SVG carry transparency; a JPG brings a white box, so it is a last
+  resort rather than a preference.
+- Every panel we draw is dark, so a **white or reversed variant wins**. Scoring
+  accumulates rather than first-matching, because "FullColor White Print" is
+  both a white variant and a print asset and the print part has to count against
+  it.
+- A school with only print files returns null and falls back to the drawn crest
+  in its own colours, which beats a broken image on air.
+
+The output state now carries the marks and the school brand, so the browser
+source draws the same marks the control surface previews.
+
+**Motion, read off a reference frame by frame.** The build in a broadcast
+matchup graphic is: a dark header cap wipes in first, its title revealed
+*through* the cap's own edge, then the body panel grows downward from under the
+rail, then wings push out from the centre carrying each team's colour, then the
+rows fill from their own side. Nothing fades up. That difference is most of what
+reads as broadcast rather than as a web page.
+
+Five new primitives, usable on any template: `gx-cap`, `gx-reveal`, `gx-grow`,
+`gx-wing-l/r`, `gx-fill-l/r`. The fullscreen matchup is rebuilt on them.
+
+**Swap in place.** When a layer changes content but keeps its template, the
+output keys on the template rather than the take, so React reuses the panel and
+only the contents change. Taking a lower third out to bring an identical one
+back in is the single most amateur thing a graphics system can do.
+
+**Numbers roll** rather than cut, via `gx-num`.
+
+**A play button on the preview.** Until now the only way to see a graphic
+animate was to put it on air, which is exactly why motion never got fixed.
+
+**Images.** A public `graphics-images` bucket, an upload endpoint bounded on
+type and size server-side, and an `image` field type with a picker that lists
+what is already uploaded. Reads are public because a browser source holds no
+session; writes stay server-side through the service role.
+
+**Seven new templates**, closing most of the gap against the reference packages:
+Freeform image, Background image, Social bug, Matchup lower third, Player or
+team bio, Lineup side panel, and a Crawl that actually crawls (two runs
+translating by exactly their own width, so the loop has no seam).
+
+**Still open:** there is no UI yet to attach art to a sponsor —
+`graphics_sponsors.logo_path` and the whole read path exist, but the Library
+needs a picker. And the score bug is still deliberately out of scope.

@@ -7,6 +7,7 @@ import { useShowState } from '@/lib/graphics/use-show-sync'
 import { autoPages } from '@/lib/graphics/pages'
 import { capabilitiesFor } from '@/lib/graphics/depth'
 import StagePreview from '@/app/gfx/components/StagePreview'
+import ImageField from '@/app/gfx/components/ImageField'
 import type { MarkContext } from '@/app/gfx/components/LogoMark'
 import { themeCssVars } from '@/lib/graphics/theme'
 import { computeTiming, formatClock, formatDuration, parseDuration, readSeconds } from '@/lib/graphics/timing'
@@ -70,8 +71,12 @@ export default function ShowClient({
   const { show, blocks, rows, shelf, air, theme, schools, rosters, audioAssets } = bundle
 
   const ctx: MarkContext = useMemo(
-    () => ({ schoolCode: show.school_code, awayCode: show.away_code, schools }),
-    [show.school_code, show.away_code, schools],
+    () => ({
+      schoolCode: show.school_code, awayCode: show.away_code, schools,
+      marks: bundle.marks,
+      sponsorMarks: Object.fromEntries(show.sponsors.map(sp => [sp.name, sp.logo_url ?? null])),
+    }),
+    [show.school_code, show.away_code, schools, bundle.marks, show.sponsors],
   )
 
   /** Local edits win until the server round-trips, so typing never stutters. */
@@ -719,7 +724,7 @@ export default function ShowClient({
             <>
               <div className="sh-pvwrap">
                 <div className="sh-mon pvw"><span className="lab">PREVIEW</span>
-                  <StagePreview single={previewGraphic} ctx={ctx} />
+                  <StagePreview single={previewGraphic} ctx={ctx} replay />
                 </div>
               </div>
               {selected ? (
@@ -1079,6 +1084,8 @@ function RowEditor({
                         )
                       })}
                     </div>
+                  ) : field.type === 'image' ? (
+                    <ImageField value={row.graphic!.data[field.id] || ''} onChange={v => setGraphicField(field.id, v)} />
                   ) : field.type === 'textarea' ? (
                     <textarea style={{ minHeight: 48 }} value={row.graphic!.data[field.id] || ''}
                       onChange={e => setGraphicField(field.id, e.target.value)} />

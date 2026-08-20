@@ -5,6 +5,7 @@ import JerseyPad from './JerseyPad'
 import SetupDrawer from './SetupDrawer'
 import { useShowState } from '@/lib/graphics/use-show-sync'
 import StagePreview from '@/app/gfx/components/StagePreview'
+import ImageField from '@/app/gfx/components/ImageField'
 import type { MarkContext } from '@/app/gfx/components/LogoMark'
 import { themeCssVars } from '@/lib/graphics/theme'
 import { templateById, templatesForEvent, LOGO_CHOICES, blankData } from '@/lib/graphics/templates'
@@ -49,8 +50,12 @@ export default function BoardClient({
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   const ctx: MarkContext = useMemo(
-    () => ({ schoolCode: show.school_code, awayCode: show.away_code, schools }),
-    [show.school_code, show.away_code, schools],
+    () => ({
+      schoolCode: show.school_code, awayCode: show.away_code, schools,
+      marks: bundle.marks,
+      sponsorMarks: Object.fromEntries(show.sponsors.map(sp => [sp.name, sp.logo_url ?? null])),
+    }),
+    [show.school_code, show.away_code, schools, bundle.marks, show.sponsors],
   )
 
   const merged = useMemo<ShelfItem[]>(
@@ -331,7 +336,9 @@ export default function BoardClient({
                           )
                         })}
                       </div>
-                    ) : field.type === 'textarea' ? (
+                    ) : field.type === 'image' ? (
+                    <ImageField value={selected.graphic!.data[field.id] || ''} onChange={v => setCardField(field.id, v)} />
+                  ) : field.type === 'textarea' ? (
                       <textarea style={{ minHeight: 48 }} value={selected.graphic!.data[field.id] || ''}
                         onChange={e => setCardField(field.id, e.target.value)} />
                     ) : (

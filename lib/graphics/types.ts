@@ -44,12 +44,22 @@ export type AirEntry = {
   taken_at: string
 }
 
+export type SchoolBrand = {
+  short_name: string | null; name: string | null; mascot: string | null
+  primary_color: string | null; secondary_color: string | null; accent_color: string | null
+}
+
 export type GraphicsOutputState = {
   show_id: string | null
   show_name: string | null
   state: GraphicsShowState | null
   theme: GraphicsTheme
   air: AirEntry[]
+  /** Real logo art by school code, so a browser source can draw a mark. */
+  marks: Record<string, { badge: string | null; wordmark: string | null }>
+  schools: Record<string, SchoolBrand>
+  school_code: string | null
+  away_code: string | null
   audio: { one: AudioCue & { started_at: string } | null; bed: AudioCue | null }
   /** Server clock, so a client can correct for drift on auto-out timers. */
   server_now: string

@@ -3,6 +3,8 @@ export type ShowSponsor = {
   name: string
   scope: 'district' | 'school' | 'event'
   on: boolean
+  /** Public URL of the sponsor's art. A sponsor bug without it is just text. */
+  logo_url?: string | null
 }
 
 /**
@@ -27,6 +29,7 @@ export function sanitizeShowSponsors(input: unknown): ShowSponsor[] {
       name: String(s.name ?? '').slice(0, 160),
       scope: scope as ShowSponsor['scope'],
       on: s.on !== false,
+      logo_url: typeof s.logo_url === 'string' && s.logo_url ? s.logo_url.slice(0, 500) : null,
     }
   }).filter(s => s.name)
 }
@@ -38,12 +41,18 @@ export function sanitizeShowSponsors(input: unknown): ShowSponsor[] {
  */
 export function mergeLibraryIntoShow(
   current: ShowSponsor[],
-  library: { id: string; name: string; scope: 'district' | 'school' }[],
+  library: { id: string; name: string; scope: 'district' | 'school'; logo_url?: string | null }[],
 ): ShowSponsor[] {
   const byId = new Map(current.map(s => [s.id, s]))
   const merged: ShowSponsor[] = library.map(lib => {
     const existing = byId.get(lib.id)
-    return { id: lib.id, name: lib.name, scope: lib.scope, on: existing ? existing.on : true }
+    return {
+      id: lib.id, name: lib.name, scope: lib.scope,
+      on: existing ? existing.on : true,
+      // Art always follows the library, so replacing a sponsor's logo updates
+      // every show that carries it rather than only the next one.
+      logo_url: lib.logo_url ?? null,
+    }
   })
   for (const s of current) {
     if (s.scope === 'event') merged.push(s)
