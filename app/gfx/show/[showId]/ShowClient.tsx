@@ -5,6 +5,7 @@ import SetupDrawer from './SetupDrawer'
 import JerseyPad from './JerseyPad'
 import { useShowState } from '@/lib/graphics/use-show-sync'
 import { autoPages } from '@/lib/graphics/pages'
+import { capabilitiesFor } from '@/lib/graphics/depth'
 import StagePreview from '@/app/gfx/components/StagePreview'
 import type { MarkContext } from '@/app/gfx/components/LogoMark'
 import { themeCssVars } from '@/lib/graphics/theme'
@@ -16,6 +17,9 @@ import type { GraphicPayload, GraphicsLayer } from '@/lib/graphics/types'
 
 type Mode = 'build' | 'run' | 'review'
 type Role = 'director' | 'graphics' | 'audio' | 'camera' | 'talent'
+
+/** A list has no clock, so the timing columns would only be noise. */
+const LIST_COLUMNS = ['pg', 'slug', 'form', 'gfx', 'gdetail', 'ok']
 
 const ROLE_COLUMNS: Record<Role, string[]> = {
   director: ['pg', 'slug', 'form', 'video', 'camera', 'gfx', 'est', 'front', 'back', 'ok'],
@@ -50,6 +54,8 @@ export default function ShowClient({
   const [selId, setSelId] = useState<string | null>(bundle.rows[0]?.id ?? null)
   const [nextId, setNextId] = useState<string | null>(bundle.rows[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
+  /** A take specifically, so only the TAKE button guards against a double press. */
+  const [taking, setTaking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState<Record<string, Partial<ShowRow>>>({})
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -123,17 +129,34 @@ export default function ShowClient({
     await pullState(true)
   }, [call, show.id, pullState])
 
+  /**
+   * Take, optimistically.
+   *
+   * The cursor moves on the click and the request goes out behind it. A take is
+   * the one action where waiting on a round trip is unacceptable: the director
+   * has already called it and is looking at the next row, not at the screen. If
+   * the server refuses, the error shows and the next pull puts the cursor back
+   * where the as-run actually is.
+   */
   const take = useCallback(async () => {
-    if (!nextId) return
-    const ok = await call(`/api/gfx/shows/${show.id}/take`, { method: 'POST', body: JSON.stringify({ row_id: nextId }) })
-    if (!ok) return
-    const i = merged.findIndex(r => r.id === nextId)
+    if (!nextId || taking) return
+    const rowId = nextId
+
+    const i = merged.findIndex(r => r.id === rowId)
     let j = i + 1
     while (j < merged.length && merged[j].floated) j++
     setNextId(j < merged.length ? merged[j].id : null)
-    setSelId(nextId)
-    refresh()
-  }, [nextId, call, show.id, merged, refresh])
+    setSelId(rowId)
+
+    setTaking(true)
+    try {
+      const ok = await call(`/api/gfx/shows/${show.id}/take`, { method: 'POST', body: JSON.stringify({ row_id: rowId }) })
+      refresh()
+      if (!ok) setNextId(rowId)
+    } finally {
+      setTaking(false)
+    }
+  }, [nextId, taking, call, show.id, merged, refresh])
 
   const fireShelf = useCallback(async (graphic: GraphicPayload) => {
     await call(`/api/gfx/shows/${show.id}/air`, { method: 'POST', body: JSON.stringify({ action: 'put', graphic }) })
@@ -357,6 +380,7 @@ export default function ShowClient({
     return () => window.removeEventListener('keydown', onKey)
   }, [take, merged, nextId])
 
+  const caps = capabilitiesFor(show.depth)
   const pages = useMemo(() => autoPages(blocks, merged), [blocks, merged])
 
   /**
@@ -388,7 +412,9 @@ export default function ShowClient({
     }
     return out
   }, [blocks, merged, role, mode])
-  const columns = mode === 'build' ? ROLE_COLUMNS.director : ROLE_COLUMNS[role]
+  const columns = !caps.timing
+    ? LIST_COLUMNS
+    : mode === 'build' ? ROLE_COLUMNS.director : ROLE_COLUMNS[role]
   const previewGraphic = selected?.graphic ?? null
   const live = show.state === 'live'
 
@@ -488,7 +514,7 @@ export default function ShowClient({
             </button>
           ))}
         </div>
-        {mode !== 'build' && (
+        {caps.roles && mode !== 'build' && (
           <select className="sh-role" value={role} onChange={e => setRole(e.target.value as Role)}>
             {(Object.keys(ROLE_COLUMNS) as Role[]).map(r => <option key={r} value={r}>{r[0].toUpperCase() + r.slice(1)}</option>)}
           </select>
@@ -520,6 +546,7 @@ export default function ShowClient({
         onRefresh={refresh}
       />
 
+      {caps.timing ? (
       <div className={`sh-timing${live ? ' hot' : ''}`}>
         <div className="sh-tc"><div className="k">Air</div><div className="v sm">{show.air_at ? formatClock(Date.parse(show.air_at)) : '—'}</div></div>
         <div className="sh-tc"><div className="k">Hard out</div><div className="v sm">{show.hard_out_at ? formatClock(Date.parse(show.hard_out_at)) : '—'}</div></div>
@@ -538,15 +565,27 @@ export default function ShowClient({
             <span style={{ color: 'var(--gx-next)' }}>■ NEXT</span>
           </div></div>
       </div>
+      ) : (
+        <div className="sh-timing slim">
+          <div className="sh-tc" style={{ flex: 1 }}><div className="k">On air</div>
+            <div className="v sm">{airRow ? `${airRow.page} · ${airRow.slug}` : '—'}</div></div>
+          <div className="sh-tc"><div className="k">Entries</div>
+            <div className="v sm">{merged.length}</div></div>
+        </div>
+      )}
 
-      <div className={`sh-body${busy ? ' sh-busy' : ''}`}>
+      {/* A hairline, not a curtain. Dimming the whole screen on every request
+          hid the rundown at the exact moment the director needed to read it. */}
+      <div className={`sh-work${busy ? ' on' : ''}`} />
+
+      <div className="sh-body">
         <div className="sh-center">
           {mode === 'build' && (
             <div className="sh-tools">
               <b style={{ fontSize: 11, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--gx-mu)' }}>Build</b>
               <button className="gfx-btn sm" onClick={() => void addRow(false)}>＋ Row</button>
               <button className="gfx-btn sm" onClick={() => void addRow(true)}>＋ Row with graphic</button>
-              <button className="gfx-btn sm ghost" onClick={() => void addBlock()}>＋ Block</button>
+              {caps.blocks && <button className="gfx-btn sm ghost" onClick={() => void addBlock()}>＋ Block</button>}
               <button className="gfx-btn sm ghost" onClick={() => void refreshAndRenumber()}>Renumber</button>
               {selected && (
                 <>
@@ -643,7 +682,7 @@ export default function ShowClient({
                       {columns.map(c => cell(row, c, i))}
                     </tr>
                   )
-                  if (mode !== 'build' || row.id !== selId) return tr
+                  if (!caps.script || mode !== 'build' || row.id !== selId) return tr
                   return (
                     <Fragment key={row.id}>
                       {tr}
@@ -740,7 +779,7 @@ export default function ShowClient({
                       {merged.find(r => r.id === nextId) ? `${merged.find(r => r.id === nextId)!.page} · ${merged.find(r => r.id === nextId)!.slug}` : '—'}
                     </div>
                     <button className="gfx-btn take" style={{ width: '100%', minHeight: 54, fontSize: 15 }}
-                      disabled={!nextId || busy} onClick={() => void take()}>TAKE</button>
+                      disabled={!nextId || taking} onClick={() => void take()}>TAKE</button>
                   </div>
                 </section>
               )}
@@ -753,7 +792,7 @@ export default function ShowClient({
                       away={rosters.away}
                       homeSchool={schoolOptions.find(s => s.code === show.school_code)}
                       awaySchool={schoolOptions.find(s => s.code === show.away_code)}
-                      disabled={busy}
+                      disabled={false}
                       onTake={graphic => void fireShelf(graphic)}
                     />
                   </div>
@@ -784,7 +823,7 @@ export default function ShowClient({
                 </section>
               )}
 
-              {(role === 'director' || role === 'graphics' || role === 'talent') && (
+              {caps.script && (role === 'director' || role === 'graphics' || role === 'talent') && (
                 <section className="sh-sect">
                   <h4>Prompter<span className="r">{show.prompter_speed.toFixed(1)}\u00d7</span></h4>
                   <div className="sh-in">

@@ -6,6 +6,7 @@ import type {
   AirEntry, GraphicPayload, GraphicsEventType, GraphicsShowState, GraphicsTheme,
 } from '@/lib/graphics/types'
 import { sanitizePlayers, type Player } from '@/lib/graphics/rosters'
+import type { GraphicsDepth } from '@/lib/graphics/depth'
 
 export type ShowBlock = {
   id: string
@@ -45,6 +46,8 @@ export type ShowRow = {
 export type ShelfItem = {
   id: string
   label: string
+  /** Free text, because every show groups its cards differently. */
+  group_label: string | null
   graphic: GraphicPayload | null
   sort_order: number
 }
@@ -54,6 +57,7 @@ export type ShowBundle = {
     id: string
     name: string
     event_type: GraphicsEventType
+    depth: GraphicsDepth
     state: GraphicsShowState
     show_date: string | null
     air_at: string | null
@@ -93,7 +97,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
   const { data: show } = await service
     .from('graphics_shows')
     .select(
-      'id, name, event_type, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, production_id, graphics_channels(id, slug, name, listening)',
+      'id, name, event_type, depth, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, production_id, graphics_channels(id, slug, name, listening)',
     )
     .eq('id', showId)
     .maybeSingle()
@@ -102,7 +106,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
   const [{ data: blocks }, { data: rows }, { data: shelf }, { data: air }] = await Promise.all([
     service.from('graphics_blocks').select('id, label, anchor_type, anchor_at, sort_order').eq('show_id', showId).order('sort_order'),
     service.from('graphics_rows').select('*').eq('show_id', showId).order('sort_order'),
-    service.from('graphics_shelf_items').select('id, label, graphic, sort_order').eq('show_id', showId).order('sort_order'),
+    service.from('graphics_shelf_items').select('id, label, group_label, graphic, sort_order').eq('show_id', showId).order('sort_order'),
     service.from('graphics_air').select('layer, graphic, source, out_seconds, taken_at').eq('show_id', showId),
   ])
 
@@ -160,6 +164,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
     show: {
       id: show.id, name: show.name,
       event_type: show.event_type as GraphicsEventType,
+      depth: (show.depth ?? 'rundown') as GraphicsDepth,
       state: show.state as GraphicsShowState,
       show_date: show.show_date, air_at: show.air_at, hard_out_at: show.hard_out_at,
       venue: show.venue, school_code: show.school_code, away_code: show.away_code,

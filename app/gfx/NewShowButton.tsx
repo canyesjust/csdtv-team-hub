@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { GRAPHICS_EVENT_TYPES } from '@/lib/graphics/types'
+import {
+  GRAPHICS_DEPTHS, DEPTH_LABEL, DEPTH_BLURB, defaultDepthFor, type GraphicsDepth,
+} from '@/lib/graphics/depth'
 
 type ProductionOption = {
   id: string
@@ -41,6 +44,8 @@ export default function NewShowButton({
   const [busy, setBusy] = useState(false)
   const [name, setName] = useState('')
   const [eventType, setEventType] = useState<string>('concert')
+  const [depth, setDepth] = useState<GraphicsDepth>(defaultDepthFor('concert'))
+  const [depthTouched, setDepthTouched] = useState(false)
   const [schoolCode, setSchoolCode] = useState('')
   const [channelId, setChannelId] = useState('')
   const [airAt, setAirAt] = useState('')
@@ -83,11 +88,17 @@ export default function NewShowButton({
     setProductionId(p.id)
     setName(p.title)
     setEventType(p.event_type)
+    if (!depthTouched) setDepth(defaultDepthFor(p.event_type))
     if (p.school_code) setSchoolCode(p.school_code)
     if (p.venue) setVenue(p.venue)
     if (p.starts_at || p.start_datetime) setAirAt(toLocal(p.starts_at || p.start_datetime))
     if (p.end_datetime) setHardOutAt(toLocal(p.end_datetime))
-  }, [])
+  }, [depthTouched])
+
+  const chooseEventType = (t: string) => {
+    setEventType(t)
+    if (!depthTouched) setDepth(defaultDepthFor(t))
+  }
 
   const create = async () => {
     setBusy(true)
@@ -98,6 +109,7 @@ export default function NewShowButton({
         body: JSON.stringify({
           name: name.trim() || `New ${EVENT_LABEL[eventType].toLowerCase()}`,
           event_type: eventType,
+          depth,
           school_code: schoolCode || null,
           channel_id: channelId || null,
           air_at: airAt ? new Date(airAt).toISOString() : null,
@@ -167,15 +179,33 @@ export default function NewShowButton({
           <div style={{ display: 'grid', gap: 6 }}>
             {GRAPHICS_EVENT_TYPES.map(t => (
               <button key={t} className={`gfx-btn${eventType === t ? ' on' : ''}`}
-                style={{ textAlign: 'left', padding: '10px 12px' }} onClick={() => setEventType(t)}>
+                style={{ textAlign: 'left', padding: '10px 12px' }} onClick={() => chooseEventType(t)}>
                 <b style={{ display: 'block' }}>{EVENT_LABEL[t]}</b>
                 <span className="gfx-note">{EVENT_BLURB[t]}</span>
               </button>
             ))}
           </div>
           <p className="gfx-note" style={{ marginTop: 8 }}>
-            The event type decides the starter rundown, which templates are offered, and what the shelf
-            starts with. All of it is editable afterwards.
+            The event type decides which templates are offered and what you start with. All of it is
+            editable afterwards.
+          </p>
+        </section>
+
+        <section className="gfx-dsec">
+          <h5>How much structure?</h5>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {GRAPHICS_DEPTHS.map(d => (
+              <button key={d} className={`gfx-btn${depth === d ? ' on' : ''}`}
+                style={{ textAlign: 'left', padding: '10px 12px' }}
+                onClick={() => { setDepth(d); setDepthTouched(true) }}>
+                <b style={{ display: 'block' }}>{DEPTH_LABEL[d]}</b>
+                <span className="gfx-note">{DEPTH_BLURB[d]}</span>
+              </button>
+            ))}
+          </div>
+          <p className="gfx-note" style={{ marginTop: 8 }}>
+            A rundown is one way to organise graphics, not the only one. Most Friday games want the board and
+            nothing else. You can change this later and nothing is thrown away.
           </p>
         </section>
 

@@ -90,7 +90,25 @@ tr.sh-block td { background: #101a2c; font-size: 9.5px; letter-spacing: .12em; t
 .sh-lrow { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--gx-pn2);
   border: 1px solid var(--gx-ln); border-radius: 8px; margin-bottom: 4px; cursor: pointer; font-size: 11.5px; }
 .sh-lrow.air { border-color: var(--gx-live); background: rgba(226,55,68,.15); }
-.sh-busy { opacity: .55; pointer-events: none; }
+/* Work in progress reads as a hairline under the timing strip. The screen used
+   to drop to 55% opacity and stop taking clicks for the length of every
+   request, which on a take meant the rundown greyed out at the one moment the
+   director had to be able to read it. */
+.sh-work {
+  height: 2px; flex: none; background: transparent; overflow: hidden; position: relative;
+}
+.sh-work.on::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, var(--gx-ac), transparent);
+  animation: sh-work 900ms linear infinite;
+}
+@keyframes sh-work {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sh-work.on::after { animation: none; background: var(--gx-ac); opacity: .5; }
+}
 
 /* ---- jersey pad ---- */
 .jp-display { background: #050810; border: 2px solid var(--gx-next); border-radius: 10px;
@@ -195,3 +213,6 @@ tr.sh-block td { background: #101a2c; font-size: 9.5px; letter-spacing: .12em; t
   margin-left: auto; background: var(--gx-ac); color: #04203a;
   font-size: 9px; font-weight: 800; padding: 1px 6px; border-radius: 999px; letter-spacing: 0;
 }
+
+/* A list has no clock, so the strip carries only what it is and where it is. */
+.sh-timing.slim { background: #0b1626; padding: 5px 12px; }

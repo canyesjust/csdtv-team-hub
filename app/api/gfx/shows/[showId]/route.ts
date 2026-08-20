@@ -3,6 +3,7 @@ import { withGraphicsControl, controlError } from '@/lib/graphics/control'
 import { GRAPHICS_EVENT_TYPES, GRAPHICS_SHOW_STATES } from '@/lib/graphics/types'
 import { sanitizeShowSponsors } from '@/lib/graphics/sponsors'
 import { sanitizePrompterSeek } from '@/lib/graphics/prompter'
+import { isGraphicsDepth } from '@/lib/graphics/depth'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sh
     if (typeof body.event_type === 'string' && (GRAPHICS_EVENT_TYPES as readonly string[]).includes(body.event_type)) {
       patch.event_type = body.event_type
     }
+    if (isGraphicsDepth(body.depth)) patch.depth = body.depth
     if (typeof body.state === 'string' && (GRAPHICS_SHOW_STATES as readonly string[]).includes(body.state)) {
       patch.state = body.state
       // Going live for the first time stamps the clock the timing math rebases on.

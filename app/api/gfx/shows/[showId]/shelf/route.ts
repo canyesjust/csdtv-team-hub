@@ -18,7 +18,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ sho
 
     const { data, error } = await ctx.service
       .from('graphics_shelf_items')
-      .insert({ show_id: ctx.showId, label, graphic, sort_order: last ? Number(last.sort_order) + 10 : 10 })
+      .insert({
+        show_id: ctx.showId, label, graphic,
+        group_label: typeof body.group_label === 'string' && body.group_label.trim()
+          ? body.group_label.trim().slice(0, 40) : null,
+        sort_order: last ? Number(last.sort_order) + 10 : 10,
+      })
       .select('id').single()
     if (error) return controlError('Could not add the shelf item', 500)
     return NextResponse.json({ success: true, id: data.id })

@@ -1,0 +1,73 @@
+/* ============================================================================
+   The board. A bank of cards, no order, no clock.
+
+   Sized for a student in a dark van looking at the field, not at the screen.
+   Cards are big, the on-air state is unmistakable, and one press does the whole
+   job in either direction.
+   ========================================================================== */
+
+.bd-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 430px; min-height: 0; }
+.bd-main { min-width: 0; overflow: auto; padding: 14px 16px 40px; border-right: 1px solid var(--gx-ln); }
+
+.bd-group { margin-bottom: 22px; }
+.bd-group h3 {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--gx-mu); margin: 0 0 9px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--gx-ln);
+}
+.bd-group h3 .gfx-note { font-size: 10px; opacity: .6; }
+
+.bd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(198px, 1fr)); gap: 9px; }
+
+.bd-card {
+  position: relative; display: flex; flex-direction: column; gap: 0;
+  padding: 0; overflow: hidden; text-align: left; cursor: pointer;
+  background: var(--gx-pn2); color: var(--gx-tx);
+  border: 1px solid var(--gx-ln); border-radius: 11px;
+  font: inherit; transition: border-color .12s ease, background .12s ease;
+}
+.bd-card:hover { border-color: var(--gx-ac); }
+.bd-card.sel { box-shadow: 0 0 0 1px var(--gx-ac); }
+.bd-card:active { transform: translateY(1px); }
+
+/* On air is red and it is not subtle. Reading this wrong puts the wrong thing
+   on television. */
+.bd-card.up {
+  border-color: var(--gx-live);
+  box-shadow: inset 0 0 0 1px var(--gx-live), 0 0 18px rgba(226,55,68,.28);
+  background: #23111a;
+}
+
+.bd-thumb {
+  display: block; position: relative; width: 100%; aspect-ratio: 16/9; overflow: hidden;
+  background:
+    radial-gradient(70% 60% at 30% 30%, rgba(255,220,170,.16), transparent 65%),
+    radial-gradient(60% 70% at 78% 70%, rgba(90,150,255,.13), transparent 65%),
+    linear-gradient(170deg, #182338, #060a12 74%);
+  border-bottom: 1px solid var(--gx-ln);
+}
+.bd-meta { display: block; padding: 8px 10px 9px; }
+.bd-name { display: block; font-size: 13px; font-weight: 700; line-height: 1.25; }
+.bd-sub { display: block; font-size: 10.5px; color: var(--gx-mu); margin-top: 2px; }
+
+.bd-onair {
+  position: absolute; top: 7px; right: 7px; z-index: 3;
+  background: var(--gx-live); color: #fff;
+  font-size: 9px; font-weight: 800; letter-spacing: .1em;
+  padding: 3px 7px; border-radius: 5px;
+}
+
+.bd-add, .bd-newgroup { display: flex; align-items: center; }
+.bd-add select, .bd-newgroup select {
+  width: 100%; min-height: 62px; font: inherit; font-size: 12.5px; font-weight: 600;
+  color: var(--gx-mu); background: transparent;
+  border: 1px dashed var(--gx-ln); border-radius: 11px; padding: 8px; cursor: pointer;
+}
+.bd-add select:hover, .bd-newgroup select:hover { border-color: var(--gx-ac); color: var(--gx-tx); }
+.bd-newgroup { margin-top: 6px; max-width: 240px; }
+
+@media (max-width: 1100px) {
+  .bd-body { grid-template-columns: minmax(0, 1fr) 340px; }
+  .bd-grid { grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); }
+}

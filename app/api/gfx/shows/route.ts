@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedTeamUser, isStaffOrManagerRole } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
+import { isGraphicsDepth, defaultDepthFor } from '@/lib/graphics/depth'
 import { GRAPHICS_EVENT_TYPES, type GraphicsEventType } from '@/lib/graphics/types'
 import { starterFor } from '@/lib/graphics/starters'
 import { mergeLibraryIntoShow } from '@/lib/graphics/sponsors'
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
       sponsors,
       name,
       event_type: eventType,
+      depth: isGraphicsDepth(body.depth) ? body.depth : defaultDepthFor(eventType),
       state: 'draft',
       school_code: typeof body.school_code === 'string' ? body.school_code : null,
       away_code: typeof body.away_code === 'string' ? body.away_code : null,

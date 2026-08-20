@@ -400,3 +400,71 @@ deserves. Add drops a block called NEW SEGMENT, and the header label is an input
 running order implies. The stored value is still written, because the prompter
 and the exports read it, but a stored page that disagrees with the order can no
 longer show up on screen.
+
+## Build log, session 10
+
+**The grey screen on take.** `.sh-busy` put `opacity: .55` and
+`pointer-events: none` on the entire body for the duration of every request. So
+a take greyed the rundown out and stopped accepting clicks until the round trip
+came back, which is precisely the moment the director has to be able to read the
+next row and precisely the moment they must not be blocked.
+
+Two changes:
+
+**Work is a hairline, not a curtain.** A 2px line under the timing strip while
+anything is in flight. Nothing dims, nothing stops accepting input.
+
+**Take is optimistic.** The cursor moves on the click and the request follows
+it. The director has already called the row out loud and is looking at the next
+one, not at the screen, so waiting on a round trip to move the highlight is a
+round trip too many. If the server refuses, the error shows and the cursor
+returns to the row that did not go. The next state pull is authoritative either
+way, because the as-run is what actually happened.
+
+The TAKE button still guards a double press, but on its own `taking` flag rather
+than the global one, so firing a shelf graphic no longer disables TAKE and a
+take no longer disables the jersey pad.
+
+## Build log, session 11
+
+**Undoing an overcorrection.** The v3 concept said this, and it was right:
+
+> A concert is a spine and the job is advancing. A game is a bank of triggers
+> with no order. A parade is one long list. A graduation is 400 names where the
+> reader skips. Four different jobs. A single panel that tries all four does
+> none of them well, which is exactly why the current parade panel is good: it
+> only does parades. The expensive parts are the renderer, the motion system,
+> the state plumbing, the theme engine and the template schema. All shared. The
+> control surface is the cheap part.
+
+Then the one-screen consolidation, fixing a real problem (eleven tabs), threw
+that away and made everything a rundown. A Friday game got pages, a clock,
+front and back times, blocks and a script field it will never use.
+
+**Depth is now a property of the show.** Three, chosen at creation and
+changeable at any time from the setup drawer.
+
+| Depth | What it is | Defaults for |
+|---|---|---|
+| **Just graphics** | A bank of cards you hit. No order, no clock. | game, other |
+| **An ordered list** | One list you advance. No clock, no script. | parade, ceremony |
+| **A full rundown** | Segments, timing, script, prompter, roles. | concert |
+
+`lib/graphics/depth.ts` holds this as a capability table rather than scattered
+conditionals, so what a depth does and does not carry is one object you can read
+and a test can assert.
+
+**The board is a second surface, not the rundown with things off.** `BoardClient`
+is its own component: grouped cards big enough to hit in a dark van, a live
+thumbnail of each graphic, one press to put a card up and the same press to take
+it out, red and unmistakable when it is on. The program monitor and the jersey
+pad sit beside it. No timing strip, no pages, no script, no roles.
+
+Everything expensive stays shared: the renderer, the motion system, the layer
+policy, the theme engine, the templates, the outputs, the packages, the
+listening ladder, the panel endpoint and the sponsor report.
+
+**Changing depth destroys nothing.** Rows survive a drop to board and return if
+you go back up. Cards live on the shelf either way. The drawer says so next to
+each option, because a choice you cannot safely get wrong on a Tuesday is not
+really a choice.

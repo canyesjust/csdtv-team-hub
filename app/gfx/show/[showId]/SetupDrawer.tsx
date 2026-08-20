@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { deriveTheme, themeCssVars } from '@/lib/graphics/theme'
 import { GRAPHICS_EVENT_TYPES, GRAPHICS_SHOW_STATES } from '@/lib/graphics/types'
+import { GRAPHICS_DEPTHS, DEPTH_LABEL, DEPTH_BLURB, depthChangeNote } from '@/lib/graphics/depth'
 import { templateById } from '@/lib/graphics/templates'
 import type { ShowBundle } from '@/lib/graphics/show-data'
 
@@ -135,6 +136,28 @@ export default function SetupDrawer({
           <p className="gfx-note" style={{ marginTop: 7 }}>
             Anything but <b>live</b> puts a rehearsal flag in the corner of the output, so a student can run the
             whole show on the real machine and nobody wonders whether it went out.
+          </p>
+        </section>
+
+        <section className="gfx-dsec">
+          <h5>How much structure?</h5>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {GRAPHICS_DEPTHS.map(d => (
+              <button key={d} className={`gfx-btn${show.depth === d ? ' on' : ''}`}
+                style={{ textAlign: 'left', padding: '9px 11px' }}
+                onClick={() => onPatch({ depth: d })}>
+                <b style={{ display: 'block' }}>{DEPTH_LABEL[d]}</b>
+                <span className="gfx-note">{DEPTH_BLURB[d]}</span>
+              </button>
+            ))}
+          </div>
+          {GRAPHICS_DEPTHS.filter(d => d !== show.depth).map(d => {
+            const note = depthChangeNote(show.depth, d, rows.length)
+            return note ? <p key={d} className="gfx-note" style={{ marginTop: 7 }}><b>{DEPTH_LABEL[d]}:</b> {note}</p> : null
+          })}
+          <p className="gfx-note" style={{ marginTop: 7 }}>
+            Change this whenever. Rows and cards both survive, so a game that turns into a hosted broadcast
+            halfway through the season costs one click.
           </p>
         </section>
 

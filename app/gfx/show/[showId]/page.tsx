@@ -2,7 +2,9 @@ import { notFound, redirect } from 'next/navigation'
 import { getStaffOrManagerUser } from '@/lib/server/auth'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { loadShowBundle } from '@/lib/graphics/show-data'
+import { capabilitiesFor } from '@/lib/graphics/depth'
 import ShowClient from './ShowClient'
+import BoardClient from './BoardClient'
 import './show.css'
 
 export const dynamic = 'force-dynamic'
@@ -27,5 +29,8 @@ export default async function ShowPage({ params }: { params: Promise<{ showId: s
       .order('name'),
   ])
 
-  return <ShowClient bundle={bundle} channels={channels || []} schools={schools || []} />
+  // A board is a different surface, not the rundown with things switched off.
+  // The expensive machinery is shared; the control surface is the cheap part.
+  const Surface = capabilitiesFor(bundle.show.depth).board ? BoardClient : ShowClient
+  return <Surface bundle={bundle} channels={channels || []} schools={schools || []} />
 }

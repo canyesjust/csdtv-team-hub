@@ -12,6 +12,10 @@ export async function PATCH(
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     const patch: Record<string, unknown> = {}
     if (typeof body.label === 'string') patch.label = body.label.slice(0, 80)
+    if (typeof body.group_label === 'string' || body.group_label === null) {
+      patch.group_label = typeof body.group_label === 'string' && body.group_label.trim()
+        ? body.group_label.trim().slice(0, 40) : null
+    }
     if ('graphic' in body) {
       const graphic = sanitizeGraphic(body.graphic)
       if (!graphic) return controlError('Unknown or malformed graphic')
