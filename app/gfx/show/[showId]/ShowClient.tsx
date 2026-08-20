@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SetupDrawer from './SetupDrawer'
 import JerseyPad from './JerseyPad'
 import { useShowState } from '@/lib/graphics/use-show-sync'
@@ -58,6 +58,8 @@ export default function ShowClient({
   const [chapters, setChapters] = useState<string>('')
   const [sponsorReport, setSponsorReport] = useState<{ name: string; takes: number; seconds: number }[]>([])
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const blockTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const [blockDraft, setBlockDraft] = useState<Record<string, string>>({})
 
   const { show, blocks, rows, shelf, air, theme, schools, rosters, audioAssets } = bundle
 
@@ -210,21 +212,26 @@ export default function ShowClient({
     if (ok) void refreshAndRenumber()
   }, [call, show.id, refreshAndRenumber])
 
+  /** Created with a placeholder and renamed in place. A modal prompt to name a
+   *  thing you can see on screen is a step for nothing. */
   const addBlock = useCallback(async () => {
-    const label = window.prompt('Block name', 'NEW BLOCK')
-    if (!label) return
-    const ok = await call(`/api/gfx/shows/${show.id}/blocks`, { method: 'POST', body: JSON.stringify({ label }) })
+    const ok = await call(`/api/gfx/shows/${show.id}/blocks`, {
+      method: 'POST', body: JSON.stringify({ label: 'NEW SEGMENT' }),
+    })
     if (ok) void refreshAndRenumber()
   }, [call, show.id, refreshAndRenumber])
 
-  const renameBlock = useCallback(async (blockId: string, current: string) => {
-    const label = window.prompt('Block name', current)
-    if (!label || label === current) return
-    const ok = await call(`/api/gfx/shows/${show.id}/blocks/${blockId}`, {
-      method: 'PATCH', body: JSON.stringify({ label }),
-    })
-    if (ok) refresh()
-  }, [call, show.id, refresh])
+  const renameBlock = useCallback((blockId: string, label: string) => {
+    setBlockDraft(d => ({ ...d, [blockId]: label }))
+    clearTimeout(blockTimers.current[blockId])
+    blockTimers.current[blockId] = setTimeout(() => {
+      void fetch(`/api/gfx/shows/${show.id}/blocks/${blockId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      }).catch(() => null)
+    }, 600)
+  }, [show.id])
 
   /**
    * Deleting a block keeps its rows. Losing a whole segment because someone
@@ -404,7 +411,10 @@ export default function ShowClient({
       case 'pg': return (
         <td key={key} className="sh-pg">
           {mode === 'build' && <span className="sh-handle">⠿</span>}
-          {row.page || <span className="gfx-note">{pages[row.id] || ''}</span>}
+          {/* Derived, never the stored value. A page that disagrees with the
+              running order is worse than no page at all, and storing it only
+              matters for the prompter and the exports. */}
+          {pages[row.id] || row.page}
         </td>
       )
       case 'slug': return (
@@ -444,7 +454,16 @@ export default function ShowClient({
       }
       case 'front': return <td key={key} className="sh-num gfx-note">{formatClock(timing.front[index], true)}</td>
       case 'back': return <td key={key} className="sh-num gfx-note">{formatClock(timing.back[index], true)}</td>
-      case 'ok': return <td key={key}>{row.approved ? <span className="sh-tick">✓</span> : <span className="gfx-chip idle">draft</span>}</td>
+      case 'ok': return (
+        <td key={key}>
+          {editing ? (
+            <button className="sh-okbtn" title={row.approved ? 'Approved' : 'Mark approved'}
+              onClick={e => { e.stopPropagation(); patchRow(row.id, { approved: !row.approved }) }}>
+              {row.approved ? <span className="sh-tick">✓</span> : <span className="gfx-chip idle">draft</span>}
+            </button>
+          ) : row.approved ? <span className="sh-tick">✓</span> : <span className="gfx-chip idle">draft</span>}
+        </td>
+      )
       case 'script': return (
         <td key={key} style={{ fontSize: 15, lineHeight: 1.5, maxWidth: '74ch' }}>
           {row.script || <span className="gfx-note">—</span>}
@@ -551,7 +570,13 @@ export default function ShowClient({
                     return (
                       <tr className="sh-block" key={`b-${b?.id ?? 'none'}`}>
                         <td colSpan={columns.length}>
-                          <span className="sh-bl">{b ? b.label : 'UNASSIGNED'}</span>
+                          {b && mode === 'build' ? (
+                            <input className="sh-blin" value={blockDraft[b.id] ?? b.label}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => renameBlock(b.id, e.target.value)} />
+                          ) : (
+                            <span className="sh-bl">{b ? b.label : 'UNASSIGNED'}</span>
+                          )}
                           {b?.anchor_at && (
                             <span className="sh-anchor">
                               {b.anchor_type === 'hard_start' ? 'hard start ' : b.anchor_type === 'hard_out' ? 'hard out ' : 'target '}
@@ -565,12 +590,8 @@ export default function ShowClient({
                                 ＋ Row
                               </button>
                               {b && (
-                                <>
-                                  <button className="gfx-btn sm ghost"
-                                    onClick={e => { e.stopPropagation(); void renameBlock(b.id, b.label) }}>Rename</button>
-                                  <button className="gfx-btn sm ghost" style={{ color: '#ff9ba4' }}
-                                    onClick={e => { e.stopPropagation(); void deleteBlock(b.id, b.label, entry.count) }}>Delete</button>
-                                </>
+                                <button className="gfx-btn sm ghost" style={{ color: '#ff9ba4' }}
+                                  onClick={e => { e.stopPropagation(); void deleteBlock(b.id, b.label, entry.count) }}>Delete</button>
                               )}
                             </span>
                           )}
@@ -593,7 +614,7 @@ export default function ShowClient({
                     row.is_break ? 'sh-brk' : '',
                     row.id === selId ? 'sh-sel' : '',
                   ].filter(Boolean).join(' ')
-                  return (
+                  const tr = (
                     <tr
                       key={row.id}
                       className={[
@@ -622,6 +643,29 @@ export default function ShowClient({
                       {columns.map(c => cell(row, c, i))}
                     </tr>
                   )
+                  if (mode !== 'build' || row.id !== selId) return tr
+                  return (
+                    <Fragment key={row.id}>
+                      {tr}
+                      <tr className="sh-scriptrow">
+                        <td colSpan={columns.length}>
+                          <div className="sh-scriptwrap">
+                            <label>
+                              Script
+                              <span className="gfx-note">reads {formatDuration(readSeconds(row.script))}</span>
+                            </label>
+                            <textarea value={row.script} placeholder="What is read out loud. This is what the prompter shows."
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => patchRow(row.id, { script: e.target.value })} />
+                            <label>IFB / talent note<span className="gfx-note">never read aloud</span></label>
+                            <input className="sh-ifb" value={row.ifb} placeholder="In their ear only"
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => patchRow(row.id, { ifb: e.target.value })} />
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
+                  )
                 })}
                 {mode === 'build' && (
                   <tr><td colSpan={columns.length} className="sh-addrow" onClick={() => void addRow(false)}>＋ add a row</td></tr>
@@ -634,22 +678,20 @@ export default function ShowClient({
         <div className="sh-side">
           {mode === 'build' ? (
             <>
-              <section className="sh-sect">
-                <h4>Preview</h4>
-                <div className="sh-in">
-                  <div className="sh-mon pvw"><span className="lab">PREVIEW</span>
-                    <StagePreview single={previewGraphic} ctx={ctx} />
-                  </div>
-                  <p className="gfx-note" style={{ marginTop: 7 }}>
-                    Everything you type below lands here. Nothing reaches program until you take it.
-                  </p>
+              <div className="sh-pvwrap">
+                <div className="sh-mon pvw"><span className="lab">PREVIEW</span>
+                  <StagePreview single={previewGraphic} ctx={ctx} />
                 </div>
-              </section>
+              </div>
               {selected ? (
                 <RowEditor row={selected} onPatch={patch => patchRow(selected.id, patch)}
-                  eventType={show.event_type} audioAssets={audioAssets} />
+                  eventType={show.event_type} audioAssets={audioAssets}
+                  onDuplicate={() => void duplicateRow(selected)}
+                  onDelete={() => void deleteRow(selected.id)} />
               ) : (
-                <section className="sh-sect"><div className="sh-in"><p className="gfx-note">Click a row.</p></div></section>
+                <section className="sh-sect"><div className="sh-in">
+                  <p className="gfx-note">Click a row. Its graphic lands here, everything else is in the grid.</p>
+                </div></section>
               )}
 
               <section className="sh-sect">
@@ -913,130 +955,45 @@ export default function ShowClient({
   )
 }
 
-/** Row fields, then the row's graphic inline with every field editable. */
+/**
+ * The graphic, and nothing else.
+ *
+ * Everything about the row itself lives in the grid where the row is. This
+ * panel used to repeat all of it, which meant two places to change one thing
+ * and a wall of fields to read past before reaching the work.
+ */
 function RowEditor({
-  row, onPatch, eventType, audioAssets,
+  row, onPatch, eventType, audioAssets, onDuplicate, onDelete,
 }: {
   row: ShowRow
   onPatch: (patch: Partial<ShowRow>) => void
   eventType: ShowBundle['show']['event_type']
   audioAssets: ShowBundle['audioAssets']
+  onDuplicate: () => void
+  onDelete: () => void
 }) {
+  const [openOptions, setOpenOptions] = useState(false)
   const template = row.graphic ? templateById(row.graphic.tid) : null
   const cue = (row.audio_cue || null) as { asset_id: string; mode: 'oneshot' | 'bed'; gain_db: number } | null
   const cueAsset = cue ? audioAssets.find(a => a.id === cue.asset_id) ?? null : null
+
   const setGraphicField = (field: string, value: string) => {
     if (!row.graphic) return
     onPatch({ graphic: { ...row.graphic, data: { ...row.graphic.data, [field]: value } } })
   }
 
+  const optionCount = (cue ? 1 : 0) + (row.hold_full ? 1 : 0) + (row.floated ? 1 : 0)
+
   return (
     <>
       <section className="sh-sect">
-        <h4>{row.page} · {row.slug}
-          <span className="r">{row.approved ? <span className="sh-tick">approved</span> : 'draft'}</span></h4>
-        <div className="sh-in">
-          <div className="sh-g2">
-            <div><label className="sh-label" style={{ marginTop: 0 }}>Page</label>
-              <input value={row.page} onChange={e => onPatch({ page: e.target.value })} /></div>
-            <div><label className="sh-label" style={{ marginTop: 0 }}>Form</label>
-              <input value={row.form} onChange={e => onPatch({ form: e.target.value })} /></div>
-          </div>
-          <label className="sh-label">Slug</label>
-          <input value={row.slug} onChange={e => onPatch({ slug: e.target.value })} />
-          <div className="sh-g2">
-            <div><label className="sh-label">Est (sec)</label>
-              <input value={row.est_seconds} onChange={e => onPatch({ est_seconds: Number(e.target.value) || 0 })} /></div>
-            <div><label className="sh-label">Talent</label>
-              <input value={row.talent} onChange={e => onPatch({ talent: e.target.value })} /></div>
-          </div>
-          <div className="sh-g2">
-            <div><label className="sh-label">Video</label>
-              <input value={row.video} onChange={e => onPatch({ video: e.target.value })} /></div>
-            <div><label className="sh-label">Camera</label>
-              <input value={row.camera} onChange={e => onPatch({ camera: e.target.value })} /></div>
-          </div>
-          <label className="sh-label">Audio</label>
-          <input value={row.audio_source} onChange={e => onPatch({ audio_source: e.target.value })} />
-          <label className="sh-label">
-            Script
-            <span style={{ float: 'right', textTransform: 'none', letterSpacing: 0 }}>
-              reads {formatDuration(readSeconds(row.script))}
-            </span>
-          </label>
-          <textarea style={{ minHeight: 64 }} value={row.script} onChange={e => onPatch({ script: e.target.value })} />
-          <label className="sh-label">IFB / talent note</label>
-          <input value={row.ifb} onChange={e => onPatch({ ifb: e.target.value })} />
-          <label className="sh-label">On take</label>
-          <div className="sh-seg">
-            <button className={`gfx-btn ${!row.hold_full ? 'on' : ''}`} onClick={() => onPatch({ hold_full: false })}>Clear the previous full screen</button>
-            <button className={`gfx-btn ${row.hold_full ? 'on' : ''}`} onClick={() => onPatch({ hold_full: true })}>Hold it</button>
-          </div>
-          <label className="sh-label">Audio cue on take</label>
-          {audioAssets.length === 0 ? (
-            <p className="gfx-note">Nothing uploaded yet. The Library&rsquo;s Audio tab takes the file.</p>
-          ) : (
-            <>
-              <select value={cue?.asset_id ?? ''} onChange={e => {
-                const assetId = e.target.value
-                if (!assetId) { onPatch({ audio_cue: null }); return }
-                const asset = audioAssets.find(a => a.id === assetId)
-                const mode = asset?.kind === 'bed' ? 'bed' : 'oneshot'
-                onPatch({ audio_cue: { asset_id: assetId, mode, gain_db: mode === 'bed' ? -14 : 0 } })
-              }}>
-                <option value="">None</option>
-                {audioAssets.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} · {a.kind}{a.duration_seconds ? ` · ${formatDuration(Math.round(a.duration_seconds))}` : ''}
-                  </option>
-                ))}
-              </select>
-              {cue && (
-                <>
-                  <div className="sh-seg" style={{ marginTop: 6 }}>
-                    <button className={`gfx-btn ${cue.mode === 'oneshot' ? 'on' : ''}`}
-                      onClick={() => onPatch({ audio_cue: { ...cue, mode: 'oneshot' } })}>One shot</button>
-                    <button className={`gfx-btn ${cue.mode === 'bed' ? 'on' : ''}`}
-                      onClick={() => onPatch({ audio_cue: { ...cue, mode: 'bed', gain_db: cue.gain_db || -14 } })}>Bed</button>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                    <input type="range" min={-30} max={6} step={1} value={cue.gain_db}
-                      style={{ flex: 1 }}
-                      onChange={e => onPatch({ audio_cue: { ...cue, gain_db: Number(e.target.value) } })} />
-                    <span className="gfx-note" style={{ minWidth: 44, textAlign: 'right' }}>{cue.gain_db} dB</span>
-                  </div>
-                  {cueAsset?.duration_seconds && row.est_seconds !== Math.round(cueAsset.duration_seconds) && (
-                    <button className="gfx-btn sm ghost" style={{ marginTop: 6 }}
-                      onClick={() => onPatch({ est_seconds: Math.round(cueAsset.duration_seconds!) })}>
-                      Set the estimate to the clip, {formatDuration(Math.round(cueAsset.duration_seconds))}
-                    </button>
-                  )}
-                  <p className="gfx-note" style={{ marginTop: 6 }}>
-                    Taking this row fires it. A one shot replaces the last one shot, a bed replaces the bed, so a
-                    stinger never stops the music underneath it.
-                  </p>
-                </>
-              )}
-            </>
-          )}
-          <div style={{ display: 'flex', gap: 5, marginTop: 10 }}>
-            <button className={`gfx-btn sm ${row.approved ? 'next' : ''}`} onClick={() => onPatch({ approved: !row.approved })}>
-              {row.approved ? '✓ Approved' : 'Approve'}
-            </button>
-            <button className="gfx-btn sm ghost" onClick={() => onPatch({ floated: !row.floated })}>
-              {row.floated ? 'Unfloat' : 'Float'}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="sh-sect">
-        <h4>Graphic{template ? ` · ${template.name}` : ''}
-          {template && <span className="r">{GRAPHICS_LAYER_LABELS[template.layer]}</span>}</h4>
+        <h4>
+          {row.page ? `${row.page} · ` : ''}{row.slug || 'Row'}
+          <span className="r">{template ? GRAPHICS_LAYER_LABELS[template.layer] : 'no graphic'}</span>
+        </h4>
         <div className="sh-in">
           {!template ? (
             <>
-              <p className="gfx-note" style={{ marginBottom: 8 }}>No graphic on this row.</p>
               <select defaultValue="" onChange={e => {
                 const t = templateById(e.target.value)
                 if (t) onPatch({ graphic: { tid: t.id, data: blankData(t) } })
@@ -1044,9 +1001,23 @@ function RowEditor({
                 <option value="">Add a graphic…</option>
                 {templatesForEvent(eventType).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
+              <p className="gfx-note" style={{ marginTop: 8 }}>
+                This row carries no graphic. Plenty of rows should not.
+              </p>
             </>
           ) : (
             <>
+              <div className="sh-tswap">
+                <select value={template.id} onChange={e => {
+                  const t = templateById(e.target.value)
+                  if (t) onPatch({ graphic: { tid: t.id, data: blankData(t) } })
+                }}>
+                  {templatesForEvent(eventType).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <button className="gfx-btn sm ghost" title="Remove the graphic from this row"
+                  onClick={() => onPatch({ graphic: null })}>✕</button>
+              </div>
+
               {template.fields.map(field => (
                 <div key={field.id}>
                   <label className="sh-label">{field.label}</label>
@@ -1078,11 +1049,80 @@ function RowEditor({
                   )}
                 </div>
               ))}
-              <button className="gfx-btn sm ghost" style={{ marginTop: 10, color: '#ff9ba4', borderColor: 'var(--gx-live)' }}
-                onClick={() => onPatch({ graphic: null })}>Remove graphic</button>
             </>
           )}
         </div>
+      </section>
+
+      <section className="sh-sect">
+        <button className="sh-disc" onClick={() => setOpenOptions(v => !v)}>
+          <span className="sh-caret">{openOptions ? '▾' : '▸'}</span>
+          Row options
+          {optionCount > 0 && <span className="sh-badge">{optionCount}</span>}
+        </button>
+        {openOptions && (
+          <div className="sh-in">
+            <label className="sh-label" style={{ marginTop: 0 }}>On take</label>
+            <div className="sh-seg">
+              <button className={`gfx-btn ${!row.hold_full ? 'on' : ''}`}
+                onClick={() => onPatch({ hold_full: false })}>Clear the full screen</button>
+              <button className={`gfx-btn ${row.hold_full ? 'on' : ''}`}
+                onClick={() => onPatch({ hold_full: true })}>Hold it</button>
+            </div>
+
+            <label className="sh-label">Audio cue on take</label>
+            {audioAssets.length === 0 ? (
+              <p className="gfx-note">Nothing uploaded yet. The Library&rsquo;s Audio tab takes the file.</p>
+            ) : (
+              <>
+                <select value={cue?.asset_id ?? ''} onChange={e => {
+                  const assetId = e.target.value
+                  if (!assetId) { onPatch({ audio_cue: null }); return }
+                  const asset = audioAssets.find(a => a.id === assetId)
+                  const mode = asset?.kind === 'bed' ? 'bed' : 'oneshot'
+                  onPatch({ audio_cue: { asset_id: assetId, mode, gain_db: mode === 'bed' ? -14 : 0 } })
+                }}>
+                  <option value="">None</option>
+                  {audioAssets.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} · {a.kind}{a.duration_seconds ? ` · ${formatDuration(Math.round(a.duration_seconds))}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {cue && (
+                  <>
+                    <div className="sh-seg" style={{ marginTop: 6 }}>
+                      <button className={`gfx-btn ${cue.mode === 'oneshot' ? 'on' : ''}`}
+                        onClick={() => onPatch({ audio_cue: { ...cue, mode: 'oneshot' } })}>One shot</button>
+                      <button className={`gfx-btn ${cue.mode === 'bed' ? 'on' : ''}`}
+                        onClick={() => onPatch({ audio_cue: { ...cue, mode: 'bed', gain_db: cue.gain_db || -14 } })}>Bed</button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <input type="range" min={-30} max={6} step={1} value={cue.gain_db} style={{ flex: 1 }}
+                        onChange={e => onPatch({ audio_cue: { ...cue, gain_db: Number(e.target.value) } })} />
+                      <span className="gfx-note" style={{ minWidth: 44, textAlign: 'right' }}>{cue.gain_db} dB</span>
+                    </div>
+                    {cueAsset?.duration_seconds && row.est_seconds !== Math.round(cueAsset.duration_seconds) && (
+                      <button className="gfx-btn sm ghost" style={{ marginTop: 6 }}
+                        onClick={() => onPatch({ est_seconds: Math.round(cueAsset.duration_seconds!) })}>
+                        Set the estimate to the clip, {formatDuration(Math.round(cueAsset.duration_seconds))}
+                      </button>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: 5, marginTop: 12, flexWrap: 'wrap' }}>
+              <button className="gfx-btn sm ghost" onClick={() => onPatch({ floated: !row.floated })}>
+                {row.floated ? 'Unfloat' : 'Float'}
+              </button>
+              <button className="gfx-btn sm ghost" onClick={onDuplicate}>Duplicate</button>
+              <button className="gfx-btn sm ghost" style={{ color: '#ff9ba4', borderColor: 'var(--gx-live)' }}
+                onClick={onDelete}>Delete row</button>
+            </div>
+          </div>
+        )}
       </section>
     </>
   )

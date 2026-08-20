@@ -364,3 +364,39 @@ the next mount.
 its rig. Setting it to done turns it off. Nobody has to remember, and the manual
 override is a toggle in the show bar next to the rig name, with a green ear when
 it is awake. The Library's Outputs tab has the same toggle per rig.
+
+## Build log, session 9
+
+**One place per thing.** Making the grid editable without taking anything out of
+the right panel left two places to change the same field and a wall to read past
+before reaching the work. The rule now is one line long: **the grid owns the
+row, the panel owns the graphic.**
+
+Gone from the right panel: page, form, slug, estimate, talent, video, camera,
+audio. All of them are in the grid cell they belong to.
+
+What the panel shows in BUILD, top to bottom: the preview, the template picker,
+and the template's own fields. That is it. A row with no graphic gets one line
+and a picker.
+
+**Script moved into the grid.** Selecting a row opens a full-width strip under
+it with the script and the IFB note. Copy is long-form and belongs across the
+screen, not in a 340px column, and it sits directly under the row it is read
+for. The read-time estimate is on the label.
+
+**Approve is a click on the tick column.** It was a button in the panel for a
+thing that already had a column.
+
+**Row options is one disclosure, closed.** On take, audio cue, float, duplicate,
+delete. Everything in there is set once and forgotten, and the header carries a
+count when any of it is set, so nothing is hidden that is actually doing
+something.
+
+**Blocks are renamed in place.** `window.prompt` produced a block called YES,
+which is exactly what a modal asking you to name a thing you can see on screen
+deserves. Add drops a block called NEW SEGMENT, and the header label is an input.
+
+**Pages are derived, never read from the column.** The grid shows the number the
+running order implies. The stored value is still written, because the prompter
+and the exports read it, but a stored page that disagrees with the order can no
+longer show up on screen.
