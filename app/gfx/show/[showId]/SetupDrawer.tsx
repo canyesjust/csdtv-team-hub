@@ -164,7 +164,7 @@ export default function SetupDrawer({
         <section className="gfx-dsec">
           <h5>Production</h5>
           {!libLoaded ? (
-            <p className="gfx-note">Loading the schedule\u2026</p>
+            <p className="gfx-note">Loading the schedule…</p>
           ) : (
             <>
               <select value={show.production_id ?? ''}

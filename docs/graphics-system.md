@@ -468,3 +468,26 @@ listening ladder, the panel endpoint and the sponsor report.
 you go back up. Cards live on the shelf either way. The drawer says so next to
 each option, because a choice you cannot safely get wrong on a Tuesday is not
 really a choice.
+
+## Build log, session 12
+
+**Linking to a production is the first question now.** It was already the first
+section, but it was a `<select>` sitting among four other sections and it did
+not read as a decision. It is now the opening move: a searchable list of the
+49 upcoming productions, each showing its number, title, date, school and venue,
+with the guessed event type as a chip. Pick one and it collapses to a linked
+strip with an Unlink button, and the name, school, venue, times and event type
+below are already filled in.
+
+Rows for productions that already have a show are disabled rather than hidden,
+so it is obvious the thing exists and is spoken for rather than missing.
+
+**A whole class of rendering bug, found and swept.** JSX text and attribute
+values are not JavaScript string literals, so a `…` written in either is
+eight characters on screen rather than an ellipsis. Two had shipped in the
+prompter position controls, which meant the Back and Ahead keys read
+`↑↑ Back`.
+
+Fixed everywhere and swept with a scanner that flags any `\uXXXX` sitting
+outside quotes or backticks on its line. Worth re-running after any bulk edit
+that writes JSX from a script.

@@ -825,7 +825,7 @@ export default function ShowClient({
 
               {caps.script && (role === 'director' || role === 'graphics' || role === 'talent') && (
                 <section className="sh-sect">
-                  <h4>Prompter<span className="r">{show.prompter_speed.toFixed(1)}\u00d7</span></h4>
+                  <h4>Prompter<span className="r">{show.prompter_speed.toFixed(1)}×</span></h4>
                   <div className="sh-in">
                     <div className="sh-g2">
                       <button className={`gfx-btn ${show.prompter_roll ? 'live' : ''}`}
@@ -834,7 +834,7 @@ export default function ShowClient({
                       </button>
                       <div style={{ display: 'flex', gap: 5 }}>
                         <button className="gfx-btn ghost" style={{ flex: 1 }}
-                          onClick={() => void patchShow({ prompter_speed: Math.max(0.2, show.prompter_speed - 0.2) })}>\u2013</button>
+                          onClick={() => void patchShow({ prompter_speed: Math.max(0.2, show.prompter_speed - 0.2) })}>−</button>
                         <button className="gfx-btn ghost" style={{ flex: 1 }}
                           onClick={() => void patchShow({ prompter_speed: Math.min(6, show.prompter_speed + 0.2) })}>+</button>
                       </div>
@@ -843,13 +843,13 @@ export default function ShowClient({
                     <label className="sh-label">Position</label>
                     <div className="sh-seg">
                       <button className="gfx-btn"
-                        onClick={() => void patchShow({ prompter_seek: { kind: 'back', value: '3' } })}>\u2191\u2191 Back</button>
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'back', value: '3' } })}>↑↑ Back</button>
                       <button className="gfx-btn"
-                        onClick={() => void patchShow({ prompter_seek: { kind: 'back', value: '1' } })}>\u2191 Line</button>
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'back', value: '1' } })}>↑ Line</button>
                       <button className="gfx-btn"
-                        onClick={() => void patchShow({ prompter_seek: { kind: 'forward', value: '1' } })}>\u2193 Line</button>
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'forward', value: '1' } })}>↓ Line</button>
                       <button className="gfx-btn"
-                        onClick={() => void patchShow({ prompter_seek: { kind: 'forward', value: '3' } })}>\u2193\u2193 Ahead</button>
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'forward', value: '3' } })}>↓↓ Ahead</button>
                     </div>
                     <div className="sh-seg" style={{ marginTop: 4 }}>
                       <button className="gfx-btn ghost"

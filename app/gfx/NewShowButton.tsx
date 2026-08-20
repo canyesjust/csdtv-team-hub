@@ -54,6 +54,13 @@ export default function NewShowButton({
   const [productions, setProductions] = useState<ProductionOption[]>([])
   const [productionsLoaded, setProductionsLoaded] = useState(false)
   const [productionId, setProductionId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
+  const schoolName = (code: string | null) => {
+    if (!code) return ''
+    const s = schools.find(x => x.code === code)
+    return s ? (s.short_name || s.name || '') : ''
+  }
 
   const dateLabel = (iso: string | null) => {
     if (!iso) return ''
@@ -86,6 +93,7 @@ export default function NewShowButton({
   const pickProduction = useCallback((p: ProductionOption | null) => {
     if (!p) { setProductionId(null); return }
     setProductionId(p.id)
+    setSearch('')
     setName(p.title)
     setEventType(p.event_type)
     if (!depthTouched) setDepth(defaultDepthFor(p.event_type))
@@ -99,6 +107,15 @@ export default function NewShowButton({
     setEventType(t)
     if (!depthTouched) setDepth(defaultDepthFor(t))
   }
+
+  const picked = productions.find(p => p.id === productionId) ?? null
+
+  const visibleProductions = productions.filter(p => {
+    if (!search.trim()) return true
+    const hay = [p.title, String(p.production_number ?? ''), schoolName(p.school_code), p.venue]
+      .filter(Boolean).join(' ').toLowerCase()
+    return hay.includes(search.trim().toLowerCase())
+  })
 
   const create = async () => {
     setBusy(true)
@@ -139,39 +156,60 @@ export default function NewShowButton({
           <button className="gfx-btn sm ghost" onClick={() => setOpen(false)}>Cancel</button>
         </div>
 
+        {/* The first question, because the answer fills in most of the rest.
+            Half the shows we cover are already on the schedule with a title, a
+            school, a date and a venue attached. */}
         <section className="gfx-dsec">
-          <h5>Start from a production</h5>
-          {!productionsLoaded ? (
-            <p className="gfx-note">Loading the schedule\u2026</p>
+          <h5>Is this on the schedule?</h5>
+
+          {picked ? (
+            <div className="ns-linked">
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <b>{picked.production_number ? `#${picked.production_number} \u00b7 ` : ''}{picked.title}</b>
+                <div className="gfx-note">
+                  {[dateLabel(picked.starts_at), schoolName(picked.school_code), picked.venue]
+                    .filter(Boolean).join(' \u00b7 ') || 'Linked'}
+                </div>
+              </span>
+              <button className="gfx-btn sm ghost" onClick={() => setProductionId(null)}>Unlink</button>
+            </div>
+          ) : !productionsLoaded ? (
+            <p className="gfx-note">Loading the schedule…</p>
           ) : productions.length === 0 ? (
             <p className="gfx-note">
-              Nothing on the schedule in the next while. You can still build the show here and link it to a
-              production later from the show&rsquo;s setup drawer.
+              Nothing coming up on the schedule. Build the show here and you can link it to a production later
+              from the show&rsquo;s setup drawer.
             </p>
           ) : (
             <>
-              <select value={productionId ?? ''} onChange={e => {
-                pickProduction(productions.find(p => p.id === e.target.value) ?? null)
-              }}>
-                <option value="">Not from a production\u2026</option>
-                {productions.map(p => (
-                  <option key={p.id} value={p.id} disabled={p.has_show}>
-                    {p.production_number ? `#${p.production_number} \u00b7 ` : ''}{p.title}
-                    {p.starts_at ? ` \u00b7 ${dateLabel(p.starts_at)}` : ''}
-                    {p.has_show ? ' \u00b7 already has a show' : ''}
-                  </option>
+              <input value={search} placeholder="Search the schedule…"
+                onChange={e => setSearch(e.target.value)} />
+              <div className="ns-list">
+                {visibleProductions.length === 0 ? (
+                  <p className="gfx-note" style={{ padding: '10px 2px' }}>Nothing matches that.</p>
+                ) : visibleProductions.map(p => (
+                  <button key={p.id} className="ns-prod" disabled={p.has_show}
+                    onClick={() => pickProduction(p)}>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span className="ns-title">
+                        {p.production_number ? `#${p.production_number} ` : ''}{p.title}
+                      </span>
+                      <span className="gfx-note">
+                        {[dateLabel(p.starts_at), schoolName(p.school_code), p.venue]
+                          .filter(Boolean).join(' \u00b7 ')}
+                        {p.has_show ? ' \u00b7 already has a show' : ''}
+                      </span>
+                    </span>
+                    <span className="ns-type">{EVENT_LABEL[p.event_type] ?? p.event_type}</span>
+                  </button>
                 ))}
-              </select>
-              {productionId && (
-                <button className="gfx-btn sm ghost" style={{ marginTop: 7 }}
-                  onClick={() => { setProductionId(null) }}>Unlink</button>
-              )}
+              </div>
+              <p className="gfx-note" style={{ marginTop: 8 }}>
+                Picking one fills in the name, school, venue and times, and links the two so the as-run lands
+                back on the production afterwards. Or just carry on below and skip this.
+              </p>
             </>
           )}
-          <p className="gfx-note" style={{ marginTop: 7 }}>
-            The production record already knows the title, the school, the date and the venue. Picking one
-            fills all of it in and links the two, so the as-run log lands back on the production afterwards.
-          </p>
         </section>
 
         <section className="gfx-dsec">
