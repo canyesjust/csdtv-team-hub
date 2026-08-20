@@ -12,7 +12,7 @@
     "lint": "eslint",
     "test:signage": "tsx scripts/signage-golden.mjs check && node scripts/signage-react-golden.mjs check",
     "test:signage:update": "tsx scripts/signage-golden.mjs snapshot && node scripts/signage-react-golden.mjs snapshot",
-    "test:graphics": "tsx scripts/graphics-timing.test.mts && tsx scripts/graphics-layers.test.mts && tsx scripts/graphics-rosters.test.mts && tsx scripts/graphics-asrun.test.mts && tsx scripts/graphics-panel.test.mts && tsx scripts/graphics-shows.test.mts && tsx scripts/graphics-production.test.mts && tsx scripts/graphics-pages.test.mts"
+    "test:graphics": "tsx scripts/graphics-timing.test.mts && tsx scripts/graphics-layers.test.mts && tsx scripts/graphics-rosters.test.mts && tsx scripts/graphics-asrun.test.mts && tsx scripts/graphics-panel.test.mts && tsx scripts/graphics-shows.test.mts && tsx scripts/graphics-production.test.mts && tsx scripts/graphics-pages.test.mts && tsx scripts/graphics-prompter.test.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",

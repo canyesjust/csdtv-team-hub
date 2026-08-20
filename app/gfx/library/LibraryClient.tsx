@@ -321,6 +321,11 @@ function OutputsTab({
           Set these once per machine in OBS and never re-paste them. Assign a different show to the channel
           and the page already open follows it.
         </p>
+        <p className="gfx-note" style={{ marginBottom: 12 }}>
+          <b>Listening</b> is the rig&rsquo;s ear. Off, every output page on it checks back every two minutes.
+          On, they run at broadcast cadence. It switches itself on when a show on the rig goes to rehearsal or
+          live and off when the show wraps, so this is only the manual override.
+        </p>
         {channels.map(c => (
           <div key={c.id} style={{ marginBottom: 18 }}>
             <div className="lb-row" style={{ marginBottom: 4 }}>
@@ -328,7 +333,14 @@ function OutputsTab({
                 <div className="nm">{c.name}</div>
                 <div className="sub">{c.note || c.slug}</div>
               </span>
-              <span className={`gfx-chip ${c.listening ? 'onair' : 'idle'}`}>{c.listening ? 'listening' : 'idle'}</span>
+              <button className={`gfx-btn sm ${c.listening ? 'on' : 'ghost'}`}
+                title={c.listening
+                  ? 'Output pages on this rig are polling at broadcast cadence'
+                  : 'Output pages on this rig check back every two minutes'}
+                onClick={() => void patchChannel(c.id, { listening: !c.listening },
+                  c.listening ? 'Rig asleep. Outputs drop to a two minute check.' : 'Rig listening.')}>
+                {c.listening ? 'Listening' : 'Idle'}
+              </button>
             </div>
             {[
               ['Graphics browser source', `${origin}/gfx/${c.slug}/out?k=${c.output_token}`],

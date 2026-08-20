@@ -29,6 +29,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sh
         if (data && !data.started_at) patch.started_at = new Date().toISOString()
       }
       if (body.state === 'done') patch.ended_at = new Date().toISOString()
+
+      /**
+       * Wake the rig when the show goes live or into rehearsal, and put it back
+       * to sleep when it wraps. Listening is what separates a 350ms poll from a
+       * two minute one, and nobody should have to remember to flip it.
+       */
+      const { data: showRow } = await ctx.service
+        .from('graphics_shows').select('channel_id').eq('id', ctx.showId).maybeSingle()
+      if (showRow?.channel_id) {
+        const wake = body.state === 'live' || body.state === 'rehearsal'
+        await ctx.service
+          .from('graphics_channels')
+          .update({ listening: wake })
+          .eq('id', showRow.channel_id)
+      }
     }
     for (const key of ['air_at', 'hard_out_at'] as const) {
       if (typeof body[key] === 'string') {

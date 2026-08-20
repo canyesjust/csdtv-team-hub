@@ -3,6 +3,7 @@ import { getChannelBySlug } from '@/lib/graphics/output-state'
 import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { timingSafeEqualStr } from '@/lib/server/security'
 import { checkRateLimit } from '@/lib/server/rate-limit'
+import { resolveGfxPollMs } from '@/lib/graphics/polling'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
 
   const { data: show } = await service
     .from('graphics_shows')
-    .select('id, name, state, prompter_roll, prompter_speed, updated_at')
+    .select('id, name, state, prompter_roll, prompter_speed, prompter_seek_n, prompter_seek_kind, prompter_seek_value, updated_at')
     .eq('channel_id', channel.id)
     .in('state', ['rehearsal', 'live'])
     .order('updated_at', { ascending: false })
@@ -47,6 +48,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
 
   const empty = {
     rev: 0, show_name: null, rehearsal: true, roll: false, speed: 1, rows: [] as unknown[],
+    seek: { n: 0, kind: null, value: null },
+    poll_ms: resolveGfxPollMs({ listening: channel.listening, hasShow: false, live: false, realtimeConnected: false }),
   }
   if (!show) {
     const res = NextResponse.json(empty)
@@ -67,6 +70,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
     rehearsal: show.state !== 'live',
     roll: Boolean((show as { prompter_roll?: boolean }).prompter_roll),
     speed: Number((show as { prompter_speed?: number }).prompter_speed ?? 1),
+    seek: {
+      n: Number((show as { prompter_seek_n?: number }).prompter_seek_n ?? 0),
+      kind: (show as { prompter_seek_kind?: string | null }).prompter_seek_kind ?? null,
+      value: (show as { prompter_seek_value?: string | null }).prompter_seek_value ?? null,
+    },
+    // Same ladder as the graphics output. A prompter page left open in an empty
+    // trailer must not poll every four seconds for a fortnight.
+    poll_ms: resolveGfxPollMs({
+      listening: channel.listening,
+      hasShow: true,
+      live: show.state === 'live',
+      realtimeConnected: false,
+    }),
     rows: visible.map(r => ({
       id: r.id, page: r.page, slug: r.slug, script: r.script || '', ifb: r.ifb || '',
       on_air: Boolean(r.started_at && !r.ended_at),

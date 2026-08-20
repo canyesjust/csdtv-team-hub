@@ -128,3 +128,12 @@ tr.sh-block td { background: #101a2c; font-size: 9.5px; letter-spacing: .12em; t
 .sh-bl { font-weight: 800; letter-spacing: .1em; }
 .sh-bacts { display: none; gap: 4px; margin-left: 12px; vertical-align: middle; }
 .sh-block:hover .sh-bacts { display: inline-flex; }
+
+/* ---- listening ----
+   The rig's ear. Off means every output page checks back every two minutes
+   instead of several times a second, which is the whole point of the ladder. */
+.sh-ear {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: #3a4256; margin-right: 6px; vertical-align: middle;
+}
+.sh-ear.on { background: var(--gx-next); box-shadow: 0 0 0 3px rgba(47,182,115,.22); }

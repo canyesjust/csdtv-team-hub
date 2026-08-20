@@ -330,3 +330,37 @@ accept `90`, `1:30` or `1:02:05` because a producer types whichever is fastest.
 33 district departments, so the picker listed Purchasing and Risk Management
 next to Alta High. Every graphics query now filters `type = 'school'` and
 `active`, ordered by level then name.
+
+## Build log, session 8
+
+**Prompter position.** Talent misses a line and needs to go back, and the
+rundown must not move to make that happen. The scroll position lives in the
+browser source, so the control surface cannot set it directly. It issues a
+numbered command instead: `prompter_seek_n` increments server-side and the
+output applies the seek exactly once, which is what makes a repeated poll safe.
+A command arriving twice does not scroll twice.
+
+Controls are Back ×3, Back ×1, Ahead ×1, Ahead ×3, plus **Back to on air**,
+**Top of show** and **Jump to** the selected row. Back scrolls the prompter only.
+Nothing is re-taken and the director's cursor does not move.
+
+`resolveSeek` is pure and tested, including the sign, because getting Back
+backwards scrolls away from the line the talent just missed.
+
+**Listening reaches everything now.** `graphics_channels.listening` already
+drove the graphics output ladder. The prompter and audio outputs ignored it and
+polled flat forever. Both now read `poll_ms` off their own payload and re-arm
+the timer each tick, so a change takes effect on the next poll rather than on
+the next mount.
+
+| Listening | Show state | Every output polls |
+|---|---|---|
+| off | anything | 120s |
+| on | nothing assigned | 120s |
+| on | draft or done | 5s |
+| on | rehearsal or live | 350ms, or 1.5s with realtime up |
+
+**It arms itself.** Setting a show to rehearsal or live turns listening on for
+its rig. Setting it to done turns it off. Nobody has to remember, and the manual
+override is a toggle in the show bar next to the rig name, with a green ear when
+it is awake. The Library's Outputs tab has the same toggle per rig.

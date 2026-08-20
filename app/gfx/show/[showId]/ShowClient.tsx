@@ -168,6 +168,19 @@ export default function ShowClient({
     }, 600)
   }, [show.id, setPaused])
 
+  /**
+   * Listening is the rig's ear. Off, every output page checks back every two
+   * minutes; on, they run at broadcast cadence. It follows the show state
+   * automatically and this is the manual override.
+   */
+  const setListening = useCallback(async (on: boolean) => {
+    if (!show.channel) return
+    const ok = await call(`/api/gfx/channels/${show.channel.id}`, {
+      method: 'PATCH', body: JSON.stringify({ listening: on }),
+    })
+    if (ok) refresh()
+  }, [call, show.channel, refresh])
+
   const patchShow = useCallback(async (patch: Record<string, unknown>) => {
     const ok = await call(`/api/gfx/shows/${show.id}`, { method: 'PATCH', body: JSON.stringify(patch) })
     if (ok) refresh()
@@ -464,7 +477,17 @@ export default function ShowClient({
         <span className="gfx-spacer" />
         {error && <span style={{ color: '#ff9ba4', fontSize: 11.5 }}>{error}</span>}
         <span className={`gfx-chip ${live ? 'onair' : 'idle'}`}>{live ? 'On air' : show.state}</span>
-        {show.channel && <span className="gfx-note">{show.channel.name}</span>}
+        {show.channel && (
+          <button
+            className={`gfx-btn sm ${show.channel.listening ? 'on' : 'ghost'}`}
+            title={show.channel.listening
+              ? 'Outputs are polling at broadcast cadence'
+              : 'Outputs are idle, checking back every two minutes'}
+            onClick={() => void setListening(!show.channel!.listening)}>
+            <span className={`sh-ear${show.channel.listening ? ' on' : ''}`} />
+            {show.channel.name} {show.channel.listening ? 'listening' : 'idle'}
+          </button>
+        )}
         <button className="gfx-btn sm ghost" onClick={() => setDrawerOpen(true)}>⚙ Setup</button>
       </div>
 
@@ -721,23 +744,49 @@ export default function ShowClient({
 
               {(role === 'director' || role === 'graphics' || role === 'talent') && (
                 <section className="sh-sect">
-                  <h4>Prompter<span className="r">{show.prompter_speed.toFixed(1)}×</span></h4>
+                  <h4>Prompter<span className="r">{show.prompter_speed.toFixed(1)}\u00d7</span></h4>
                   <div className="sh-in">
                     <div className="sh-g2">
                       <button className={`gfx-btn ${show.prompter_roll ? 'live' : ''}`}
                         onClick={() => void patchShow({ prompter_roll: !show.prompter_roll })}>
-                        {show.prompter_roll ? '⏸ Pause' : '▶ Roll'}
+                        {show.prompter_roll ? '\u23f8 Pause' : '\u25b6 Roll'}
                       </button>
                       <div style={{ display: 'flex', gap: 5 }}>
                         <button className="gfx-btn ghost" style={{ flex: 1 }}
-                          onClick={() => void patchShow({ prompter_speed: Math.max(0.2, show.prompter_speed - 0.2) })}>–</button>
+                          onClick={() => void patchShow({ prompter_speed: Math.max(0.2, show.prompter_speed - 0.2) })}>\u2013</button>
                         <button className="gfx-btn ghost" style={{ flex: 1 }}
                           onClick={() => void patchShow({ prompter_speed: Math.min(6, show.prompter_speed + 0.2) })}>+</button>
                       </div>
                     </div>
+
+                    <label className="sh-label">Position</label>
+                    <div className="sh-seg">
+                      <button className="gfx-btn"
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'back', value: '3' } })}>\u2191\u2191 Back</button>
+                      <button className="gfx-btn"
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'back', value: '1' } })}>\u2191 Line</button>
+                      <button className="gfx-btn"
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'forward', value: '1' } })}>\u2193 Line</button>
+                      <button className="gfx-btn"
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'forward', value: '3' } })}>\u2193\u2193 Ahead</button>
+                    </div>
+                    <div className="sh-seg" style={{ marginTop: 4 }}>
+                      <button className="gfx-btn ghost"
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'air' } })}>Back to on air</button>
+                      <button className="gfx-btn ghost"
+                        onClick={() => void patchShow({ prompter_seek: { kind: 'top' } })}>Top of show</button>
+                      {selected && (
+                        <button className="gfx-btn ghost"
+                          onClick={() => void patchShow({ prompter_seek: { kind: 'row', value: selected.id } })}>
+                          Jump to {selected.page || selected.slug}
+                        </button>
+                      )}
+                    </div>
+
                     <p className="gfx-note" style={{ marginTop: 7 }}>
-                      Controls live here. The prompter output is a clean page with no chrome on it and it follows
-                      the cursor, so a take jumps it.
+                      Back scrolls the prompter up without moving the rundown, so talent can pick up a line they
+                      missed and the show never re-takes anything. <b>Back to on air</b> puts it where the
+                      director is.
                     </p>
                   </div>
                 </section>

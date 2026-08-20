@@ -4,6 +4,7 @@ import { getServiceSupabaseClient } from '@/lib/server/supabase-service'
 import { timingSafeEqualStr } from '@/lib/server/security'
 import { checkRateLimit } from '@/lib/server/rate-limit'
 import { buildAudioState } from '@/lib/graphics/audio'
+import { resolveGfxPollMs } from '@/lib/graphics/polling'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
 
   const { data: show } = await service
     .from('graphics_shows')
-    .select('id, updated_at')
+    .select('id, state, updated_at')
     .eq('channel_id', channel.id)
     .in('state', ['rehearsal', 'live'])
     .order('updated_at', { ascending: false })
@@ -44,7 +45,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ chan
     .maybeSingle()
 
   const playing = show ? await buildAudioState(service, show.id) : []
-  const res = NextResponse.json({ rev: Date.now(), playing })
+  const res = NextResponse.json({
+    rev: Date.now(),
+    playing,
+    // Same ladder as the graphics output. Listening off means this page checks
+    // back every two minutes instead of every second.
+    poll_ms: resolveGfxPollMs({
+      listening: channel.listening,
+      hasShow: Boolean(show),
+      live: show?.state === 'live',
+      realtimeConnected: false,
+    }),
+  })
   res.headers.set('Cache-Control', 'no-store')
   return res
 }

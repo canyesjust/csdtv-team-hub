@@ -69,7 +69,7 @@ export type ShowBundle = {
     away_roster_id: string | null
     package_id: string | null
     production_id: string | null
-    channel: { id: string; slug: string; name: string } | null
+    channel: { id: string; slug: string; name: string; listening: boolean } | null
   }
   blocks: ShowBlock[]
   rows: ShowRow[]
@@ -93,7 +93,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
   const { data: show } = await service
     .from('graphics_shows')
     .select(
-      'id, name, event_type, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, production_id, graphics_channels(id, slug, name)',
+      'id, name, event_type, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, production_id, graphics_channels(id, slug, name, listening)',
     )
     .eq('id', showId)
     .maybeSingle()
@@ -154,7 +154,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
   // join is to-one, so accept either shape.
   const embedded = (show as unknown as { graphics_channels?: unknown }).graphics_channels
   const channel = (Array.isArray(embedded) ? embedded[0] : embedded) as
-    { id: string; slug: string; name: string } | null | undefined ?? null
+    { id: string; slug: string; name: string; listening: boolean } | null | undefined ?? null
 
   return {
     show: {
