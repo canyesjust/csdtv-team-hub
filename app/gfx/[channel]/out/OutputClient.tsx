@@ -7,6 +7,7 @@ import type { MarkContext } from '@/app/gfx/components/LogoMark'
 import { themeCssVars } from '@/lib/graphics/theme'
 import { sortAirForRender } from '@/lib/graphics/layers'
 import { resolveGfxPollMs } from '@/lib/graphics/polling'
+import { zoneRect } from '@/lib/graphics/zones'
 import type { AirEntry, GraphicsOutputState } from '@/lib/graphics/types'
 import '@/app/gfx/components/graphics.css'
 
@@ -192,7 +193,17 @@ export default function OutputClient({
           )
         })}
         {safeArea && (
-          <div style={{ position: 'absolute', inset: '5%', border: '2px dashed rgba(255,255,255,.25)', borderRadius: 4 }} />
+          <>
+            <div style={{ position: 'absolute', inset: '5%', border: '2px dashed rgba(255,255,255,.25)', borderRadius: 4 }} />
+            {(() => {
+              const r = zoneRect(payload?.state.bug_zone ?? 'none')
+              return r ? (
+                <div className="gx-zone" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
+                  <span>SCORE BUG</span>
+                </div>
+              ) : null
+            })()}
+          </>
         )}
       </div>
 

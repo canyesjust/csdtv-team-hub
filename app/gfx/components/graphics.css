@@ -338,3 +338,18 @@
 @keyframes gxCrawl { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 .gx-crawl-run { display: inline-flex; flex: none; animation: gxCrawl linear infinite; }
 @media (prefers-reduced-motion: reduce) { .gx-crawl-run { animation: none; } }
+
+/* Reserved space for a score bug we do not draw. A guide, never on air: it
+   renders in the preview and behind ?safe=1, and nowhere else. */
+.gx-zone {
+  position: absolute; z-index: 40; pointer-events: none;
+  border: 3px dashed rgba(255, 196, 92, 0.85);
+  background: rgba(255, 196, 92, 0.10);
+  border-radius: 6px;
+  display: flex; align-items: flex-start; justify-content: flex-start;
+}
+.gx-zone span {
+  background: rgba(255, 196, 92, 0.92); color: #1a1206;
+  font: 800 22px/1 Inter, system-ui, sans-serif; letter-spacing: 3px;
+  padding: 7px 12px; border-radius: 0 0 6px 0;
+}

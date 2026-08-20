@@ -549,3 +549,33 @@ translating by exactly their own width, so the loop has no seam).
 **Still open:** there is no UI yet to attach art to a sponsor —
 `graphics_sponsors.logo_path` and the whole read path exist, but the Library
 needs a picker. And the score bug is still deliberately out of scope.
+
+## Build log, session 14
+
+**We do not build a score bug.** It comes from a separate service and keys over
+us as its own OBS source. That decision is settled and the templates reflect it.
+
+What the decision creates is a collision problem, because our lower thirds and
+our ticker live in exactly the space a corner score bug wants. We cannot move
+theirs, so the only defence is knowing where it sits.
+
+`bug_zone` on the show: none, four corners, or a full-width strip top or bottom.
+`lib/graphics/zones.ts` turns that into rectangles in stage coordinates and
+answers three questions, all pure and tested:
+
+- Does a lower third at this position sit under it?
+- Does the ticker sit under it? (A bottom strip means only one of the two can be
+  up, which is a real either-or the operator has to know about.)
+- Where should a lower third go instead? It prefers staying low, because a
+  raised band over a camera is a compromise and should only happen when it has to.
+
+It shows up in three places, all of them before air:
+
+- **The preview** draws it as a dashed amber box, so a student sees the reserved
+  space while building rather than discovering it during a game.
+- **`?safe=1` on the output** draws the same box, for setting the rig up.
+- **The row editor** warns when the selected graphic lands under it, with a
+  **Move it** button that picks a clear position.
+
+Amber rather than red throughout: this is a collision with something we do not
+control, not a mistake somebody made.

@@ -6,6 +6,7 @@ import JerseyPad from './JerseyPad'
 import { useShowState } from '@/lib/graphics/use-show-sync'
 import { autoPages } from '@/lib/graphics/pages'
 import { capabilitiesFor } from '@/lib/graphics/depth'
+import { zoneWarning, safeLowerPosition } from '@/lib/graphics/zones'
 import StagePreview from '@/app/gfx/components/StagePreview'
 import ImageField from '@/app/gfx/components/ImageField'
 import type { MarkContext } from '@/app/gfx/components/LogoMark'
@@ -724,12 +725,13 @@ export default function ShowClient({
             <>
               <div className="sh-pvwrap">
                 <div className="sh-mon pvw"><span className="lab">PREVIEW</span>
-                  <StagePreview single={previewGraphic} ctx={ctx} replay />
+                  <StagePreview single={previewGraphic} ctx={ctx} replay zone={show.bug_zone} />
                 </div>
               </div>
               {selected ? (
                 <RowEditor row={selected} onPatch={patch => patchRow(selected.id, patch)}
                   eventType={show.event_type} audioAssets={audioAssets}
+                  bugZone={show.bug_zone}
                   onDuplicate={() => void duplicateRow(selected)}
                   onDelete={() => void deleteRow(selected.id)} />
               ) : (
@@ -769,7 +771,7 @@ export default function ShowClient({
                 <div className="sh-in">
                   <div className="sh-pvpg">
                     <div className="sh-mon pvw"><span className="lab">PREVIEW</span>
-                      <StagePreview single={merged.find(r => r.id === nextId)?.graphic ?? null} ctx={ctx} /></div>
+                      <StagePreview single={merged.find(r => r.id === nextId)?.graphic ?? null} ctx={ctx} zone={show.bug_zone} /></div>
                     <div className="sh-mon pgm"><span className="lab">PROGRAM</span>
                       <StagePreview air={air} ctx={ctx} /></div>
                   </div>
@@ -1007,12 +1009,13 @@ export default function ShowClient({
  * and a wall of fields to read past before reaching the work.
  */
 function RowEditor({
-  row, onPatch, eventType, audioAssets, onDuplicate, onDelete,
+  row, onPatch, eventType, audioAssets, bugZone, onDuplicate, onDelete,
 }: {
   row: ShowRow
   onPatch: (patch: Partial<ShowRow>) => void
   eventType: ShowBundle['show']['event_type']
   audioAssets: ShowBundle['audioAssets']
+  bugZone: ShowBundle['show']['bug_zone']
   onDuplicate: () => void
   onDelete: () => void
 }) {
@@ -1027,6 +1030,10 @@ function RowEditor({
   }
 
   const optionCount = (cue ? 1 : 0) + (row.hold_full ? 1 : 0) + (row.floated ? 1 : 0)
+
+  // Caught while building rather than on air, which is the only time it is
+  // cheap to fix.
+  const clash = template ? zoneWarning(bugZone, template.layer, row.graphic?.data.pos) : null
 
   return (
     <>
@@ -1062,6 +1069,17 @@ function RowEditor({
                   onClick={() => onPatch({ graphic: null })}>✕</button>
               </div>
 
+              {clash && (
+                <div className="sh-clash">
+                  {clash}
+                  {template.layer === 'lower' && (
+                    <button className="gfx-btn sm ghost" style={{ marginLeft: 8 }}
+                      onClick={() => setGraphicField('pos', safeLowerPosition(bugZone, row.graphic?.data.pos || 'left-low'))}>
+                      Move it
+                    </button>
+                  )}
+                </div>
+              )}
               {template.fields.map(field => (
                 <div key={field.id}>
                   <label className="sh-label">{field.label}</label>

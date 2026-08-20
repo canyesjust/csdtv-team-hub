@@ -66,7 +66,7 @@ export async function buildChannelOutputState(channelId: string): Promise<Graphi
     air: [], audio: { one: null, bed: null },
     // The output page had no mark context at all, so every logo field on air
     // rendered nothing. This is what carries the art to the browser source.
-    marks: {}, schools: {}, school_code: null, away_code: null,
+    marks: {}, schools: {}, school_code: null, away_code: null, bug_zone: 'none',
     server_now: now, rev: 0,
   }
 
@@ -75,7 +75,7 @@ export async function buildChannelOutputState(channelId: string): Promise<Graphi
 
   const { data: show } = await service
     .from('graphics_shows')
-    .select('id, name, state, school_code, away_code, theme_override, updated_at')
+    .select('id, name, state, school_code, away_code, bug_zone, theme_override, updated_at')
     .eq('channel_id', channelId)
     .in('state', ['rehearsal', 'live'])
     .order('state', { ascending: false })
@@ -121,6 +121,7 @@ export async function buildChannelOutputState(channelId: string): Promise<Graphi
     schools,
     school_code: show.school_code,
     away_code: show.away_code ?? null,
+    bug_zone: (show.bug_zone ?? 'none') as GraphicsOutputState['bug_zone'],
     server_now: now,
     rev: Date.parse(show.updated_at || now) || 0,
   }

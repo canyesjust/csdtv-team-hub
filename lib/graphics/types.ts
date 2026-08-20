@@ -60,6 +60,8 @@ export type GraphicsOutputState = {
   schools: Record<string, SchoolBrand>
   school_code: string | null
   away_code: string | null
+  /** Reserved space for an external score bug. Drawn only as a guide. */
+  bug_zone: 'none' | 'tl' | 'tr' | 'bl' | 'br' | 'top' | 'bottom'
   audio: { one: AudioCue & { started_at: string } | null; bed: AudioCue | null }
   /** Server clock, so a client can correct for drift on auto-out timers. */
   server_now: string

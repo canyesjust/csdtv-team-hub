@@ -8,6 +8,7 @@ import type {
 import { sanitizePlayers, type Player } from '@/lib/graphics/rosters'
 import type { GraphicsDepth } from '@/lib/graphics/depth'
 import type { ShowSponsor } from '@/lib/graphics/sponsors'
+import type { BugZone } from '@/lib/graphics/zones'
 import { loadMarkArt } from '@/lib/graphics/mark-data'
 import type { MarkArt } from '@/lib/graphics/marks'
 
@@ -61,6 +62,8 @@ export type ShowBundle = {
     name: string
     event_type: GraphicsEventType
     depth: GraphicsDepth
+    /** Where somebody else's score bug sits, so we stay out of it. */
+    bug_zone: BugZone
     state: GraphicsShowState
     show_date: string | null
     air_at: string | null
@@ -102,7 +105,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
   const { data: show } = await service
     .from('graphics_shows')
     .select(
-      'id, name, event_type, depth, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, production_id, graphics_channels(id, slug, name, listening)',
+      'id, name, event_type, depth, bug_zone, state, show_date, air_at, hard_out_at, venue, school_code, away_code, started_at, theme_override, sponsors, prompter_roll, prompter_speed, home_roster_id, away_roster_id, package_id, production_id, graphics_channels(id, slug, name, listening)',
     )
     .eq('id', showId)
     .maybeSingle()
@@ -171,6 +174,7 @@ export async function loadShowBundle(showId: string): Promise<ShowBundle | null>
       id: show.id, name: show.name,
       event_type: show.event_type as GraphicsEventType,
       depth: (show.depth ?? 'rundown') as GraphicsDepth,
+      bug_zone: (show.bug_zone ?? 'none') as BugZone,
       state: show.state as GraphicsShowState,
       show_date: show.show_date, air_at: show.air_at, hard_out_at: show.hard_out_at,
       venue: show.venue, school_code: show.school_code, away_code: show.away_code,

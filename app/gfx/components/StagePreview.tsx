@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import GraphicRenderer from './GraphicRenderer'
 import type { MarkContext } from './LogoMark'
 import { sortAirForRender } from '@/lib/graphics/layers'
+import { zoneRect, type BugZone } from '@/lib/graphics/zones'
 import type { AirEntry, GraphicPayload } from '@/lib/graphics/types'
 import './graphics.css'
 
@@ -15,7 +16,7 @@ import './graphics.css'
  * time the panel re-renders reads as a glitch.
  */
 export default function StagePreview({
-  air, single, ctx, animate = false, className = '', replay = false,
+  air, single, ctx, animate = false, className = '', replay = false, zone = 'none',
 }: {
   air?: AirEntry[]
   single?: GraphicPayload | null
@@ -24,6 +25,8 @@ export default function StagePreview({
   className?: string
   /** Show a play button. Motion you cannot watch is motion nobody can fix. */
   replay?: boolean
+  /** Reserved space for an external score bug, drawn as a guide only. */
+  zone?: BugZone
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.2)
@@ -60,6 +63,14 @@ export default function StagePreview({
             ctx={ctx}
           />
         ))}
+        {(() => {
+          const r = zoneRect(zone)
+          return r ? (
+            <div className="gx-zone" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
+              <span>SCORE BUG</span>
+            </div>
+          ) : null
+        })()}
       </div>
       {replay && entries.length > 0 && (
         <button className="sh-replay" title="Play the animation"

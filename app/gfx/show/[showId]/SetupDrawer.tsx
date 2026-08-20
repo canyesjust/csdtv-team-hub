@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { deriveTheme, themeCssVars } from '@/lib/graphics/theme'
 import { GRAPHICS_EVENT_TYPES, GRAPHICS_SHOW_STATES } from '@/lib/graphics/types'
 import { GRAPHICS_DEPTHS, DEPTH_LABEL, DEPTH_BLURB, depthChangeNote } from '@/lib/graphics/depth'
+import { BUG_ZONES, BUG_ZONE_LABEL } from '@/lib/graphics/zones'
 import { templateById } from '@/lib/graphics/templates'
 import type { ShowBundle } from '@/lib/graphics/show-data'
 
@@ -159,6 +160,23 @@ export default function SetupDrawer({
             Change this whenever. Rows and cards both survive, so a game that turns into a hosted broadcast
             halfway through the season costs one click.
           </p>
+        </section>
+
+        <section className="gfx-dsec">
+          <h5>Score bug</h5>
+          <p className="gfx-note" style={{ marginBottom: 7 }}>
+            The score comes from your own service and keys over the top of us. We never draw it. Telling us
+            where it sits is what keeps our lower thirds out from under it.
+          </p>
+          <select value={show.bug_zone} onChange={e => onPatch({ bug_zone: e.target.value })}>
+            {BUG_ZONES.map(z => <option key={z} value={z}>{BUG_ZONE_LABEL[z]}</option>)}
+          </select>
+          {show.bug_zone !== 'none' && (
+            <p className="gfx-note" style={{ marginTop: 7 }}>
+              It shows as a dashed box in the preview and behind <code>?safe=1</code> on the output, so a
+              student can see the space while they build rather than discovering it on air.
+            </p>
+          )}
         </section>
 
         <section className="gfx-dsec">

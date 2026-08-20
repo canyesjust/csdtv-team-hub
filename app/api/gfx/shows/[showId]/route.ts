@@ -4,6 +4,7 @@ import { GRAPHICS_EVENT_TYPES, GRAPHICS_SHOW_STATES } from '@/lib/graphics/types
 import { sanitizeShowSponsors } from '@/lib/graphics/sponsors'
 import { sanitizePrompterSeek } from '@/lib/graphics/prompter'
 import { isGraphicsDepth } from '@/lib/graphics/depth'
+import { isBugZone } from '@/lib/graphics/zones'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ sh
       patch.event_type = body.event_type
     }
     if (isGraphicsDepth(body.depth)) patch.depth = body.depth
+    if (isBugZone(body.bug_zone)) patch.bug_zone = body.bug_zone
     if (typeof body.state === 'string' && (GRAPHICS_SHOW_STATES as readonly string[]).includes(body.state)) {
       patch.state = body.state
       // Going live for the first time stamps the clock the timing math rebases on.
