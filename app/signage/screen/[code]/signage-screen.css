@@ -1671,7 +1671,10 @@
    ========================================================================= */
 .cic-screen.layout-zoned2 {
   --navy: #04263f;
-  --navy-2: #021a2c;
+  --navy-2: color-mix(in srgb, var(--navy) 50%, #05070d);
+  /* Stage base: the site's color (via --navy) forced firmly dark, so a location's
+     brand color is honored but the layout always reads as a dark surface. */
+  --z2-base: color-mix(in srgb, var(--navy) 58%, #05070d);
   --panel: #063a5c;
   --blue1: #065687;
   --accent: #3abfe8;
@@ -1685,12 +1688,11 @@
   --glass-hi: inset 0 0.14vmax 0 rgba(255, 255, 255, 0.30);
   --glass-shadow: 0 0.7vmax 2.2vmax rgba(0, 0, 0, 0.24);
   --glass-radius: 1.1vmax;
-  /* Ambient brand-colored glow so the frosted panels have something to refract. */
+  /* Dark, site-derived base with a single subtle top lift so the frosted panels
+     still read — no bright glows that wash the whole screen out. */
   background:
-    radial-gradient(48% 44% at 85% 9%, rgba(74, 162, 222, 0.22), transparent 60%),
-    radial-gradient(46% 42% at 5% 93%, rgba(251, 174, 66, 0.13), transparent 60%),
-    radial-gradient(62% 56% at 50% 55%, rgba(34, 84, 130, 0.30), transparent 72%),
-    var(--navy-2);
+    radial-gradient(95% 62% at 50% -14%, color-mix(in srgb, var(--navy) 66%, #ffffff 5%), transparent 64%),
+    var(--z2-base);
 }
 /* One shared glass surface for every panel. */
 .cic-screen.layout-zoned2 .cic-rail,

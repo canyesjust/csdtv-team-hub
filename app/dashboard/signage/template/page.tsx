@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import { SignagePageShell, useSignageAdminStyles } from '../components/SignageAdmin'
 import { useSignage } from '../components/SignageProvider'
+import SignageLogoPicker from '../components/SignageLogoPicker'
 
 type TemplateRow = {
   name: string
@@ -42,16 +43,18 @@ export default function SignageTemplatePage() {
   const [form, setForm] = useState<TemplateRow>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [schoolCode, setSchoolCode] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!activeSiteId) { setLoading(false); return }
     setLoading(true)
     const { data } = await supabase
       .from('signage_sites')
-      .select('name, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, show_calendar_ticker, brand_title, brand_subtitle, logo_url')
+      .select('name, default_layout, show_weather, show_clock, show_ticker, show_visitor_welcome, show_calendar_ticker, brand_title, brand_subtitle, logo_url, school_code')
       .eq('id', activeSiteId)
       .maybeSingle()
     if (data) {
+      setSchoolCode((data as { school_code?: string | null }).school_code ?? null)
       setForm({
         name: data.name ?? '',
         default_layout: data.default_layout ?? 'zoned',
@@ -159,15 +162,11 @@ export default function SignageTemplatePage() {
             <input value={form.brand_subtitle || ''} placeholder="(e.g. school tagline)" onChange={e => setForm(f => ({ ...f, brand_subtitle: e.target.value || null }))} style={s.input} />
           </div>
           <div>
-            <p style={s.lbl}>Logo URL</p>
-            <input value={form.logo_url || ''} placeholder="https://… (blank uses the default CIC logo)" onChange={e => setForm(f => ({ ...f, logo_url: e.target.value || null }))} style={{ ...s.input, fontFamily: 'ui-monospace, monospace' }} />
-            {form.logo_url && (
-              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={form.logo_url} alt="" style={{ height: 36, maxWidth: 160, objectFit: 'contain', background: '#0b1b2b', borderRadius: 6, padding: 4 }} onError={e => { e.currentTarget.style.display = 'none' }} />
-                <span style={{ fontSize: 11, color: s.muted }}>Preview</span>
-              </div>
-            )}
+            <p style={s.lbl}>Logo</p>
+            <SignageLogoPicker value={form.logo_url} schoolCode={schoolCode} onChange={url => setForm(f => ({ ...f, logo_url: url }))} />
+            <p style={{ ...s.lbl, margin: '8px 0 0', lineHeight: 1.45 }}>
+              Choose from the official marks. Pick a white / reversed version — it sits on the dark Zoned 2 panels. Blank uses the default district logo.
+            </p>
           </div>
         </div>
 
