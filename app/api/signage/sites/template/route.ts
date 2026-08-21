@@ -38,6 +38,9 @@ export async function POST(request: NextRequest) {
     const lon = Number(body.weather_lon)
     if (Number.isFinite(lon) && lon >= -180 && lon <= 180) update.weather_lon = lon
   }
+  // Per-location content sources (news RSS + calendar iCal/RSS).
+  if (body.news_feed_url !== undefined) update.news_feed_url = String(body.news_feed_url).trim() || null
+  if (body.calendar_feed_url !== undefined) update.calendar_feed_url = String(body.calendar_feed_url).trim() || null
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No template fields provided' }, { status: 400 })

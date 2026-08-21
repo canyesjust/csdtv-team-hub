@@ -403,7 +403,16 @@ function wxSceneHtml(cls: string): string {
   return `<div class="z2wx-scene"><span class="z2wx-cloud c1"></span><span class="z2wx-cloud c2"></span>${precip}${flash}</div>`
 }
 
-function zoned2Weather(w: Feed['weather']): string {
+function zoned2Weather(w: Feed['weather'], place: string): string {
+  const label = place && place.trim() ? place : 'This location'
+  // No coordinates set yet — show a subtle prompt instead of faking a temperature.
+  if (w.condition === '__not_set__') {
+    return (
+      `<div class="cic-rail cic-z2-weather z2wx-clear">` +
+      `<div class="cic-railhd">${esc(label)} <span class="sub">Weather</span></div>` +
+      `<div class="cic-z2-notset">📍 Set this location&rsquo;s address to show local weather</div></div>`
+    )
+  }
   const cls = screenWeatherClass(w.condition)
   const cond = w.condition ? `<div class="cic-z2-cond">${esc(w.condition)}</div>` : ''
   const meta =
@@ -412,7 +421,7 @@ function zoned2Weather(w: Feed['weather']): string {
     (w.windMph != null ? `<span>Wind <b>${esc(w.windMph)} mph</b></span>` : '')
   return (
     `<div class="cic-rail cic-z2-weather z2wx-${cls}">${wxSceneHtml(cls)}` +
-    `<div class="cic-railhd">Sandy, Utah <span class="sub">Now</span></div>` +
+    `<div class="cic-railhd">${esc(label)} <span class="sub">Now</span></div>` +
     `<div class="cic-z2-wx"><div class="cic-z2-wxico" aria-hidden>${wxIconHtml(cls)}</div>` +
     `<div><div class="cic-z2-temp">${w.tempF != null ? esc(w.tempF) : '--'}<sup>°</sup></div>${cond}</div></div>` +
     `<div class="cic-z2-wxmeta">${meta}</div></div>`
@@ -471,7 +480,7 @@ function railWidgetHtml(key: RailWidget, feed: Feed, ctx: { dateStr: string }): 
   switch (key) {
     case 'none': return ''
     case 'brand': return zoned2BrandBox({ logoUrl: feed.screen.logo_url, dateStr: ctx.dateStr })
-    case 'weather': return zoned2Weather(feed.weather)
+    case 'weather': return zoned2Weather(feed.weather, feed.screen.center_name)
     case 'board': return zoned2Rail(feed)
     case 'directions': return railDirectionsHtml(feed)
     case 'announcements': return annCardHtml(feed.announcements)
@@ -549,7 +558,10 @@ function composeBody(feed: Feed): string {
   const portrait = s.orientation === 'portrait'
   const layout = s.layout ?? 'zoned'
   const tpl = feed.template
-  const showWeather = tpl?.show_weather !== false
+  // Hide the header weather chip when the location has no coordinates yet
+  // (the feed reports a '__not_set__' sentinel). Zoned 2's rail weather widget
+  // shows its own "set this location" note instead and is unaffected by this.
+  const showWeather = tpl?.show_weather !== false && feed.weather.condition !== '__not_set__'
   const showClock = tpl?.show_clock !== false
   const showTicker = tpl?.show_ticker !== false
   const showVisitor = tpl?.show_visitor_welcome !== false

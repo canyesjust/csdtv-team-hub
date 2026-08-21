@@ -1798,6 +1798,7 @@
 .cic-screen.layout-zoned2 .cic-z2-temp { font-weight: 800; font-size: 6vmax; line-height: 0.9; font-variant-numeric: tabular-nums; }
 .cic-screen.layout-zoned2 .cic-z2-temp sup { font-size: 2.6vmax; font-weight: 700; top: -2.4vmax; }
 .cic-screen.layout-zoned2 .cic-z2-cond { font-weight: 600; font-size: 1.7vmax; color: #dcefff; margin-top: 0.4vh; }
+.cic-screen.layout-zoned2 .cic-z2-notset { display: flex; align-items: center; min-height: 6vmax; font-weight: 500; font-size: 1.5vmax; line-height: 1.4; color: var(--muted); margin-top: 0.8vh; }
 .cic-screen.layout-zoned2 .cic-z2-wxmeta { display: flex; gap: 1.6vmax; margin-top: 1.4vh; padding-top: 1.2vh; border-top: 1px solid var(--line); font-weight: 500; font-size: 1.4vmax; color: var(--muted); }
 .cic-screen.layout-zoned2 .cic-z2-wxmeta b { color: #fff; }
 

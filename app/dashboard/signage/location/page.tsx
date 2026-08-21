@@ -11,10 +11,12 @@ type LocationForm = {
   center_name: string
   weather_lat: number
   weather_lon: number
+  news_feed_url: string
+  calendar_feed_url: string
 }
 
 // Canyons School District office — the default if a site has no coordinates yet.
-const DEFAULTS: LocationForm = { center_name: 'Canyons School District', weather_lat: 40.5649, weather_lon: -111.8389 }
+const DEFAULTS: LocationForm = { center_name: 'Canyons School District', weather_lat: 40.5649, weather_lon: -111.8389, news_feed_url: '', calendar_feed_url: '' }
 
 function mapSrc(lat: number, lon: number): string {
   const west = (lon - 0.03).toFixed(4)
@@ -77,7 +79,7 @@ export default function SignageLocationPage() {
     setLoading(true)
     const { data } = await supabase
       .from('signage_sites')
-      .select('center_name, weather_lat, weather_lon')
+      .select('center_name, weather_lat, weather_lon, news_feed_url, calendar_feed_url')
       .eq('id', activeSiteId)
       .maybeSingle()
     if (data) {
@@ -85,6 +87,8 @@ export default function SignageLocationPage() {
         center_name: data.center_name ?? DEFAULTS.center_name,
         weather_lat: typeof data.weather_lat === 'number' ? data.weather_lat : DEFAULTS.weather_lat,
         weather_lon: typeof data.weather_lon === 'number' ? data.weather_lon : DEFAULTS.weather_lon,
+        news_feed_url: (data as { news_feed_url?: string | null }).news_feed_url ?? '',
+        calendar_feed_url: (data as { calendar_feed_url?: string | null }).calendar_feed_url ?? '',
       })
     } else {
       setForm(DEFAULTS)
@@ -134,6 +138,8 @@ export default function SignageLocationPage() {
         center_name: form.center_name,
         weather_lat: form.weather_lat,
         weather_lon: form.weather_lon,
+        news_feed_url: form.news_feed_url,
+        calendar_feed_url: form.calendar_feed_url,
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -229,6 +235,30 @@ export default function SignageLocationPage() {
             />
           </div>
           <p style={{ fontSize: 11.5, color: s.muted, margin: 0 }}>The pin shows the saved point. Used for the weather widget and local time on this location&rsquo;s screens.</p>
+        </div>
+
+        <div style={{ ...s.card, display: 'grid', gap: 12 }}>
+          <h3 style={s.h3}>News &amp; calendar sources</h3>
+          <div>
+            <p style={s.lbl}>News RSS feed</p>
+            <input
+              value={form.news_feed_url}
+              onChange={e => setForm(f => ({ ...f, news_feed_url: e.target.value }))}
+              placeholder="https://… this location's news RSS (optional)"
+              style={{ ...s.input, fontFamily: 'ui-monospace, monospace' }}
+            />
+            <p style={{ ...s.lbl, margin: '4px 0 0', lineHeight: 1.45 }}>District news always shows. When set, this location&rsquo;s headlines are mixed in with it.</p>
+          </div>
+          <div>
+            <p style={s.lbl}>Calendar feed (iCal .ics or RSS)</p>
+            <input
+              value={form.calendar_feed_url}
+              onChange={e => setForm(f => ({ ...f, calendar_feed_url: e.target.value }))}
+              placeholder="https://… public Google Calendar .ics or an RSS feed"
+              style={{ ...s.input, fontFamily: 'ui-monospace, monospace' }}
+            />
+            <p style={{ ...s.lbl, margin: '4px 0 0', lineHeight: 1.45 }}>Powers the Calendar card. A public Google Calendar&rsquo;s &ldquo;Secret address in iCal format&rdquo; works. Blank hides the card at this location.</p>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>

@@ -24,6 +24,11 @@ const WEATHER_TIMEOUT_MS = 1800
 
 const weatherFallback: SignageWeather = { tempF: null, condition: '', icon: '🌤', high: null, low: null, windMph: null }
 
+// Shown when a location has no coordinates yet. The '__not_set__' condition is a
+// sentinel the renderers detect to draw a subtle "set this location" note on the
+// weather card instead of a temperature — so we never fake Sandy weather.
+const WEATHER_NOT_SET: SignageWeather = { tempF: null, condition: '__not_set__', icon: '📍', high: null, low: null, windMph: null }
+
 async function weatherWithTimeout(lat: number, lon: number): Promise<SignageWeather> {
   try {
     return await Promise.race([
@@ -75,17 +80,13 @@ function decodeNewsTitle(raw: string): string {
     .trim()
 }
 
-/** District news headlines for the Zoned 2 bottom rotator (cached ~10 min). */
-async function loadDistrictNews(): Promise<DistrictNewsItem[]> {
-  if (districtNewsCache && Date.now() - districtNewsCache.at < DISTRICT_NEWS_TTL_MS) {
-    return districtNewsCache.items
-  }
+/** Fetch + parse one RSS feed into news items (title + optional thumbnail). */
+async function fetchNewsFeed(url: string): Promise<DistrictNewsItem[]> {
+  const ctrl = new AbortController()
+  const to = setTimeout(() => ctrl.abort(), 2500)
   try {
-    const ctrl = new AbortController()
-    const to = setTimeout(() => ctrl.abort(), 2500)
-    const res = await fetch(DISTRICT_NEWS_FEED, { signal: ctrl.signal, cache: 'no-store' })
-    clearTimeout(to)
-    if (!res.ok) throw new Error('news ' + res.status)
+    const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' })
+    if (!res.ok) return []
     const xml = await res.text()
     const blocks = xml.split(/<item[\s>]/i).slice(1)
     const items: DistrictNewsItem[] = []
@@ -96,8 +97,6 @@ async function loadDistrictNews(): Promise<DistrictNewsItem[]> {
       const t = decodeNewsTitle(m[1])
       if (!t || seen.has(t)) continue
       seen.add(t)
-      // Article thumbnail: prefer <media:content url> / <media:thumbnail url>,
-      // fall back to the first <img src> inside the item (e.g. the description).
       let image: string | null = null
       const mc = block.match(/<media:(?:content|thumbnail)[^>]*\burl="([^"]+)"/i)
       if (mc) image = mc[1]
@@ -112,12 +111,49 @@ async function loadDistrictNews(): Promise<DistrictNewsItem[]> {
       items.push({ title: t, image })
       if (items.length >= 8) break
     }
-    const out = items.length ? items : DISTRICT_NEWS_FALLBACK
-    districtNewsCache = { at: Date.now(), items: out }
-    return out
+    return items
   } catch {
-    return districtNewsCache?.items ?? DISTRICT_NEWS_FALLBACK
+    return []
+  } finally {
+    clearTimeout(to)
   }
+}
+
+const newsFeedCache = new Map<string, { at: number; items: DistrictNewsItem[] }>()
+async function loadNewsFeedCached(url: string): Promise<DistrictNewsItem[]> {
+  const cached = newsFeedCache.get(url)
+  if (cached && Date.now() - cached.at < DISTRICT_NEWS_TTL_MS) return cached.items
+  const items = await fetchNewsFeed(url)
+  if (items.length) newsFeedCache.set(url, { at: Date.now(), items })
+  return items.length ? items : (cached?.items ?? [])
+}
+
+/**
+ * News for the Zoned 2 rotator: the district feed always, plus this location's
+ * own feed when one is set, interleaved so both are represented. Deduped by
+ * title, capped at 8. Falls back to the baked district headlines if nothing loads.
+ */
+async function loadCombinedNews(siteNewsUrl: string | null | undefined): Promise<DistrictNewsItem[]> {
+  const [district, site] = await Promise.all([
+    loadNewsFeedCached(DISTRICT_NEWS_FEED),
+    siteNewsUrl && siteNewsUrl.trim() ? loadNewsFeedCached(siteNewsUrl.trim()) : Promise.resolve([] as DistrictNewsItem[]),
+  ])
+  // Interleave school-first so the location's own news leads, district fills in.
+  const mixed: DistrictNewsItem[] = []
+  const seen = new Set<string>()
+  const max = Math.max(site.length, district.length)
+  for (let i = 0; i < max; i++) {
+    for (const item of [site[i], district[i]]) {
+      if (!item) continue
+      const key = item.title.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      mixed.push(item)
+      if (mixed.length >= 8) break
+    }
+    if (mixed.length >= 8) break
+  }
+  return mixed.length ? mixed : DISTRICT_NEWS_FALLBACK
 }
 
 // District closures (2026-27). Update yearly. Dates are local calendar dates.
@@ -175,6 +211,79 @@ function upcomingClosures(limit = 5): { date: string; label: string }[] {
     if (out.length >= limit) break
   }
   return out
+}
+
+// ── Per-location calendar (iCal / RSS) ──────────────────────────────────────
+const calendarCache = new Map<string, { at: number; items: { date: string; label: string }[] }>()
+const CALENDAR_TTL_MS = 15 * 60 * 1000
+
+function icalUnfold(text: string): string {
+  return text.replace(/\r?\n[ \t]/g, '')
+}
+function icalDecode(v: string): string {
+  return v.replace(/\\n/gi, ' ').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\').replace(/\s+/g, ' ').trim()
+}
+function dtToYmd(dt: string): string | null {
+  const m = dt.match(/(\d{4})-?(\d{2})-?(\d{2})/)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null
+}
+
+/**
+ * A location's own calendar for the Zoned 2 card. Accepts an iCal (.ics, e.g. a
+ * public Google Calendar) or an RSS feed, returns the next few upcoming events.
+ * No district fallback — an unset location returns [] so the card can prompt setup.
+ */
+async function loadSiteCalendar(calUrl: string | null | undefined): Promise<{ date: string; label: string }[]> {
+  const url = (calUrl ?? '').trim()
+  if (!url) return []
+  const cached = calendarCache.get(url)
+  if (cached && Date.now() - cached.at < CALENDAR_TTL_MS) return cached.items
+  const ctrl = new AbortController()
+  const to = setTimeout(() => ctrl.abort(), 3000)
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' })
+    if (!res.ok) return cached?.items ?? []
+    const raw = await res.text()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const events: { ymd: string; label: string }[] = []
+
+    if (/BEGIN:VCALENDAR/i.test(raw)) {
+      const text = icalUnfold(raw)
+      for (const ev of text.split(/BEGIN:VEVENT/i).slice(1)) {
+        const dtm = ev.match(/DTSTART[^:\n]*:([0-9TZ:-]+)/i)
+        const sm = ev.match(/SUMMARY[^:\n]*:([^\n\r]+)/i)
+        if (!dtm || !sm) continue
+        const ymd = dtToYmd(dtm[1])
+        const label = icalDecode(sm[1])
+        if (ymd && label) events.push({ ymd, label })
+      }
+    } else {
+      for (const b of raw.split(/<item[\s>]/i).slice(1)) {
+        const tm = b.match(/<title>([\s\S]*?)<\/title>/i)
+        const dm = b.match(/<pubDate>([\s\S]*?)<\/pubDate>/i) || b.match(/<(?:dc:)?date>([\s\S]*?)<\/(?:dc:)?date>/i)
+        if (!tm) continue
+        const label = decodeNewsTitle(tm[1])
+        const d = dm ? new Date(dm[1].trim()) : null
+        const ymd = d && !Number.isNaN(d.getTime())
+          ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          : null
+        if (label && ymd) events.push({ ymd, label })
+      }
+    }
+
+    const items = events
+      .filter(e => parseYmd(e.ymd).getTime() >= today.getTime())
+      .sort((a, b) => a.ymd.localeCompare(b.ymd))
+      .slice(0, 5)
+      .map(e => ({ date: formatClosureDate(e.ymd), label: e.label }))
+    calendarCache.set(url, { at: Date.now(), items })
+    return items
+  } catch {
+    return cached?.items ?? []
+  } finally {
+    clearTimeout(to)
+  }
 }
 
 // ── Broadcast board (system content) ───────────────────────────────────────
@@ -519,7 +628,7 @@ export async function buildScreenFeed(
       // Explicit column list (never select('*')) so secret columns such as
       // ablesign_api_key / ablesign_workspace_id are never loaded into or
       // serialized with the public screen feed.
-      ? service.from('signage_sites').select('weather_lat, weather_lon, show_calendar_ticker, ticker_extra, default_layout, center_name, default_theme, use_brand_colors, bg_color, panel_color, accent_color, school_code, brand_title, brand_subtitle, logo_url, show_weather, show_clock, show_ticker, show_visitor_welcome').eq('id', siteId).maybeSingle()
+      ? service.from('signage_sites').select('weather_lat, weather_lon, show_calendar_ticker, ticker_extra, default_layout, center_name, default_theme, use_brand_colors, bg_color, panel_color, accent_color, school_code, brand_title, brand_subtitle, logo_url, show_weather, show_clock, show_ticker, show_visitor_welcome, news_feed_url, calendar_feed_url').eq('id', siteId).maybeSingle()
       : service.from('signage_settings').select('*').eq('id', 1).maybeSingle(),
     service.from('signage_board_takeover').select('*').eq('id', 1).maybeSingle(),
   ])
@@ -662,15 +771,20 @@ export async function buildScreenFeed(
     }))
 
   const site = siteRes.data
-  const weatherLat = Number(site?.weather_lat ?? 40.5649)
-  const weatherLon = Number(site?.weather_lon ?? -111.8389)
+  // A location only gets real weather once it has its own coordinates. We do NOT
+  // fall back to the district's Sandy coordinates — a new location that hasn't
+  // been set up shows a blank "set location" card instead of pretending to be
+  // in Sandy. Its own coordinates are entered on the Location & weather page.
+  const hasCoords = site?.weather_lat != null && site?.weather_lon != null
+  const weatherLat = Number(site?.weather_lat)
+  const weatherLon = Number(site?.weather_lon)
 
   // The district calendar only shows in the ticker for sites that opt in, so a
   // new school doesn't inherit district-wide events.
   const wantsCalendar = Boolean(site?.show_calendar_ticker)
   const [scheduleItems, weather] = await Promise.all([
     wantsCalendar ? scheduleTickerSafe(service, today) : Promise.resolve([] as TickerItem[]),
-    weatherWithTimeout(weatherLat, weatherLon),
+    hasCoords ? weatherWithTimeout(weatherLat, weatherLon) : Promise.resolve(WEATHER_NOT_SET),
   ])
 
   tickerItems.push(...scheduleItems)
@@ -756,8 +870,12 @@ export async function buildScreenFeed(
       board_next = null
     }
 
-    // Upcoming district closures from the calendar.
-    closures = upcomingClosures(5)
+    // The location's own calendar (iCal/RSS). The district office keeps the
+    // built-in district calendar as a fallback; other locations show only their
+    // own feed (empty until set — the card prompts to configure it).
+    closures = site?.calendar_feed_url
+      ? await loadSiteCalendar(site.calendar_feed_url)
+      : (site?.school_code === '051' ? upcomingClosures(5) : [])
 
     // Now on CSDtv — a board meeting currently broadcasting live.
     try {
@@ -776,8 +894,8 @@ export async function buildScreenFeed(
       csdtv_live = null
     }
 
-    // District news headlines (district website RSS) for the bottom rotator.
-    news = await loadDistrictNews()
+    // News: the district feed always, mixed with this location's own feed if set.
+    news = await loadCombinedNews(site?.news_feed_url)
   }
 
   return {

@@ -687,12 +687,22 @@ function Zoned2WxScene({ cls }: { cls: string }) {
   )
 }
 
-function Zoned2Weather({ weather }: { weather: { tempF: number | null; condition: string; icon: string; high: number | null; low: number | null; windMph: number | null } }) {
+function Zoned2Weather({ weather, place }: { weather: { tempF: number | null; condition: string; icon: string; high: number | null; low: number | null; windMph: number | null }; place: string }) {
+  const label = place && place.trim() ? place : 'This location'
+  // No coordinates set yet — subtle prompt instead of a fake temperature.
+  if (weather.condition === '__not_set__') {
+    return (
+      <div className="cic-rail cic-z2-weather z2wx-clear">
+        <div className="cic-railhd">{label} <span className="sub">Weather</span></div>
+        <div className="cic-z2-notset">📍 Set this location&rsquo;s address to show local weather</div>
+      </div>
+    )
+  }
   const cls = screenWeatherClass(weather.condition)
   return (
     <div className={`cic-rail cic-z2-weather z2wx-${cls}`}>
       <Zoned2WxScene cls={cls} />
-      <div className="cic-railhd">Sandy, Utah <span className="sub">Now</span></div>
+      <div className="cic-railhd">{label} <span className="sub">Now</span></div>
       <div className="cic-z2-wx">
         <div className="cic-z2-wxico" aria-hidden><Zoned2WxIcon cls={cls} /></div>
         <div>
@@ -876,7 +886,7 @@ function RailWidgetView({ widget, feed, logoUrl, clock, dateStr }: {
   switch (widget) {
     case 'none': return null
     case 'brand': return <Zoned2BrandBox logoUrl={logoUrl} clock={clock} dateStr={dateStr} />
-    case 'weather': return <Zoned2Weather weather={feed.weather} />
+    case 'weather': return <Zoned2Weather weather={feed.weather} place={feed.screen.center_name} />
     case 'board': return <Zoned2Rotator board={feed.board_next} closures={feed.closures} announcements={feed.announcements} live={feed.csdtv_live} />
     case 'directions': return <RailDirections feed={feed} />
     case 'announcements': return <AnnCard announcements={feed.announcements} />
@@ -1186,7 +1196,10 @@ export default function ScreenClient({ code, initialFeed, imageSeconds }: Screen
     : feed.screen.center_name
 
   // Per-site template toggles + branding (default to the original CIC behavior).
-  const showWeather = feed.template?.show_weather !== false
+  // Hide the header weather chip when the location has no coordinates yet
+  // (feed reports a '__not_set__' sentinel). Zoned 2's rail weather widget shows
+  // its own "set this location" note instead and is unaffected by this.
+  const showWeather = feed.template?.show_weather !== false && feed.weather.condition !== '__not_set__'
   const showClock = feed.template?.show_clock !== false
   const showTicker = feed.template?.show_ticker !== false
   const showVisitorWelcome = feed.template?.show_visitor_welcome !== false
